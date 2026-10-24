@@ -2,7 +2,7 @@ name = "openentity-registry"
 main = "src/index.ts"
 compatibility_date = "2026-10-01"
 workers_dev = false
-routes = [{ pattern = "openentity.org/v1/*", zone_name = "openentity.org" }]
+# No route: the site Worker forwards /v1/* through its REGISTRY service binding.
 
 # Secrets (wrangler secret put): REGISTRY_KEY_JWK, CUSTODY_KEY, HASH_SALT, TURNSTILE_SECRET,
 # CIO_SITE_ID, CIO_API_KEY, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY.
