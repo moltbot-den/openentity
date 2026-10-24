@@ -1,0 +1,8 @@
+packages:
+  - spec
+  - site
+  - registry
+  - cli
+  - mcp
+  - sdk/ts
+  - redirects
