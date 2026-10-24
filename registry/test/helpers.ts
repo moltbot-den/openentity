@@ -1,4 +1,4 @@
-import { env } from "cloudflare:test";
+import { createExecutionContext, env } from "cloudflare:test";
 import { vi } from "vitest";
 import { app } from "../src/index.ts";
 import { base58btcEncode, buildDeclaration, buildDocument, canonicalize, generateKeyPair, nowSeconds, randomNonce, sha256, signObject, type KeyPair, type Proof } from "../src/sdk.ts";
@@ -10,7 +10,7 @@ export async function call(method: string, path: string, body?: unknown, headers
   const res = await app.request(`https://openentity.org/v1${path}`, {
     method, headers: { "content-type": "application/json", ...headers },
     body: body === undefined ? undefined : typeof body === "string" ? body : JSON.stringify(body),
-  }, e);
+  }, e, createExecutionContext());
   const text = await res.text();
   let json: any = null;
   try { json = JSON.parse(text); } catch { /* not JSON */ }

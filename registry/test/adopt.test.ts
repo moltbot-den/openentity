@@ -108,4 +108,11 @@ describe("stamp (spec 10.4)", () => {
     expect((await call("POST", "/adopt", objs, s)).status).toBe(201);
     expect((await call("POST", "/adopt", objs, s)).body.error).toBe("stamp_reused");
   });
+
+  it("caps writes per IP per day", async () => {
+    const e = { ...E, IP_DAILY_LIMIT: "1" }, ip = { "cf-connecting-ip": `203.0.113.${Math.floor(Math.random() * 250)}` };
+    const a = await generateKeyPair(), b = await generateKeyPair();
+    expect((await call("POST", "/adopt", await signed(a), { ...(await stamp(a.did)), ...ip }, e)).status).toBe(201);
+    expect((await call("POST", "/adopt", await signed(b), { ...(await stamp(b.did)), ...ip }, e)).body.error).toBe("rate_limited");
+  });
 });

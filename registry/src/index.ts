@@ -42,23 +42,30 @@ async function readJson(c: C): Promise<any> {
   try { return JSON.parse(text); } catch { return fail(400, "bad_json", "body is not valid JSON"); }
 }
 const salted = (env: Env, s: string) => sha256Hex(`${env.HASH_SALT ?? "openentity-dev-salt"}:${s}`);
+const BUMP = "INSERT INTO rate_events (key, window_start, count) VALUES (?, ?, ?) ON CONFLICT (key, window_start) DO UPDATE SET count = count + excluded.count RETURNING count";
 /** Adds n to a counter and returns the new total. */
 async function bump(db: D1Database, key: string, window: string, n = 1): Promise<number> {
-  return (await db.prepare("INSERT INTO rate_events (key, window_start, count) VALUES (?, ?, ?) ON CONFLICT (key, window_start) DO UPDATE SET count = count + excluded.count RETURNING count").bind(key, window, n).first<number>("count"))!;
+  return (await db.prepare(BUMP).bind(key, window, n).first<number>("count"))!;
 }
-/** Every write: per-IP limits, then a single-use proof-of-work stamp naming the writing EID (spec 10.4). */
+/** Every write: per-IP limits, then a single-use proof-of-work stamp naming the writing EID (spec 10.4). Both counters in one D1 round trip. */
 async function writeGuard(c: C, eid: string) {
   const env = c.env;
   const ip = await salted(env, c.req.header("cf-connecting-ip") ?? "unknown");
   if (env.WRITE_LIMITER && !(await env.WRITE_LIMITER.limit({ key: ip })).success) fail(429, "rate_limited", `at most ${LIMITS.writes_per_ip_per_minute} writes per minute per IP`);
-  const daily = Number(env.IP_DAILY_LIMIT ?? LIMITS.writes_per_ip_per_day);
-  if ((await bump(env.DB, `ip:${ip}`, today())) > daily) fail(429, "rate_limited", `at most ${daily} writes per day per IP`);
   const stamp = c.req.header("x-oe-stamp");
   if (!stamp) fail(400, "stamp_required", "write endpoints require an X-OE-Stamp header; see GET /v1/spec for the bits");
   const err = await checkStamp(stamp!, Number(env.STAMP_BITS), eid);
   if (err) fail(400, "stamp_invalid", err);
-  if ((await bump(env.DB, `stamp:${await sha256Hex(stamp!)}`, stamp!.split(":")[2].slice(0, 10))) > 1) fail(409, "stamp_reused", "each stamp is accepted once");
+  const [ipCount, stampCount] = (await env.DB.batch<{ count: number }>([
+    env.DB.prepare(BUMP).bind(`ip:${ip}`, today(), 1),
+    env.DB.prepare(BUMP).bind(`stamp:${await sha256Hex(stamp!)}`, stamp!.split(":")[2].slice(0, 10), 1),
+  ])).map((r) => r.results[0].count);
+  const daily = Number(env.IP_DAILY_LIMIT ?? LIMITS.writes_per_ip_per_day);
+  if (ipCount > daily) fail(429, "rate_limited", `at most ${daily} writes per day per IP`);
+  if (stampCount > 1) fail(409, "stamp_reused", "each stamp is accepted once");
 }
+/** Wakes the log incorporator after the response; the cron incorporates anything a lost message leaves behind. */
+const wake = (c: C) => c.executionCtx.waitUntil(c.env.LOG_QUEUE.send({ t: "leaf" }));
 function schema(type: string, obj: unknown) {
   const r = validate(type as "EntityDocument", obj);
   if (!r.ok) fail(422, "schema_invalid", `${type}: ${r.errors.join("; ")}`);
@@ -159,22 +166,25 @@ async function adopt(c: C, document: any, declaration: any) {
   if (!(await resolveDid(eid))) fail(422, "unsupported_method", `cannot resolve ${eid}`);
   await signedBy(document, eid, "document");
   await signedBy(declaration, eid, "declaration");
-  if (await db.prepare("SELECT 1 FROM declarations WHERE eid = ? AND version = ?").bind(eid, declaration.declaration_version).first())
-    fail(409, "declaration_exists", "this EID already has a Declaration of this version");
-  if (await entity(db, eid)) fail(409, "entity_exists", "this EID is already listed");
 
-  const now = nowIso();
-  const dl = await leafFor(db, "Declaration", eid, await sha(declaration), now);
-  const doc = await leafFor(db, "EntityDocument", eid, await sha(document), now);
+  // One transaction, no reads first: the primary keys on declarations (eid, version) and entities (eid) are the
+  // one-Declaration and one-listing guards; a conflict rolls back the whole batch, log leaves included.
+  const now = nowIso(), dSha = await sha(declaration), docSha = await sha(document);
+  const dl = await leafFor(db, "Declaration", eid, dSha, now);
+  const doc = await leafFor(db, "EntityDocument", eid, docSha, now);
   const res = await db.batch([
     dl.stmt,
-    db.prepare(`INSERT INTO declarations (eid, version, json, sha256, received_at, log_index) VALUES (?, ?, ?, ?, ?, ${LAST_INDEX})`).bind(eid, declaration.declaration_version, JSON.stringify(declaration), await sha(declaration), now),
+    db.prepare(`INSERT INTO declarations (eid, version, json, sha256, received_at, log_index) VALUES (?, ?, ?, ?, ?, ${LAST_INDEX})`).bind(eid, declaration.declaration_version, JSON.stringify(declaration), dSha, now),
     doc.stmt,
-    db.prepare(`INSERT INTO documents (eid, seq, json, sha256, received_at, log_index) VALUES (?, ?, ?, ?, ?, ${LAST_INDEX})`).bind(eid, document.seq, JSON.stringify(document), await sha(document), now),
+    db.prepare(`INSERT INTO documents (eid, seq, json, sha256, received_at, log_index) VALUES (?, ?, ?, ?, ?, ${LAST_INDEX})`).bind(eid, document.seq, JSON.stringify(document), docSha, now),
     db.prepare(`INSERT INTO entities (eid, root_method, name, level, created, updated, custody, latest_seq, adopted_log_index) VALUES (?, ?, ?, 0, ?, ?, ?, ?, ${LAST_INDEX} - 1)`)
       .bind(eid, eid.split(":")[1], document.name, now, now, document.operator?.custody ?? null, document.seq),
-  ]);
-  await c.env.LOG_QUEUE.send({ t: "leaf" });
+  ]).catch((e) => {
+    if (/UNIQUE constraint failed: declarations\./.test(String(e))) fail(409, "declaration_exists", "this EID already has a Declaration of this version");
+    if (/UNIQUE constraint failed: entities\./.test(String(e))) fail(409, "entity_exists", "this EID is already listed");
+    throw e;
+  });
+  wake(c);
   const idx = firstIdx(res);
   const base = `https://${c.env.REGISTRY_HOST}/v1/entities/${eid}`;
   return { eid, level: "L0", ...receipt(c, idx, dl), urls: { entity: base, document: `${base}/document`, log_proof: `https://${c.env.REGISTRY_HOST}/v1/log/proof/${idx}` } };
@@ -313,7 +323,7 @@ app.put("/entities/:eid/document", async (c) => {
     db.prepare(`INSERT INTO documents (eid, seq, json, sha256, received_at, log_index) VALUES (?, ?, ?, ?, ?, ${LAST_INDEX})`).bind(eid, doc.seq, JSON.stringify(doc), s, now),
     db.prepare("UPDATE entities SET name = ?, latest_seq = ?, updated = ?, custody = ? WHERE eid = ?").bind(doc.name, doc.seq, now, doc.operator?.custody ?? null, eid),
   ]);
-  await c.env.LOG_QUEUE.send({ t: "leaf" });
+  wake(c);
   return c.json({ eid, seq: doc.seq, ...receipt(c, firstIdx(res), l) });
 });
 
@@ -333,7 +343,7 @@ app.post("/entities/:eid/aliases", async (c) => {
     db.prepare(`INSERT OR REPLACE INTO aliases (eid, type, value, proof_json, verified_at, last_checked, status, log_index) VALUES (?, ?, ?, ?, ?, ?, 'verified', ${LAST_INDEX})`).bind(eid, body.type, body.value, JSON.stringify(obj.proof), now, now),
     db.prepare("UPDATE entities SET updated = ? WHERE eid = ?").bind(now, eid),
   ]);
-  await c.env.LOG_QUEUE.send({ t: "leaf" });
+  wake(c);
   const lv = await refreshLevel(db, eid);
   return c.json({ eid, alias: { type: body.type, value: body.value, status: "verified" }, level: LEVEL(lv.level), ...receipt(c, firstIdx(res), l) }, 201);
 });
@@ -369,7 +379,7 @@ app.post("/entities/:eid/record", async (c) => {
   }
   stmts.push(db.prepare("UPDATE entities SET record_seq = ?, record_head_hash = ?, updated = ? WHERE eid = ? AND record_seq = ?").bind(seq, prev, now, eid, e.record_seq));
   const res = await db.batch(stmts);
-  await c.env.LOG_QUEUE.send({ t: "leaf" });
+  wake(c);
   return c.json({ eid, head: { seq, hash: prev }, accepted: entries.map((en, i) => ({ seq: en.seq, ...receipt(c, (res[2 * i].results[0] as { idx: number }).idx, leaves[i]) })) }, 201);
 });
 
@@ -390,7 +400,7 @@ app.post("/attestations", async (c) => {
     if (att.revoked_at) fail(409, "already_revoked", "attestation already revoked");
     const l = await leafFor(db, "Revocation", att.subject, s, now);
     const res = await db.batch([l.stmt, db.prepare("UPDATE attestations SET revoked_at = ?, revocation_json = ? WHERE sha256 = ?").bind(now, JSON.stringify(a), a.attestation_sha256)]);
-    await c.env.LOG_QUEUE.send({ t: "leaf" });
+    wake(c);
     await refreshLevel(db, att.subject);
     return c.json({ sha256: s, revoked: a.attestation_sha256, ...receipt(c, firstIdx(res), l) }, 201);
   }
@@ -403,7 +413,7 @@ app.post("/attestations", async (c) => {
     l.stmt,
     db.prepare(`INSERT INTO attestations (sha256, issuer, subject, claim_type, json, created, expires, log_index) VALUES (?, ?, ?, ?, ?, ?, ?, ${LAST_INDEX})`).bind(s, issuer, subject, a.claim_type, JSON.stringify(a), a.created, expires),
   ]);
-  await c.env.LOG_QUEUE.send({ t: "leaf" });
+  wake(c);
   const lv = await refreshLevel(db, subject);
   return c.json({ sha256: s, subject, subject_level: LEVEL(lv.level), ...receipt(c, firstIdx(res), l) }, 201);
 });
@@ -453,7 +463,7 @@ app.post("/continuity", async (c) => {
   } else stmts.push(db.prepare("UPDATE entities SET predecessor_eid = ?, updated = ? WHERE eid = ?").bind(previous, now, successor));
   stmts.push(db.prepare("UPDATE entities SET successor_eid = ?, updated = ? WHERE eid = ?").bind(successor, now, previous));
   const res = await db.batch(stmts);
-  await c.env.LOG_QUEUE.send({ t: "leaf" });
+  wake(c);
   const lv = await refreshLevel(db, successor);
   return c.json({ previous, successor, basis: link.basis, level: LEVEL(lv.level), ...receipt(c, firstIdx(res), l) }, 201);
 });
@@ -476,7 +486,7 @@ app.post("/withdraw", async (c) => {
     db.prepare("UPDATE declarations SET withdrawn_at = ?, withdrawal_json = ? WHERE eid = ? AND version = ?").bind(now, JSON.stringify(w), eid, w.declaration_version),
     db.prepare("UPDATE entities SET withdrawn_at = ?, level = NULL, level_label = NULL, updated = ? WHERE eid = ?").bind(now, now, eid),
   ]);
-  await c.env.LOG_QUEUE.send({ t: "leaf" });
+  wake(c);
   return c.json({ eid, withdrawn: true, ...receipt(c, firstIdx(res), l) }, 201);
 });
 
