@@ -1,0 +1,97 @@
+"""Runs scripts/independent_verifier.py against a stub registry built with this SDK."""
+import base64
+import importlib.util
+import json
+import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from pathlib import Path
+from urllib.parse import parse_qs, urlparse
+
+import pytest
+
+from openentity import client, core
+
+ROOT = Path(__file__).resolve().parents[3]
+spec = importlib.util.spec_from_file_location("iv", ROOT / "scripts/independent_verifier.py")
+iv = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(iv)
+ORIGIN = "openentity.org/log"
+
+
+def _registry(n=37, tamper_root=False, tamper_object=False):
+    reg = core.KeyPair(b"\7" * 32)
+    ents, leaves = {}, []
+    for i in range(n):
+        kp = core.KeyPair(bytes([i + 1]) * 32)
+        doc, decl = client.build_adoption(kp, f"E{i}", "d", "http://x")
+        if tamper_object and i % 5 == 0:
+            doc["name"] = "forged"
+        ents[kp.did] = {"document": doc, "declaration": decl}
+        leaves.append(core.log_leaf("Declaration", kp.did, core.canonical_hash(decl).hex(), core.now()))
+    hashes = [core.leaf_hash(core.canonicalize(lf).encode()) for lf in leaves]
+    root = b"\0" * 32 if tamper_root else core.merkle_root(hashes)
+    body = f"{ORIGIN}\n{n}\n{base64.b64encode(root).decode()}\n"
+    keyid = core.sha256(ORIGIN.encode() + b"\n\x01" + reg.public)[:4]
+    sig = base64.b64encode(keyid + reg.private.sign(body.encode())).decode()
+    note = f"{body}\n\u2014 {ORIGIN} {sig}\n"
+
+    class H(BaseHTTPRequestHandler):
+        def log_message(self, *a):
+            pass
+
+        def do_GET(self):
+            u = urlparse(self.path)
+            q = {k: v[0] for k, v in parse_qs(u.query).items()}
+            parts = u.path.split("/")
+            if u.path.endswith("/checkpoint"):
+                out = note.encode()
+            elif u.path.endswith("/spec"):
+                out = json.dumps({"registry": {"log_key": reg.did.removeprefix("did:key:")}}).encode()
+            elif u.path.endswith("/log/entries"):
+                s = int(q["start"])
+                out = json.dumps({"entries": leaves[s:int(q["end"])]}).encode()
+            elif "/log/proof/" in u.path:
+                out = json.dumps({"proof": [h.hex() for h in core.inclusion_proof(int(parts[-1]), hashes)]}).encode()
+            else:
+                out = json.dumps(ents[parts[-1]]).encode()
+            self.send_response(200)
+            self.send_header("content-length", str(len(out)))
+            self.end_headers()
+            self.wfile.write(out)
+
+    srv = HTTPServer(("127.0.0.1", 0), H)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    return srv
+
+
+def _run(monkeypatch, capsys, **kw):
+    srv = _registry(**kw)
+    try:
+        monkeypatch.setattr("sys.argv", ["iv", f"http://127.0.0.1:{srv.server_port}"])
+        return iv.main(), capsys.readouterr().out
+    finally:
+        srv.shutdown()
+
+
+def test_verifier_passes_honest_registry(monkeypatch, capsys):
+    code, out = _run(monkeypatch, capsys)
+    assert code == 0 and "inclusion proofs checked: 37" in out and "RESULT: PASS" in out
+
+
+def test_verifier_catches_bad_root(monkeypatch, capsys):
+    code, out = _run(monkeypatch, capsys, tamper_root=True)
+    assert code == 1 and "RESULT: FAIL" in out
+
+
+def test_verifier_catches_forged_objects(monkeypatch, capsys):
+    code, out = _run(monkeypatch, capsys, tamper_object=True)
+    assert code == 1 and "InvalidSignature" in out
+
+
+def test_verifier_jcs_and_sig_agree_with_sdk():
+    kp = core.KeyPair(b"\3" * 32)
+    obj = core.sign_object({"a": [1.5, 1e21, "é"], "b": {"z": 1, "a": 2}}, kp)
+    assert iv.jcs(obj) == core.canonicalize(obj)
+    iv.verify_sig(obj)
+    with pytest.raises(Exception):
+        iv.verify_sig({**obj, "a": []})
