@@ -18,4 +18,10 @@ if [ -f pnpm-lock.yaml ]; then
   pnpm -r --if-present run test
 fi
 
+# Independent Python implementation: its own tests, and every TS-generated vector must verify.
+if [ -d sdk/python ]; then
+  (cd sdk/python && uv run --quiet pytest -q) || fail=1
+  uv run --quiet scripts/independent_verifier.py --vectors test-vectors || fail=1
+fi
+
 exit $fail

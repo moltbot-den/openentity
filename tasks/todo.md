@@ -14,7 +14,7 @@ Domain result: the wrangler OAuth token has `zone (read)` only, so DNS records, 
 
 ## Phase 1: the standard and its home (PRD 11, Phase 1)
 Spec
-- [ ] `spec/declaration-1.0.txt` and its SHA-256; `spec/schemas/` (EntityDocument, Declaration, Withdrawal, RecordEntry, Attestation, Revocation, ContinuityLink, Dispute, LogLeaf); `spec/claim-types.md`
+- [ ] `spec/declaration-1.0.txt` and its SHA-256; `spec/schemas/` (EntityDocument, Declaration, Withdrawal, RecordEntry, Attestation, Revocation, ContinuityLink, Dispute, LogLeaf); `spec/claim-types.md` (include `custom:securemyagent:security_posture`: score_band, checks_passed[], scanner_version, evidence_hash; 30-day expiry)
 - [ ] `test-vectors/` from the TS reference with a published throwaway seed; independent Python verifier reproduces every vector
 SDK and CLI
 - [ ] `sdk/ts`: did:key, JCS, eddsa-jcs-2022 sign and verify, EIP-712 verify, stamp, Merkle proofs
@@ -30,6 +30,9 @@ Site (`site/`, Astro with Starlight, Workers static assets)
 - [ ] `llms.txt` (Appendix A), `llms-full.txt`, `skill/openentity/SKILL.md`, `AGENTS.md`, well-known files, robots.txt with Content-Signal, sitemap, security.txt
 - [ ] Human form: Turnstile plus Customer.io Track API (form not rendered until credentials exist)
 Cloudflare
+- [x] Resources: D1 `openentity-registry` (f24dd781-d0c2-41a7-95cd-60c52588891d), KV `openentity-registry` (04fc64a9acac4853bc94edb36afaa92a), R2 `openentity-log`, Queues `openentity-log-incorporate` and `openentity-alias-verify` (Workers Paid confirmed by Queues)
+- [x] Turnstile widget `openentity-subscribe` (site key 0x4AAAAAAFkggsScyaPIMp2v); Web Analytics site token 1c8d90533d834474833d04a8b62d5117
+- [x] WAF custom rule on openentity.org: skip security level, browser integrity check, managed rules, rate limiting and Super Bot Fight Mode on every path (token `moltbot-den/cloudflare-api-token` cannot edit zone settings directly, so the skip rule does it)
 - [ ] Zone settings (PRD 7.7): AI crawler categories allowed, Bot Fight Mode off, no challenges, Web Analytics
 - [ ] `deploy.yml` (`wrangler deploy` on merge to `main`) and the post-deploy fetch check
 Required tests (PRD 11 Phase 1)

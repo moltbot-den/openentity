@@ -38,13 +38,15 @@ def jcs(v):
     if isinstance(v, list): return "[" + ",".join(map(jcs, v)) + "]"
     return "{" + ",".join(json.dumps(k, ensure_ascii=False) + ":" + jcs(v[k]) for k in sorted(v, key=lambda k: k.encode("utf-16-be"))) + "}"
 
-def verify_sig(obj):
-    """eddsa-jcs-2022: signature over sha256(jcs(proof minus proofValue)) || sha256(jcs(object minus proof))."""
-    p = obj["proof"]; did = p["verificationMethod"].split("#")[0]
+def verify_sig(obj, p=None):
+    """eddsa-jcs-2022: signature over sha256(jcs(proof minus proofValue)) || sha256(jcs(object minus proof/proofs))."""
+    p = p or obj["proof"]; did = p["verificationMethod"].split("#")[0]
     raw = b58d(did.removeprefix("did:key:z"))
     if not did.startswith("did:key:z") or raw[:2] != b"\xed\x01": raise ValueError(f"cannot resolve {did[:24]}")
     cfg = {k: v for k, v in p.items() if k != "proofValue"}
-    ED(raw[2:]).verify(b58d(p["proofValue"][1:]), H(jcs(cfg)) + H(jcs({k: v for k, v in obj.items() if k != "proof"})))
+    ED(raw[2:]).verify(b58d(p["proofValue"][1:]), H(jcs(cfg)) + H(jcs(unsigned(obj))))
+
+def unsigned(o): return {k: v for k, v in o.items() if k not in ("proof", "proofs")}  # ContinuityLink carries proofs[]
 
 def verify_inclusion(i, size, leaf, proof, root):  # RFC 9162 2.1.3.2
     fn, sn, r = i, size - 1, leaf
@@ -81,8 +83,9 @@ def check_vectors(d):
         if "object" not in v: continue
         o = v["object"]; c = jcs(o)
         res += [(f.name, "canonical", v["canonical"] == c), (f.name, "sha256", v["sha256"] == H(c).hex()),
-                (f.name, "unsigned_canonical", v["unsigned_canonical"] == jcs({k: x for k, x in o.items() if k != "proof"}))]
-        try: verify_sig(o); res.append((f.name, "proof", True))
+                (f.name, "unsigned_canonical", v["unsigned_canonical"] == jcs(unsigned(o)))]
+        if "proof" not in o and "proofs" not in o: continue  # log leaves are unsigned by design
+        try: [verify_sig(o, p) for p in o.get("proofs") or [o["proof"]]]; res.append((f.name, "proof", True))
         except (InvalidSignature, ValueError, KeyError): res.append((f.name, "proof", False))
     for r in res: print("ok  " if r[2] else "FAIL", r[0], r[1])
     bad = sum(not r[2] for r in res); print(f"vectors: {len(res)} checks, {bad} failed")
