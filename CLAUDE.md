@@ -39,7 +39,7 @@ pnpm workspaces: `spec/` (OEIS-1.md, schemas, declaration text and hash, claim-t
 
 ## Domains
 
-`openentity.org` is canonical and the only domain in any URL the standard emits; `mcp.openentity.org` is the remote MCP server. `openentityidentitystandard.com` is a 301 of every path to `openentity.org`. `oeis.dev` is the developer and contribution hub (a 302 to this repo until Phase 3 ships the hub).
+`openentity.org` is canonical and the only domain in any URL the standard emits; `mcp.openentity.org` is the remote MCP server. `openentityidentitystandard.com` is a 301 of every path to `openentity.org`. `oeis.dev` is the developer and contribution hub (a 302 to this repo until Phase 3 ships the hub). Both redirects run as the `redirects/` Worker on custom domains (the wrangler OAuth token cannot write zone rulesets).
 
 ## Task tracking
 
