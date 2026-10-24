@@ -171,7 +171,7 @@ To verify any Open Entity object: (1) resolve the `verificationMethod` DID to it
 
 ### 4.6 Test vectors
 
-The repository publishes `spec/test-vectors/` with a fixed seed, its EID, a signed Entity Document, a signed Declaration, a Record entry and an Attestation, plus the expected canonical bytes and hashes. An implementation that reproduces every vector is interoperable.
+The repository publishes `test-vectors/` with a fixed seed, its EID, a signed Entity Document, a signed Declaration, a Record entry and an Attestation, plus the expected canonical bytes and hashes. An implementation that reproduces every vector is interoperable.
 
 ## 5. Entity Document
 

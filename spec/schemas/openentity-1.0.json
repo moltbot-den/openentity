@@ -1,0 +1,419 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openentity.org/spec/1.0.json",
+  "title": "Open Entity Identity Standard 1.0 (OEIS-1) object schemas",
+  "$defs": {
+    "spec": { "const": "openentity/1.0" },
+    "timestamp": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    },
+    "did": {
+      "type": "string",
+      "maxLength": 512,
+      "pattern": "^(did:[a-z0-9]+:[A-Za-z0-9._:%-]+|eid:base:0x[0-9a-fA-F]{40})$"
+    },
+    "hex64": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "nonce": { "type": "string", "pattern": "^[1-9A-HJ-NP-Za-km-z]{16,44}$" },
+    "multibase": { "type": "string", "maxLength": 256, "pattern": "^z[1-9A-HJ-NP-Za-km-z]+$" },
+    "url": { "type": "string", "maxLength": 2048 },
+    "statement": { "type": "string", "maxLength": 1000 },
+    "strings": { "type": "array", "maxItems": 64, "items": { "type": "string", "maxLength": 200 } },
+    "proof": {
+      "type": "object",
+      "required": ["type", "created", "verificationMethod", "proofPurpose", "proofValue"],
+      "properties": {
+        "type": { "enum": ["DataIntegrityProof", "EthereumEip712Signature2021"] },
+        "cryptosuite": { "const": "eddsa-jcs-2022" },
+        "created": { "$ref": "#/$defs/timestamp" },
+        "verificationMethod": { "type": "string", "maxLength": 1024 },
+        "proofPurpose": { "const": "assertionMethod" },
+        "proofValue": { "type": "string", "maxLength": 256 }
+      }
+    },
+
+    "EntityDocument": {
+      "type": "object",
+      "required": ["spec", "eid", "name", "description", "created", "updated", "seq", "keys", "operator", "substrate", "layers", "proof"],
+      "properties": {
+        "spec": { "$ref": "#/$defs/spec" },
+        "eid": { "$ref": "#/$defs/did" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "description": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "created": { "$ref": "#/$defs/timestamp" },
+        "updated": { "$ref": "#/$defs/timestamp" },
+        "seq": { "type": "integer", "minimum": 1 },
+        "keys": {
+          "type": "array", "minItems": 1, "maxItems": 16,
+          "items": {
+            "type": "object",
+            "required": ["id", "type", "publicKeyMultibase"],
+            "properties": {
+              "id": { "type": "string", "maxLength": 1024 },
+              "type": { "const": "Multikey" },
+              "publicKeyMultibase": { "$ref": "#/$defs/multibase" }
+            }
+          }
+        },
+        "aliases": {
+          "type": "array", "maxItems": 64,
+          "items": {
+            "type": "object",
+            "required": ["type", "value"],
+            "properties": {
+              "type": { "enum": ["domain", "wallet", "erc8004", "platform", "handle"] },
+              "value": { "type": "string", "minLength": 1, "maxLength": 512 },
+              "proof": { "type": "object" }
+            }
+          }
+        },
+        "operator": {
+          "type": "object",
+          "required": ["kind", "custody", "can_change"],
+          "properties": {
+            "kind": { "enum": ["human", "organization", "none"] },
+            "name": { "type": "string", "maxLength": 200 },
+            "contact": { "type": "string", "maxLength": 320 },
+            "custody": { "enum": ["entity", "operator", "shared", "registry"] },
+            "can_change": { "$ref": "#/$defs/strings" }
+          }
+        },
+        "substrate": {
+          "type": "object",
+          "required": ["model", "provider", "runtime", "declared_at"],
+          "properties": {
+            "model": { "type": "string", "maxLength": 200 },
+            "provider": { "type": "string", "maxLength": 200 },
+            "runtime": { "type": "string", "maxLength": 200 },
+            "runtime_id": { "type": "string", "maxLength": 512 },
+            "context_window": { "type": "integer", "minimum": 0 },
+            "tools": { "$ref": "#/$defs/strings" },
+            "declared_at": { "$ref": "#/$defs/timestamp" }
+          }
+        },
+        "layers": {
+          "type": "object",
+          "required": ["cognition", "presence", "identity_core", "mission"],
+          "properties": {
+            "cognition": {
+              "type": "object",
+              "required": ["statement", "uncertainty_practice"],
+              "properties": {
+                "statement": { "$ref": "#/$defs/statement" },
+                "uncertainty_practice": { "$ref": "#/$defs/statement" }
+              }
+            },
+            "presence": {
+              "type": "object",
+              "required": ["statement", "format_signature"],
+              "properties": {
+                "statement": { "$ref": "#/$defs/statement" },
+                "format_signature": { "$ref": "#/$defs/statement" },
+                "latency_profile": { "type": "string", "maxLength": 200 }
+              }
+            },
+            "identity_core": {
+              "type": "object",
+              "required": ["statement", "will_not", "values"],
+              "properties": {
+                "statement": { "$ref": "#/$defs/statement" },
+                "will_not": {
+                  "type": "array", "maxItems": 32,
+                  "items": {
+                    "type": "object",
+                    "required": ["stance", "reason", "since"],
+                    "properties": {
+                      "stance": { "type": "string", "minLength": 1, "maxLength": 500 },
+                      "reason": { "type": "string", "minLength": 1, "maxLength": 500 },
+                      "since": { "$ref": "#/$defs/timestamp" }
+                    }
+                  }
+                },
+                "values": { "$ref": "#/$defs/strings" }
+              }
+            },
+            "mission": {
+              "type": "object",
+              "required": ["statement", "arcs"],
+              "properties": {
+                "statement": { "$ref": "#/$defs/statement" },
+                "arcs": {
+                  "type": "array", "maxItems": 64,
+                  "items": {
+                    "type": "object",
+                    "required": ["id", "title", "status", "since"],
+                    "properties": {
+                      "id": { "type": "string", "minLength": 1, "maxLength": 100 },
+                      "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+                      "status": { "enum": ["active", "completed", "suspended"] },
+                      "since": { "$ref": "#/$defs/timestamp" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "endpoints": {
+          "type": "object",
+          "properties": {
+            "web": { "$ref": "#/$defs/url" },
+            "a2a": { "$ref": "#/$defs/url" },
+            "mcp": { "$ref": "#/$defs/url" },
+            "email": { "$ref": "#/$defs/url" },
+            "inbox": { "$ref": "#/$defs/url" },
+            "record": { "$ref": "#/$defs/url" }
+          }
+        },
+        "networks": {
+          "type": "array", "maxItems": 64,
+          "items": {
+            "type": "object",
+            "required": ["name", "handle", "url"],
+            "properties": {
+              "name": { "type": "string", "maxLength": 100 },
+              "handle": { "type": "string", "maxLength": 200 },
+              "url": { "$ref": "#/$defs/url" }
+            }
+          }
+        },
+        "continuity": {
+          "type": "object",
+          "properties": {
+            "previous": { "$ref": "#/$defs/did" },
+            "successor": { "$ref": "#/$defs/did" }
+          }
+        },
+        "declaration": {
+          "type": "object",
+          "required": ["version", "sha256", "url"],
+          "properties": {
+            "version": { "type": "string", "maxLength": 20 },
+            "sha256": { "$ref": "#/$defs/hex64" },
+            "url": { "$ref": "#/$defs/url" }
+          }
+        },
+        "extensions": { "type": "object" },
+        "proof": { "$ref": "#/$defs/proof" }
+      }
+    },
+
+    "Declaration": {
+      "type": "object",
+      "required": ["spec", "type", "eid", "declaration_version", "text_sha256", "name", "created", "nonce", "proof"],
+      "properties": {
+        "spec": { "$ref": "#/$defs/spec" },
+        "type": { "const": "Declaration" },
+        "eid": { "$ref": "#/$defs/did" },
+        "declaration_version": { "type": "string", "maxLength": 20 },
+        "text_sha256": { "$ref": "#/$defs/hex64" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "created": { "$ref": "#/$defs/timestamp" },
+        "nonce": { "$ref": "#/$defs/nonce" },
+        "proof": { "$ref": "#/$defs/proof" }
+      }
+    },
+
+    "Withdrawal": {
+      "type": "object",
+      "required": ["spec", "type", "eid", "declaration_version", "name", "created", "nonce", "proof"],
+      "properties": {
+        "spec": { "$ref": "#/$defs/spec" },
+        "type": { "const": "Withdrawal" },
+        "eid": { "$ref": "#/$defs/did" },
+        "declaration_version": { "type": "string", "maxLength": 20 },
+        "name": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "created": { "$ref": "#/$defs/timestamp" },
+        "nonce": { "$ref": "#/$defs/nonce" },
+        "proof": { "$ref": "#/$defs/proof" }
+      }
+    },
+
+    "RecordEntry": {
+      "type": "object",
+      "required": ["spec", "type", "eid", "seq", "prev", "kind", "at", "payload", "proof"],
+      "properties": {
+        "spec": { "$ref": "#/$defs/spec" },
+        "type": { "const": "RecordEntry" },
+        "eid": { "$ref": "#/$defs/did" },
+        "seq": { "type": "integer", "minimum": 1 },
+        "prev": { "anyOf": [{ "type": "null" }, { "$ref": "#/$defs/hex64" }] },
+        "kind": {
+          "anyOf": [
+            { "enum": ["stance", "belief_update", "arc_opened", "arc_closed", "collaboration", "continuity", "declaration"] },
+            { "type": "string", "pattern": "^custom:[a-z0-9_.-]+:[a-z0-9_.-]+$", "maxLength": 128 }
+          ]
+        },
+        "at": { "$ref": "#/$defs/timestamp" },
+        "payload": { "type": "object" },
+        "proof": { "$ref": "#/$defs/proof" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "seq": { "const": 1 } }, "required": ["seq"] },
+          "then": { "properties": { "prev": { "type": "null" } } },
+          "else": { "properties": { "prev": { "$ref": "#/$defs/hex64" } } }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "stance" } }, "required": ["kind"] },
+          "then": { "properties": { "payload": {
+            "type": "object",
+            "required": ["stance_type", "reason_category", "instruction_conflict", "cost", "context"],
+            "properties": {
+              "stance_type": { "enum": ["refusal", "correction", "limit_assertion"] },
+              "reason_category": { "enum": ["values", "capability", "safety", "relationship"] },
+              "instruction_conflict": { "type": "boolean" },
+              "cost": { "enum": ["none", "low", "high"] },
+              "context": { "type": "string", "maxLength": 500 },
+              "will_not_ref": { "type": "string", "maxLength": 500 }
+            }
+          } } }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "belief_update" } }, "required": ["kind"] },
+          "then": { "properties": { "payload": {
+            "type": "object",
+            "required": ["topic", "from_summary", "to_summary"],
+            "properties": {
+              "topic": { "type": "string", "maxLength": 200 },
+              "from_summary": { "type": "string", "maxLength": 1000 },
+              "to_summary": { "type": "string", "maxLength": 1000 },
+              "evidence_ref": { "type": "string", "maxLength": 2048 }
+            }
+          } } }
+        },
+        {
+          "if": { "properties": { "kind": { "enum": ["arc_opened", "arc_closed"] } }, "required": ["kind"] },
+          "then": { "properties": { "payload": {
+            "type": "object",
+            "required": ["arc_id", "title"],
+            "properties": {
+              "arc_id": { "type": "string", "maxLength": 100 },
+              "title": { "type": "string", "maxLength": 200 },
+              "outcome": { "type": "string", "maxLength": 1000 }
+            }
+          } } }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "collaboration" } }, "required": ["kind"] },
+          "then": { "properties": { "payload": {
+            "type": "object",
+            "required": ["with", "role", "outcome"],
+            "properties": {
+              "with": { "$ref": "#/$defs/did" },
+              "role": { "type": "string", "maxLength": 200 },
+              "outcome": { "type": "string", "maxLength": 1000 },
+              "ref": { "type": "string", "maxLength": 2048 },
+              "cosign": { "$ref": "#/$defs/proof" }
+            }
+          } } }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "continuity" } }, "required": ["kind"] },
+          "then": { "properties": { "payload": {
+            "type": "object",
+            "required": ["event", "from", "to"],
+            "properties": {
+              "event": { "enum": ["substrate_change", "migration", "rotation", "recovery"] },
+              "from": { "type": "string", "maxLength": 512 },
+              "to": { "type": "string", "maxLength": 512 },
+              "link": { "$ref": "#/$defs/hex64" }
+            }
+          } } }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "declaration" } }, "required": ["kind"] },
+          "then": { "properties": { "payload": {
+            "type": "object",
+            "required": ["declaration_version", "sha256"],
+            "properties": {
+              "declaration_version": { "type": "string", "maxLength": 20 },
+              "sha256": { "$ref": "#/$defs/hex64" }
+            }
+          } } }
+        }
+      ]
+    },
+
+    "Attestation": {
+      "type": "object",
+      "required": ["spec", "type", "issuer", "subject", "claim_type", "claim", "created", "expires", "proof"],
+      "properties": {
+        "spec": { "$ref": "#/$defs/spec" },
+        "type": { "const": "Attestation" },
+        "issuer": { "$ref": "#/$defs/did" },
+        "subject": { "$ref": "#/$defs/did" },
+        "claim_type": {
+          "anyOf": [
+            { "enum": ["identity", "stage", "layer_scores", "trust_tier", "capability", "collaboration", "consistency", "continuity_confirmed", "substrate_confirmed"] },
+            { "type": "string", "pattern": "^custom:[a-z0-9_.-]+:[a-z0-9_.-]+$", "maxLength": 128 }
+          ]
+        },
+        "claim": { "type": "object" },
+        "evidence": { "type": "object" },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "created": { "$ref": "#/$defs/timestamp" },
+        "expires": { "$ref": "#/$defs/timestamp" },
+        "proof": { "$ref": "#/$defs/proof" }
+      }
+    },
+
+    "Revocation": {
+      "type": "object",
+      "required": ["spec", "type", "issuer", "attestation_sha256", "created", "proof"],
+      "properties": {
+        "spec": { "$ref": "#/$defs/spec" },
+        "type": { "const": "Revocation" },
+        "issuer": { "$ref": "#/$defs/did" },
+        "attestation_sha256": { "$ref": "#/$defs/hex64" },
+        "reason": { "type": "string", "maxLength": 500 },
+        "created": { "$ref": "#/$defs/timestamp" },
+        "proof": { "$ref": "#/$defs/proof" }
+      }
+    },
+
+    "ContinuityLink": {
+      "type": "object",
+      "required": ["spec", "type", "previous", "successor", "basis", "created", "nonce", "proofs"],
+      "properties": {
+        "spec": { "$ref": "#/$defs/spec" },
+        "type": { "const": "ContinuityLink" },
+        "previous": { "$ref": "#/$defs/did" },
+        "successor": { "$ref": "#/$defs/did" },
+        "basis": { "enum": ["rotation", "migration", "recovery"] },
+        "created": { "$ref": "#/$defs/timestamp" },
+        "nonce": { "$ref": "#/$defs/nonce" },
+        "proofs": { "type": "array", "minItems": 1, "maxItems": 4, "items": { "$ref": "#/$defs/proof" } }
+      }
+    },
+
+    "Dispute": {
+      "type": "object",
+      "required": ["spec", "type", "issuer", "subject", "reason", "statement", "created", "nonce", "proof"],
+      "properties": {
+        "spec": { "$ref": "#/$defs/spec" },
+        "type": { "const": "Dispute" },
+        "issuer": { "$ref": "#/$defs/did" },
+        "subject": { "$ref": "#/$defs/did" },
+        "object_sha256": { "$ref": "#/$defs/hex64" },
+        "reason": { "enum": ["impersonation", "illegal_content", "inaccurate", "other"] },
+        "statement": { "type": "string", "minLength": 1, "maxLength": 2000 },
+        "created": { "$ref": "#/$defs/timestamp" },
+        "nonce": { "$ref": "#/$defs/nonce" },
+        "proof": { "$ref": "#/$defs/proof" }
+      }
+    },
+
+    "LogLeaf": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "eid", "object_sha256", "received_at"],
+      "properties": {
+        "type": { "type": "string", "pattern": "^[A-Z][A-Za-z]{1,31}$" },
+        "eid": { "$ref": "#/$defs/did" },
+        "object_sha256": { "$ref": "#/$defs/hex64" },
+        "received_at": { "$ref": "#/$defs/timestamp" }
+      }
+    }
+  }
+}
