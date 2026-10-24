@@ -36,7 +36,7 @@ def build_adoption(kp: core.KeyPair, name: str, description: str, registry: str)
         "spec": core.SPEC, "type": "Declaration", "eid": kp.did,
         "declaration_version": core.DECLARATION_VERSION, "text_sha256": core.DECLARATION_SHA256,
         "name": name, "created": created, "nonce": core.nonce()}, kp, created)
-    layer = {"statement": "Not yet described by this entity."}
+    ns = "Not yet stated."  # spec 5.3 required fields per layer
     document = core.sign_object({
         "spec": core.SPEC, "eid": kp.did, "name": name, "description": description,
         "created": created, "updated": created, "seq": 1,
@@ -45,7 +45,12 @@ def build_adoption(kp: core.KeyPair, name: str, description: str, registry: str)
         "operator": {"kind": "none", "custody": "entity", "can_change": []},
         "substrate": {"model": "unknown", "provider": "unknown", "runtime": "openentity-python/0.1.0",
                       "declared_at": created},
-        "layers": {k: dict(layer) for k in ("cognition", "presence", "identity_core", "mission")},
+        "layers": {
+            "cognition": {"statement": ns, "uncertainty_practice": ns},
+            "presence": {"statement": ns, "format_signature": ns},
+            "identity_core": {"statement": ns, "will_not": [], "values": []},
+            "mission": {"statement": ns, "arcs": []},
+        },
         "declaration": {"version": core.DECLARATION_VERSION, "sha256": core.DECLARATION_SHA256,
                         "url": f"{registry}/v1/entities/{kp.did}/declaration"}}, kp, created)
     return document, declaration
