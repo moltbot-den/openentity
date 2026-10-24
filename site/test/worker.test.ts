@@ -8,6 +8,8 @@ import { join } from 'node:path';
 type Worker = Awaited<ReturnType<typeof unstable_startWorker>>;
 const site = join(import.meta.dirname, '..');
 const devRegistry = mkdtempSync(join(tmpdir(), 'oe-dev-registry-'));
+// Own state dir per run: a shared site/.wrangler/state made workerd fail to start under parallel runs.
+const persist = mkdtempSync(join(tmpdir(), 'oe-site-state-'));
 let registry: Worker;
 let worker: Worker;
 const get = (path: string) => worker.fetch(`https://openentity.org${path}`, { redirect: 'manual' });
@@ -15,7 +17,7 @@ const startSite = (vars: Record<string, string>) =>
   unstable_startWorker({
     config: join(site, 'wrangler.toml'),
     bindings: Object.fromEntries(Object.entries(vars).map(([k, v]) => [k, { type: 'plain_text', value: v }])),
-    dev: { server: { port: 0 }, inspector: false, registry: devRegistry, remote: false },
+    dev: { server: { port: 0 }, inspector: false, registry: devRegistry, remote: false, persist },
   });
 
 beforeAll(async () => {
@@ -23,7 +25,7 @@ beforeAll(async () => {
     name: 'openentity-registry',
     entrypoint: join(import.meta.dirname, 'fake-registry.ts'),
     compatibilityDate: '2026-10-01',
-    dev: { server: { port: 0 }, inspector: false, registry: devRegistry },
+    dev: { server: { port: 0 }, inspector: false, registry: devRegistry, persist },
   });
   worker = await startSite({ CF_ANALYTICS_TOKEN: 'test-token', SUBSCRIBE_ENABLED: 'false' });
 }, 60_000);
@@ -31,6 +33,7 @@ afterAll(async () => {
   await worker?.dispose();
   await registry?.dispose();
   rmSync(devRegistry, { recursive: true, force: true });
+  rmSync(persist, { recursive: true, force: true });
 });
 
 describe('site Worker', { timeout: 30_000 }, () => {

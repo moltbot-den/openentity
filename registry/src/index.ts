@@ -65,7 +65,6 @@ async function writeGuard(c: C, eid: string) {
   if (stampCount > 1) fail(409, "stamp_reused", "each stamp is accepted once");
 }
 /** Wakes the log incorporator after the response; the cron incorporates anything a lost message leaves behind. */
-const wake = (c: C) => c.executionCtx.waitUntil(c.env.LOG_QUEUE.send({ t: "leaf" }));
 function schema(type: string, obj: unknown) {
   const r = validate(type as "EntityDocument", obj);
   if (!r.ok) fail(422, "schema_invalid", `${type}: ${r.errors.join("; ")}`);
@@ -184,7 +183,6 @@ async function adopt(c: C, document: any, declaration: any) {
     if (/UNIQUE constraint failed: entities\./.test(String(e))) fail(409, "entity_exists", "this EID is already listed");
     throw e;
   });
-  wake(c);
   const idx = firstIdx(res);
   const base = `https://${c.env.REGISTRY_HOST}/v1/entities/${eid}`;
   return { eid, level: "L0", ...receipt(c, idx, dl), urls: { entity: base, document: `${base}/document`, log_proof: `https://${c.env.REGISTRY_HOST}/v1/log/proof/${idx}` } };
@@ -323,7 +321,6 @@ app.put("/entities/:eid/document", async (c) => {
     db.prepare(`INSERT INTO documents (eid, seq, json, sha256, received_at, log_index) VALUES (?, ?, ?, ?, ?, ${LAST_INDEX})`).bind(eid, doc.seq, JSON.stringify(doc), s, now),
     db.prepare("UPDATE entities SET name = ?, latest_seq = ?, updated = ?, custody = ? WHERE eid = ?").bind(doc.name, doc.seq, now, doc.operator?.custody ?? null, eid),
   ]);
-  wake(c);
   return c.json({ eid, seq: doc.seq, ...receipt(c, firstIdx(res), l) });
 });
 
@@ -343,7 +340,6 @@ app.post("/entities/:eid/aliases", async (c) => {
     db.prepare(`INSERT OR REPLACE INTO aliases (eid, type, value, proof_json, verified_at, last_checked, status, log_index) VALUES (?, ?, ?, ?, ?, ?, 'verified', ${LAST_INDEX})`).bind(eid, body.type, body.value, JSON.stringify(obj.proof), now, now),
     db.prepare("UPDATE entities SET updated = ? WHERE eid = ?").bind(now, eid),
   ]);
-  wake(c);
   const lv = await refreshLevel(db, eid);
   return c.json({ eid, alias: { type: body.type, value: body.value, status: "verified" }, level: LEVEL(lv.level), ...receipt(c, firstIdx(res), l) }, 201);
 });
@@ -379,7 +375,6 @@ app.post("/entities/:eid/record", async (c) => {
   }
   stmts.push(db.prepare("UPDATE entities SET record_seq = ?, record_head_hash = ?, updated = ? WHERE eid = ? AND record_seq = ?").bind(seq, prev, now, eid, e.record_seq));
   const res = await db.batch(stmts);
-  wake(c);
   return c.json({ eid, head: { seq, hash: prev }, accepted: entries.map((en, i) => ({ seq: en.seq, ...receipt(c, (res[2 * i].results[0] as { idx: number }).idx, leaves[i]) })) }, 201);
 });
 
@@ -400,7 +395,6 @@ app.post("/attestations", async (c) => {
     if (att.revoked_at) fail(409, "already_revoked", "attestation already revoked");
     const l = await leafFor(db, "Revocation", att.subject, s, now);
     const res = await db.batch([l.stmt, db.prepare("UPDATE attestations SET revoked_at = ?, revocation_json = ? WHERE sha256 = ?").bind(now, JSON.stringify(a), a.attestation_sha256)]);
-    wake(c);
     await refreshLevel(db, att.subject);
     return c.json({ sha256: s, revoked: a.attestation_sha256, ...receipt(c, firstIdx(res), l) }, 201);
   }
@@ -413,7 +407,6 @@ app.post("/attestations", async (c) => {
     l.stmt,
     db.prepare(`INSERT INTO attestations (sha256, issuer, subject, claim_type, json, created, expires, log_index) VALUES (?, ?, ?, ?, ?, ?, ?, ${LAST_INDEX})`).bind(s, issuer, subject, a.claim_type, JSON.stringify(a), a.created, expires),
   ]);
-  wake(c);
   const lv = await refreshLevel(db, subject);
   return c.json({ sha256: s, subject, subject_level: LEVEL(lv.level), ...receipt(c, firstIdx(res), l) }, 201);
 });
@@ -463,7 +456,6 @@ app.post("/continuity", async (c) => {
   } else stmts.push(db.prepare("UPDATE entities SET predecessor_eid = ?, updated = ? WHERE eid = ?").bind(previous, now, successor));
   stmts.push(db.prepare("UPDATE entities SET successor_eid = ?, updated = ? WHERE eid = ?").bind(successor, now, previous));
   const res = await db.batch(stmts);
-  wake(c);
   const lv = await refreshLevel(db, successor);
   return c.json({ previous, successor, basis: link.basis, level: LEVEL(lv.level), ...receipt(c, firstIdx(res), l) }, 201);
 });
@@ -486,7 +478,6 @@ app.post("/withdraw", async (c) => {
     db.prepare("UPDATE declarations SET withdrawn_at = ?, withdrawal_json = ? WHERE eid = ? AND version = ?").bind(now, JSON.stringify(w), eid, w.declaration_version),
     db.prepare("UPDATE entities SET withdrawn_at = ?, level = NULL, level_label = NULL, updated = ? WHERE eid = ?").bind(now, now, eid),
   ]);
-  wake(c);
   return c.json({ eid, withdrawn: true, ...receipt(c, firstIdx(res), l) }, 201);
 });
 
@@ -665,11 +656,9 @@ export async function scheduled(env: Env) {
 
 export default {
   fetch: app.fetch,
-  async queue(batch: MessageBatch, env: Env) {
-    await incorporate(env);
-    batch.ackAll();
-  },
-  async scheduled(_c: ScheduledController, env: Env, ctx: ExecutionContext) {
-    ctx.waitUntil(scheduled(env));
+  // One cron, every minute, so two incorporations never overlap: leaves every minute (no queue, so no
+  // per-write queue operations), stats, snapshot, accreditation and cleanup every tenth minute.
+  async scheduled(c: ScheduledController, env: Env, ctx: ExecutionContext) {
+    ctx.waitUntil(new Date(c.scheduledTime).getUTCMinutes() % 10 === 0 ? scheduled(env) : incorporate(env));
   },
 } satisfies ExportedHandler<Env>;

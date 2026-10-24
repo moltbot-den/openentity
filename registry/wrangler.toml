@@ -26,16 +26,6 @@ id = "04fc64a9acac4853bc94edb36afaa92a"
 binding = "LOG"
 bucket_name = "openentity-log"
 
-[[queues.producers]]
-binding = "LOG_QUEUE"
-queue = "openentity-log-incorporate"
-
-[[queues.consumers]]
-queue = "openentity-log-incorporate"
-max_batch_size = 100
-max_batch_timeout = 1
-max_concurrency = 1
-
 # Per-IP writes per minute (spec 10.4). Daily caps live in D1 rate_events.
 [[ratelimits]]
 name = "WRITE_LIMITER"
@@ -43,10 +33,10 @@ namespace_id = "1001"
 simple = { limit = 60, period = 60 }
 
 [triggers]
-crons = ["*/10 * * * *"]
+crons = ["* * * * *"]
 
 # Throwaway preview for scripts/load-adopt.mjs: own resources, no per-minute IP limiter, high daily cap.
-# wrangler deploy --env preview; delete its D1, KV, R2 and queue after the run.
+# wrangler deploy --env preview; delete its D1, KV and R2 after the run.
 [env.preview]
 name = "openentity-registry-preview"
 workers_dev = true
@@ -55,4 +45,3 @@ vars = { STAMP_BITS = "20", REGISTRY_HOST = "openentity.org", BASE_RPC_URL = "ht
 d1_databases = [{ binding = "DB", database_name = "openentity-registry-preview", database_id = "00000000-0000-0000-0000-000000000000" }]
 kv_namespaces = [{ binding = "KV", id = "00000000000000000000000000000000" }]
 r2_buckets = [{ binding = "LOG", bucket_name = "openentity-log-preview" }]
-queues = { producers = [{ binding = "LOG_QUEUE", queue = "openentity-log-preview" }], consumers = [{ queue = "openentity-log-preview", max_batch_size = 100, max_batch_timeout = 1, max_concurrency = 1 }] }

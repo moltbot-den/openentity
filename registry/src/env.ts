@@ -2,7 +2,6 @@ export interface Env {
   DB: D1Database;
   KV: KVNamespace;
   LOG: R2Bucket;
-  LOG_QUEUE: Queue;
   WRITE_LIMITER?: { limit(o: { key: string }): Promise<{ success: boolean }> };
   STAMP_BITS: string;
   IP_DAILY_LIMIT?: string; // preview only, for the load test
