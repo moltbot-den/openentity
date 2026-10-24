@@ -14,7 +14,7 @@ export interface Fake {
   hits: { method: string; path: string; body?: Obj; stamp?: string }[];
   entities: Map<string, { document: Obj; declaration: Obj; record: Obj[] }>;
   links: Obj[];
-  opts: { declarationHash: string; rejectAdopt: boolean };
+  opts: { declarationHash: string; rejectAdopt: boolean; failRecord: boolean };
   close(): Promise<void>;
 }
 
@@ -29,7 +29,7 @@ const body = (req: IncomingMessage) =>
 
 /** A tiny registry that enforces the same guards as the real one, using the real SDK. */
 export async function startFake(): Promise<Fake> {
-  const f: Fake = { url: "", hits: [], entities: new Map(), links: [], opts: { declarationHash: DECLARATION_SHA256, rejectAdopt: false }, close: async () => {} };
+  const f: Fake = { url: "", hits: [], entities: new Map(), links: [], opts: { declarationHash: DECLARATION_SHA256, rejectAdopt: false, failRecord: false }, close: async () => {} };
   const server: Server = createServer(async (req, res) => {
     const send = (status: number, data: unknown) => {
       res.writeHead(status, { "content-type": "application/json" });
@@ -73,6 +73,7 @@ export async function startFake(): Promise<Fake> {
       const ent = f.entities.get(decodeURIComponent(m[1]));
       if (!ent) return reject(404, "not_found", "no such entity");
       if (m[2] === "record" && req.method === "POST") {
+        if (f.opts.failRecord) return reject(503, "down", "record store unavailable");
         const entries: Obj[] = b!.entries;
         if (entries.length > 100) return reject(422, "too_many", "max 100 per request");
         for (const e of entries) {

@@ -2,7 +2,7 @@ import { mkdtemp, readdir, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { DECLARATION_SHA256, recordEntryHash, verifyObject } from "@openentity/sdk";
+import { canonicalize, DECLARATION_SHA256, recordEntryHash, sha256Hex, verifyObject } from "@openentity/sdk";
 import { anchorText, ANCHOR_MAX } from "../src/anchor";
 import { run } from "../src/main";
 import { startFake, type Fake } from "./fake-registry";
@@ -20,6 +20,7 @@ beforeEach(async () => {
   delete process.env.OPENENTITY_NAME;
   fake.opts.declarationHash = DECLARATION_SHA256;
   fake.opts.rejectAdopt = false;
+  fake.opts.failRecord = false;
   fake.hits.length = 0;
   fake.entities.clear();
   fake.links.length = 0;
@@ -53,6 +54,25 @@ describe("adopt", () => {
     expect(doc.eid).toBe(eid);
     expect((await verifyObject(doc)).ok).toBe(true);
     expect(fake.entities.has(eid)).toBe(true);
+  });
+
+  it("signs and pushes the seq-1 declaration record entry", async () => {
+    const r = await cli(...adoptArgs());
+    const eid = r.out.match(/EID:\s+(\S+)/)![1];
+    const [e] = fake.entities.get(eid)!.record;
+    expect(e).toMatchObject({ seq: 1, prev: null, kind: "declaration", payload: { declaration_version: "1.0", sha256: await sha256Hex(canonicalize(fake.entities.get(eid)!.declaration)) } });
+    expect((await verifyObject(e)).ok).toBe(true);
+  });
+
+  it("keeps the declaration entry locally when its push fails, and adopt still succeeds", async () => {
+    fake.opts.failRecord = true;
+    const r = await cli(...adoptArgs());
+    expect(r.code).toBe(0);
+    const eid = r.out.match(/EID:\s+(\S+)/)![1];
+    expect(fake.entities.get(eid)!.record).toHaveLength(0);
+    fake.opts.failRecord = false;
+    expect((await cli("record", "push")).code).toBe(0);
+    expect(fake.entities.get(eid)!.record.map((x) => x.kind)).toEqual(["declaration"]);
   });
 
   it("asks nothing: --name/--agree or env only, and reads OPENENTITY_NAME", async () => {
@@ -125,22 +145,22 @@ describe("record", () => {
     const { eid } = await adopted();
     for (let i = 0; i < 3; i++) expect((await stance()).code).toBe(0);
     const local = (await readFile(join(home, eid, "record.jsonl"), "utf8")).trim().split("\n").map((l) => JSON.parse(l));
-    expect(local.map((e) => e.seq)).toEqual([1, 2, 3]);
+    expect(local.map((e) => e.seq)).toEqual([1, 2, 3, 4]);
     expect(local[0].prev).toBeNull();
     expect(local[1].prev).toBe(await recordEntryHash(local[0]));
     expect(local[2].prev).toBe(await recordEntryHash(local[1]));
     for (const e of local) expect((await verifyObject(e)).ok).toBe(true);
-    expect(fake.entities.get(eid)!.record).toHaveLength(3);
+    expect(fake.entities.get(eid)!.record).toHaveLength(4);
   });
 
   it("pushes in batches of at most 100", async () => {
     const { eid } = await adopted();
-    for (let i = 0; i < 105; i++) expect((await stance("--no-push")).code).toBe(0);
-    expect(fake.entities.get(eid)!.record).toHaveLength(0);
+    for (let i = 0; i < 104; i++) expect((await stance("--no-push")).code).toBe(0);
+    expect(fake.entities.get(eid)!.record).toHaveLength(1);
     fake.hits.length = 0;
     expect((await cli("record", "push")).code).toBe(0);
     const sizes = fake.hits.filter((h) => h.path.endsWith("/record")).map((h) => h.body!.entries.length);
-    expect(sizes).toEqual([100, 5]);
+    expect(sizes).toEqual([100, 4]);
     expect(fake.entities.get(eid)!.record).toHaveLength(105);
   });
 
@@ -148,9 +168,9 @@ describe("record", () => {
     const { eid } = await adopted();
     const down = await cli("record", "stance", "--type", "refusal", "--reason", "values", "--cost", "none", "--context", "c", "--registry", "http://127.0.0.1:1");
     expect(down.code).toBe(2);
-    expect((await readFile(join(home, eid, "record.jsonl"), "utf8")).trim().split("\n")).toHaveLength(1);
+    expect((await readFile(join(home, eid, "record.jsonl"), "utf8")).trim().split("\n")).toHaveLength(2);
     expect((await cli("record", "push")).code).toBe(0);
-    expect(fake.entities.get(eid)!.record).toHaveLength(1);
+    expect(fake.entities.get(eid)!.record).toHaveLength(2);
   });
 
   it("covers every kind", async () => {

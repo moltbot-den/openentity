@@ -3,6 +3,8 @@ import { join } from "node:path";
 import {
   buildDeclaration,
   buildDocument,
+  canonicalize,
+  sha256Hex,
   DECLARATION_SHA256,
   DECLARATION_TEXT,
   DECLARATION_VERSION,
@@ -13,6 +15,7 @@ import {
   validate,
 } from "@openentity/sdk";
 import { CliError, EXIT, stateErr, usage } from "./errors";
+import { appendEntry, pushRecord } from "./record";
 import { Registry, specDeclHash, type Obj } from "./http";
 import {
   createEntityDir,
@@ -25,6 +28,7 @@ import {
   setCurrent,
   writeJson,
   type Ctx,
+  type Entity,
   type Result,
 } from "./store";
 
@@ -120,6 +124,11 @@ export async function adopt({ v }: Ctx): Promise<Result> {
   const level: string | undefined = res.level;
   await saveState({ dir, state: { ...state, level } });
   await setCurrent(eid);
+
+  // Seq-1 declaration entry (spec 7.3). The registry never writes entries; a failed push stays local for the next push.
+  const ent: Entity = { eid, dir, kp, doc: document, declaration, state: { ...state, level }, registry: reg };
+  await appendEntry(ent, "declaration", { declaration_version: DECLARATION_VERSION, sha256: await sha256Hex(canonicalize(declaration)) });
+  await pushRecord(ent).catch(() => undefined);
 
   const out = {
     eid: res.eid ?? eid,
