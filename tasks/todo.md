@@ -30,7 +30,7 @@ Site (`site/`, Astro with Starlight, Workers static assets)
 - [x] `llms.txt` (Appendix A), `llms-full.txt`, `skill/openentity/SKILL.md`, `AGENTS.md`, well-known files, robots.txt with Content-Signal, sitemap, security.txt
 - [ ] Human form: Turnstile plus Customer.io Track API (form not rendered until credentials exist). Site side done: rendered by the site Worker only when `SUBSCRIBE_ENABLED = "true"`; posts form-encoded `email`, `operator`, `cf-turnstile-response` to `/v1/subscribe`
 Cloudflare
-- [x] Resources: D1 `openentity-registry` (f24dd781-d0c2-41a7-95cd-60c52588891d), KV `openentity-registry` (04fc64a9acac4853bc94edb36afaa92a), R2 `openentity-log`, Queues `openentity-log-incorporate` and `openentity-alias-verify` (Workers Paid confirmed by Queues)
+- [x] Resources: D1 `openentity-registry` (f24dd781-d0c2-41a7-95cd-60c52588891d), KV `openentity-registry` (04fc64a9acac4853bc94edb36afaa92a), R2 `openentity-log`. No Queues: the account is on the Queues free tier (10K operations a day), which one load test used up, so a per-minute cron incorporates leaves instead
 - [x] Turnstile widget `openentity-subscribe` (site key 0x4AAAAAAFkggsScyaPIMp2v); Web Analytics site token 1c8d90533d834474833d04a8b62d5117
 - [x] WAF custom rule on openentity.org: skip security level, browser integrity check, managed rules, rate limiting and Super Bot Fight Mode on every path (token `moltbot-den/cloudflare-api-token` cannot edit zone settings directly, so the skip rule does it)
 - [ ] Zone settings (PRD 7.7): AI crawler categories allowed, Bot Fight Mode off, no challenges, Web Analytics

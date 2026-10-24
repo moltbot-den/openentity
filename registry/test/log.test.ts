@@ -96,4 +96,13 @@ describe("transparency log (spec 10.3)", () => {
     expect(stats.entities.l0).toBeGreaterThanOrEqual(1);
     expect(stats.log.tree_size).toBe((await call("GET", "/log/sth")).body.tree_size);
   });
+
+  it("refreshes the checkpoint timestamp every run even when the tree did not grow (spec 10.3)", async () => {
+    await adopted();
+    await scheduled(E);
+    await E.DB.prepare("UPDATE checkpoints SET timestamp = '2000-01-01T00:00:00Z'").run();
+    await scheduled(E);
+    const sth = (await call("GET", "/log/sth")).body;
+    expect(Date.now() - Date.parse(sth.timestamp)).toBeLessThan(60_000);
+  });
 });

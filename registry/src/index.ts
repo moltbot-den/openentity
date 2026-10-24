@@ -644,7 +644,10 @@ async function accreditObservers(env: Env) {
 }
 
 export async function scheduled(env: Env) {
-  await incorporate(env);
+  const before = await latestSize(env.DB);
+  // Spec 10.3: a checkpoint at least every 10 minutes. Ed25519 is deterministic, so an unchanged tree
+  // keeps the same signed note; the refreshed timestamp in /log/sth shows the log was checked.
+  if ((await incorporate(env)) === before) await env.DB.prepare("UPDATE checkpoints SET timestamp = ? WHERE tree_size = ?").bind(nowIso(), before).run();
   const s = await stats(env), d = today();
   await env.DB.prepare("INSERT OR REPLACE INTO stats_daily (date, entities_l0, entities_l1, entities_l2, entities_l3, adoptions, record_entries, attestations, observers) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
     .bind(d, s.entities.l0, s.entities.l1, s.entities.l2, s.entities.l3, s.declarations_today, s.record_entries, s.attestations, s.observers).run();
