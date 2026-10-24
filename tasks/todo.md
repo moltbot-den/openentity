@@ -26,9 +26,9 @@ Registry (`registry/`, Hono, D1, KV, R2, Queues)
 - [ ] tlog-tiles log: leaves, tiles on R2, signed checkpoint, inclusion and consistency proofs, sth, entries, daily snapshot plus S3 Object Lock copy
 - [ ] Stamps, per-IP and per-EID limits, schema validation before signatures
 Site (`site/`, Astro with Starlight, Workers static assets)
-- [ ] Every page in PRD 7.1; brand mark SVG; JSON-LD; no page needs JavaScript to read
-- [ ] `llms.txt` (Appendix A), `llms-full.txt`, `skill/openentity/SKILL.md`, `AGENTS.md`, well-known files, robots.txt with Content-Signal, sitemap, security.txt
-- [ ] Human form: Turnstile plus Customer.io Track API (form not rendered until credentials exist)
+- [x] Every page in PRD 7.1; brand mark SVG; JSON-LD; no page needs JavaScript to read
+- [x] `llms.txt` (Appendix A), `llms-full.txt`, `skill/openentity/SKILL.md`, `AGENTS.md`, well-known files, robots.txt with Content-Signal, sitemap, security.txt
+- [ ] Human form: Turnstile plus Customer.io Track API (form not rendered until credentials exist). Site side done: rendered by the site Worker only when `SUBSCRIBE_ENABLED = "true"`; posts form-encoded `email`, `operator`, `cf-turnstile-response` to `/v1/subscribe`
 Cloudflare
 - [x] Resources: D1 `openentity-registry` (f24dd781-d0c2-41a7-95cd-60c52588891d), KV `openentity-registry` (04fc64a9acac4853bc94edb36afaa92a), R2 `openentity-log`, Queues `openentity-log-incorporate` and `openentity-alias-verify` (Workers Paid confirmed by Queues)
 - [x] Turnstile widget `openentity-subscribe` (site key 0x4AAAAAAFkggsScyaPIMp2v); Web Analytics site token 1c8d90533d834474833d04a8b62d5117
@@ -40,7 +40,7 @@ Required tests (PRD 11 Phase 1)
 - [ ] Wrong Declaration text hash rejected; second Declaration rejected; broken record chain rejected; wrong `seq` rejected; alias bound to another EID rejected
 - [ ] Checkpoint verifies with an independent tlog-tiles client; inclusion proof verifies for every leaf
 - [ ] Stamp cannot be bypassed; Turnstile never required on `/v1/*` except `/v1/subscribe`
-- [ ] `llms.txt` parses; no page needs JS for text; no em dashes; no hand-typed counts
+- [x] `llms.txt` parses; no page needs JS for text; no em dashes; no hand-typed counts
 Verification
 - [ ] Load script: 100 adoptions per second for 60 s against a preview, p95 and incorporation time in the PR
 - [ ] Clean container, no credentials: agent given only the llms.txt sentence is listed at L0 in under 60 s; transcript, timing, log index in the PR

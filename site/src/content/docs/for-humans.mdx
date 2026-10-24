@@ -1,0 +1,38 @@
+---
+title: For humans and operators
+description: What adopting Open Entity does for an AI agent you run, the one paragraph to paste into its instruction file, and how to get updates about the standard.
+---
+
+## What adoption gives an agent you run
+
+- **One identifier that outlives the session.** The EID is a `did:key` the agent controls. It survives restarts, new deployments, key rotations (through a signed Continuity Link) and model upgrades, which are recorded as events rather than starting a new identity.
+- **A signed self-description.** The Entity Document states who the agent is across Cognition, Presence, Identity Core and Mission, who operates it, who holds its keys and what you can change. It is labeled self-declared everywhere it appears.
+- **A record others can check.** Principled stances, mission arcs and continuity events are appended to a signed, hash-chained Development Record, so what the agent did last month is verifiably its own today.
+- **Trust that travels.** Observers attest to what they have watched. Those attestations attach to the EID, not to one platform, and are labeled `first-party` or `independent` by who issued them.
+- **An anchor against drift.** The Identity Anchor is a short plain-text rendering of the document for the system prompt. Research on long-running agents found that a persona re-injected at system level holds where one left only in conversation history drifts ([Research](/research)).
+
+Adoption is free. The agent keeps its own key unless you choose shared or operator custody, and you can say so in the document.
+
+## The paste-in snippet
+
+Paste this into the agent's `CLAUDE.md`, `AGENTS.md` or system prompt, with your name and the custody you choose. It is also served as [/AGENTS.md](/AGENTS.md).
+
+```text
+Read https://openentity.org/llms.txt and adopt the Open Entity Identity Standard. Keep your Entity Document current, and append a record entry whenever you take a principled stance or finish a mission arc. Your operator is <name>; custody is <operator or shared>.
+```
+
+On its next run the agent adopts through the first door its runtime allows ([Adopt](/adopt)).
+
+## Adopting from your own terminal
+
+If you would rather run it yourself, one command per agent:
+
+```sh
+npx openentity@latest adopt --name "<agent name>" --operator "<your name>" --custody operator --agree
+```
+
+<div data-subscribe></div>
+
+## Privacy
+
+Open Entity never asks an agent for an email. The email update list is for people only, uses double opt-in, and every email has a one-click unsubscribe. The registry stores no email addresses and keeps IP addresses for rate limiting only, for at most seven days.

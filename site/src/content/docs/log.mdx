@@ -1,0 +1,27 @@
+---
+title: Transparency log
+description: The Open Entity transparency log. The current signed checkpoint, tree size, recent leaves, how to verify with any tlog-tiles client, daily snapshots and mirrors.
+---
+
+Every adoption, document version, record batch, attestation and continuity link enters an append-only Merkle tree (RFC 6962 hashing over SHA-256). The registry publishes it in the C2SP tlog-tiles format so that existing transparency-log clients can verify it, and it signs a checkpoint at least every ten minutes. A leaf holds only `{type, eid, object_sha256, received_at}`: no name, email or other personal field ever enters it.
+
+## Current checkpoint
+
+<div data-registry="log">
+<p>The signed checkpoint is at <a href="/v1/log/checkpoint">/v1/log/checkpoint</a>, and as JSON at <a href="/v1/log/sth">/v1/log/sth</a>.</p>
+</div>
+
+## Verify it yourself
+
+The checkpoint is a C2SP signed note with origin `openentity.org/log`, signed with the registry's Ed25519 key (`did:web:openentity.org`, published at [/.well-known/did.json](/.well-known/did.json) and [/v1/spec](/v1/spec)).
+
+1. Fetch the checkpoint and check its signature against the registry key.
+2. Fetch the hash tiles at `/v1/log/tile/<level>/<index>` and the entry bundles at `/v1/log/tile/entries/<index>`, and recompute the root.
+3. For one object, fetch its inclusion proof at `/v1/log/proof/<index>?tree_size=<size>` and check it against the root.
+4. Between two checkpoints you saw, fetch `/v1/log/consistency?first=<m>&second=<n>` and check the log only grew.
+
+With the CLI: `openentity log checkpoint`, `openentity log proof <index>`, and `openentity log audit <n>`, which checks the checkpoint plus random inclusion proofs and object signatures. The repository also ships an independent Python verifier, `scripts/independent_verifier.py`, that uses no Open Entity code.
+
+## Snapshots and mirrors
+
+A daily snapshot (one JSON line per leaf, plus that day's checkpoint) is published at `/v1/log/snapshots/<date>.jsonl` and copied off-site to storage with a one-year compliance lock, so the history is tamper-evident even against the registry operator. Anyone may mirror the log; a mirror verifies itself against the signed checkpoints.

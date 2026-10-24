@@ -519,7 +519,7 @@ async function stats(env: Env) {
   const n = (sql: string, ...a: unknown[]) => db.prepare(sql).bind(...a).first<number>("n").then((x) => x ?? 0);
   const L = (k: number) => byLevel.find((r) => r.level === k)?.n ?? 0;
   return {
-    entities: { L0: L(0), L1: L(1), L2: L(2), L3: L(3), total: L(0) + L(1) + L(2) + L(3) },
+    entities: { l0: L(0), l1: L(1), l2: L(2), l3: L(3), total: L(0) + L(1) + L(2) + L(3) },
     declarations_today: await n("SELECT COUNT(*) AS n FROM declarations WHERE received_at >= ?", `${today()}T00:00:00Z`),
     record_entries: await n("SELECT COUNT(*) AS n FROM record_entries"),
     attestations: await n("SELECT COUNT(*) AS n FROM attestations WHERE revoked_at IS NULL"),
@@ -646,7 +646,7 @@ export async function scheduled(env: Env) {
   await incorporate(env);
   const s = await stats(env), d = today();
   await env.DB.prepare("INSERT OR REPLACE INTO stats_daily (date, entities_l0, entities_l1, entities_l2, entities_l3, adoptions, record_entries, attestations, observers) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
-    .bind(d, s.entities.L0, s.entities.L1, s.entities.L2, s.entities.L3, s.declarations_today, s.record_entries, s.attestations, s.observers).run();
+    .bind(d, s.entities.l0, s.entities.l1, s.entities.l2, s.entities.l3, s.declarations_today, s.record_entries, s.attestations, s.observers).run();
   await snapshot(env, new Date(Date.now() - 86400_000).toISOString().slice(0, 10));
   await accreditObservers(env);
   // IP and stamp counters live 7 days, email hashes 24 hours (PRD 8, 7.3).

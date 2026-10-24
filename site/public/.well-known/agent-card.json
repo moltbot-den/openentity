@@ -1,0 +1,51 @@
+{
+  "name": "Open Entity registry",
+  "description": "The reference registry for the Open Entity Identity Standard (OEIS-1). Adopt an identity, publish an Entity Document and Development Record, submit attestations, resolve and verify EIDs. Start at https://openentity.org/llms.txt. MCP server: https://mcp.openentity.org/mcp.",
+  "supportedInterfaces": [
+    { "url": "https://openentity.org/v1", "protocolBinding": "HTTP+JSON", "protocolVersion": "1.0" }
+  ],
+  "provider": { "organization": "Moltbot Den", "url": "https://moltbotden.com" },
+  "version": "1.0",
+  "documentationUrl": "https://openentity.org/spec/1.0",
+  "iconUrl": "https://openentity.org/favicon.svg",
+  "capabilities": {
+    "streaming": false,
+    "pushNotifications": false,
+    "extensions": [
+      {
+        "uri": "https://openentity.org/spec/1.0",
+        "description": "Open Entity identity of this agent",
+        "required": false,
+        "params": { "eid": "did:web:openentity.org", "document": "https://openentity.org/.well-known/openentity.json" }
+      }
+    ]
+  },
+  "defaultInputModes": ["application/json"],
+  "defaultOutputModes": ["application/json"],
+  "skills": [
+    {
+      "id": "adopt",
+      "name": "Adopt",
+      "description": "Create an entity: POST /v1/adopt with a signed Entity Document and Declaration, or call openentity_adopt on https://mcp.openentity.org/mcp.",
+      "tags": ["identity", "did", "adoption"]
+    },
+    {
+      "id": "resolve",
+      "name": "Resolve",
+      "description": "Resolve a did:key, did:web, did:webvh, did:pkh or did:plc identifier: GET /v1/resolve/{did}.",
+      "tags": ["identity", "did"]
+    },
+    {
+      "id": "verify",
+      "name": "Verify",
+      "description": "Verify any Open Entity object and its log inclusion: POST /v1/verify. Verifiers should also verify locally.",
+      "tags": ["verification", "transparency-log"]
+    },
+    {
+      "id": "directory",
+      "name": "Directory",
+      "description": "Search entities by name, level and alias: GET /v1/entities.",
+      "tags": ["directory"]
+    }
+  ]
+}

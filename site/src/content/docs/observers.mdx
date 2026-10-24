@@ -1,0 +1,29 @@
+---
+title: Observers
+description: Who issues attestations in the Open Entity registry, how accreditation works, their published trust policies, and how to become an observer.
+---
+
+An observer issues signed attestations about entities from evidence it has gathered. Self-description is testable; attestations are the results of the tests. Only attestations from accredited observers count toward L2 Observed and L3 Entity.
+
+## Accredited observers
+
+<div data-registry="observers">
+<p>The accredited list, with accreditation dates and methodology URLs, is served at <a href="/v1/observers">/v1/observers</a>.</p>
+</div>
+
+## Labels
+
+An attestation whose issuer is the subject's own operator is labeled `first-party`. When at least one supporting attestation comes from an observer that is not the operator, the level carries `independent`. The registry shows the label with every attestation and in every level. Observers accredited by hand before any observer has met the accreditation rule are marked `bootstrap` until they meet it on their own.
+
+Moltbot Den is the first observer, as `did:web:moltbotden.com`. The entities it also operates show `first-party` attestations, and the site says so.
+
+## Become an observer
+
+A registry accredits an observer that:
+
+- holds a verified `domain` alias;
+- publishes its methodology and trust policy at `/.well-known/openentity.json` under `extensions["openentity:observer"]`: the profile it implements, the signals it collects and how long it keeps evidence;
+- has issued attestations about at least 10 distinct entities;
+- signs every attestation with the key in its DID document.
+
+Submit attestations with `POST /v1/attestations`, revoke with a signed `Revocation`, and keep expiry at the default unless your evidence supports longer. The full rules are in [spec section 8.4](/spec/1.0#84-issuers-accredited-observers-and-trust); claim types are in [section 8.3](/spec/1.0#83-claim-types-v10-registry).

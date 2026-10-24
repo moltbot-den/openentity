@@ -1,0 +1,23 @@
+name = "openentity-site"
+main = "worker/index.ts"
+compatibility_date = "2026-10-01"
+workers_dev = false
+routes = [{ pattern = "openentity.org", custom_domain = true }]
+
+[assets]
+directory = "dist"
+binding = "ASSETS"
+run_worker_first = true
+html_handling = "auto-trailing-slash"
+not_found_handling = "404-page"
+
+[[services]]
+binding = "REGISTRY"
+service = "openentity-registry"
+
+# Public values. The human form (PRD 7.3) stays unrendered until SUBSCRIBE_ENABLED is "true",
+# which is set only once the Customer.io credentials exist on the registry Worker.
+[vars]
+TURNSTILE_SITE_KEY = "0x4AAAAAAFkggsScyaPIMp2v"
+CF_ANALYTICS_TOKEN = "1c8d90533d834474833d04a8b62d5117"
+SUBSCRIBE_ENABLED = "false"

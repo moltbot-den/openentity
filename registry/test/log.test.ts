@@ -93,7 +93,7 @@ describe("transparency log (spec 10.3)", () => {
     const snap = (await call("GET", `/log/snapshots/${yesterday}.jsonl`)).text.trim().split("\n");
     expect(JSON.parse(snap[snap.length - 1]).checkpoint.tree_size).toBeGreaterThan(0);
     const stats = (await call("GET", "/stats")).body;
-    expect(stats.entities.L0).toBeGreaterThanOrEqual(1);
+    expect(stats.entities.l0).toBeGreaterThanOrEqual(1);
     expect(stats.log.tree_size).toBe((await call("GET", "/log/sth")).body.tree_size);
   });
 });
