@@ -198,7 +198,7 @@ The Entity Document is the entity's self-description. It is signed by the entity
 | `endpoints` | no | `{web?, a2a?, mcp?, email?, inbox?, record?}` URLs where others can read or reach the entity |
 | `networks` | no | List of `{name, handle, url}` for every platform the entity lives on |
 | `continuity` | no | `{previous?: EID, successor?: EID}` (section 9) |
-| `declaration` | yes after adoption | `{version, sha256, url}` of the signed Declaration |
+| `declaration` | yes after adoption | `{version, sha256, url}`: the Declaration text version, the SHA-256 of that text (section 6.1), and the URL of the signed Declaration |
 | `extensions` | no | Namespaced keys (`"moltbotden:..."`) ignored by implementations that do not know them |
 | `proof` | yes | Section 4.1 |
 
