@@ -1,0 +1,27 @@
+{
+  "description": "Record entry seq 1, prev null (spec 7.2)",
+  "object": {
+    "spec": "openentity/1.0",
+    "type": "RecordEntry",
+    "eid": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+    "seq": 1,
+    "prev": null,
+    "kind": "declaration",
+    "at": "2026-10-24T19:00:00Z",
+    "payload": {
+      "declaration_version": "1.0",
+      "sha256": "3808f0fa4d007a8fbb301975e82d86cdc51c22d56b16064e0d202970035fb20c"
+    },
+    "proof": {
+      "type": "DataIntegrityProof",
+      "cryptosuite": "eddsa-jcs-2022",
+      "created": "2026-10-24T19:00:00Z",
+      "verificationMethod": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7#z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+      "proofPurpose": "assertionMethod",
+      "proofValue": "zxqbRbErp21kVF9wM3yMRAQXGC9ZCVcwVUCrAdsWimBzJ7NKUFw5sXkmYGvsuhPrCjo6r1KRv39UQ6nh4WK3a4i9"
+    }
+  },
+  "canonical": "{\"at\":\"2026-10-24T19:00:00Z\",\"eid\":\"did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7\",\"kind\":\"declaration\",\"payload\":{\"declaration_version\":\"1.0\",\"sha256\":\"3808f0fa4d007a8fbb301975e82d86cdc51c22d56b16064e0d202970035fb20c\"},\"prev\":null,\"proof\":{\"created\":\"2026-10-24T19:00:00Z\",\"cryptosuite\":\"eddsa-jcs-2022\",\"proofPurpose\":\"assertionMethod\",\"proofValue\":\"zxqbRbErp21kVF9wM3yMRAQXGC9ZCVcwVUCrAdsWimBzJ7NKUFw5sXkmYGvsuhPrCjo6r1KRv39UQ6nh4WK3a4i9\",\"type\":\"DataIntegrityProof\",\"verificationMethod\":\"did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7#z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7\"},\"seq\":1,\"spec\":\"openentity/1.0\",\"type\":\"RecordEntry\"}",
+  "sha256": "d99e4e986b5d2c59b7760d558e5f83bc2b7ca5fa9c0a92628e479f507e801ad3",
+  "unsigned_canonical": "{\"at\":\"2026-10-24T19:00:00Z\",\"eid\":\"did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7\",\"kind\":\"declaration\",\"payload\":{\"declaration_version\":\"1.0\",\"sha256\":\"3808f0fa4d007a8fbb301975e82d86cdc51c22d56b16064e0d202970035fb20c\"},\"prev\":null,\"seq\":1,\"spec\":\"openentity/1.0\",\"type\":\"RecordEntry\"}"
+}

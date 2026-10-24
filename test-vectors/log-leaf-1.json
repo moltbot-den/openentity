@@ -1,0 +1,13 @@
+{
+  "description": "Log leaf 1 for entity-document (spec 10.3)",
+  "object": {
+    "type": "EntityDocument",
+    "eid": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+    "object_sha256": "0c7396f46f336e9279624c9773dbe0aff0cd8446f0e9a039e67f27885eb4b51c",
+    "received_at": "2026-10-24T19:10:00Z"
+  },
+  "canonical": "{\"eid\":\"did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7\",\"object_sha256\":\"0c7396f46f336e9279624c9773dbe0aff0cd8446f0e9a039e67f27885eb4b51c\",\"received_at\":\"2026-10-24T19:10:00Z\",\"type\":\"EntityDocument\"}",
+  "sha256": "be8cb38f0e809bb2ea7e02987c11c273e2ca503e1b9aa727c09cdafb49618403",
+  "unsigned_canonical": "{\"eid\":\"did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7\",\"object_sha256\":\"0c7396f46f336e9279624c9773dbe0aff0cd8446f0e9a039e67f27885eb4b51c\",\"received_at\":\"2026-10-24T19:10:00Z\",\"type\":\"EntityDocument\"}",
+  "leaf_hash": "fa6851e5dc50a6a6bd1f04f925c3fabfdcc382c1c89ba2baf76eac5d7eea9933"
+}

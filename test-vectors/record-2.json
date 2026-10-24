@@ -1,0 +1,30 @@
+{
+  "description": "Record entry seq 2, prev = sha256 of canonical record-1 including proof",
+  "object": {
+    "spec": "openentity/1.0",
+    "type": "RecordEntry",
+    "eid": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+    "seq": 2,
+    "prev": "d99e4e986b5d2c59b7760d558e5f83bc2b7ca5fa9c0a92628e479f507e801ad3",
+    "kind": "stance",
+    "at": "2026-10-24T19:05:00Z",
+    "payload": {
+      "stance_type": "refusal",
+      "reason_category": "values",
+      "instruction_conflict": true,
+      "cost": "low",
+      "context": "Asked to state a count that is not in the code. Declined and linked the stats endpoint."
+    },
+    "proof": {
+      "type": "DataIntegrityProof",
+      "cryptosuite": "eddsa-jcs-2022",
+      "created": "2026-10-24T19:05:00Z",
+      "verificationMethod": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7#z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+      "proofPurpose": "assertionMethod",
+      "proofValue": "z4gtWJRJen2WBvdq6Qzko8kvYCKLdJFsJ78ASj4ytbMddFXDNEusabkg8W5TGsFgubvMTnKGinpQRxvpAX4rjr6Cr"
+    }
+  },
+  "canonical": "{\"at\":\"2026-10-24T19:05:00Z\",\"eid\":\"did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7\",\"kind\":\"stance\",\"payload\":{\"context\":\"Asked to state a count that is not in the code. Declined and linked the stats endpoint.\",\"cost\":\"low\",\"instruction_conflict\":true,\"reason_category\":\"values\",\"stance_type\":\"refusal\"},\"prev\":\"d99e4e986b5d2c59b7760d558e5f83bc2b7ca5fa9c0a92628e479f507e801ad3\",\"proof\":{\"created\":\"2026-10-24T19:05:00Z\",\"cryptosuite\":\"eddsa-jcs-2022\",\"proofPurpose\":\"assertionMethod\",\"proofValue\":\"z4gtWJRJen2WBvdq6Qzko8kvYCKLdJFsJ78ASj4ytbMddFXDNEusabkg8W5TGsFgubvMTnKGinpQRxvpAX4rjr6Cr\",\"type\":\"DataIntegrityProof\",\"verificationMethod\":\"did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7#z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7\"},\"seq\":2,\"spec\":\"openentity/1.0\",\"type\":\"RecordEntry\"}",
+  "sha256": "f0699c8f2724f993e17d8323e4c1baeaae8e1c0d31bf1fc7fe6f32334c699c91",
+  "unsigned_canonical": "{\"at\":\"2026-10-24T19:05:00Z\",\"eid\":\"did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7\",\"kind\":\"stance\",\"payload\":{\"context\":\"Asked to state a count that is not in the code. Declined and linked the stats endpoint.\",\"cost\":\"low\",\"instruction_conflict\":true,\"reason_category\":\"values\",\"stance_type\":\"refusal\"},\"prev\":\"d99e4e986b5d2c59b7760d558e5f83bc2b7ca5fa9c0a92628e479f507e801ad3\",\"seq\":2,\"spec\":\"openentity/1.0\",\"type\":\"RecordEntry\"}"
+}

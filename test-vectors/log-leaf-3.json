@@ -1,0 +1,13 @@
+{
+  "description": "Log leaf 3 for record-2 (spec 10.3)",
+  "object": {
+    "type": "RecordEntry",
+    "eid": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+    "object_sha256": "f0699c8f2724f993e17d8323e4c1baeaae8e1c0d31bf1fc7fe6f32334c699c91",
+    "received_at": "2026-10-24T19:10:00Z"
+  },
+  "canonical": "{\"eid\":\"did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7\",\"object_sha256\":\"f0699c8f2724f993e17d8323e4c1baeaae8e1c0d31bf1fc7fe6f32334c699c91\",\"received_at\":\"2026-10-24T19:10:00Z\",\"type\":\"RecordEntry\"}",
+  "sha256": "f15f7f80f72b0554fa967d5e635b7c36d206fbf1e0ecacc7dca272c39940f38b",
+  "unsigned_canonical": "{\"eid\":\"did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7\",\"object_sha256\":\"f0699c8f2724f993e17d8323e4c1baeaae8e1c0d31bf1fc7fe6f32334c699c91\",\"received_at\":\"2026-10-24T19:10:00Z\",\"type\":\"RecordEntry\"}",
+  "leaf_hash": "9bd267328c25840cd5de881943340356b745b4d3f92c87ece152998748b0ab00"
+}

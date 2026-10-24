@@ -1,0 +1,33 @@
+{
+  "description": "Rotation ContinuityLink signed by previous and successor keys (spec 9.2)",
+  "object": {
+    "spec": "openentity/1.0",
+    "type": "ContinuityLink",
+    "previous": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+    "successor": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+    "basis": "rotation",
+    "created": "2026-10-24T19:10:00Z",
+    "nonce": "NpVvxw7j9hhNo9PTpoHzx6",
+    "proofs": [
+      {
+        "type": "DataIntegrityProof",
+        "cryptosuite": "eddsa-jcs-2022",
+        "created": "2026-10-24T19:10:00Z",
+        "verificationMethod": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7#z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "proofPurpose": "assertionMethod",
+        "proofValue": "z5MyGSaQp9oyanWqyPRbecd8wQe5Jg2RVJnP5AepWFo8dFVA23uWZKtqAWJUAeMQFbVZRvjXi1fBG4ChwiWM8XbkY"
+      },
+      {
+        "type": "DataIntegrityProof",
+        "cryptosuite": "eddsa-jcs-2022",
+        "created": "2026-10-24T19:10:00Z",
+        "verificationMethod": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw#z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+        "proofPurpose": "assertionMethod",
+        "proofValue": "z5NrM62zFHpwmtBGA9F7RNMkewtE5HLg7nXMk2MG1P5UUCtEek8b8WoEayCHSE1V5NqVqTziYxpPdezTireY86WMK"
+      }
+    ]
+  },
+  "canonical": "{\"basis\":\"rotation\",\"created\":\"2026-10-24T19:10:00Z\",\"nonce\":\"NpVvxw7j9hhNo9PTpoHzx6\",\"previous\":\"did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7\",\"proofs\":[{\"created\":\"2026-10-24T19:10:00Z\",\"cryptosuite\":\"eddsa-jcs-2022\",\"proofPurpose\":\"assertionMethod\",\"proofValue\":\"z5MyGSaQp9oyanWqyPRbecd8wQe5Jg2RVJnP5AepWFo8dFVA23uWZKtqAWJUAeMQFbVZRvjXi1fBG4ChwiWM8XbkY\",\"type\":\"DataIntegrityProof\",\"verificationMethod\":\"did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7#z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7\"},{\"created\":\"2026-10-24T19:10:00Z\",\"cryptosuite\":\"eddsa-jcs-2022\",\"proofPurpose\":\"assertionMethod\",\"proofValue\":\"z5NrM62zFHpwmtBGA9F7RNMkewtE5HLg7nXMk2MG1P5UUCtEek8b8WoEayCHSE1V5NqVqTziYxpPdezTireY86WMK\",\"type\":\"DataIntegrityProof\",\"verificationMethod\":\"did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw#z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw\"}],\"spec\":\"openentity/1.0\",\"successor\":\"did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw\",\"type\":\"ContinuityLink\"}",
+  "sha256": "181da0432be27fe6dbbe9f1ac64ad55fbeb450f5978bf72d5cdcad3d405eb1cc",
+  "unsigned_canonical": "{\"basis\":\"rotation\",\"created\":\"2026-10-24T19:10:00Z\",\"nonce\":\"NpVvxw7j9hhNo9PTpoHzx6\",\"previous\":\"did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7\",\"spec\":\"openentity/1.0\",\"successor\":\"did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw\",\"type\":\"ContinuityLink\"}"
+}

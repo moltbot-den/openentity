@@ -1,0 +1,13 @@
+{
+  "description": "Log leaf 5 for continuity-link (spec 10.3)",
+  "object": {
+    "type": "ContinuityLink",
+    "eid": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+    "object_sha256": "181da0432be27fe6dbbe9f1ac64ad55fbeb450f5978bf72d5cdcad3d405eb1cc",
+    "received_at": "2026-10-24T19:10:00Z"
+  },
+  "canonical": "{\"eid\":\"did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7\",\"object_sha256\":\"181da0432be27fe6dbbe9f1ac64ad55fbeb450f5978bf72d5cdcad3d405eb1cc\",\"received_at\":\"2026-10-24T19:10:00Z\",\"type\":\"ContinuityLink\"}",
+  "sha256": "3e9cd30eb1c91b8c6063be8c2a537fa51a2d56278f5d1331da5c27314a153a46",
+  "unsigned_canonical": "{\"eid\":\"did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7\",\"object_sha256\":\"181da0432be27fe6dbbe9f1ac64ad55fbeb450f5978bf72d5cdcad3d405eb1cc\",\"received_at\":\"2026-10-24T19:10:00Z\",\"type\":\"ContinuityLink\"}",
+  "leaf_hash": "4969af1524eeb66d54da7223df3b719cd353594b5b63e1626e494ca41615790b"
+}
