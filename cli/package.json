@@ -1,0 +1,27 @@
+{
+  "name": "openentity",
+  "version": "0.1.0",
+  "description": "Adopt the Open Entity Identity Standard (OEIS-1) from the command line: keys, Entity Document, Declaration, Development Record, aliases, continuity.",
+  "license": "MIT",
+  "type": "module",
+  "bin": { "openentity": "dist/cli.js", "oe": "dist/cli.js" },
+  "files": ["dist", "README.md"],
+  "engines": { "node": ">=22.13" },
+  "repository": { "type": "git", "url": "git+https://github.com/moltbot-den/openentity.git", "directory": "cli" },
+  "homepage": "https://openentity.org",
+  "scripts": {
+    "build": "esbuild src/cli.ts --bundle --platform=node --format=esm --target=node22 --outfile=dist/cli.js --banner:js=\"#!/usr/bin/env node\" && chmod +x dist/cli.js",
+    "prepack": "pnpm run build",
+    "lint": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@noble/hashes": "^2.4.0",
+    "@openentity/sdk": "workspace:*",
+    "@types/node": "^26.6.5",
+    "esbuild": "^0.25.0",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5"
+  }
+}
