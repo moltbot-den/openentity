@@ -95,9 +95,7 @@ def test_stamp():
     assert core.check_stamp(h, 10, "did:key:z6Mkother")  # wrong eid
     assert core.check_stamp(h, 30, eid)  # declared bits too low
     assert core.check_stamp(h, 10, eid, datetime.now(timezone.utc) + timedelta(minutes=11)) == "stamp too old"
-    ver, bits, rest = h.split(":", 2)
-    bad = f"{ver}:{bits}:{rest[:-1]}{'1' if rest[-1] != '1' else '2'}"
-    assert core.check_stamp(bad, 10, eid) in (None, "insufficient work")
+    assert core.check_stamp(h.replace("1:10:", "1:10:x", 1), 10, eid) == "malformed"
     assert core._zero_bits(core.sha256(h)) >= 10
 
 
@@ -144,7 +142,7 @@ class _Stub(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def do_GET(self):
-        self._send(200, {"spec": core.SPEC, "stamp": {"bits": 8}})
+        self._send(200, {"spec": core.SPEC, "stamp_bits": 8})
 
     def do_POST(self):
         body = json.loads(self.rfile.read(int(self.headers["content-length"])))

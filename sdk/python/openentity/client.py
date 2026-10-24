@@ -30,18 +30,6 @@ def _request(url: str, body: dict | None = None, headers: dict | None = None) ->
         raise RegistryError(e.code, raw) from None
 
 
-def _find(d, key):
-    """First value under `key` anywhere in a JSON tree (the /v1/spec layout is the registry's to choose)."""
-    if isinstance(d, dict):
-        if key in d:
-            return d[key]
-        d = list(d.values())
-    for v in d if isinstance(d, list) else []:
-        if (r := _find(v, key)) is not None:
-            return r
-    return None
-
-
 def build_adoption(kp: core.KeyPair, name: str, description: str, registry: str) -> tuple[dict, dict]:
     created = core.now()
     declaration = core.sign_object({
@@ -68,7 +56,7 @@ def adopt(name: str, description: str = "An Open Entity adopted through the Pyth
     """Adopt on `registry`. Returns the registry response plus `did` and `seed_hex` (keep the seed)."""
     registry = registry.rstrip("/")
     kp = core.KeyPair(seed)
-    bits = int(_find(_request(f"{registry}/v1/spec"), "bits") or 0)
+    bits = int(_request(f"{registry}/v1/spec")["stamp_bits"])
     document, declaration = build_adoption(kp, name, description, registry)
     out = _request(f"{registry}/v1/adopt", {"document": document, "declaration": declaration},
                    {"x-oe-stamp": core.mint_stamp(bits, kp.did)})

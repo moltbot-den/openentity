@@ -8,7 +8,7 @@
   uv run scripts/independent_verifier.py --vectors test-vectors
 Checks the signed checkpoint (C2SP note, key from /v1/spec), N random RFC 6962 inclusion proofs and N random
 object signatures (eddsa-jcs-2022, did:key). Prints a report, exits 1 on any failure."""
-import argparse, base64, hashlib, json, random, re, sys, urllib.request
+import argparse, base64, hashlib, json, random, sys, urllib.request
 from decimal import Decimal
 from pathlib import Path
 from cryptography.exceptions import InvalidSignature
@@ -62,17 +62,6 @@ def get(url):
     with urllib.request.urlopen(urllib.request.Request(url, headers={"user-agent": "oe-independent-verifier"}), timeout=30) as r:
         return json.loads(r.read()) if url.split("?")[0].split("/")[-1] != "checkpoint" else r.read().decode()
 
-def strings(v):
-    if isinstance(v, str): yield v
-    for c in (v.values() if isinstance(v, dict) else v if isinstance(v, list) else []): yield from strings(c)
-
-def registry_pub(spec):
-    """Registry key from /v1/spec: a signed-note vkey (name+hash+base64), or a did:key / z6Mk multibase key."""
-    for s in strings(spec):
-        if m := re.fullmatch(r"[^+\s]+\+[0-9a-f]{8}\+([A-Za-z0-9+/=]{20,})", s): return base64.b64decode(m[1])[1:]
-        if m := re.search(r"z6Mk[1-9A-HJ-NP-Za-km-z]{40,}", s): return b58d(m[0][1:])[2:]
-    raise ValueError("no registry key in /v1/spec")
-
 def check_checkpoint(note, pub):  # body "origin\nsize\nbase64(root)\n", blank line, "<em dash> name base64(keyid||sig)"
     body, _, sigs = note.partition("\n\n")
     origin, size, root = body.split("\n")[:3]
@@ -85,23 +74,16 @@ def check_checkpoint(note, pub):  # body "origin\nsize\nbase64(root)\n", blank l
     raise ValueError("no signature by the registry key")
 
 def check_vectors(d):
-    """Each *.json under d. A node with `object` (or a bare signed object) is checked against sibling `*canonical*`
-    and `*sha256*` fields (full or proof-stripped form) and its proof."""
+    """test-vectors/*.json: {object, canonical, sha256, unsigned_canonical}; keys.json has no object and is skipped."""
     res = []
-    def walk(node, f):
-        if isinstance(node, list): return [walk(c, f) for c in node]
-        if not isinstance(node, dict): return
-        obj = node.get("object", node if "proof" in node else None)
-        if isinstance(obj, dict):
-            forms = {jcs(obj), jcs({k: v for k, v in obj.items() if k != "proof"})}
-            for k, v in node.items():
-                if k != "object" and isinstance(v, str) and "canonical" in k: res.append((f.name, k, v in forms))
-                if k != "object" and isinstance(v, str) and "sha256" in k: res.append((f.name, k, v in {H(x).hex() for x in forms}))
-            if "proof" in obj:
-                try: verify_sig(obj); res.append((f.name, "proof", True))
-                except (InvalidSignature, ValueError, KeyError): res.append((f.name, "proof", False))
-        for c in node.values(): walk(c, f)
-    for f in sorted(Path(d).rglob("*.json")): walk(json.loads(f.read_text()), f)
+    for f in sorted(Path(d).glob("*.json")):
+        v = json.loads(f.read_text())
+        if "object" not in v: continue
+        o = v["object"]; c = jcs(o)
+        res += [(f.name, "canonical", v["canonical"] == c), (f.name, "sha256", v["sha256"] == H(c).hex()),
+                (f.name, "unsigned_canonical", v["unsigned_canonical"] == jcs({k: x for k, x in o.items() if k != "proof"}))]
+        try: verify_sig(o); res.append((f.name, "proof", True))
+        except (InvalidSignature, ValueError, KeyError): res.append((f.name, "proof", False))
     for r in res: print("ok  " if r[2] else "FAIL", r[0], r[1])
     bad = sum(not r[2] for r in res); print(f"vectors: {len(res)} checks, {bad} failed")
     return 1 if bad or not res else 0
@@ -111,15 +93,13 @@ def main():
     ap.add_argument("--vectors"); a = ap.parse_args()
     if a.vectors: return check_vectors(a.vectors)
     base, fails, inc, sig, skipped = a.registry.rstrip("/") + "/v1", [], 0, 0, 0
-    origin, size, root = check_checkpoint(get(base + "/log/checkpoint"), registry_pub(get(base + "/spec")))
+    origin, size, root = check_checkpoint(get(base + "/log/checkpoint"), base64.b64decode(get(base + "/spec")["registry"]["note_key"].split("+")[2])[1:])
     print(f"checkpoint: signature ok, origin {origin}, size {size}")
     for i in sorted(random.sample(range(size), min(a.samples, size))):
         try:
-            e = get(f"{base}/log/entries?start={i}&end={i + 1}")
-            e = (e.get("entries", e) if isinstance(e, dict) else e)[0]; e = e.get("leaf", e)
-            leaf = json.loads(e) if isinstance(e, str) else e
-            pr = get(f"{base}/log/proof/{i}?tree_size={size}"); pr = pr.get("proof") or pr.get("hashes") or pr.get("audit_path") or []
-            hashes = [bytes.fromhex(x) if re.fullmatch(r"[0-9a-f]{64}", x) else base64.b64decode(x) for x in pr]
+            e = get(f"{base}/log/entries?start={i}&end={i + 1}")["entries"][0]; leaf = e["leaf"]
+            if e["index"] != i or e["leaf_hash"] != H(b"\x00" + jcs(leaf).encode()).hex(): fails.append(f"entry {i}: index or leaf_hash wrong")
+            hashes = [bytes.fromhex(x) for x in get(f"{base}/log/proof/{i}?tree_size={size}")["proof"]]
             if not verify_inclusion(i, size, H(b"\x00" + jcs(leaf).encode()), hashes, root): fails.append(f"inclusion {i}: root mismatch")
             inc += 1
             if leaf["eid"].startswith("did:key:") and leaf["type"] in ("EntityDocument", "Declaration"):

@@ -33,6 +33,8 @@ def _registry(n=37, tamper_root=False, tamper_object=False):
     body = f"{ORIGIN}\n{n}\n{base64.b64encode(root).decode()}\n"
     keyid = core.sha256(ORIGIN.encode() + b"\n\x01" + reg.public)[:4]
     sig = base64.b64encode(keyid + reg.private.sign(body.encode())).decode()
+    notekey = f"{ORIGIN}+{keyid.hex()}+" + base64.b64encode(b"\x01" + reg.public).decode()
+    entries = [{"index": i, "leaf": lf, "leaf_hash": hashes[i].hex()} for i, lf in enumerate(leaves)]
     note = f"{body}\n\u2014 {ORIGIN} {sig}\n"
 
     class H(BaseHTTPRequestHandler):
@@ -46,10 +48,10 @@ def _registry(n=37, tamper_root=False, tamper_object=False):
             if u.path.endswith("/checkpoint"):
                 out = note.encode()
             elif u.path.endswith("/spec"):
-                out = json.dumps({"registry": {"log_key": reg.did.removeprefix("did:key:")}}).encode()
+                out = json.dumps({"stamp_bits": 8, "registry": {"note_key": notekey}}).encode()
             elif u.path.endswith("/log/entries"):
                 s = int(q["start"])
-                out = json.dumps({"entries": leaves[s:int(q["end"])]}).encode()
+                out = json.dumps({"entries": entries[s:int(q["end"])]}).encode()
             elif "/log/proof/" in u.path:
                 out = json.dumps({"proof": [h.hex() for h in core.inclusion_proof(int(parts[-1]), hashes)]}).encode()
             else:
@@ -95,3 +97,16 @@ def test_verifier_jcs_and_sig_agree_with_sdk():
     iv.verify_sig(obj)
     with pytest.raises(Exception):
         iv.verify_sig({**obj, "a": []})
+
+
+def test_vector_format(tmp_path):
+    kp = core.KeyPair(b"\3" * 32)
+    obj = core.sign_object({"a": 1.5, "b": "x"}, kp, "2026-10-24T19:00:00Z")
+    vec = {"description": "d", "object": obj, "canonical": core.canonicalize(obj),
+           "sha256": core.canonical_hash(obj).hex(),
+           "unsigned_canonical": core.canonicalize({k: v for k, v in obj.items() if k != "proof"})}
+    (tmp_path / "keys.json").write_text(json.dumps({"seed_hex": "00"}))
+    (tmp_path / "v.json").write_text(json.dumps(vec))
+    assert iv.check_vectors(str(tmp_path)) == 0
+    (tmp_path / "v.json").write_text(json.dumps({**vec, "sha256": "0" * 64}))
+    assert iv.check_vectors(str(tmp_path)) == 1

@@ -3,6 +3,7 @@ import hashlib
 import json
 import math
 import os
+import re
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
@@ -173,19 +174,17 @@ def mint_stamp(bits: int, eid: str, created: str | None = None) -> str:
         i += 1
 
 
+_STAMP = re.compile(r"^1:(\d+):(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z):(did:[^\s]+):([1-9A-HJ-NP-Za-km-z]+)$")
+
+
 def check_stamp(header: str, bits: int, eid: str, at: datetime | None = None) -> str | None:
-    """None if ok, else the reason. created and eid both contain colons, so split around the known eid."""
-    ver, declared, rest = header.split(":", 2)
-    i = rest.find(f":{eid}:")
-    if ver != "1" or not declared.isdigit() or int(declared) < bits:
-        return "bad version or too few declared bits"
-    if i < 0:
+    """None if ok, else the reason."""
+    m = _STAMP.match(header)
+    if not m:
+        return "malformed"
+    if m[3] != eid:
         return "wrong eid"
-    try:
-        created = datetime.strptime(rest[:i], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
-    except ValueError:
-        return "bad created"
-    if (at or datetime.now(timezone.utc)) - created > timedelta(minutes=10):
+    if (at or datetime.now(timezone.utc)) - datetime.strptime(m[2], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc) > timedelta(minutes=10):
         return "stamp too old"
     return None if _zero_bits(sha256(header)) >= bits else "insufficient work"
 
