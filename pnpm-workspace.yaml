@@ -6,3 +6,6 @@ packages:
   - mcp
   - sdk/ts
   - redirects
+onlyBuiltDependencies:
+  - esbuild
+  - workerd

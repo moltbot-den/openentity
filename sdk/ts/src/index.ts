@@ -126,7 +126,7 @@ export async function keyPairFromJwk(privateJwk: JsonWebKey): Promise<KeyPair> {
 }
 export async function generateKeyPair(): Promise<KeyPair> {
   const kp = (await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"])) as CryptoKeyPair;
-  return keyPairFromJwk(await crypto.subtle.exportKey("jwk", kp.privateKey));
+  return keyPairFromJwk((await crypto.subtle.exportKey("jwk", kp.privateKey)) as JsonWebKey); // cast: Workers types widen the return
 }
 /** Deterministic key pair from a 32-byte seed. For test vectors only. */
 export async function keyPairFromSeed(seed32: Uint8Array): Promise<KeyPair> {
@@ -385,7 +385,8 @@ function leadingZeroBits(h: Uint8Array): number {
 
 /** Mints `1:<bits>:<created>:<eid>:<nonce>` whose SHA-256 has at least `bits` leading zero bits. */
 export async function mintStamp(bits: number, eid: string, created: string = nowSeconds()): Promise<string> {
-  for (let n = 0; ; n++) {
+  // Random start so two stamps for the same EID in the same second differ (registries reject reuse).
+  for (let n = crypto.getRandomValues(new Uint32Array(1))[0]; ; n++) {
     let nonce = "";
     for (let x = n; nonce === "" || x > 0; x = Math.floor(x / 58)) nonce = B58[x % 58] + nonce;
     const header = `1:${bits}:${created}:${eid}:${nonce}`;

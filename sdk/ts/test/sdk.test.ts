@@ -237,6 +237,11 @@ describe("proof-of-work stamp", () => {
     expect((await oe.sha256(h))[0]).toBe(0);
     expect(await oe.checkStamp(h, 8, eid, NOW)).toBeNull();
   });
+  it("two stamps for the same eid and second differ, so registries can reject reuse", async () => {
+    const a = await oe.mintStamp(8, eid, "2026-10-24T19:00:00Z");
+    const b = await oe.mintStamp(8, eid, "2026-10-24T19:00:00Z");
+    expect(a).not.toBe(b);
+  });
   it("rejects wrong eid, stale, future, too few bits, malformed", async () => {
     const h = await oe.mintStamp(8, eid, "2026-10-24T19:00:00Z");
     expect(await oe.checkStamp(h, 8, "did:key:z6MkOther", NOW)).toMatch(/different eid/);
