@@ -155,6 +155,13 @@ describe("capabilities (spec 5.2)", () => {
     expect((await write("PUT", `/entities/${kp.did}/document`, kp.did, next)).status).toBe(200);
     expect(await find("research")).toEqual([kp.did]);
     expect(await find("code-review")).toEqual([]);
+    // A capability kept across an update stays indexed.
+    const kept = await signObject({ ...base, seq: 3, capabilities: ["research", "code-review"], updated: later(120) }, kp);
+    vi.useFakeTimers({ now: Date.now() + 61_000, toFake: ["Date"] });
+    expect((await write("PUT", `/entities/${kp.did}/document`, kp.did, kept)).status).toBe(200);
+    vi.useRealTimers();
+    expect(await find("research")).toEqual([kp.did]);
+    expect(await find("code-review")).toEqual([kp.did]);
 
     const badKp = await generateKeyPair();
     const bad = await signed(badKp, "Bad Caps", { capabilities: ["Not A Slug"] });
