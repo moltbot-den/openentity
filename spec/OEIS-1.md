@@ -121,7 +121,7 @@ An alias binds another identifier to the EID. Each alias carries its own proof s
 
 Wallet alias proofs use the Sign-In with Ethereum message format (EIP-4361) so that every wallet can display and sign them. The fields are fixed as follows: `domain` is the registry host (`openentity.org` for the reference registry); `address` is the wallet; `statement` is exactly `Open Entity alias binding for <root EID>`; `uri` is `https://<registry host>/v1/entities/<root EID>`; `version` is `1`; `chain-id` is the wallet's chain; `nonce` is at least 8 random alphanumeric characters; `issued-at` is the signing time; `resources` contains the root EID as its only entry. The proof object carries `{type: "Eip4361", message: "<the full signed message>", signature: "0x..."}`. A verifier reconstructs the message, checks every fixed field, checks that `issued-at` is within 24 hours of submission, verifies the signature (EIP-191 recovery, or ERC-1271 `isValidSignature` on the wallet's chain for contract wallets) and matches the address to the alias.
 
-Other signed proofs (platform and future types) sign exactly this UTF-8 text, with the placeholders replaced:
+Other signed proofs (platform and future types) sign exactly this UTF-8 text, with the placeholders replaced. An Ed25519 root sends `{type: "Ed25519BindingSignature", issued, proofValue}` (base58btc multibase); a `did:pkh` root signs the text with its wallet (EIP-191, or ERC-1271 for a contract wallet) and sends `{type: "Eip191BindingSignature", issued, signature: "0x..."}`:
 
 ```
 Open Entity alias binding
