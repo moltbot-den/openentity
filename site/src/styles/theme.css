@@ -1023,15 +1023,12 @@ site-search kbd {
 }
 
 /* Starlight's mobile menu button on docs pages, matched to the header's Menu control. */
-starlight-menu-button button {
-  background: transparent;
+.sl-menu-button {
+  background: var(--sl-color-black);
   color: var(--sl-color-white);
   border: 1px solid var(--sl-color-gray-5);
   border-radius: 6px;
   box-shadow: none;
-}
-starlight-menu-button[aria-expanded='true'] button {
-  background: var(--sl-color-gray-6);
 }
 
 /* ---------- Motion ---------- */
