@@ -2,7 +2,7 @@ import { mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promise
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { canonicalize, DECLARATION_SHA256, generateKeyPair, nowSeconds, randomNonce, recordEntryHash, sha256Hex, signObject, validate, verifyObject, verifyPresentation } from "@openentity/sdk";
+import { canonicalize, DECLARATION_SHA256, generateKeyPair, nowSeconds, randomNonce, recordEntryHash, sha256Hex, signObject, validate, verifyObject, verifyPresentation, publicKeyFromDidKey, base58btcDecode } from "@openentity/sdk";
 import { anchorText, ANCHOR_MAX } from "../src/anchor";
 import { run } from "../src/main";
 import { startFake, type Fake } from "./fake-registry";
@@ -235,6 +235,29 @@ describe("withdraw", () => {
     expect((await verifyObject(w)).ok).toBe(true);
     expect(JSON.parse(r.out)).toMatchObject({ eid, withdrawn: true });
     expect(JSON.parse(await readFile(join(home, eid, "withdrawal.json"), "utf8")).nonce).toBe(w.nonce);
+  });
+});
+
+describe("alias and document push", () => {
+  it("signs a platform alias the way the registry checks it (spec 3.5: proofValue over the binding text)", async () => {
+    const { eid } = await adopted();
+    expect((await cli("alias", "add", "platform", "moltbotden:tester")).code).toBe(0);
+    const { proof } = fake.hits.find((h) => h.path.endsWith("/aliases"))!.body as any;
+    expect(proof).toMatchObject({ type: "Ed25519BindingSignature" });
+    expect(proof.signature).toBeUndefined();
+    const text = `Open Entity alias binding\neid: ${eid}\nalias: moltbotden:tester\nissued: ${proof.issued}`;
+    const key = await crypto.subtle.importKey("raw", new Uint8Array(publicKeyFromDidKey(eid)), { name: "Ed25519" }, false, ["verify"]);
+    expect(await crypto.subtle.verify("Ed25519", key, new Uint8Array(base58btcDecode(proof.proofValue.slice(1))), new TextEncoder().encode(text))).toBe(true);
+  });
+
+  it("pushes two document versions in the same second with updated still increasing", async () => {
+    const { eid } = await adopted();
+    for (const v of ["One", "Two"]) {
+      expect((await cli("document", "set", "layers.mission.statement", v)).code).toBe(0);
+      expect((await cli("document", "push")).code).toBe(0);
+    }
+    const docs = fake.hits.filter((h) => h.path === `/v1/entities/${eid}/document`).map((h) => (h.body as any).updated);
+    expect(docs[1] > docs[0]).toBe(true);
   });
 });
 
