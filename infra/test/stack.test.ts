@@ -1,7 +1,7 @@
 import { App } from "aws-cdk-lib";
 import { Match, Template } from "aws-cdk-lib/assertions";
 import { expect, test } from "vitest";
-import { OpenEntityStack } from "../lib/stack.ts";
+import { CSP, OpenEntityStack } from "../lib/stack.ts";
 
 // Skip asset bundling: these tests read the template, not the Lambda zip.
 const app = new App({ context: { "aws:cdk:bundling-stacks": [] } });
@@ -35,6 +35,20 @@ test("CloudFront serves openentity.org, forwards the viewer address and the stam
       HeadersConfig: { HeaderBehavior: "whitelist", Headers: Match.arrayWith(["X-OE-Stamp", "CloudFront-Viewer-Address"]) },
     }),
   });
+});
+
+test("every response forbids framing and carries a CSP limited to what the pages load", () => {
+  t.hasResourceProperties("AWS::CloudFront::ResponseHeadersPolicy", {
+    ResponseHeadersPolicyConfig: Match.objectLike({
+      SecurityHeadersConfig: Match.objectLike({
+        FrameOptions: { FrameOption: "DENY", Override: true },
+        ContentSecurityPolicy: { ContentSecurityPolicy: CSP, Override: true },
+      }),
+    }),
+  });
+  expect(CSP).toContain("frame-ancestors 'none'");
+  expect(CSP).toContain("object-src 'none'");
+  expect(CSP).not.toMatch(/\*|'unsafe-eval'/);
 });
 
 test("mcp.openentity.org is its own distribution and certificate on the same function URL, tagged with x-oe-site, never cached", () => {

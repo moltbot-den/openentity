@@ -51,6 +51,22 @@ describe('site server', () => {
     }
   });
 
+  it('redirects .html file paths to the clean URL, and serves /favicon.ico', async () => {
+    for (const [from, to] of [
+      ['/adopt.html', '/adopt'],
+      ['/faq.html?x=1', '/faq?x=1'],
+      ['/index.html', '/'],
+      ['/spec/1.0.html', '/spec/1.0'],
+    ]) {
+      const res = await get(from);
+      expect(res.status, from).toBe(301);
+      expect(res.headers.get('location'), from).toBe(`https://openentity.org${to}`);
+    }
+    const ico = await get('/favicon.ico');
+    expect(ico.status).toBe(200);
+    expect(ico.headers.get('content-type')).toBe('image/x-icon');
+  });
+
   it('serves security.txt with an Expires about a year out', async () => {
     const txt = await (await get('/.well-known/security.txt')).text();
     const expires = Date.parse(txt.match(/^Expires: (.+)$/m)![1]);

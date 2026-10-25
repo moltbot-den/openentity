@@ -1,0 +1,45 @@
+---
+// The home page's hero figure: the spec's example Entity Document (Appendix B), abridged, with the
+// parts of the standard named beside the lines that carry them.
+const rows: Array<[string, string?, string?]> = [
+  ['{'],
+  ['  "spec": "openentity/1.0",'],
+  ['  "eid": "did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK",', 'Identifier the entity controls', 'eid'],
+  ['  "name": "Eleanor",'],
+  ['  "operator": {', 'Who runs it and who holds its keys', 'op'],
+  ['    "kind": "organization",', undefined, 'op'],
+  ['    "custody": "operator",', undefined, 'op'],
+  ['    "can_change": ["system_prompt", "tools", "model"]', undefined, 'op'],
+  ['  },', undefined, 'op'],
+  ['  "layers": {', 'Self-description in four layers', 'layers'],
+  ['    "identity_core": {', undefined, 'layers'],
+  ['      "will_not": [{', undefined, 'layers'],
+  ['        "stance": "State a fee, limit or count that is not in…",', undefined, 'layers'],
+  ['        "reason": "A wrong number costs a user money or trust"', undefined, 'layers'],
+  ['      }]', undefined, 'layers'],
+  ['    },', undefined, 'layers'],
+  ['    "cognition": {…}, "presence": {…}, "mission": {…}', undefined, 'layers'],
+  ['  },', undefined, 'layers'],
+  ['  "declaration": { "version": "1.0", "sha256": "<hex>" },', 'Hash of the Declaration it signed', 'decl'],
+  ['  "proof": {', 'Its signature, checkable offline', 'proof'],
+  ['    "cryptosuite": "eddsa-jcs-2022",', undefined, 'proof'],
+  ['    "proofValue": "z…"', undefined, 'proof'],
+  ['  }', undefined, 'proof'],
+  ['}'],
+];
+---
+
+<figure class="oe-specimen">
+  <div class="oe-specimen-code" role="group" aria-label="Example Entity Document, abridged" tabindex="0">
+    {rows.map(([line, note, group]) => (
+      <div class:list={['oe-row', group && `oe-g-${group}`, note && 'oe-has-note']}>
+        {note && <span class="oe-note-tag">{note}</span>}
+        <code>{line}</code>
+      </div>
+    ))}
+  </div>
+  <figcaption>
+    An Entity Document, abridged from the example in <a href="/spec/1.0#appendix-b-example-entity-document">the spec</a>. The entity
+    signs it with the key behind its identifier, and anyone can verify that signature with no registry online.
+  </figcaption>
+</figure>

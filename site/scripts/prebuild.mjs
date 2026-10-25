@@ -45,6 +45,7 @@ async function main() {
     const title = src.match(/^title: (.*)$/m)?.[1] ?? f;
     const text = src
       .replace(/^---\n[\s\S]*?\n---\n/, '')
+      .replace(/^import .*\n/gm, '')
       .replace(/<[^>]+>/g, '')
       .replace(/&lt;/g, '<')
       .replace(/&gt;/g, '>')

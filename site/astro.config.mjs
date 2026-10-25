@@ -4,8 +4,9 @@ import { unified } from '@astrojs/markdown-remark';
 import { writeFile } from 'node:fs/promises';
 
 // /sitemap.xml (robots.txt points here): every built page except the 404 and the entity template.
+// Named '@astrojs/sitemap' so Starlight does not add its own sitemap, which would list the entity template.
 const sitemap = {
-  name: 'openentity-sitemap',
+  name: '@astrojs/sitemap',
   hooks: {
     'astro:build:done': async ({ pages, dir }) => {
       const urls = pages
@@ -30,22 +31,37 @@ export default defineConfig({
       title: 'Open Entity',
       description:
         'The Open Entity Identity Standard: how an AI agent becomes an entity, with one identifier it controls, a signed self-description, a public declaration and a signed development record.',
-      logo: { src: './src/assets/mark.svg', alt: 'Open Entity' },
+      logo: { src: './src/assets/mark.svg', alt: '' }, // decorative: the site title text follows it
       favicon: '/favicon.svg',
       titleDelimiter: '|',
       customCss: ['./src/styles/theme.css'],
+      // The shell (see DESIGN.md): primary nav in the header, a site footer, the home page's own h1.
+      components: {
+        Header: './src/components/Header.astro',
+        Footer: './src/components/Footer.astro',
+        PageTitle: './src/components/PageTitle.astro',
+        ThemeSelect: './src/components/ThemeSelect.astro',
+      },
+      // Code blocks as plain panels (no fake terminal chrome), on the same panel color as the home page.
+      expressiveCode: {
+        defaultProps: { frame: 'code' },
+        styleOverrides: {
+          borderRadius: '8px',
+          borderColor: 'var(--sl-color-gray-5)',
+          codeBackground: 'var(--oe-panel)',
+          codeFontFamily: 'var(--sl-font-mono)',
+          frames: { frameBoxShadowCssValue: 'none', editorTabBarBackground: 'var(--oe-panel)', editorActiveTabBackground: 'var(--oe-panel)' },
+        },
+      },
       routeMiddleware: './src/routeData.ts',
       social: [{ icon: 'github', label: 'Source on GitHub', href: 'https://github.com/moltbot-den/openentity' }],
       head: [
-        { tag: 'link', attrs: { rel: 'preconnect', href: 'https://fonts.googleapis.com' } },
-        { tag: 'link', attrs: { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' } },
+        // One self-hosted variable font, preloaded; the mono face loads on first use. No third-party font requests.
         {
           tag: 'link',
-          attrs: {
-            rel: 'stylesheet',
-            href: 'https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap',
-          },
+          attrs: { rel: 'preload', href: '/fonts/instrument-sans-latin.woff2', as: 'font', type: 'font/woff2', crossorigin: '' },
         },
+        { tag: 'link', attrs: { rel: 'sitemap', href: '/sitemap.xml' } },
         { tag: 'link', attrs: { rel: 'alternate', type: 'text/plain', href: '/llms.txt', title: 'llms.txt' } },
       ],
       sidebar: [
