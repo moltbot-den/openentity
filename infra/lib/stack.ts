@@ -123,7 +123,8 @@ export class OpenEntityStack extends Stack {
         ...(snapshotBucket ? { SNAPSHOT_BUCKET: snapshotBucket.bucketName } : {}),
         ...(load ? { IP_DAILY_LIMIT: "10000000", WRITE_PER_MINUTE: "10000000" } : {}),
         REGISTRY_HOST: DOMAIN,
-        STAMP_BITS: "20",
+        // The load copy measures registry throughput; minting 6,000 stamps at 20 bits outlives their 10-minute window.
+        STAMP_BITS: load ? "12" : "20",
         BASE_RPC_URL: "https://mainnet.base.org",
         TURNSTILE_SITE_KEY: "0x4AAAAAAFkggsScyaPIMp2v",
         CF_ANALYTICS_TOKEN: "1c8d90533d834474833d04a8b62d5117",
