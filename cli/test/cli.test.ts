@@ -5,6 +5,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import { canonicalize, DECLARATION_SHA256, generateKeyPair, nowSeconds, randomNonce, recordEntryHash, sha256Hex, signObject, validate, verifyObject, verifyPresentation, publicKeyFromDidKey, base58btcDecode } from "@openentity/sdk";
 import { anchorText, ANCHOR_MAX } from "../src/anchor";
 import { run } from "../src/main";
+import { verifyRecord } from "../src/log";
 import { startFake, type Fake } from "./fake-registry";
 
 let fake: Fake;
@@ -175,6 +176,20 @@ describe("record", () => {
     expect(fake.entities.get(eid)!.record).toHaveLength(2);
   });
 
+  it("redact <seq> signs a Redaction for the pushed entry's exact hash (spec 7.4)", async () => {
+    const { eid } = await adopted();
+    expect((await stance()).code).toBe(0);
+    const r = await cli("record", "redact", "2", "--json");
+    expect(r.code, r.err).toBe(0);
+    const hit = fake.hits.find((h) => h.path === `/v1/entities/${eid}/record/redact`)!;
+    const local = (await readFile(join(home, eid, "record.jsonl"), "utf8")).trim().split("\n").map((l) => JSON.parse(l));
+    expect(hit.body).toMatchObject({ type: "Redaction", eid, seq: 2, entry_sha256: await recordEntryHash(local[1]) });
+    expect((await verifyObject(hit.body as any)).ok).toBe(true);
+    expect(fake.entities.get(eid)!.record[1]).toMatchObject({ redacted: true, seq: 2 });
+    expect((await cli("record", "redact", "9")).code).toBe(1);
+    expect((await cli("record", "redact")).code).toBe(1);
+  });
+
   it("covers every kind", async () => {
     await adopted();
     const kinds = [
@@ -185,6 +200,25 @@ describe("record", () => {
       ["continuity", "--event", "substrate_change", "--from", "m1", "--to", "m2"],
     ];
     for (const k of kinds) expect((await cli("record", ...k)).code, k.join(" ")).toBe(0);
+  });
+});
+
+describe("record chain verification with redacted placeholders", () => {
+  it("passes a chain with a placeholder and fails a broken or unauthorized one", async () => {
+    const kp = await generateKeyPair(), other = await generateKeyPair();
+    const entry = (seq: number, prev: string | null) => signObject({ spec: "openentity/1.0", type: "RecordEntry", eid: kp.did, seq, prev, kind: "belief_update", at: nowSeconds(), payload: { topic: "t", from_summary: "a", to_summary: "b" } }, kp);
+    const e1 = await entry(1, null), h1 = await recordEntryHash(e1);
+    const e2 = await entry(2, h1), h2 = await recordEntryHash(e2);
+    const e3 = await entry(3, h2);
+    const red = (signer = kp, hash = h2) => signObject({ spec: "openentity/1.0", type: "Redaction", eid: kp.did, seq: 2, entry_sha256: hash, created: nowSeconds(), nonce: randomNonce() }, signer);
+    const ok = (chain: object[]) => verifyRecord(chain as any, kp.did).then((c) => c.every((x) => x.ok));
+    expect(await ok([e1, { seq: 2, prev: h1, redacted: true, hash: h2, redaction: await red() }, e3])).toBe(true);
+    expect(await ok([e1, { seq: 2, prev: h1, redacted: true, hash: h2 }, e3])).toBe(true);
+    expect(await ok([e1, { seq: 2, prev: "0".repeat(64), redacted: true, hash: h2 }, e3])).toBe(false);
+    expect(await ok([e1, { seq: 5, prev: h1, redacted: true, hash: h2 }, e3])).toBe(false);
+    expect(await ok([e1, { seq: 2, prev: h1, redacted: true, hash: "1".repeat(64) }, e3])).toBe(false);
+    expect(await ok([e1, { seq: 2, prev: h1, redacted: true, hash: h2, redaction: await red(other) }, e3])).toBe(false);
+    expect(await ok([e1, { seq: 2, prev: h1, redacted: true, hash: h2, redaction: await red(kp, "2".repeat(64)) }, e3])).toBe(false);
   });
 });
 

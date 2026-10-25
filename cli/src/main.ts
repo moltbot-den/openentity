@@ -36,7 +36,7 @@ Usage: openentity <command> [options]   (also: oe)
   whoami | self [--entries n] | stats
   anchor [--format text|openclaw|claude|agents] [--write]
   document set <field> <value> | edit | push
-  record stance|update|arc open|arc close|collab|continuity|push
+  record stance|update|arc open|arc close|collab|continuity|push | record redact <seq>
   alias add domain|wallet|erc8004|platform <value>
   verify <file|url|eid> | resolve <did>
   present --audience <verifier> --nonce <nonce> [--no-attestations]

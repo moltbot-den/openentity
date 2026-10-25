@@ -323,6 +323,7 @@ type ObjectType =
   | "EntityDocument"
   | "Declaration"
   | "Withdrawal"
+  | "Redaction"
   | "RecordEntry"
   | "Attestation"
   | "Revocation"

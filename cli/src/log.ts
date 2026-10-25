@@ -129,21 +129,27 @@ async function verifyOne(o: Obj): Promise<Check[]> {
   return checks;
 }
 
-async function verifyRecord(entries: Obj[], eid: string): Promise<Check[]> {
+/** Chain check (spec 7.4). A redacted placeholder `{seq, prev, redacted, hash, redaction?}` links like an entry; its own
+ * signature is gone, so it is trusted only as far as the next entry's `prev` and, when present, the entity's signed Redaction. */
+export async function verifyRecord(entries: Obj[], eid: string): Promise<Check[]> {
   const checks: Check[] = [];
   let prev: Obj | undefined;
   for (const e of entries) {
-    if (e.redacted) {
-      prev = e;
-      continue;
-    }
     const bad: string[] = [];
-    if (e.eid !== eid) bad.push("eid mismatch");
     if (e.seq !== (prev ? prev.seq + 1 : 1)) bad.push(`seq ${e.seq} breaks the sequence`);
     const wantPrev = prev ? (prev.redacted ? prev.hash : await recordEntryHash(prev)) : null;
     if (e.prev !== wantPrev) bad.push("prev hash breaks the chain");
-    const s = await verifyObject(e as any, resolver);
-    if (!s.ok) bad.push(`signature: ${s.error}`);
+    if (e.redacted) {
+      if (!/^[0-9a-f]{64}$/.test(e.hash ?? "")) bad.push("placeholder hash is not SHA-256 hex");
+      if (e.redaction) {
+        const r = e.redaction, s = await verifyObject(r, resolver);
+        if (!s.ok || !signerOk(s.signer, eid) || r.eid !== eid || r.seq !== e.seq || r.entry_sha256 !== e.hash) bad.push("redaction is not the entity's signed request for this entry");
+      }
+    } else {
+      if (e.eid !== eid) bad.push("eid mismatch");
+      const s = await verifyObject(e as any, resolver);
+      if (!s.ok) bad.push(`signature: ${s.error}`);
+    }
     if (bad.length) checks.push({ name: `record entry ${e.seq}`, ok: false, detail: bad.join("; ") });
     prev = e;
   }
