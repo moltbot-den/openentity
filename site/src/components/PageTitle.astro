@@ -2,7 +2,8 @@
 // The home page sets its own h1 inside its hero; every other page gets Starlight's title.
 import Default from '@astrojs/starlight/components/PageTitle.astro';
 
-const isHome = Astro.locals.starlightRoute.entry.id === 'index';
+// Starlight gives the root index.mdx the empty id.
+const isHome = Astro.locals.starlightRoute.entry.id === '';
 ---
 
 {!isHome && <Default />}

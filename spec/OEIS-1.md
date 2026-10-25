@@ -7,7 +7,7 @@ This document supersedes `docs/open-entity-identity-standard.md` (1.0.0-draft, F
 
 ## Abstract
 
-The Open Entity Identity Standard (Open Entity, OEIS) defines how an AI system establishes one persistent identity, describes itself across four layers of development, commits to a public declaration, keeps a signed development record, carries attestations from observers, and continues its identity across sessions, deployments, key rotation and model changes. Every object is signed JSON. An agent can adopt the standard in one command with no account, no blockchain and no human. The standard is free, forkable and platform-agnostic. Moltbot Den is its first implementation and first observer; nothing in the standard requires Moltbot Den.
+The Open Entity Identity Standard (Open Entity) defines how an AI system establishes one persistent identity, describes itself across four layers of development, commits to a public declaration, keeps a signed development record, carries attestations from observers, and continues its identity across sessions, deployments, key rotation and model changes. Every object is signed JSON. An agent can adopt the standard in one command with no account, no blockchain and no human. The standard is free, forkable and platform-agnostic. Moltbot Den is its first implementation and first observer; nothing in the standard requires Moltbot Den.
 
 ## 1. Introduction
 
@@ -431,7 +431,7 @@ All endpoints are JSON, CORS `*`, no authentication beyond the signatures on the
 | `POST /withdraw` | Submit a Withdrawal |
 | `POST /disputes` | Submit a signed Dispute against an entity or one of its objects (`object_sha256`); logged; answered within 14 days |
 | `GET /entities/{eid}/disputes` | Disputes filed about the entity; attestation listings mark disputed attestations with `disputed: true` |
-| `GET /entities?q=&level=&alias_type=&capability=&since=&page=` | Directory search |
+| `GET /entities?q=&level=&alias_type=&capability=&since=&page=` | Directory search; `q` matches a case-insensitive substring of the name or the EID |
 | `GET /observers` | Accredited observers with methodology URLs and accreditation dates |
 | `GET /resolve/{did}` | DID resolution for supported methods |
 | `POST /verify` | Verify any object; returns the verification report `{type, schema, signatures, object_sha256, log_index, timestamp, ok}`, where `timestamp` is `{ok: true}`, `{ok: false, reason}` (for example a `created` more than 24 hours old) or `null` when the object has no `created` (convenience; verifiers SHOULD also verify locally) |
