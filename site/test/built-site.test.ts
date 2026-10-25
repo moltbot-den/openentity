@@ -111,6 +111,19 @@ describe('every page', () => {
     }
   });
 
+  it('links the site title to /, and names every form field', () => {
+    for (const f of pages) {
+      const html = read(f);
+      expect(html, route(f)).toMatch(/<a href="\/" class="site-title/);
+      for (const m of html.matchAll(/<(input|select|textarea)\b[^>]*>/g)) expect(m[0], route(f)).toMatch(/\s(id|name)="[^"]+"/);
+    }
+  });
+
+  it('keeps the entity template out of the sitemap and search engines', () => {
+    expect(files).not.toContain(join(dist, 'sitemap-0.xml'));
+    expect(read(join(dist, 'entity.html'))).toContain('<meta name="robots" content="noindex"/>');
+  });
+
   it('ships no human form in the static build (the server adds it only when enabled)', () => {
     for (const f of pages) expect(read(f)).not.toContain('/v1/subscribe');
     for (const r of ['adopt', 'for-humans']) expect(read(join(dist, `${r}.html`))).toContain('data-subscribe');

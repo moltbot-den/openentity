@@ -61,6 +61,8 @@ export const onRequest = defineRouteMiddleware((context) => {
   const route = context.locals.starlightRoute;
   const path = context.url.pathname.replace(/\.html$/, '').replace(/\/index$/, '/') || '/';
   const { title, description = '' } = route.entry.data;
+  // With build.format 'file' Starlight links the site title to /index.html, which is not a served URL.
+  route.siteTitleHref = '/';
   // Starlight derives canonical from the built file name (`/adopt.html`); the served URL is `/adopt`.
   for (const tag of route.head) {
     if (tag.attrs?.rel === 'canonical') tag.attrs.href = SITE + path;

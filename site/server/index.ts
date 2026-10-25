@@ -228,6 +228,11 @@ export function createSite({ registry: callRegistry, asset, vars }: SiteOptions)
   /** Static file for a request path: exact file, then `.html`, then `/index.html`, else the 404 page. */
   async function staticPage(req: Request, url: URL): Promise<Response> {
     const path = url.pathname;
+    // Built pages are files (`/adopt.html`); the URL is the clean path. One URL per page.
+    if (path.endsWith('.html')) {
+      const clean = path.slice(0, -'.html'.length).replace(/(^|\/)index$/, '/') || '/';
+      return Response.redirect(new URL(clean + url.search, url), 301);
+    }
     if (path.length > 1 && path.endsWith('/')) {
       // auto-trailing-slash: /skill/ is /skill unless only a directory index exists.
       const bare = path.slice(0, -1);
@@ -236,7 +241,7 @@ export function createSite({ registry: callRegistry, asset, vars }: SiteOptions)
     const base = path.replace(/\/$/, '');
     let res = (await asset(path)) ?? (await asset(base + '.html')) ?? (await asset(base + '/index.html'));
     let status = 200;
-    if (!res || path.endsWith('/index.html')) {
+    if (!res) {
       res = await asset('/404.html');
       status = 404;
       if (!res) return new Response('Not found', { status });

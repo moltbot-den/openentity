@@ -34,6 +34,24 @@ export const GITHUB_SUB = "repo:moltbot-den@263048018/openentity@1432633160:ref:
 // Created out of band from the GCP Secret Manager copies (moltbot-den project): REGISTRY_KEY_JWK, CUSTODY_KEY, HASH_SALT, TURNSTILE_SECRET, ORIGIN_VERIFY, optional CIO_*.
 export const APP_SECRET = "openentity/app";
 
+// What the site's pages load: their own files, the Cloudflare Web Analytics beacon, and Turnstile on the
+// subscribe form. Pagefind search needs WebAssembly. No page may be framed.
+// ponytail: 'unsafe-inline' scripts because Starlight inlines its theme bootstrap; per-response hashes from
+// the site server if a page ever renders untrusted HTML.
+export const CSP = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://static.cloudflareinsights.com https://challenges.cloudflare.com",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data:",
+  "font-src 'self'",
+  "connect-src 'self' https://cloudflareinsights.com",
+  "frame-src https://challenges.cloudflare.com",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+].join("; ");
+
 const root = (p: string) => fileURLToPath(new URL(`../../${p}`, import.meta.url));
 
 export interface OpenEntityProps extends StackProps {
@@ -171,6 +189,8 @@ export class OpenEntityStack extends Stack {
         strictTransportSecurity: { accessControlMaxAge: Duration.days(365), includeSubdomains: true, override: false },
         contentTypeOptions: { override: true },
         referrerPolicy: { referrerPolicy: cf.HeadersReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN, override: false },
+        frameOptions: { frameOption: cf.HeadersFrameOption.DENY, override: true },
+        contentSecurityPolicy: { contentSecurityPolicy: CSP, override: true },
       },
     });
     const dynamic = {

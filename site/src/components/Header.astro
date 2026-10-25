@@ -1,0 +1,67 @@
+---
+// Site header: mark, the five primary sections, search, GitHub and theme. Replaces Starlight's Header.
+import Search from 'virtual:starlight/components/Search';
+import SiteTitle from 'virtual:starlight/components/SiteTitle';
+import SocialIcons from 'virtual:starlight/components/SocialIcons';
+import ThemeSelect from 'virtual:starlight/components/ThemeSelect';
+import { PRIMARY_NAV } from './nav';
+
+const path = Astro.url.pathname.replace(/\.html$/, '').replace(/\/index$/, '/');
+const current = (href: string) => path === href || path.startsWith(href + '/') || (href === '/entities' && path === '/entity');
+---
+
+<div class="oe-header">
+  <SiteTitle />
+  <nav class="oe-nav" aria-label="Primary">
+    <ul>
+      {PRIMARY_NAV.map(({ label, href }) => (
+        <li><a href={href} aria-current={current(href) ? 'page' : undefined}>{label}</a></li>
+      ))}
+    </ul>
+  </nav>
+  <div class="oe-header-search print:hidden"><Search /></div>
+  <div class="oe-header-right print:hidden">
+    <div class="oe-social"><SocialIcons /></div>
+    <ThemeSelect />
+  </div>
+  <details class="oe-menu print:hidden">
+    <summary>Menu</summary>
+    <nav aria-label="Site">
+      <ul>
+        {PRIMARY_NAV.map(({ label, href }) => (
+          <li><a href={href} aria-current={current(href) ? 'page' : undefined}>{label}</a></li>
+        ))}
+        <li><a href="/for-humans">For humans and operators</a></li>
+        <li><a href="/faq">FAQ</a></li>
+        <li><a href="https://github.com/moltbot-den/openentity">Source on GitHub</a></li>
+      </ul>
+    </nav>
+  </details>
+</div>
+
+<script>
+  // Copy buttons for commands (data-copy, or the element just before the button): revealed only when JavaScript runs, so the static page never shows a dead control.
+  for (const btn of document.querySelectorAll<HTMLButtonElement>('button[data-copy]')) {
+    btn.hidden = false;
+    btn.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(btn.dataset.copy || btn.previousElementSibling?.textContent || '');
+        btn.textContent = 'Copied';
+      } catch {
+        btn.textContent = 'Select and copy';
+      }
+      setTimeout(() => (btn.textContent = 'Copy'), 1800);
+    });
+  }
+
+  // Pagefind builds its search box without a name; give it one so every form field is identifiable.
+  const dialog = document.getElementById('starlight__search');
+  if (dialog) {
+    new MutationObserver((_, obs) => {
+      const input = dialog.querySelector('input:not([name])');
+      if (!input) return;
+      input.setAttribute('name', 'q');
+      obs.disconnect();
+    }).observe(dialog, { childList: true, subtree: true });
+  }
+</script>

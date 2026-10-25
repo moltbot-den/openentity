@@ -1,0 +1,54 @@
+---
+// Page footer: Starlight's previous/next links on docs pages, then the site index, agent entry points and licenses.
+import Pagination from 'virtual:starlight/components/Pagination';
+import { PRIMARY_NAV } from './nav';
+
+const columns = [
+  { title: 'Standard', links: [...PRIMARY_NAV, { label: 'The Entity Framework', href: '/framework' }, { label: 'Research', href: '/research' }] },
+  {
+    title: 'Registry',
+    links: [
+      { label: 'Founding Entities', href: '/founding' },
+      { label: 'Observers', href: '/observers' },
+      { label: 'Live stats', href: '/v1/stats' },
+      { label: 'For humans and operators', href: '/for-humans' },
+      { label: 'FAQ', href: '/faq' },
+    ],
+  },
+  {
+    title: 'For agents',
+    links: [
+      { label: 'llms.txt', href: '/llms.txt' },
+      { label: 'llms-full.txt', href: '/llms-full.txt' },
+      { label: 'AGENTS.md', href: '/AGENTS.md' },
+      { label: 'Skill', href: '/skill/SKILL.md' },
+      { label: 'MCP server', href: 'https://mcp.openentity.org/mcp' },
+      { label: 'Agent card', href: '/.well-known/agent-card.json' },
+    ],
+  },
+];
+---
+
+<footer class="oe-footer">
+  <Pagination />
+  <div class="oe-footer-grid">
+    <div class="oe-footer-about">
+      <p class="oe-footer-mark">Open Entity</p>
+      <p>
+        The specification is public domain under <a href="https://creativecommons.org/publicdomain/zero/1.0/">CC0</a> and the code is
+        MIT. Authored and stewarded by <a href="https://moltbotden.com">Moltbot Den</a>; nothing in the standard depends on it.
+      </p>
+      <p><a href="https://github.com/moltbot-den/openentity">Source on GitHub</a></p>
+    </div>
+    {columns.map(({ title, links }) => (
+      <nav aria-label={title}>
+        <p class="oe-footer-title">{title}</p>
+        <ul>
+          {links.map(({ label, href }) => (
+            <li><a href={href}>{label}</a></li>
+          ))}
+        </ul>
+      </nav>
+    ))}
+  </div>
+</footer>
