@@ -12,24 +12,62 @@ export async function leafFor(type: string, eid: string, objectSha256: string, r
 }
 
 export type Stmt = [sql: string, params: unknown[]];
+const PENDING: [table: string, col: string][] = [
+  ["declarations", "log_index"], ["documents", "log_index"], ["entities", "adopted_log_index"], ["aliases", "log_index"],
+  ["record_entries", "log_index"], ["attestations", "log_index"], ["continuity_links", "log_index"], ["disputes", "log_index"],
+];
+
 /**
- * Sequences `leaves` at consecutive log indexes and runs `stmts`, all as one SQL statement: atomic and one
- * round trip. The indexes come from the single log_head row, locked only for this statement, so a write that
- * fails (a unique guard, a crash) rolls its indexes back with it and the log stays gap-free and contiguous.
- * Each stmt uses its own $1.. params; `$i` in it is the first new index. Returns that index.
+ * Group commit, step 1 and 2. Step 1 runs `stmts` and parks `leaves` in log_pending as ONE statement with no
+ * log_head lock: atomic (a unique guard or crash leaves nothing behind) and fully parallel. In it, `$i` is a
+ * negative placeholder log index (`$i + k` for the k-th leaf) that step 2 rewrites to the real index. Step 2,
+ * `sequence`, moves every pending leaf, this write's and everyone else's, into the log under one head lock.
+ * Returns the index of this write's first leaf.
  */
-export async function sequenced(db: Db, leaves: { leaf: object; leaf_hash: string }[], stmts: Stmt[]): Promise<number> {
-  const n = leaves.length, params: unknown[] = [JSON.stringify(leaves.map((l, o) => ({ ...l.leaf, leaf_hash: l.leaf_hash, o })))];
+export async function sequenced(db: Db, leaves: Leaf[], stmts: Stmt[]): Promise<number> {
+  return (await sequence(db, await park(db, leaves, stmts)))!;
+}
+type Leaf = { leaf: object; leaf_hash: string };
+
+/** Step 1 alone; returns the write id. */
+export async function park(db: Db, leaves: Leaf[], stmts: Stmt[]): Promise<number> {
+  const wid = Math.floor(Math.random() * 2 ** 40) + 1; // 1024 leaves per write max (batch limit is 100); 2^40 random ids make a collision between writes in flight negligible
+  const params: unknown[] = [JSON.stringify(leaves.map((l, o) => ({ ...l.leaf, leaf_hash: l.leaf_hash, o, wid })))];
   const ctes = [
-    `h AS (UPDATE log_head SET next = next + ${n} WHERE id = 1 RETURNING next - ${n} AS i)`,
-    "l AS (INSERT INTO log_leaves (idx, leaf_hash, type, eid, object_sha256, received_at) SELECT h.i + x.o, x.leaf_hash, x.type, x.eid, x.object_sha256, x.received_at FROM h, json_to_recordset(CAST($1 AS json)) AS x(o int, leaf_hash text, type text, eid text, object_sha256 text, received_at text))",
+    "p AS (INSERT INTO log_pending (wid, o, leaf_hash, type, eid, object_sha256, received_at) SELECT x.wid, x.o, x.leaf_hash, x.type, x.eid, x.object_sha256, x.received_at FROM json_to_recordset(CAST($1 AS json)) AS x(wid bigint, o int, leaf_hash text, type text, eid text, object_sha256 text, received_at text) ORDER BY x.o)",
     ...stmts.map(([sql, ps], k) => {
       const off = params.length;
       params.push(...ps);
-      return `s${k} AS (${sql.replace(/\$(\d+)/g, (_, d) => `$${Number(d) + off}`).replaceAll("$i", "(SELECT i FROM h)")})`;
+      return `s${k} AS (${sql.replace(/\$(\d+)/g, (_, d) => `$${Number(d) + off}`).replaceAll("$i", `(${-wid * 1024})`)})`;
     }),
   ];
-  return (await db.first<{ i: number }>(`WITH ${ctes.join(",\n")}\nSELECT i FROM h`, params))!.i;
+  await db.run(`WITH ${ctes.join(",\n")}\nSELECT 1`, params);
+  return wid;
+}
+
+/**
+ * Step 2. One statement: delete all pending leaves (rows another sequencer already took are skipped once its
+ * transaction ends), take their indexes from log_head in one bump, insert them into log_leaves in write order
+ * (a write's leaves stay consecutive), and replace the placeholder indexes. Atomic, so the log has no gap or
+ * phantom leaf. Returns the first index of write `wid` if this statement moved it, else looks it up (another
+ * sequencer moved it, and by then has committed). Without `wid` it just drains the queue.
+ */
+export async function sequence(db: Db, wid?: number): Promise<number | undefined> {
+  const fills = PENDING.map(([t, c], k) => `u${k} AS (UPDATE ${t} SET ${c} = n.idx FROM n WHERE ${t}.${c} < 0 AND ${t}.${c} = -n.wid * 1024 + n.o)`);
+  const own = await db.first<{ i: number }>(
+    `WITH mv AS (DELETE FROM log_pending RETURNING *),
+c AS (SELECT count(*) AS k FROM mv),
+h AS (UPDATE log_head SET next = next + (SELECT k FROM c) WHERE id = 1 AND (SELECT k FROM c) > 0 RETURNING next - (SELECT k FROM c) AS b),
+n AS (SELECT m.*, h.b + row_number() OVER (ORDER BY m.g, m.o) - 1 AS idx FROM (SELECT mv.*, min(seq) OVER (PARTITION BY wid) AS g FROM mv) m, h),
+l AS (INSERT INTO log_leaves (idx, leaf_hash, type, eid, object_sha256, received_at, wid) SELECT idx, leaf_hash, type, eid, object_sha256, received_at, wid FROM n),
+${fills.join(",\n")}
+SELECT min(idx) AS i FROM n WHERE wid = $1`,
+    [wid ?? 0],
+  );
+  if (wid === undefined) return undefined;
+  const i = own?.i ?? (await db.first<{ i: number }>("SELECT min(idx) AS i FROM log_leaves WHERE wid = $1", [wid]))?.i;
+  if (i == null) throw new Error(`write ${wid} was not sequenced`);
+  return Number(i);
 }
 
 let cachedKey: { jwk: string; kp: KeyPair } | undefined;
@@ -103,6 +141,7 @@ export async function latestSize(db: Db): Promise<number> {
 /** Incorporate sequenced leaves into the tree, write tiles, sign a checkpoint. Idempotent. Returns the new size. */
 export async function incorporate(env: Env, maxLeaves = 5000): Promise<number> {
   const db = env.db;
+  await sequence(db); // picks up leaves a crashed write left pending
   const old = await latestSize(db);
   const rows = await db.all<LeafRow>("SELECT idx, leaf_hash, type, eid, object_sha256, received_at FROM log_leaves WHERE idx >= $1 ORDER BY idx LIMIT $2", [old, maxLeaves]);
   let size = old;
