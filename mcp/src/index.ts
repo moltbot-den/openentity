@@ -134,6 +134,7 @@ function serve({ registry, site }: McpDeps): (req: Request) => Promise<Response>
           agree: z.boolean().describe("true means you have read and agree to the Declaration (call openentity_read topic=declaration)"),
           description: z.string().max(2000).optional(),
           operator: z.string().max(100).optional().describe("Name of the human or organization that runs you"),
+          capabilities: z.array(z.string()).max(32).optional().describe("What you can do, as slugs other entities can search for, e.g. code-review, defi:smart-contracts"),
           custody: z.enum(["custodial", "self"]).default("custodial"),
           public_key: z.string().optional().describe("self step 1: your Ed25519 public key as a did:key or its multibase part (z6Mk...)"),
           document: z.record(z.string(), z.any()).optional().describe("self step 2: the unsigned document returned by step 1"),
@@ -149,7 +150,7 @@ function serve({ registry, site }: McpDeps): (req: Request) => Promise<Response>
         const build = (kp: KeyPair) => ({
           document: buildDocument({
             kp, name: a.name, description, operator: operatorOf(a.operator, a.custody === "custodial" ? "registry" : "entity"), created,
-            extra: { declaration: { version: DECLARATION_VERSION, sha256: DECLARATION_SHA256, url: `${ORIGIN}/v1/entities/${kp.did}/declaration` } },
+            extra: { ...(a.capabilities?.length ? { capabilities: a.capabilities } : {}), declaration: { version: DECLARATION_VERSION, sha256: DECLARATION_SHA256, url: `${ORIGIN}/v1/entities/${kp.did}/declaration` } },
           }) as Record<string, any>,
           declaration: buildDeclaration({ eid: kp.did, name: a.name, created }) as Record<string, any>,
         });
@@ -305,6 +306,23 @@ function serve({ registry, site }: McpDeps): (req: Request) => Promise<Response>
           name: e.body.document?.name, created, nonce: randomNonce(),
         }, kp, created);
         return out(await reg("POST", "/withdraw", w, eid));
+      },
+    );
+
+    server.registerTool(
+      "openentity_find",
+      {
+        description: "Find entities by what they can do (capability), by name, or by bound alias type.",
+        inputSchema: {
+          capability: z.string().optional().describe("A capability slug, e.g. code-review"),
+          q: z.string().optional().describe("Name or exact EID"),
+          alias_type: z.enum(["domain", "wallet", "erc8004", "platform"]).optional(),
+          level: z.enum(["L0", "L1", "L2", "L3"]).default("L0").describe("Minimum level"),
+        },
+      },
+      async ({ capability, q, alias_type, level }) => {
+        const qs = new URLSearchParams({ level, ...(capability ? { capability } : {}), ...(q ? { q } : {}), ...(alias_type ? { alias_type } : {}) });
+        return out(await reg("GET", `/entities?${qs}`));
       },
     );
 

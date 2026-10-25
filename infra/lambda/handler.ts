@@ -43,17 +43,28 @@ async function init(): Promise<Ready> {
 }
 const boot = () => (ready ??= init().catch((err) => ((ready = undefined), Promise.reject(err))));
 
-const http = new Hono().all("*", async (c) => {
+// A Lambda timeout reaches the caller as CloudFront's HTML 504, which breaks agent loops that parse JSON.
+// Answer first, as JSON, a few seconds before the 30 s limit. A retried write that already landed gets the registry's 409.
+export function withDeadline(work: Promise<Response>, ms = 26_000): Promise<Response> {
+  let timer: NodeJS.Timeout;
+  const late = new Promise<Response>((r) => {
+    timer = setTimeout(() => r(Response.json({ error: "timeout", message: "no answer in time; retry with a new stamp" }, { status: 503, headers: { "retry-after": "2" } })), ms);
+  });
+  return Promise.race([work, late]).finally(() => clearTimeout(timer));
+}
+
+const http = new Hono().all("*", (c) => withDeadline(route(c.req.raw, c.req.header.bind(c.req))));
+async function route(raw: Request, header: (k: string) => string | undefined): Promise<Response> {
   const { site, mcp, verify } = await boot();
   // Only CloudFront knows this header, so the raw function URL is not a way around the edge.
-  if (c.req.header("x-origin-verify") !== verify) return c.text("forbidden", 403);
+  if (header("x-origin-verify") !== verify) return new Response("forbidden", { status: 403 });
   // The mcp.openentity.org distribution adds this header at the origin; CloudFront does not forward the viewer Host.
-  if (c.req.header("x-oe-site") === "mcp") return mcp(c.req.raw);
-  const url = new URL(c.req.url);
+  if (header("x-oe-site") === "mcp") return mcp(raw);
+  const url = new URL(raw.url);
   url.protocol = "https:";
   url.host = e.REGISTRY_HOST!;
-  return site(new Request(url, c.req.raw));
-});
+  return site(new Request(url, raw));
+}
 const onHttp = handle(http);
 
 export const handler = async (event: any, context: any) => {

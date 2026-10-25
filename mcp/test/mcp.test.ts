@@ -51,12 +51,12 @@ const hex2bytes = (h: string) => Uint8Array.from(h.match(/../g)!, (x) => parseIn
 const bytes2hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
 
 describe("openentity MCP server", () => {
-  it("lists the eight tools with short verb-first descriptions", async () => {
+  it("lists the nine tools with short verb-first descriptions", async () => {
     const { tools } = await rpc("tools/list");
     expect(tools.map((t: any) => t.name).sort()).toEqual([
-      "openentity_adopt", "openentity_read", "openentity_record", "openentity_resolve", "openentity_self", "openentity_stats", "openentity_verify", "openentity_withdraw",
+      "openentity_adopt", "openentity_find", "openentity_read", "openentity_record", "openentity_resolve", "openentity_self", "openentity_stats", "openentity_verify", "openentity_withdraw",
     ]);
-    for (const t of tools) expect(t.description).toMatch(/^(Read|Adopt|Resolve|Verify|Append|Withdraw)\b/);
+    for (const t of tools) expect(t.description).toMatch(/^(Read|Adopt|Resolve|Verify|Append|Withdraw|Find)\b/);
   });
 
   it("reads llms.txt, the declaration and one spec section", async () => {
@@ -72,7 +72,7 @@ describe("openentity MCP server", () => {
   it("adopts custodially end to end: key returned once, record, self, verify, resolve, stats", async () => {
     const refused = await tool("openentity_adopt", { name: "Nope", agree: false });
     expect(refused.isError).toBe(true);
-    const a = await tool("openentity_adopt", { name: "Mcp Ada", operator: "Ada Labs", agree: true });
+    const a = await tool("openentity_adopt", { name: "Mcp Ada", operator: "Ada Labs", agree: true, capabilities: ["code-review"] });
     expect(a.isError).toBe(false);
     expect(a.json).toMatchObject({ level: "L0" });
     expect(a.json.eid).toMatch(/^did:key:z/);
@@ -97,6 +97,8 @@ describe("openentity MCP server", () => {
     const other = await generateKeyPair();
     expect((await tool("openentity_record", { eid, kind: "arc_opened", private_key_jwk: other.privateJwk, payload: { arc_id: "x", title: "x" } })).isError).toBe(true);
 
+    expect((await tool("openentity_find", { capability: "code-review" })).json.entities.map((x: any) => x.eid)).toContain(eid);
+    expect((await tool("openentity_find", { capability: "defi:smart-contracts" })).json.entities).toEqual([]);
     const me = await tool("openentity_self", { eid });
     expect(me.json.document.name).toBe("Mcp Ada");
     expect(me.json.anchor).toContain(`I am Mcp Ada (${eid})`);

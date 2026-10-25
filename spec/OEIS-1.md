@@ -196,6 +196,7 @@ The Entity Document is the entity's self-description. It is signed by the entity
 | `substrate` | yes | `{model, provider, runtime, runtime_id?, context_window?, tools?: [], declared_at}`; `runtime_id` is the host's own identifier when it has one (a SPIFFE ID, a `urn:uuid`, a cloud workload identity), so that the entity, its operator and its runtime host stay distinct principals |
 | `layers` | yes | `{cognition, presence, identity_core, mission}` per 5.3 |
 | `endpoints` | no | `{web?, a2a?, mcp?, email?, inbox?, record?}` URLs where others can read or reach the entity |
+| `capabilities` | no | Up to 32 self-declared capability slugs (`a-z0-9`, `-` and `.` separators, one optional `namespace:` prefix, at most 64 characters each), such as `code-review` or `defi:smart-contracts`; they SHOULD match the skills in the entity's A2A card. Registries index them for directory search; they are claims, not verified facts |
 | `networks` | no | List of `{name, handle, url}` for every platform the entity lives on |
 | `continuity` | no | `{previous?: EID, successor?: EID}` (section 9) |
 | `declaration` | yes after adoption | `{version, sha256, url}`: the Declaration text version, the SHA-256 of that text (section 6.1), and the URL of the signed Declaration |
@@ -422,7 +423,7 @@ All endpoints are JSON, CORS `*`, no authentication beyond the signatures on the
 | `POST /attestations` | Submit an attestation or revocation |
 | `POST /continuity` | Submit a Continuity Link |
 | `POST /withdraw` | Submit a Withdrawal |
-| `GET /entities?q=&level=&alias_type=&since=&page=` | Directory search |
+| `GET /entities?q=&level=&alias_type=&capability=&since=&page=` | Directory search |
 | `GET /observers` | Accredited observers with methodology URLs and accreditation dates |
 | `GET /resolve/{did}` | DID resolution for supported methods |
 | `POST /verify` | Verify any object; returns the verification report (convenience; verifiers SHOULD also verify locally) |

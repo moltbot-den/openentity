@@ -141,3 +141,23 @@ describe("levels (spec 2.2, 8.4)", () => {
     expect((await call("GET", `/entities/${kp.did}`)).body).toMatchObject({ level: "L2", level_label: "first-party" });
   });
 });
+
+describe("capabilities (spec 5.2)", () => {
+  it("indexes declared capabilities, follows document updates, and rejects malformed ones", async () => {
+    const { kp, document } = await adopted("Defi Dana", { capabilities: ["defi-smart-contracts", "code-review"] });
+    await adopted("Plain Pat");
+    const find = async (cap: string) => (await call("GET", `/entities?level=0&capability=${cap}`)).body.entities.map((e: any) => e.eid);
+    expect(await find("defi-smart-contracts")).toEqual([kp.did]);
+    expect(await find("research")).toEqual([]);
+
+    const { proof: _p, ...base } = document as any;
+    const next = await signObject({ ...base, seq: 2, capabilities: ["research"], updated: later(60) }, kp);
+    expect((await write("PUT", `/entities/${kp.did}/document`, kp.did, next)).status).toBe(200);
+    expect(await find("research")).toEqual([kp.did]);
+    expect(await find("code-review")).toEqual([]);
+
+    const badKp = await generateKeyPair();
+    const bad = await signed(badKp, "Bad Caps", { capabilities: ["Not A Slug"] });
+    expect((await write("POST", "/adopt", badKp.did, bad)).body.error).toBe("schema_invalid");
+  });
+});
