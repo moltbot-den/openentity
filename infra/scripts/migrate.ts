@@ -7,7 +7,7 @@ import { dataApiDb } from "../../registry/src/db.ts";
 
 const profile = process.env.GITHUB_ACTIONS ? [] : ["--profile", "openentity"];
 const stack = JSON.parse(
-  execFileSync("aws", ["cloudformation", "describe-stacks", "--stack-name", "OpenEntity", "--region", "us-east-1", "--output", "json", ...profile], { encoding: "utf8" }),
+  execFileSync("aws", ["cloudformation", "describe-stacks", "--stack-name", process.env.STACK ?? "OpenEntity", "--region", "us-east-1", "--output", "json", ...profile], { encoding: "utf8" }),
 ).Stacks[0];
 const out = (k: string) => stack.Outputs.find((o: any) => o.OutputKey === k).OutputValue;
 if (!process.env.GITHUB_ACTIONS) process.env.AWS_PROFILE = "openentity";

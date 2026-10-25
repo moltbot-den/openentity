@@ -19,7 +19,9 @@ async function init(): Promise<Ready> {
   const env: Env = {
     db: dataApiDb({ resourceArn: e.DB_CLUSTER_ARN!, secretArn: e.DB_SECRET_ARN!, database: e.DB_NAME! }),
     log: s3Blobs(e.LOG_BUCKET!),
-    snapshots: s3Blobs(e.SNAPSHOT_BUCKET!),
+    snapshots: e.SNAPSHOT_BUCKET ? s3Blobs(e.SNAPSHOT_BUCKET) : undefined,
+    IP_DAILY_LIMIT: e.IP_DAILY_LIMIT,
+    WRITE_PER_MINUTE: e.WRITE_PER_MINUTE,
     STAMP_BITS: e.STAMP_BITS!,
     REGISTRY_HOST: e.REGISTRY_HOST!,
     BASE_RPC_URL: e.BASE_RPC_URL!,
