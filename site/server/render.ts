@@ -176,6 +176,9 @@ ${lineage.previous || lineage.successor ? `<ul>${lineage.previous ? `<li>Continu
   };
 }
 
+/** The URL when it is http(s), else null: registry strings reach href attributes, and `javascript:` must not. */
+const httpUrl = (u: unknown): string | null => (typeof u === 'string' && /^https?:\/\//i.test(u) ? u : null);
+
 /** Rows for /entities from GET /v1/entities. */
 export function renderEntityList(res: unknown, query: URLSearchParams): string {
   const rows = list(res, 'entities', 'results');
@@ -205,7 +208,7 @@ export function renderObservers(res: unknown): string {
     .map(
       (o) =>
         `<tr><td>${esc(o.name ?? o.did)}<div class="oe-eid">${esc(o.did)}</div>${o.bootstrap || o.level === 'bootstrap' ? '<span class="oe-label">bootstrap</span>' : ''}</td><td>${date(o.accredited_at ?? o.accreditation_date)}</td><td>${
-          o.methodology_url || o.trust_policy_url ? `<a href="${esc(o.methodology_url ?? o.trust_policy_url)}" rel="nofollow">Methodology and trust policy</a>` : ''
+          httpUrl(o.methodology_url ?? o.trust_policy_url) ? `<a href="${esc(httpUrl(o.methodology_url ?? o.trust_policy_url))}" rel="nofollow">Methodology and trust policy</a>` : ''
         }</td></tr>`,
     )
     .join('')}</tbody></table>`;

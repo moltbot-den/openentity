@@ -434,7 +434,7 @@ All endpoints are JSON, CORS `*`, no authentication beyond the signatures on the
 | `GET /entities?q=&level=&alias_type=&capability=&since=&page=` | Directory search |
 | `GET /observers` | Accredited observers with methodology URLs and accreditation dates |
 | `GET /resolve/{did}` | DID resolution for supported methods |
-| `POST /verify` | Verify any object; returns the verification report (convenience; verifiers SHOULD also verify locally) |
+| `POST /verify` | Verify any object; returns the verification report `{type, schema, signatures, object_sha256, log_index, timestamp, ok}`, where `timestamp` is `{ok: true}`, `{ok: false, reason}` (for example a `created` more than 24 hours old) or `null` when the object has no `created` (convenience; verifiers SHOULD also verify locally) |
 | `GET /log/checkpoint`, `GET /log/tile/{level}/{index}[.p/{width}]`, `GET /log/tile/entries/{index}` | The tlog-tiles log itself (section 10.3), static files |
 | `GET /log/sth` | The current checkpoint as JSON: `{tree_size, root_hash, timestamp, signature}` |
 | `GET /log/entries?start=&end=` | Log entries (max 1,000 per call) |

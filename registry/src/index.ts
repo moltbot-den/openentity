@@ -3,12 +3,12 @@ import { Hono, type Context } from "hono";
 import { cors } from "hono/cors";
 import {
   DECLARATION_SHA256, DECLARATION_VERSION, SPEC, buildDeclaration, buildDocument, canonicalize, checkStamp, checkTimestamp,
-  generateKeyPair, normalizeEid, noteVkey, recordEntryHash, sha256Hex, signObject, validate, verifyObject, verifyProof, type Proof,
+  generateKeyPair, normalizeEid, noteVkey, recordEntryHash, sha256Hex, signObject, validate, verifyObject, verifyProof, type Proof, type Resolver,
 } from "./sdk.ts";
 import { type Env, REGISTRY_DID, LOG_ORIGIN, b64, nowIso } from "./env.ts";
 import { type Stmt, consistencyProof, inclusionProof, incorporate, latestSize, leafFor, leafJson, registryKey, sequenced, snapshot, tileIndex, treeRoot, type LeafRow } from "./log.ts";
 import type { Db } from "./db.ts";
-import { platformDomain, resolveDid, resolver, verifyAlias } from "./aliases.ts";
+import { DOMAIN, getJson, platformDomain, resolveDid, resolver, verifyAlias } from "./aliases.ts";
 
 type C = Context<{ Bindings: Env }>;
 class HttpError extends Error {
@@ -26,7 +26,9 @@ const LEVEL = (n: number | null) => (n === null ? null : `L${n}`);
 const today = () => nowIso().slice(0, 10);
 
 export const app = new Hono<{ Bindings: Env }>().basePath("/v1");
-app.use("*", cors());
+// Agents call from browsers too: allow the headers a write needs. No credentials, ever (agent endpoints have no login).
+// CloudFront does not forward Access-Control-Request-Headers, so the list is fixed rather than reflected.
+app.use("*", cors({ origin: "*", allowMethods: ["GET", "POST", "PUT", "OPTIONS"], allowHeaders: ["content-type", "x-oe-stamp", "accept", "if-none-match"], exposeHeaders: ["retry-after", "etag"], maxAge: 86400 }));
 app.onError((e, c) => {
   if (e instanceof HttpError) return c.json({ error: e.code, message: e.message }, e.status as 400);
   if (UNIQUE.test(String(e))) return c.json({ error: "conflict", message: "object already exists or was accepted concurrently" }, 409);
@@ -38,7 +40,10 @@ app.notFound((c) => c.json({ error: "not_found", message: "no such endpoint" }, 
 
 // ---------- shared guards ----------
 
-async function readJson(c: C): Promise<any> {
+const STAMP_REQUIRED = "write endpoints require an X-OE-Stamp header; see GET /v1/spec for the bits";
+/** Body of a write. The stamp header is checked first so every write answers a missing stamp the same way, whatever the body. */
+async function readJson(c: C, stamped = true): Promise<any> {
+  if (stamped && !c.req.header("x-oe-stamp")) fail(400, "stamp_required", STAMP_REQUIRED);
   const text = await c.req.text();
   if (text.length > 2_000_000) fail(413, "too_large", "request body exceeds 2 MB");
   try { return JSON.parse(text); } catch { return fail(400, "bad_json", "body is not valid JSON"); }
@@ -59,7 +64,7 @@ export function clientIp(c: C): string {
 async function writeGuard(c: C, eid: string) {
   const env = c.env;
   const stamp = c.req.header("x-oe-stamp");
-  if (!stamp) fail(400, "stamp_required", "write endpoints require an X-OE-Stamp header; see GET /v1/spec for the bits");
+  if (!stamp) fail(400, "stamp_required", STAMP_REQUIRED);
   const err = await checkStamp(stamp!, Number(env.STAMP_BITS), eid);
   if (err) fail(400, "stamp_invalid", err);
   const ip = await salted(env, clientIp(c)), now = nowIso();
@@ -73,7 +78,10 @@ async function writeGuard(c: C, eid: string) {
   if (counts.get("ip")! > daily) fail(429, "rate_limited", `at most ${daily} writes per day per IP`);
   if (counts.get("stamp")! > 1) fail(409, "stamp_reused", "each stamp is accepted once");
 }
+const MAX_BYTES: Record<string, number> = { EntityDocument: LIMITS.document_max_bytes, RecordEntry: LIMITS.record_entry_max_bytes }; // spec 4.1, 7.3
 function schema(type: string, obj: unknown) {
+  const max = MAX_BYTES[type];
+  if (max && new TextEncoder().encode(JSON.stringify(obj)).length > max) fail(413, "too_large", `${type} exceeds ${max} bytes`);
   const r = validate(type as "EntityDocument", obj);
   if (!r.ok) fail(422, "schema_invalid", `${type}: ${r.errors.join("; ")}`);
 }
@@ -81,8 +89,8 @@ function window(created: string, what: string) {
   const err = checkTimestamp(created);
   if (err) fail(422, "timestamp_invalid", `${what}: ${err}`);
 }
-async function signedBy(obj: { proof?: Proof }, did: string, what: string) {
-  const r = await verifyObject(obj, resolver);
+async function signedBy(obj: { proof?: Proof }, did: string, what: string, res: Resolver = resolver) {
+  const r = await verifyObject(obj, res);
   if (!r.ok || normalizeEid(r.signer ?? "") !== did) fail(422, "signature_invalid", `${what}: ${r.error ?? `signed by ${r.signer}, expected ${did}`}`);
 }
 async function entity(db: Db, eid: string): Promise<any> {
@@ -381,7 +389,10 @@ app.post("/entities/:eid/record", async (c) => {
     hashes.push(prev);
     seq++;
   }
-  for (const en of entries) await signedBy(en, eid, `entry ${en.seq}`);
+  // One DID resolution per request, not per entry: a did:web root is a fetch to a host the writer controls.
+  const resolved = new Map<string, ReturnType<Resolver>>();
+  const once: Resolver = (did) => resolved.get(did) ?? (resolved.set(did, resolver(did)), resolved.get(did)!);
+  for (const en of entries) await signedBy(en, eid, `entry ${en.seq}`, once);
   if ((await bump(db, `rec:${eid}`, today(), entries.length)) > LIMITS.record_entries_per_eid_per_day) fail(429, "rate_limited", `at most ${LIMITS.record_entries_per_eid_per_day} record entries per day`);
   const now = nowIso();
   const leaves = await Promise.all(entries.map((_, i) => leafFor("RecordEntry", eid, hashes[i], now)));
@@ -548,7 +559,7 @@ app.get("/resolve/:did", async (c) => {
 });
 
 app.post("/verify", async (c) => {
-  const o = await readJson(c);
+  const o = await readJson(c, false);
   const type: string = o?.type ?? (o?.keys && o?.eid ? "EntityDocument" : "unknown");
   const v = validate(type as "EntityDocument", o);
   let signatures: { ok: boolean; signer?: string; error?: string }[] = [];
@@ -561,7 +572,7 @@ app.post("/verify", async (c) => {
   const created = o?.created ?? o?.updated ?? o?.at;
   return c.json({
     type, schema: { ok: v.ok, errors: v.errors }, signatures, object_sha256: s, log_index: leaf ?? null,
-    timestamp: created && type !== "RecordEntry" ? checkTimestamp(created) ?? "ok" : null,
+    timestamp: created && type !== "RecordEntry" ? ((reason) => (reason ? { ok: false, reason } : { ok: true }))(checkTimestamp(created)) : null,
     ok: v.ok && signatures.length > 0 && signatures.every((x) => x.ok),
   });
 });
@@ -653,7 +664,7 @@ app.post("/subscribe", async (c) => {
   const env = c.env;
   if (!env.TURNSTILE_SECRET || !env.CIO_SITE_ID || !env.CIO_API_KEY) fail(503, "subscribe_unavailable", "the signup form is not configured on this registry");
   const ct = c.req.header("content-type") ?? "";
-  const f: Record<string, unknown> = ct.includes("application/json") ? await readJson(c) : Object.fromEntries(await c.req.formData());
+  const f: Record<string, unknown> = ct.includes("application/json") ? await readJson(c, false) : Object.fromEntries(await c.req.formData());
   const email = String(f.email ?? "").trim().toLowerCase();
   const token = String(f["cf-turnstile-response"] ?? f.turnstile_token ?? "");
   if (!/^[^\s@]{1,64}@[^\s@]{1,253}\.[^\s@]{2,}$/.test(email)) fail(400, "bad_email", "a valid email is required");
@@ -685,12 +696,14 @@ async function accreditObservers(env: Env) {
     if (existing?.bootstrap === 0) continue;
     const alias = (await env.db.first<{ value: string }>("SELECT value FROM aliases WHERE eid = $1 AND type = 'domain' AND status = 'verified' LIMIT 1", [issuer]))?.value;
     const domain = issuer.startsWith("did:web:") ? issuer.slice(8).split(":")[0] : alias?.slice(8);
-    if (!domain) continue;
-    const wk: any = await fetch(`https://${domain}/.well-known/openentity.json`).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+    if (!domain || !DOMAIN.test(domain)) continue;
+    const wk: any = await getJson(`https://${domain}/.well-known/openentity.json`).catch(() => null);
     const ext = wk?.extensions?.["openentity:observer"];
     if (!ext) continue;
+    // The site links these two URLs, so only https survives (a javascript: URL would run on openentity.org).
+    const https = (u: unknown) => (typeof u === "string" && /^https:\/\//i.test(u) ? u : null);
     await env.db.run("INSERT INTO observers (did, name, methodology_url, trust_policy_url, accredited_at, bootstrap) VALUES ($1, $2, $3, $4, $5, 0) ON CONFLICT (did) DO UPDATE SET bootstrap = 0, methodology_url = excluded.methodology_url",
-      [issuer, wk.name ?? domain, ext.methodology ?? ext.methodology_url ?? null, wk.extensions?.["openentity:trust_policy"]?.url ?? null, nowIso()]);
+      [issuer, String(wk.name ?? domain).slice(0, 200), https(ext.methodology ?? ext.methodology_url), https(wk.extensions?.["openentity:trust_policy"]?.url), nowIso()]);
   }
 }
 

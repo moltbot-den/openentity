@@ -5,12 +5,22 @@ import { base58btcDecode, publicKeyFromDidKey, type Resolver } from "./sdk.ts";
 import { type Env, hex, unhex } from "./env.ts";
 
 const enc = new TextEncoder();
-const DOMAIN = /^(?=.{1,253}$)([a-z0-9-]{1,63}\.)+[a-z]{2,63}$/;
+export const DOMAIN = /^(?=.{1,253}$)([a-z0-9-]{1,63}\.)+[a-z]{2,63}$/;
 
-async function getJson(url: string): Promise<any> {
-  const res = await fetch(url, { headers: { accept: "application/json" }, redirect: "manual" });
-  if (!res.ok) return null;
-  return res.json().catch(() => null);
+const FETCH_TIMEOUT_MS = 5_000, FETCH_MAX_BYTES = 256 * 1024;
+
+/** GET JSON from a host the caller does not control: no redirects, 5 s overall, 256 KB at most. Null on any failure. */
+export async function getJson(url: string): Promise<any> {
+  const res = await fetch(url, { headers: { accept: "application/json" }, redirect: "manual", signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
+  if (!res.ok || !res.body) return null;
+  const reader = res.body.getReader(), parts: Uint8Array[] = [];
+  for (let n = 0; ; ) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if ((n += value.length) > FETCH_MAX_BYTES) { await reader.cancel(); return null; }
+    parts.push(value);
+  }
+  try { return JSON.parse(await new Blob(parts as BlobPart[]).text()); } catch { return null; }
 }
 
 /** DID document for did:key, did:pkh, did:web and did:plc; null when the method is unsupported or unreachable. */

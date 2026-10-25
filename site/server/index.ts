@@ -251,7 +251,7 @@ export function createSite({ registry: callRegistry, asset, vars }: SiteOptions)
     const path = url.pathname;
 
     // Same-origin registry API (spec 10.2).
-    if (path.startsWith('/v1/')) return callRegistry(req);
+    if (path === '/v1' || path.startsWith('/v1/')) return callRegistry(req);
 
     if (path === '/.well-known/security.txt' || path === '/security.txt') {
       return new Response(securityTxt(new Date()), { headers: { 'content-type': 'text/plain; charset=utf-8' } });
