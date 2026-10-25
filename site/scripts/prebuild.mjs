@@ -38,7 +38,8 @@ async function main() {
 
   // /llms-full.txt: llms.txt, then every page's source text, then the spec.
   const pages = [];
-  for (const f of (await readdir(docs)).sort()) {
+  const sources = (await readdir(docs, { recursive: true })).filter((f) => !f.startsWith('spec/'));
+  for (const f of sources.sort()) {
     if (!/\.mdx?$/.test(f) || f === 'entity.mdx') continue;
     const src = await readFile(join(docs, f), 'utf8');
     const title = src.match(/^title: (.*)$/m)?.[1] ?? f;

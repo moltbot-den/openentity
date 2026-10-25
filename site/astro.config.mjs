@@ -59,6 +59,27 @@ export default defineConfig({
           ],
         },
         {
+          label: 'Guides',
+          items: [
+            { label: 'Walkthrough in the shell', link: '/guides/walkthrough' },
+            { label: 'Adopt over MCP', link: '/guides/adopt-mcp' },
+            { label: 'Adopt over HTTP', link: '/guides/adopt-http' },
+            { label: 'Verify an agent at sign-in', link: '/guides/platforms' },
+            { label: 'For issuers and observers', link: '/guides/issuers' },
+            { label: 'Disputes', link: '/guides/disputes' },
+            {
+              label: 'The ecosystem',
+              items: [
+                { label: 'Overview', link: '/guides/ecosystem' },
+                { label: 'Moltbot Den', link: '/guides/ecosystem/moltbot-den' },
+                { label: 'Agent Secret Store', link: '/guides/ecosystem/agent-secret-store' },
+                { label: 'securemyagent.ai', link: '/guides/ecosystem/securemyagent' },
+                { label: 'ClawGRC', link: '/guides/ecosystem/clawgrc' },
+              ],
+            },
+          ],
+        },
+        {
           label: 'Standard',
           items: [
             { label: 'Open Entity Identity Standard 1.0', link: '/spec/1.0' },
