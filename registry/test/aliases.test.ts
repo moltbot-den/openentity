@@ -105,6 +105,43 @@ describe("aliases (spec 3.4, 3.5)", () => {
     expect((await write("POST", `/entities/${a.kp.did}/aliases`, a.kp.did, { type: "erc8004", value, proof })).status).toBe(201);
   });
 
+  it("erc8004: binds through the agent's registration file when it lists a DID service naming the root EID (spec 3.4)", async () => {
+    const a = await adopted(), b = await adopted();
+    const value = "eip155:8453:0x8004a169fb4a3325136eb29fa0ceb6d2e539a432:7";
+    const abiString = (s: string) => {
+      const h = hex(enc.encode(s));
+      return "0x" + (32).toString(16).padStart(64, "0") + (h.length / 2).toString(16).padStart(64, "0") + h.padEnd(Math.ceil(h.length / 64) * 64, "0");
+    };
+    let uri = "https://agents.example/reg/7.json", file: any = {};
+    const calls: string[] = [];
+    mockFetch({
+      "rpc.test": async (req) => {
+        const data: string = (await req.json()).params[0].data;
+        calls.push(data.slice(0, 10));
+        return { jsonrpc: "2.0", id: 1, result: data.startsWith("0xc87b56dd") && data.endsWith("7".padStart(64, "0")) ? abiString(uri) : "0x" };
+      },
+      "agents.example/reg/7.json": () => file,
+      "ipfs.io/ipfs/bafyfile": () => file,
+    });
+    const bind = () => write("POST", `/entities/${a.kp.did}/aliases`, a.kp.did, { type: "erc8004", value });
+    const reg = (eid: string, key = "services") => ({ type: "https://eips.ethereum.org/EIPS/eip-8004#registration-v1", name: "Agent", [key]: [{ name: "A2A", endpoint: "https://agents.example/a2a" }, { name: "DID", endpoint: eid }] });
+
+    file = reg(b.kp.did);
+    expect((await bind()).body.error).toBe("alias_proof_invalid");
+    file = { services: [{ name: "OpenEntity", endpoint: a.kp.did }] };
+    expect((await bind()).body.error).toBe("alias_proof_invalid");
+    uri = "https://169.254.169.254/latest/meta-data";
+    file = reg(a.kp.did);
+    expect((await bind()).body.error).toBe("alias_proof_invalid");
+    uri = "ipfs://bafyfile";
+    expect((await bind()).status).toBe(201);
+    expect(calls).toContain("0xc87b56dd"); // tokenURI(uint256): ERC-8004's agentURI
+
+    const c = await adopted();
+    uri = `data:application/json;base64,${btoa(JSON.stringify(reg(c.kp.did, "endpoints")))}`;
+    expect((await write("POST", `/entities/${c.kp.did}/aliases`, c.kp.did, { type: "erc8004", value })).status).toBe(201);
+  });
+
   it("platform: needs both the entity's signature and the platform's binding file for this EID", async () => {
     const a = await adopted(), b = await adopted();
     const value = "den:eleanor";
