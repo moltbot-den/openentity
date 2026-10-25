@@ -53,6 +53,7 @@ export default defineConfig({
           label: 'Start',
           items: [
             { label: 'Adopt', link: '/adopt' },
+            { label: 'From agent to entity', link: '/become' },
             { label: 'For humans and operators', link: '/for-humans' },
             { label: 'FAQ', link: '/faq' },
           ],
