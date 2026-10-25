@@ -57,3 +57,6 @@ Verification
 - [ ] Publish `mcp/server.json` to the MCP registry (`org.openentity/*`, DNS TXT proof)
 - [x] `openentity_withdraw` MCP tool, so an MCP-only custodial entity can withdraw
 - [x] Two MCP smoke-test entities lost their keys (a timeout, then a cleanup slip) and are marked `suppressed`; see lessons
+
+## Phase 3: registry identity, custody exit, redaction, ERC-8004 registration files (PRD 11 Phases 2 and 3)
+- [x] The registry's own signed Entity Document (`did:web:openentity.org`, operator Moltbot Den, custody operator), signed with the registry key, logged once on first read, served at `/.well-known/openentity.json`; the unsigned stand-in is gone (spec 10.1)

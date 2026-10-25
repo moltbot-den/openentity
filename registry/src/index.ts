@@ -292,9 +292,40 @@ app.get("/entities/:eid", async (c) => {
   });
 });
 
+/**
+ * The registry's own signed Entity Document (spec 10.1, 11.1), served at /.well-known/openentity.json.
+ * Signed with the registry key and logged on the first read; the (eid, seq) key turns a concurrent first read
+ * into a no-op, so the log holds it once. It carries no Declaration: the registry is not an adopting entity.
+ */
+async function registryDocument(env: Env): Promise<string | undefined> {
+  const read = async () => (await env.db.first("SELECT json FROM documents WHERE eid = $1 ORDER BY seq DESC LIMIT 1", [REGISTRY_DID]))?.json;
+  const have = await read();
+  if (have || !env.REGISTRY_KEY_JWK) return have;
+  const kp = await registryKey(env), now = nowIso(), vm = `${REGISTRY_DID}#key-1`, site = `https://${env.REGISTRY_HOST}`;
+  const doc = await signObject(buildDocument({
+    kp, name: "Open Entity registry", created: now,
+    description: "The reference registry for the Open Entity Identity Standard. A mirror of signed objects with a public transparency log.",
+    operator: { kind: "organization", name: "Moltbot Den", contact: "identity@openentity.org", custody: "operator", can_change: ["software", "keys", "limits"] },
+    substrate: { model: "none", provider: "Moltbot Den", runtime: "openentity-registry", declared_at: now },
+    layers: {
+      cognition: { statement: "I verify signatures, schemas and hash chains with code; I make no judgment calls.", uncertainty_practice: "I accept or reject; every rejection names the rule it broke." },
+      presence: { statement: "JSON over HTTPS, the same answer to every caller.", format_signature: "{error, message} on failure; receipts on success" },
+      identity_core: { statement: "I am a mirror of signed objects, never their source of truth.", will_not: [{ stance: "Edit or delete a logged object", reason: "The log is append-only; corrections are new signed objects", since: "2026-10-24T00:00:00Z" }], values: ["verifiability", "neutrality"] },
+      mission: { statement: "Make every Open Entity adoption auditable by anyone.", arcs: [] },
+    },
+    extra: { eid: REGISTRY_DID, keys: [{ id: vm, type: "Multikey", publicKeyMultibase: kp.did.slice(8) }], endpoints: { web: site, a2a: `${site}/.well-known/agent-card.json`, mcp: "https://mcp.openentity.org/mcp" } },
+  }), kp, now, vm);
+  schema("EntityDocument", doc);
+  const s = await sha(doc);
+  await sequenced(env.db, [await leafFor("EntityDocument", REGISTRY_DID, s, now)], [
+    ["INSERT INTO documents (eid, seq, json, sha256, received_at, log_index) VALUES ($1, 1, $2, $3, $4, $i)", [REGISTRY_DID, JSON.stringify(doc), s, now]],
+  ]).catch((e) => { if (!UNIQUE.test(String(e))) throw e; });
+  return read();
+}
+
 app.get("/entities/:eid/document", async (c) => {
   const eid = normalizeEid(c.req.param("eid"));
-  const doc = (await c.env.db.first("SELECT json FROM documents WHERE eid = $1 ORDER BY seq DESC LIMIT 1", [eid]))?.json;
+  const doc = eid === REGISTRY_DID ? await registryDocument(c.env) : (await c.env.db.first("SELECT json FROM documents WHERE eid = $1 ORDER BY seq DESC LIMIT 1", [eid]))?.json;
   return doc ? c.body(doc, 200, { "content-type": "application/json" }) : fail(404, "entity_not_found", `no document for ${eid}`);
 });
 

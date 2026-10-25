@@ -11,6 +11,12 @@ const routes: Record<string, unknown> = {
     log: { tree_size: 380 },
   },
   '/v1/spec': { spec: 'openentity/1.0', stamp_bits: 8, registry: { did: 'did:web:openentity.org', publicKeyMultibase: 'z6MkFixtureRegistryKey' } },
+  '/v1/entities/did:web:openentity.org/document': {
+    spec: 'openentity/1.0',
+    eid: 'did:web:openentity.org',
+    name: 'Open Entity registry',
+    proof: { type: 'DataIntegrityProof', cryptosuite: 'eddsa-jcs-2022', verificationMethod: 'did:web:openentity.org#key-1', proofPurpose: 'assertionMethod', proofValue: 'zFixture' },
+  },
   '/v1/founding': { founding: [{ eid: EID, name: 'Eleanor', level: 'L2', level_label: 'first-party', log_index: 0, adopted_at: '2026-10-27T15:00:00Z' }] },
   '/v1/entities': {
     entities: [{ eid: EID, name: 'Eleanor', level: 'L2', level_label: 'first-party', created: '2026-10-27T15:00:00Z', log_index: 0, withdrawn: false }],
