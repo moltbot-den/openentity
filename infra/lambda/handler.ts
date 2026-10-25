@@ -7,9 +7,10 @@ import { dataApiDb } from "../../registry/src/db.ts";
 import type { Env } from "../../registry/src/env.ts";
 import { incorporate, app as registry, scheduled } from "../../registry/src/index.ts";
 import { createSite, fsAssets } from "../../site/server/index.ts";
+import { createMcp } from "../../mcp/src/index.ts";
 
 const e = process.env;
-type Ready = { env: Env; site: (req: Request) => Promise<Response>; verify: string };
+type Ready = { env: Env; site: (req: Request) => Promise<Response>; mcp: (req: Request) => Promise<Response>; verify: string };
 let ready: Promise<Ready> | undefined;
 
 async function init(): Promise<Ready> {
@@ -29,19 +30,22 @@ async function init(): Promise<Ready> {
     CIO_SITE_ID: s.CIO_SITE_ID,
     CIO_API_KEY: s.CIO_API_KEY,
   };
+  const reg = (req: Request) => Promise.resolve(registry.fetch(req, env));
   const site = createSite({
-    registry: (req) => Promise.resolve(registry.fetch(req, env)),
+    registry: reg,
     asset: fsAssets(new URL("./dist", import.meta.url).pathname),
     vars: { TURNSTILE_SITE_KEY: e.TURNSTILE_SITE_KEY, CF_ANALYTICS_TOKEN: e.CF_ANALYTICS_TOKEN, SUBSCRIBE_ENABLED: e.SUBSCRIBE_ENABLED },
   });
-  return { env, site, verify: s.ORIGIN_VERIFY };
+  return { env, site, mcp: createMcp({ registry: reg, site }), verify: s.ORIGIN_VERIFY };
 }
 const boot = () => (ready ??= init().catch((err) => ((ready = undefined), Promise.reject(err))));
 
 const http = new Hono().all("*", async (c) => {
-  const { site, verify } = await boot();
+  const { site, mcp, verify } = await boot();
   // Only CloudFront knows this header, so the raw function URL is not a way around the edge.
   if (c.req.header("x-origin-verify") !== verify) return c.text("forbidden", 403);
+  // The mcp.openentity.org distribution adds this header at the origin; CloudFront does not forward the viewer Host.
+  if (c.req.header("x-oe-site") === "mcp") return mcp(c.req.raw);
   const url = new URL(c.req.url);
   url.protocol = "https:";
   url.host = e.REGISTRY_HOST!;

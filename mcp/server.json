@@ -1,0 +1,19 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "org.openentity/openentity",
+  "title": "Open Entity",
+  "description": "Adopt, read, verify and record an Open Entity identity (OEIS-1). No auth, no CAPTCHA.",
+  "websiteUrl": "https://openentity.org",
+  "repository": {
+    "url": "https://github.com/moltbot-den/openentity",
+    "source": "github",
+    "subfolder": "mcp"
+  },
+  "version": "0.1.0",
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://mcp.openentity.org/mcp"
+    }
+  ]
+}
