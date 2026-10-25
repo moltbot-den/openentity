@@ -36,10 +36,18 @@ export const APP_SECRET = "openentity/app";
 
 const root = (p: string) => fileURLToPath(new URL(`../../${p}`, import.meta.url));
 
+export interface OpenEntityProps extends StackProps {
+  /** A throwaway copy for the load test: no domain, no Object Lock, no CI role or alarms, its own signing key, destroyable. */
+  load?: boolean;
+}
+
 export class OpenEntityStack extends Stack {
-  constructor(scope: Construct, id: string, props: StackProps) {
+  constructor(scope: Construct, id: string, props: OpenEntityProps) {
     super(scope, id, props);
-    const appSecret = sm.Secret.fromSecretNameV2(this, "AppSecret", APP_SECRET);
+    const load = !!props.load;
+    // The load stack signs with a throwaway key, so no second log ever carries the production registry key.
+    const secretName = load ? "openentity/load" : APP_SECRET;
+    const appSecret = sm.Secret.fromSecretNameV2(this, "AppSecret", secretName);
 
     // ---- Data: Aurora Serverless v2 Postgres, reached only through the Data API (no VPC on the Lambda) ----
     const vpc = new ec2.Vpc(this, "Vpc", {
@@ -57,9 +65,9 @@ export class OpenEntityStack extends Stack {
       vpc,
       vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
       storageEncrypted: true,
-      backup: { retention: Duration.days(14) },
-      deletionProtection: true,
-      removalPolicy: RemovalPolicy.RETAIN,
+      backup: { retention: Duration.days(load ? 1 : 14) },
+      deletionProtection: !load,
+      removalPolicy: load ? RemovalPolicy.DESTROY : RemovalPolicy.RETAIN,
     });
 
     // ---- Log: tlog-tiles files and checkpoints; daily snapshots under Object Lock (PRD 7.4) ----
@@ -68,9 +76,10 @@ export class OpenEntityStack extends Stack {
       encryption: s3.BucketEncryption.S3_MANAGED,
       enforceSSL: true,
       versioned: true,
-      removalPolicy: RemovalPolicy.RETAIN,
+      removalPolicy: load ? RemovalPolicy.DESTROY : RemovalPolicy.RETAIN,
+      autoDeleteObjects: load,
     });
-    const snapshotBucket = new s3.Bucket(this, "SnapshotBucket", {
+    const snapshotBucket = load ? undefined : new s3.Bucket(this, "SnapshotBucket", {
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       encryption: s3.BucketEncryption.S3_MANAGED,
       enforceSSL: true,
@@ -111,9 +120,11 @@ export class OpenEntityStack extends Stack {
         DB_SECRET_ARN: db.secret!.secretArn,
         DB_NAME: "openentity",
         LOG_BUCKET: logBucket.bucketName,
-        SNAPSHOT_BUCKET: snapshotBucket.bucketName,
+        ...(snapshotBucket ? { SNAPSHOT_BUCKET: snapshotBucket.bucketName } : {}),
+        ...(load ? { IP_DAILY_LIMIT: "10000000", WRITE_PER_MINUTE: "10000000" } : {}),
         REGISTRY_HOST: DOMAIN,
-        STAMP_BITS: "20",
+        // The load copy measures registry throughput; minting 6,000 stamps at 20 bits outlives their 10-minute window.
+        STAMP_BITS: load ? "12" : "20",
         BASE_RPC_URL: "https://mainnet.base.org",
         TURNSTILE_SITE_KEY: "0x4AAAAAAFkggsScyaPIMp2v",
         CF_ANALYTICS_TOKEN: "1c8d90533d834474833d04a8b62d5117",
@@ -124,7 +135,7 @@ export class OpenEntityStack extends Stack {
     appSecret.grantRead(fn);
     db.grantDataApiAccess(fn);
     logBucket.grantReadWrite(fn);
-    snapshotBucket.grantReadWrite(fn);
+    snapshotBucket?.grantReadWrite(fn);
     const url = fn.addFunctionUrl({ authType: lambda.FunctionUrlAuthType.NONE });
 
     new scheduler.Schedule(this, "Cron", {
@@ -136,13 +147,13 @@ export class OpenEntityStack extends Stack {
     });
 
     // ---- Edge: CloudFront at openentity.org; every request goes to the Lambda URL ----
-    const cert = new acm.Certificate(this, "Cert", {
+    const cert = load ? undefined : new acm.Certificate(this, "Cert", {
       domainName: DOMAIN,
       validation: acm.CertificateValidation.fromDns(),
     });
     const origin = new origins.FunctionUrlOrigin(url, {
       // The Lambda rejects requests without this header, so the function URL is not a bypass around CloudFront.
-      customHeaders: { "x-origin-verify": SecretValue.secretsManager(APP_SECRET, { jsonField: "ORIGIN_VERIFY" }).unsafeUnwrap() },
+      customHeaders: { "x-origin-verify": SecretValue.secretsManager(secretName, { jsonField: "ORIGIN_VERIFY" }).unsafeUnwrap() },
     });
     const forward = new cf.OriginRequestPolicy(this, "Forward", {
       headerBehavior: cf.OriginRequestHeaderBehavior.allowList(
@@ -170,13 +181,20 @@ export class OpenEntityStack extends Stack {
     // Hashed build assets never change, so the edge keeps them.
     const immutable = { ...dynamic, allowedMethods: cf.AllowedMethods.ALLOW_GET_HEAD, cachePolicy: cf.CachePolicy.CACHING_OPTIMIZED };
     const dist = new cf.Distribution(this, "Dist", {
-      domainNames: [DOMAIN],
-      certificate: cert,
+      ...(cert ? { domainNames: [DOMAIN], certificate: cert } : {}),
       minimumProtocolVersion: cf.SecurityPolicyProtocol.TLS_V1_2_2021,
       httpVersion: cf.HttpVersion.HTTP2_AND_3,
       defaultBehavior: dynamic,
       additionalBehaviors: { "/_astro/*": immutable, "/pagefind/*": immutable },
     });
+
+    const out = (k: string, v: string) => new CfnOutput(this, k, { value: v });
+    out("DistributionDomain", dist.distributionDomainName);
+    out("FunctionName", fn.functionName);
+    out("DbClusterArn", db.clusterArn);
+    out("DbSecretArn", db.secret!.secretArn);
+    out("LogBucketName", logBucket.bucketName);
+    if (load) return; // the load copy stops here: no MCP domain, CI role, alarms or budget
 
     // ---- MCP edge: mcp.openentity.org is a second distribution on the same Lambda ----
     // CloudFront cannot forward the viewer Host to a function URL, so this origin adds x-oe-site and the handler routes on it.
@@ -187,7 +205,7 @@ export class OpenEntityStack extends Stack {
     });
     const mcpOrigin = new origins.FunctionUrlOrigin(url, {
       customHeaders: {
-        "x-origin-verify": SecretValue.secretsManager(APP_SECRET, { jsonField: "ORIGIN_VERIFY" }).unsafeUnwrap(),
+        "x-origin-verify": SecretValue.secretsManager(secretName, { jsonField: "ORIGIN_VERIFY" }).unsafeUnwrap(),
         "x-oe-site": "mcp",
       },
     });
@@ -249,16 +267,10 @@ export class OpenEntityStack extends Stack {
     });
 
     // ---- Outputs (scripts/cloudflare-dns.ts and the deploy workflow read these) ----
-    const out = (k: string, v: string) => new CfnOutput(this, k, { value: v });
-    out("DistributionDomain", dist.distributionDomainName);
     out("DistributionId", dist.distributionId);
     out("McpDistributionDomain", mcpDist.distributionDomainName);
     out("McpDistributionId", mcpDist.distributionId);
-    out("FunctionName", fn.functionName);
-    out("DbClusterArn", db.clusterArn);
-    out("DbSecretArn", db.secret!.secretArn);
-    out("LogBucketName", logBucket.bucketName);
-    out("SnapshotBucketName", snapshotBucket.bucketName);
+    out("SnapshotBucketName", snapshotBucket!.bucketName);
     out("DeployRoleArn", deployRole.roleArn);
   }
 }

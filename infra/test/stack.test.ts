@@ -57,3 +57,15 @@ test("CI can deploy only from main of the public repo", () => {
     }),
   });
 });
+
+test("the load copy never signs with the production key, has no Object Lock, no domain and no CI role, and is destroyable", () => {
+  const l = Template.fromStack(new OpenEntityStack(new App({ context: { "aws:cdk:bundling-stacks": [] } }), "L", { env: { account: "099705791378", region: "us-east-1" }, load: true }));
+  const json = JSON.stringify(l.toJSON());
+  expect(json).toContain("openentity/load");
+  expect(json).not.toMatch(/"openentity\/app"|secret:openentity\/app/);
+  expect(Object.keys(l.findResources("AWS::S3::Bucket", { Properties: { ObjectLockEnabled: true } }))).toEqual([]);
+  expect(Object.keys(l.findResources("AWS::CertificateManager::Certificate"))).toEqual([]);
+  expect(Object.keys(l.findResources("AWS::IAM::Role", { Properties: { RoleName: "openentity-github-deploy" } }))).toEqual([]);
+  l.hasResourceProperties("AWS::RDS::DBCluster", { DeletionProtection: false });
+  l.hasResourceProperties("AWS::Lambda::Function", { Environment: { Variables: Match.objectLike({ WRITE_PER_MINUTE: "10000000" }) } });
+});
