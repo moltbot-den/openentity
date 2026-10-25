@@ -146,16 +146,106 @@ def sign_object(obj: dict, kp: KeyPair, created: str | None = None) -> dict:
     return {**{k: v for k, v in obj.items() if k != "proof"}, "proof": {**proof, "proofValue": "z" + b58encode(sig)}}
 
 
-def verify_object(obj: dict) -> tuple[bool, str]:
-    """Returns (ok, signer did or error). Resolves did:key only."""
+# ---- EIP-712 for did:pkh (spec 4.2) ----
+def _keccak(b: bytes | str) -> bytes:
+    from Crypto.Hash import keccak
+    return keccak.new(digest_bits=256, data=b.encode() if isinstance(b, str) else b).digest()
+
+
+def eip712_digest(object_type: str, canonical_hash_hex: str, created: str) -> bytes:
+    """Digest of OpenEntityObject{objectType, canonicalHash, created} under domain {name: "Open Entity", version: "1"}."""
+    domain = _keccak(_keccak("EIP712Domain(string name,string version)") + _keccak("Open Entity") + _keccak("1"))
+    typehash = _keccak("OpenEntityObject(string objectType,bytes32 canonicalHash,string created)")
+    struct = _keccak(typehash + _keccak(object_type) + bytes.fromhex(canonical_hash_hex) + _keccak(created))
+    return _keccak(b"\x19\x01" + domain + struct)
+
+
+# secp256k1, for public-key recovery only (no secret ever passes through this code).
+_P = 2**256 - 2**32 - 977
+_N = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141
+_G = (0x79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798, 0x483ADA7726A3C4655DA4FBFC0E1108A8FD17B448A68554199C47D08FFB10D4B8)
+
+
+def _add(a, b):
+    if a is None:
+        return b
+    if b is None:
+        return a
+    if a[0] == b[0] and (a[1] + b[1]) % _P == 0:
+        return None
+    lam = (3 * a[0] * a[0] * pow(2 * a[1], -1, _P)) if a == b else ((b[1] - a[1]) * pow(b[0] - a[0], -1, _P))
+    x = (lam * lam - a[0] - b[0]) % _P
+    return x, (lam * (a[0] - x) - a[1]) % _P
+
+
+def _mul(k: int, pt):
+    out = None
+    while k:
+        if k & 1:
+            out = _add(out, pt)
+        pt, k = _add(pt, pt), k >> 1
+    return out
+
+
+def recover_eip712(digest: bytes, sig_hex: str) -> str:
+    """Checksummed address that signed `digest`."""
+    sig = bytes.fromhex(sig_hex.removeprefix("0x"))
+    if len(sig) != 65:
+        raise ValueError("signature must be 65 bytes")
+    r, s_, v = int.from_bytes(sig[:32], "big"), int.from_bytes(sig[32:64], "big"), sig[64] - 27 if sig[64] >= 27 else sig[64]
+    if v > 1 or not (0 < r < _N and 0 < s_ < _N):
+        raise ValueError("invalid signature")
+    y = pow((r ** 3 + 7) % _P, (_P + 1) // 4, _P)
+    if y % 2 != v:
+        y = _P - y
+    e = int.from_bytes(digest, "big")
+    q = _mul(pow(r, -1, _N), _add(_mul(s_, (r, y)), _mul((-e) % _N, _G)))
+    if q is None:
+        raise ValueError("invalid signature")
+    addr = _keccak(q[0].to_bytes(32, "big") + q[1].to_bytes(32, "big"))[12:].hex()
+    h = _keccak(addr).hex()
+    return "0x" + "".join(c.upper() if int(h[i], 16) >= 8 else c for i, c in enumerate(addr))
+
+
+def default_resolver(did: str) -> dict:
+    """Offline resolution: did:key and did:pkh. Pass a resolver for did:web and other methods."""
+    if did.startswith("did:key:"):
+        return {"ed25519": [public_from_did_key(did)]}
+    m = re.fullmatch(r"did:pkh:eip155:\d+:(0x[0-9a-fA-F]{40})", did)
+    if m:
+        return {"address": m.group(1)}
+    raise ValueError(f"cannot resolve {':'.join(did.split(':')[:2])} offline; pass a resolver")
+
+
+def verify_object(obj: dict, resolver=default_resolver) -> tuple[bool, str]:
+    """Returns (ok, signer did or error). eddsa-jcs-2022 (Ed25519) or EIP-712 (did:pkh), spec 4.5."""
     try:
         proof = obj["proof"]
         did = proof["verificationMethod"].split("#")[0]
-        if proof.get("cryptosuite") != "eddsa-jcs-2022" or not proof["proofValue"].startswith("z"):
-            return False, "unsupported proof"
-        Ed25519PublicKey.from_public_bytes(public_from_did_key(did)).verify(
-            b58decode(proof["proofValue"][1:]), _signing_input(obj, proof))
-        return True, did
+        if proof.get("proofPurpose") != "assertionMethod":
+            return False, "proofPurpose must be assertionMethod"
+        keys = resolver(did)
+        if proof.get("type") == "DataIntegrityProof":
+            if proof.get("cryptosuite") != "eddsa-jcs-2022" or not proof["proofValue"].startswith("z"):
+                return False, "unsupported proof"
+            sig, msg = b58decode(proof["proofValue"][1:]), _signing_input(obj, proof)
+            for pk in keys.get("ed25519", []):
+                try:
+                    Ed25519PublicKey.from_public_bytes(pk).verify(sig, msg)
+                    return True, did
+                except InvalidSignature:
+                    continue
+            return False, "signature does not verify"
+        if proof.get("type") == "EthereumEip712Signature2021":
+            if not keys.get("address"):
+                return False, "signer has no Ethereum address"
+            doc = {k: v for k, v in obj.items() if k != "proof"}
+            t = obj.get("type") if isinstance(obj.get("type"), str) else "EntityDocument"
+            digest = eip712_digest(t, canonical_hash(doc).hex(), proof["created"])
+            if recover_eip712(digest, proof["proofValue"]).lower() == keys["address"].lower():
+                return True, did
+            return False, "EIP-712 signer does not match"
+        return False, f"unsupported proof type {proof.get('type')}"
     except (InvalidSignature, KeyError, ValueError, TypeError) as e:
         return False, f"{type(e).__name__}: {e}"
 
@@ -171,15 +261,16 @@ def build_presentation(kp: KeyPair, audience: str, nonce_: str, attestations: li
     return sign_object({**obj, "attestations": attestations} if attestations else obj, kp, created)
 
 
-def verify_presentation(p: dict, audience: str, nonce_: str, now: datetime | None = None, max_age: int = 300) -> dict:
+def verify_presentation(p: dict, audience: str, nonce_: str, now: datetime | None = None, max_age: int = 300,
+                        resolver=default_resolver) -> dict:
     """Check a Presentation this verifier asked for. ok covers the presentation; attestations are reported one by one.
-    Resolves did:key only, like verify_object; revocation needs the issuer or a registry and is the caller's to check."""
+    Offline it resolves did:key and did:pkh; pass a resolver for did:web. Revocation needs the issuer or a registry and is the caller's to check."""
     t = now or datetime.now(timezone.utc)
     errors: list[str] = []
     if p.get("type") != "Presentation" or p.get("spec") != SPEC:
         return {"ok": False, "errors": ["not a Presentation"], "attestations": []}
     eid = p.get("eid")
-    ok, signer = verify_object(p)
+    ok, signer = verify_object(p, resolver)
     if not ok or signer != eid:
         errors.append(f"signature: {signer if not ok else f'signed by {signer}, not {eid}'}")
     if p.get("audience") != audience:
@@ -200,7 +291,7 @@ def verify_presentation(p: dict, audience: str, nonce_: str, now: datetime | Non
         elif _ts(a["expires"]) <= t:
             c["error"] = "expired"
         else:
-            a_ok, a_signer = verify_object(a)
+            a_ok, a_signer = verify_object(a, resolver)
             if a_ok and a_signer == a.get("issuer"):
                 c["ok"] = True
             else:

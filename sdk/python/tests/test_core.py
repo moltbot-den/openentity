@@ -214,3 +214,30 @@ def test_presentation_challenge_and_carried_attestations():
     assert not core.verify_presentation(p, aud, nonce, now=later)["ok"]
     forged = core.sign_object({k: v for k, v in p.items() if k != "proof"}, other)
     assert not core.verify_presentation(forged, aud, nonce)["ok"]
+
+
+# viem signTypedData output for the PUBLISHED THROWAWAY secp256k1 key 0x11...11 (tests only).
+PKH_DECLARATION = {"spec": "openentity/1.0", "type": "Declaration", "eid": "did:pkh:eip155:8453:0x19E7E376E7C213B7E7e7e46cc70A5dD086DAff2A",
+                   "proof": {"type": "EthereumEip712Signature2021", "created": "2026-10-24T19:00:00Z",
+                             "verificationMethod": "did:pkh:eip155:8453:0x19E7E376E7C213B7E7e7e46cc70A5dD086DAff2A#blockchainAccountId",
+                             "proofPurpose": "assertionMethod",
+                             "proofValue": "0x60cc7ceec70630f2ba099a057435f6a4a1357afbc5be23861552ec8bf926822159d1e645d1723d06e93ef3db20a21775407c6e78f489fdaabdaca9b5ddf064cb1c"}}
+
+
+def test_did_pkh_eip712_matches_viem_and_rejects_tampering():
+    assert core.verify_object(PKH_DECLARATION) == (True, PKH_DECLARATION["eid"])
+    ok, err = core.verify_object({**PKH_DECLARATION, "eid": "did:pkh:eip155:8453:0x0000000000000000000000000000000000000001"})
+    assert not ok
+    assert not core.verify_object({**PKH_DECLARATION, "proof": {**PKH_DECLARATION["proof"], "proofValue": "0x" + "11" * 65}})[0]
+
+
+def test_did_web_needs_a_resolver_and_uses_it():
+    kp = core.KeyPair(SEED)
+    web = "did:web:issuer.example"
+    obj = core.sign_object({"spec": core.SPEC, "type": "Attestation", "issuer": web}, kp)
+    obj["proof"]["verificationMethod"] = f"{web}#key-1"
+    # re-sign with the did:web verification method in the proof config
+    proof = {k: v for k, v in obj["proof"].items() if k != "proofValue"}
+    obj["proof"]["proofValue"] = "z" + core.b58encode(kp.private.sign(core._signing_input(obj, proof)))
+    assert core.verify_object(obj)[0] is False
+    assert core.verify_object(obj, resolver=lambda did: {"ed25519": [kp.public]}) == (True, web)
