@@ -36,7 +36,7 @@ AWS (account `openentity` 099705791378, us-east-1, stack `OpenEntity`, from cred
 - [x] Cutover 2026-10-25: D1 rows imported, R2 tiles and snapshots copied, apex CNAME to CloudFront (DNS-only), verifier PASS on openentity.org at tree size 7
 - [x] Cloudflare Workers `openentity-site` and `openentity-registry` and the KV namespace deleted
 - [ ] Lambda concurrency quota 1000 requested (new accounts start at 10); load test waits for it
-- [ ] Old D1 `openentity-registry` and R2 `openentity-log` kept as cold copies; delete after the Phase 1 PR merges
+- [x] Old D1 and R2 deleted after the first green AWS deploy; a final D1 export sits under Object Lock at `cloudflare-archive/` in the snapshot bucket
 Cloudflare (free plan only: DNS, redirects Worker, Turnstile, Web Analytics)
 - [x] Turnstile widget `openentity-subscribe` (site key 0x4AAAAAAFkggsScyaPIMp2v); Web Analytics site token 1c8d90533d834474833d04a8b62d5117
 - [x] `deploy.yml`: `cdk deploy` through OIDC, schema through the Data API, redirects through wrangler, then the post-deploy fetch check
