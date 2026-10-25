@@ -25,6 +25,7 @@ jobs:
           registry-url: https://registry.npmjs.org
       - run: npm install -g npm@^11.5.1
       - run: pnpm install --frozen-lockfile
+      - uses: astral-sh/setup-uv@v6
       - run: bash scripts/verify.sh
       # pnpm pack applies publishConfig and rewrites workspace: ranges; npm stage publish does the OIDC exchange.
       - working-directory: ${{ inputs.package }}
