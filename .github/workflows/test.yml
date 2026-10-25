@@ -11,13 +11,13 @@ jobs:
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
         if: hashFiles('pnpm-lock.yaml') != ''
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
         if: hashFiles('pnpm-lock.yaml') == ''
       - uses: astral-sh/setup-uv@v6
       - run: bash scripts/verify.sh

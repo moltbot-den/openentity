@@ -1,0 +1,25 @@
+{
+  "name": "@openentity/site",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/prebuild.mjs && astro build",
+    "dev": "node scripts/prebuild.mjs && astro dev",
+    "lint": "astro sync && tsc --noEmit",
+    "typecheck": "astro sync && tsc --noEmit",
+    "test": "pnpm run build && vitest run"
+  },
+  "dependencies": {
+    "@astrojs/markdown-remark": "^7.3.4",
+    "@astrojs/starlight": "^0.42.7",
+    "astro": "^7.4.2",
+    "hono": "^4.13.13"
+  },
+  "devDependencies": {
+    "@openentity/sdk": "workspace:*",
+    "@types/node": "^26.6.5",
+    "esbuild": "^0.28.2",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5"
+  }
+}

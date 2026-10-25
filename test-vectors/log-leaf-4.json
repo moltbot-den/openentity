@@ -1,0 +1,13 @@
+{
+  "description": "Log leaf 4 for attestation (spec 10.3)",
+  "object": {
+    "type": "Attestation",
+    "eid": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+    "object_sha256": "199082174ad06dc4af9fed93d40ccf06b4957a32e88eaf64aff27b81cc905556",
+    "received_at": "2026-10-24T19:10:00Z"
+  },
+  "canonical": "{\"eid\":\"did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7\",\"object_sha256\":\"199082174ad06dc4af9fed93d40ccf06b4957a32e88eaf64aff27b81cc905556\",\"received_at\":\"2026-10-24T19:10:00Z\",\"type\":\"Attestation\"}",
+  "sha256": "f7146ac58624e77271baaa538f3b47dcb53ed3d15af473827fad9af03792adb2",
+  "unsigned_canonical": "{\"eid\":\"did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7\",\"object_sha256\":\"199082174ad06dc4af9fed93d40ccf06b4957a32e88eaf64aff27b81cc905556\",\"received_at\":\"2026-10-24T19:10:00Z\",\"type\":\"Attestation\"}",
+  "leaf_hash": "230bc7c7396d97b77a3c227588d86ccc9b7daa69dc2e1a1d8996e02b34d552c6"
+}

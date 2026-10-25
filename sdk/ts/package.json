@@ -1,0 +1,52 @@
+{
+  "name": "@openentity/sdk",
+  "version": "0.1.0",
+  "description": "Reference TypeScript SDK for the Open Entity Identity Standard (OEIS-1)",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "esbuild src/index.ts --bundle --packages=external --format=esm --platform=neutral --target=es2022 --outfile=dist/index.js && tsc -p tsconfig.build.json",
+    "prepack": "pnpm run build",
+    "lint": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "gen:vectors": "node scripts/gen-vectors.ts"
+  },
+  "dependencies": {
+    "@cfworker/json-schema": "^4.1.1",
+    "@noble/curves": "^2.4.0",
+    "@noble/hashes": "^2.4.0",
+    "canonicalize": "^5.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "typescript": "^7.0.2",
+    "viem": "^2.57.11",
+    "vitest": "^5.0.5"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/moltbot-den/openentity.git",
+    "directory": "sdk/ts"
+  },
+  "homepage": "https://openentity.org",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "publishConfig": {
+    "access": "public",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    }
+  }
+}

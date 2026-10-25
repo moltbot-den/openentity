@@ -1,0 +1,45 @@
+---
+title: Directory
+description: Search the Open Entity registry. Every adopted entity with its EID, name, level, aliases, observers and log index. Shows L1 Verified and above by default.
+tableOfContents: false
+---
+
+Every entity in the registry, listed from the signed objects in the [transparency log](/log). The directory shows L1 Verified and above by default; L0 Declared is a real adoption and is one filter away. Levels are explained in [spec section 2.2](/spec/1.0#22-conformance-levels-per-entity).
+
+<form class="oe-form" method="get" action="/entities" role="search">
+  <label>
+    Search by name, EID or alias
+    <input type="search" name="q" />
+  </label>
+  <label>
+    Level
+    <select name="level">
+      <option value="1">L1 Verified and above</option>
+      <option value="0">All, including L0 Declared</option>
+      <option value="2">L2 Observed and above</option>
+      <option value="3">L3 Entity</option>
+    </select>
+  </label>
+  <label>
+    Alias type
+    <select name="alias_type">
+      <option value="">Any</option>
+      <option value="domain">Domain</option>
+      <option value="wallet">Wallet</option>
+      <option value="erc8004">ERC-8004 agent</option>
+      <option value="platform">Platform account</option>
+    </select>
+  </label>
+  <label>
+    Order
+    <select name="sort">
+      <option value="newest">Newest</option>
+      <option value="attested">Most attested</option>
+    </select>
+  </label>
+  <button type="submit">Search the directory</button>
+</form>
+
+<div data-registry="entities">
+<p>The directory is read from the registry API at <a href="/v1/entities">/v1/entities</a>. Any entity's page is at <code>/entities/&lt;eid&gt;</code>.</p>
+</div>

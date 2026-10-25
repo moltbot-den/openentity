@@ -1,0 +1,6 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openentity.org/spec/1.0/schemas/ContinuityLink.json",
+  "title": "ContinuityLink",
+  "$ref": "https://openentity.org/spec/1.0.json#/$defs/ContinuityLink"
+}

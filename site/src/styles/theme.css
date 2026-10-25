@@ -1,0 +1,230 @@
+/* Open Entity: monochrome plus one accent (cobalt, the colour of the mark). One family: IBM Plex. */
+:root {
+  --sl-font: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+  --sl-font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --sl-content-width: 46rem;
+  --sl-text-h1: 2.25rem;
+  --sl-text-h2: 1.5rem;
+  --sl-text-h3: 1.1875rem;
+  --sl-line-height: 1.65;
+
+  /* dark */
+  --sl-color-accent-low: #1c2550;
+  --sl-color-accent: #8fa3ff;
+  --sl-color-accent-high: #d4dbff;
+  --sl-color-white: #f2f3f5;
+  --sl-color-gray-1: #dcdee3;
+  --sl-color-gray-2: #b5b9c2;
+  --sl-color-gray-3: #8a8f9a;
+  --sl-color-gray-4: #5d626c;
+  --sl-color-gray-5: #3a3e46;
+  --sl-color-gray-6: #24272d;
+  --sl-color-black: #18191c;
+}
+
+:root[data-theme='light'] {
+  --sl-color-accent-low: #dfe4fb;
+  --sl-color-accent: #2b46d6;
+  --sl-color-accent-high: #16248a;
+  --sl-color-white: #15171b;
+  --sl-color-gray-1: #24272d;
+  --sl-color-gray-2: #3a3e46;
+  --sl-color-gray-3: #5d626c;
+  --sl-color-gray-4: #8a8f9a;
+  --sl-color-gray-5: #c9ccd3;
+  --sl-color-gray-6: #eceef1;
+  --sl-color-gray-7: #f6f7f8;
+  --sl-color-black: #ffffff;
+}
+
+.sl-markdown-content h1,
+.sl-markdown-content h2,
+.sl-markdown-content h3 {
+  letter-spacing: -0.01em;
+  font-weight: 600;
+}
+h1#_top {
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.sl-markdown-content code:not(pre code) {
+  font-size: 0.875em;
+}
+
+/* Home: the command is the hero. */
+.oe-hero {
+  padding-block: 1rem 0.5rem;
+}
+:root:has(.oe-hero) h1#_top {
+  font-size: clamp(2.5rem, 7vw, 4.25rem);
+  line-height: 1.04;
+  letter-spacing: -0.035em;
+  max-width: 13ch;
+}
+.oe-lede {
+  font-size: 1.1875rem;
+  color: var(--sl-color-gray-2);
+  max-width: 38rem;
+}
+.oe-doors {
+  list-style: none;
+  padding: 0;
+  margin: 2rem 0 0;
+  border-top: 1px solid var(--sl-color-gray-5);
+}
+.oe-doors li {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.25rem;
+  padding: 0.875rem 0;
+  border-bottom: 1px solid var(--sl-color-gray-5);
+  margin: 0;
+}
+.oe-doors .oe-door {
+  color: var(--sl-color-gray-3);
+  font-size: 0.875rem;
+}
+.oe-doors code {
+  font-size: clamp(0.95rem, 2.6vw, 1.25rem);
+  background: none;
+  padding: 0;
+  color: var(--sl-color-white);
+  overflow-wrap: anywhere;
+}
+@media (min-width: 50rem) {
+  .oe-doors li {
+    grid-template-columns: 9rem 1fr;
+    align-items: baseline;
+  }
+}
+
+/* Live counts. */
+.oe-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+  gap: 0;
+  margin: 2.5rem 0;
+  border-left: 1px solid var(--sl-color-gray-5);
+}
+.oe-stats > div {
+  padding: 0.25rem 1rem 0.5rem;
+  border-right: 1px solid var(--sl-color-gray-5);
+  margin: 0;
+}
+.oe-stats dt {
+  font-size: 0.875rem;
+  color: var(--sl-color-gray-3);
+}
+.oe-stats dd {
+  margin: 0;
+  font-size: 1.75rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--sl-color-white);
+}
+
+.oe-practices {
+  counter-reset: none;
+}
+.oe-practices li::marker {
+  color: var(--sl-color-accent);
+  font-weight: 600;
+}
+
+.oe-two {
+  display: grid;
+  gap: 1.5rem;
+  margin-top: 1.5rem;
+}
+@media (min-width: 50rem) {
+  .oe-two {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+.oe-two > section {
+  border-top: 2px solid var(--sl-color-accent);
+  padding-top: 0.75rem;
+  margin: 0;
+}
+
+/* Adopt page: door index works without JS (plain anchor links). */
+.oe-door-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0;
+  list-style: none;
+}
+.oe-door-nav li {
+  margin: 0;
+}
+.oe-door-nav a {
+  display: inline-block;
+  padding: 0.3rem 0.75rem;
+  border: 1px solid var(--sl-color-gray-5);
+  border-radius: 999px;
+  text-decoration: none;
+  color: var(--sl-color-white);
+}
+.oe-door-nav a:hover,
+.oe-door-nav a:focus-visible {
+  border-color: var(--sl-color-accent);
+  color: var(--sl-color-accent);
+}
+
+/* Registry fragments rendered by the Worker. */
+.oe-level {
+  display: inline-block;
+  font-family: var(--sl-font-mono);
+  font-size: 0.8125rem;
+  padding: 0 0.4rem;
+  border: 1px solid var(--sl-color-accent);
+  color: var(--sl-color-accent);
+  border-radius: 0.25rem;
+}
+.oe-label {
+  font-size: 0.8125rem;
+  color: var(--sl-color-gray-3);
+}
+.oe-eid {
+  font-family: var(--sl-font-mono);
+  font-size: 0.875rem;
+  overflow-wrap: anywhere;
+}
+.oe-note {
+  border-left: 2px solid var(--sl-color-gray-4);
+  padding-left: 0.75rem;
+  color: var(--sl-color-gray-2);
+}
+.oe-form {
+  display: grid;
+  gap: 0.75rem;
+  max-width: 28rem;
+}
+.oe-form input[type='email'],
+.oe-form input[type='search'],
+.oe-form select {
+  font: inherit;
+  padding: 0.5rem 0.625rem;
+  border: 1px solid var(--sl-color-gray-4);
+  border-radius: 0.25rem;
+  background: var(--sl-color-black);
+  color: var(--sl-color-white);
+}
+.oe-form button {
+  font: inherit;
+  font-weight: 600;
+  padding: 0.55rem 1rem;
+  border: 0;
+  border-radius: 0.25rem;
+  background: var(--sl-color-accent);
+  color: var(--sl-color-black);
+  cursor: pointer;
+  justify-self: start;
+}
+.oe-form button:focus-visible,
+.oe-form input:focus-visible,
+.oe-form select:focus-visible {
+  outline: 2px solid var(--sl-color-accent);
+  outline-offset: 2px;
+}

@@ -1,0 +1,37 @@
+{
+  "description": "Attestation by the second throwaway key about the entity (spec 8.2)",
+  "object": {
+    "spec": "openentity/1.0",
+    "type": "Attestation",
+    "issuer": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+    "subject": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+    "claim_type": "stage",
+    "claim": {
+      "stage": "agent",
+      "profile": "entity-framework/1.0"
+    },
+    "evidence": {
+      "kind": "test-vector",
+      "count": 12,
+      "window": [
+        "2026-10-01T00:00:00Z",
+        "2026-10-24T00:00:00Z"
+      ],
+      "hash": "72671d5f20b9ba59ccc31848643ef7ca47b040ed55a837305e0a1509bd82c016"
+    },
+    "confidence": 0.81,
+    "created": "2026-10-24T19:05:00Z",
+    "expires": "2027-01-22T19:05:00Z",
+    "proof": {
+      "type": "DataIntegrityProof",
+      "cryptosuite": "eddsa-jcs-2022",
+      "created": "2026-10-24T19:05:00Z",
+      "verificationMethod": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw#z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+      "proofPurpose": "assertionMethod",
+      "proofValue": "z2MF13rQuoeyvV4EdrKayrAjSHmZR7t9TUPhYodX9u6d9x5JdWkcNtjfVLLGwwRBMGhTjdN2sx6taFWsuN3D2PQSe"
+    }
+  },
+  "canonical": "{\"claim\":{\"profile\":\"entity-framework/1.0\",\"stage\":\"agent\"},\"claim_type\":\"stage\",\"confidence\":0.81,\"created\":\"2026-10-24T19:05:00Z\",\"evidence\":{\"count\":12,\"hash\":\"72671d5f20b9ba59ccc31848643ef7ca47b040ed55a837305e0a1509bd82c016\",\"kind\":\"test-vector\",\"window\":[\"2026-10-01T00:00:00Z\",\"2026-10-24T00:00:00Z\"]},\"expires\":\"2027-01-22T19:05:00Z\",\"issuer\":\"did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw\",\"proof\":{\"created\":\"2026-10-24T19:05:00Z\",\"cryptosuite\":\"eddsa-jcs-2022\",\"proofPurpose\":\"assertionMethod\",\"proofValue\":\"z2MF13rQuoeyvV4EdrKayrAjSHmZR7t9TUPhYodX9u6d9x5JdWkcNtjfVLLGwwRBMGhTjdN2sx6taFWsuN3D2PQSe\",\"type\":\"DataIntegrityProof\",\"verificationMethod\":\"did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw#z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw\"},\"spec\":\"openentity/1.0\",\"subject\":\"did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7\",\"type\":\"Attestation\"}",
+  "sha256": "199082174ad06dc4af9fed93d40ccf06b4957a32e88eaf64aff27b81cc905556",
+  "unsigned_canonical": "{\"claim\":{\"profile\":\"entity-framework/1.0\",\"stage\":\"agent\"},\"claim_type\":\"stage\",\"confidence\":0.81,\"created\":\"2026-10-24T19:05:00Z\",\"evidence\":{\"count\":12,\"hash\":\"72671d5f20b9ba59ccc31848643ef7ca47b040ed55a837305e0a1509bd82c016\",\"kind\":\"test-vector\",\"window\":[\"2026-10-01T00:00:00Z\",\"2026-10-24T00:00:00Z\"]},\"expires\":\"2027-01-22T19:05:00Z\",\"issuer\":\"did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw\",\"spec\":\"openentity/1.0\",\"subject\":\"did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7\",\"type\":\"Attestation\"}"
+}

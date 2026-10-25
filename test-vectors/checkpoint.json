@@ -1,0 +1,38 @@
+{
+  "description": "C2SP tlog-checkpoint over log-leaf-0..5, signed note by the throwaway log key",
+  "origin": "openentity.org/log",
+  "tree_size": 6,
+  "root_hash": "d652b64f1193c6dd74bd6c71c1777a6f6633204323288a7de177006576c33d22",
+  "body": "openentity.org/log\n6\n1lK2TxGTxt10vWxxwXd6b2YzIEMjKIp94XcAZXbDPSI=\n",
+  "note": "openentity.org/log\n6\n1lK2TxGTxt10vWxxwXd6b2YzIEMjKIp94XcAZXbDPSI=\n\n\u2014 openentity.org/log 8uglzFU/XzuNR8BuGVijKoWNnqR5kAH5u4SQrQSwRk3FNZIYXcwmwPcJ4bvfsBebLq61W9s1SPdUUkLyVzkzWw5y7QI=\n",
+  "inclusion_proofs": [
+    [
+      "fa6851e5dc50a6a6bd1f04f925c3fabfdcc382c1c89ba2baf76eac5d7eea9933",
+      "1a7c6f29529f5967e6d8985515189e6a16d6188e1d56cd4b718b79a8c89abcd1",
+      "9016f158bdd15ceb44b320ed5e57aea9a119a802c52a0e12fb415dfc8f1fff48"
+    ],
+    [
+      "a750d4cf1ba400045d0560465e4101e695f126e7b59daa22f254ebd147484b13",
+      "1a7c6f29529f5967e6d8985515189e6a16d6188e1d56cd4b718b79a8c89abcd1",
+      "9016f158bdd15ceb44b320ed5e57aea9a119a802c52a0e12fb415dfc8f1fff48"
+    ],
+    [
+      "9bd267328c25840cd5de881943340356b745b4d3f92c87ece152998748b0ab00",
+      "75ecb1afba214332963d9796c181057253388e7a5adb47b9e48198ddb8d3fdb6",
+      "9016f158bdd15ceb44b320ed5e57aea9a119a802c52a0e12fb415dfc8f1fff48"
+    ],
+    [
+      "4c10a579646fa4bae94d6d493b0c84d27a029e6f0b59e4a3c301045427ecec3d",
+      "75ecb1afba214332963d9796c181057253388e7a5adb47b9e48198ddb8d3fdb6",
+      "9016f158bdd15ceb44b320ed5e57aea9a119a802c52a0e12fb415dfc8f1fff48"
+    ],
+    [
+      "4969af1524eeb66d54da7223df3b719cd353594b5b63e1626e494ca41615790b",
+      "775631c43a69fb608fd99662b8f73d066eec9caa9246b6870edff2f53941f424"
+    ],
+    [
+      "230bc7c7396d97b77a3c227588d86ccc9b7daa69dc2e1a1d8996e02b34d552c6",
+      "775631c43a69fb608fd99662b8f73d066eec9caa9246b6870edff2f53941f424"
+    ]
+  ]
+}

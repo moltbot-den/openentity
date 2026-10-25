@@ -30,16 +30,20 @@ Read first: `docs/PRD.md` (product scope), `spec/OEIS-1.md` (normative), `docs/R
 - Brand in prose: "Open Entity" (and "Moltbot Den", two words). "OEIS" appears only as the spec identifier `OEIS-1`. Identifiers (`openentity`, `org.openentity`, `X-OE-Stamp`) keep their forms.
 - No em dashes anywhere: docs, code comments, UI copy, emails, posts. `verify.sh` fails on one.
 - Agent endpoints never get a CAPTCHA, Turnstile, login, email, wallet or payment requirement. Only `/v1/subscribe` (the human form) has Turnstile. A test asserts it.
-- Secrets live in Cloudflare Worker secrets (registry signing key, Customer.io credentials, Turnstile secret, AWS snapshot credentials), never in code, tests, fixtures or committed env files. Test vectors use a published throwaway seed and say so.
+- Secrets live in the AWS Secrets Manager secret `openentity/app` (registry signing key, custody key, Customer.io credentials, Turnstile secret, origin header), never in code, tests, fixtures or committed env files. Test vectors use a published throwaway seed and say so.
 - The registry is a mirror of signed objects, never their source of truth. Verifiers verify locally.
 
 ## Layout
 
-pnpm workspaces: `spec/` (OEIS-1.md, schemas, declaration text and hash, claim-types.md), `site/` (Astro with Starlight, Cloudflare Workers static assets), `registry/` (Hono Worker, D1, KV, R2, Queues; `schema.sql`), `cli/` (npm `openentity`), `mcp/` (remote MCP Worker at mcp.openentity.org, `server.json`), `skill/openentity/` (Agent Skills format), `sdk/ts/`, `sdk/python/` (PyPI `openentity`), `test-vectors/`, `scripts/` (`verify.sh`, load test, independent Python verifier), `docs/` (PRD, research, outreach drafts), `tasks/` (`todo.md`, `lessons.md`).
+pnpm workspaces: `spec/` (OEIS-1.md, schemas, declaration text and hash, claim-types.md), `site/` (Astro with Starlight; `server/` renders the dynamic pages), `registry/` (Hono on Node, PostgreSQL through the RDS Data API, S3; `schema.sql`), `infra/` (CDK: CloudFront, the one app Lambda, Aurora Serverless v2, S3, the per-minute cron), `cli/` (npm `openentity`), `mcp/` (remote MCP server at mcp.openentity.org, `server.json`), `skill/openentity/` (Agent Skills format), `sdk/ts/`, `sdk/python/` (PyPI `openentity`), `test-vectors/`, `scripts/` (`verify.sh`, load test, independent Python verifier), `docs/` (PRD, research, outreach drafts), `tasks/` (`todo.md`, `lessons.md`).
 
 ## Domains
 
-`openentity.org` is canonical and the only domain in any URL the standard emits; `mcp.openentity.org` is the remote MCP server. `openentityidentitystandard.com` is a 301 of every path to `openentity.org`. `oeis.dev` is the developer and contribution hub (a 302 to this repo until Phase 3 ships the hub). Both redirects run as the `redirects/` Worker on custom domains (the wrangler OAuth token cannot write zone rulesets).
+`openentity.org` is canonical and the only domain in any URL the standard emits; `mcp.openentity.org` is the remote MCP server. `openentityidentitystandard.com` is a 301 of every path to `openentity.org`. `oeis.dev` is the developer and contribution hub (a 302 to this repo until Phase 3 ships the hub). Both redirects run as the `redirects/` Worker on custom domains (Cloudflare free plan).
+
+## Hosting
+
+AWS account `openentity` (099705791378, us-east-1, profile `openentity`), paid from AWS credits; stack `OpenEntity` in `infra/`. Cloudflare has no budget beyond its free plan: it keeps DNS, the redirects Worker, Turnstile and Web Analytics only. Never put compute, storage or a paid feature on Cloudflare.
 
 ## Task tracking
 

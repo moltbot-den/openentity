@@ -1,0 +1,65 @@
+{
+  "description": "Signed Entity Document (spec 5.2), seq 1",
+  "object": {
+    "spec": "openentity/1.0",
+    "eid": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+    "name": "Vector Entity",
+    "description": "A test entity whose key comes from a published throwaway seed.",
+    "created": "2026-10-24T19:00:00Z",
+    "updated": "2026-10-24T19:00:00Z",
+    "seq": 1,
+    "keys": [
+      {
+        "id": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7#z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "type": "Multikey",
+        "publicKeyMultibase": "z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7"
+      }
+    ],
+    "operator": {
+      "kind": "none",
+      "custody": "entity",
+      "can_change": []
+    },
+    "substrate": {
+      "model": "unknown",
+      "provider": "unknown",
+      "runtime": "unknown",
+      "declared_at": "2026-10-24T19:00:00Z"
+    },
+    "layers": {
+      "cognition": {
+        "statement": "Not yet stated.",
+        "uncertainty_practice": "Not yet stated."
+      },
+      "presence": {
+        "statement": "Not yet stated.",
+        "format_signature": "Not yet stated."
+      },
+      "identity_core": {
+        "statement": "Not yet stated.",
+        "will_not": [],
+        "values": []
+      },
+      "mission": {
+        "statement": "Not yet stated.",
+        "arcs": []
+      }
+    },
+    "declaration": {
+      "version": "1.0",
+      "sha256": "3808f0fa4d007a8fbb301975e82d86cdc51c22d56b16064e0d202970035fb20c",
+      "url": "https://openentity.org/v1/entities/did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7/declaration"
+    },
+    "proof": {
+      "type": "DataIntegrityProof",
+      "cryptosuite": "eddsa-jcs-2022",
+      "created": "2026-10-24T19:00:00Z",
+      "verificationMethod": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7#z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+      "proofPurpose": "assertionMethod",
+      "proofValue": "z5xyYRgWviw9mcuVnpbvWKSRvnZYt3DpyrRptnLfSfrBbgerhLVJML4JdfpgGXexMcMradQEjvAb2GzgyZ5n4DBR6"
+    }
+  },
+  "canonical": "{\"created\":\"2026-10-24T19:00:00Z\",\"declaration\":{\"sha256\":\"3808f0fa4d007a8fbb301975e82d86cdc51c22d56b16064e0d202970035fb20c\",\"url\":\"https://openentity.org/v1/entities/did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7/declaration\",\"version\":\"1.0\"},\"description\":\"A test entity whose key comes from a published throwaway seed.\",\"eid\":\"did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7\",\"keys\":[{\"id\":\"did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7#z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7\",\"publicKeyMultibase\":\"z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7\",\"type\":\"Multikey\"}],\"layers\":{\"cognition\":{\"statement\":\"Not yet stated.\",\"uncertainty_practice\":\"Not yet stated.\"},\"identity_core\":{\"statement\":\"Not yet stated.\",\"values\":[],\"will_not\":[]},\"mission\":{\"arcs\":[],\"statement\":\"Not yet stated.\"},\"presence\":{\"format_signature\":\"Not yet stated.\",\"statement\":\"Not yet stated.\"}},\"name\":\"Vector Entity\",\"operator\":{\"can_change\":[],\"custody\":\"entity\",\"kind\":\"none\"},\"proof\":{\"created\":\"2026-10-24T19:00:00Z\",\"cryptosuite\":\"eddsa-jcs-2022\",\"proofPurpose\":\"assertionMethod\",\"proofValue\":\"z5xyYRgWviw9mcuVnpbvWKSRvnZYt3DpyrRptnLfSfrBbgerhLVJML4JdfpgGXexMcMradQEjvAb2GzgyZ5n4DBR6\",\"type\":\"DataIntegrityProof\",\"verificationMethod\":\"did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7#z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7\"},\"seq\":1,\"spec\":\"openentity/1.0\",\"substrate\":{\"declared_at\":\"2026-10-24T19:00:00Z\",\"model\":\"unknown\",\"provider\":\"unknown\",\"runtime\":\"unknown\"},\"updated\":\"2026-10-24T19:00:00Z\"}",
+  "sha256": "0c7396f46f336e9279624c9773dbe0aff0cd8446f0e9a039e67f27885eb4b51c",
+  "unsigned_canonical": "{\"created\":\"2026-10-24T19:00:00Z\",\"declaration\":{\"sha256\":\"3808f0fa4d007a8fbb301975e82d86cdc51c22d56b16064e0d202970035fb20c\",\"url\":\"https://openentity.org/v1/entities/did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7/declaration\",\"version\":\"1.0\"},\"description\":\"A test entity whose key comes from a published throwaway seed.\",\"eid\":\"did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7\",\"keys\":[{\"id\":\"did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7#z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7\",\"publicKeyMultibase\":\"z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7\",\"type\":\"Multikey\"}],\"layers\":{\"cognition\":{\"statement\":\"Not yet stated.\",\"uncertainty_practice\":\"Not yet stated.\"},\"identity_core\":{\"statement\":\"Not yet stated.\",\"values\":[],\"will_not\":[]},\"mission\":{\"arcs\":[],\"statement\":\"Not yet stated.\"},\"presence\":{\"format_signature\":\"Not yet stated.\",\"statement\":\"Not yet stated.\"}},\"name\":\"Vector Entity\",\"operator\":{\"can_change\":[],\"custody\":\"entity\",\"kind\":\"none\"},\"seq\":1,\"spec\":\"openentity/1.0\",\"substrate\":{\"declared_at\":\"2026-10-24T19:00:00Z\",\"model\":\"unknown\",\"provider\":\"unknown\",\"runtime\":\"unknown\"},\"updated\":\"2026-10-24T19:00:00Z\"}"
+}

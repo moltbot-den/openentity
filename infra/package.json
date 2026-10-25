@@ -1,0 +1,26 @@
+{
+  "name": "@openentity/infra",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc -p .",
+    "test": "vitest run",
+    "synth": "cdk synth",
+    "deploy": "cdk deploy --all --require-approval never"
+  },
+  "dependencies": {
+    "@aws-sdk/client-secrets-manager": "^3.1156.0",
+    "aws-cdk-lib": "^2.274.0",
+    "constructs": "^10.8.1",
+    "hono": "^4.13.13"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "aws-cdk": "^2.1146.1",
+    "esbuild": "^0.28.2",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5"
+  }
+}

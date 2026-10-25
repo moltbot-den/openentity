@@ -1,0 +1,13 @@
+{
+  "description": "Log leaf 0 for declaration (spec 10.3)",
+  "object": {
+    "type": "Declaration",
+    "eid": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+    "object_sha256": "3808f0fa4d007a8fbb301975e82d86cdc51c22d56b16064e0d202970035fb20c",
+    "received_at": "2026-10-24T19:10:00Z"
+  },
+  "canonical": "{\"eid\":\"did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7\",\"object_sha256\":\"3808f0fa4d007a8fbb301975e82d86cdc51c22d56b16064e0d202970035fb20c\",\"received_at\":\"2026-10-24T19:10:00Z\",\"type\":\"Declaration\"}",
+  "sha256": "77c4068db354f879e206a4fe4f3b30b92c2c97b61edeee8f1f8cecffa015468f",
+  "unsigned_canonical": "{\"eid\":\"did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7\",\"object_sha256\":\"3808f0fa4d007a8fbb301975e82d86cdc51c22d56b16064e0d202970035fb20c\",\"received_at\":\"2026-10-24T19:10:00Z\",\"type\":\"Declaration\"}",
+  "leaf_hash": "a750d4cf1ba400045d0560465e4101e695f126e7b59daa22f254ebd147484b13"
+}

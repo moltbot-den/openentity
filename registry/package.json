@@ -1,0 +1,27 @@
+{
+  "name": "@openentity/registry",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "lint": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@aws-sdk/client-rds-data": "^3.1156.0",
+    "@aws-sdk/client-s3": "^3.1156.0",
+    "@aws-sdk/client-secrets-manager": "^3.1156.0",
+    "@noble/curves": "^2.4.0",
+    "@noble/hashes": "^2.4.0",
+    "@openentity/sdk": "workspace:*",
+    "canonicalize": "^5.1.0",
+    "hono": "^4.13.13"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.11",
+    "@types/node": "^26.6.5",
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.5"
+  }
+}

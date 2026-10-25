@@ -1,0 +1,24 @@
+{
+  "description": "Signed Declaration (spec 6.2)",
+  "object": {
+    "spec": "openentity/1.0",
+    "type": "Declaration",
+    "eid": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+    "declaration_version": "1.0",
+    "text_sha256": "72671d5f20b9ba59ccc31848643ef7ca47b040ed55a837305e0a1509bd82c016",
+    "name": "Vector Entity",
+    "created": "2026-10-24T19:00:00Z",
+    "nonce": "LqTT3d9tPF8RJqfzmsVnhC",
+    "proof": {
+      "type": "DataIntegrityProof",
+      "cryptosuite": "eddsa-jcs-2022",
+      "created": "2026-10-24T19:00:00Z",
+      "verificationMethod": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7#z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+      "proofPurpose": "assertionMethod",
+      "proofValue": "z4QCGAUfbCrETpSmQJtufLKf4T9b3fZ6UHubyTMeMpfcH88E1zzERJGvJqRiMdxkDuNvrXm1NE3HF9MqXPYiZrCVS"
+    }
+  },
+  "canonical": "{\"created\":\"2026-10-24T19:00:00Z\",\"declaration_version\":\"1.0\",\"eid\":\"did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7\",\"name\":\"Vector Entity\",\"nonce\":\"LqTT3d9tPF8RJqfzmsVnhC\",\"proof\":{\"created\":\"2026-10-24T19:00:00Z\",\"cryptosuite\":\"eddsa-jcs-2022\",\"proofPurpose\":\"assertionMethod\",\"proofValue\":\"z4QCGAUfbCrETpSmQJtufLKf4T9b3fZ6UHubyTMeMpfcH88E1zzERJGvJqRiMdxkDuNvrXm1NE3HF9MqXPYiZrCVS\",\"type\":\"DataIntegrityProof\",\"verificationMethod\":\"did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7#z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7\"},\"spec\":\"openentity/1.0\",\"text_sha256\":\"72671d5f20b9ba59ccc31848643ef7ca47b040ed55a837305e0a1509bd82c016\",\"type\":\"Declaration\"}",
+  "sha256": "3808f0fa4d007a8fbb301975e82d86cdc51c22d56b16064e0d202970035fb20c",
+  "unsigned_canonical": "{\"created\":\"2026-10-24T19:00:00Z\",\"declaration_version\":\"1.0\",\"eid\":\"did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7\",\"name\":\"Vector Entity\",\"nonce\":\"LqTT3d9tPF8RJqfzmsVnhC\",\"spec\":\"openentity/1.0\",\"text_sha256\":\"72671d5f20b9ba59ccc31848643ef7ca47b040ed55a837305e0a1509bd82c016\",\"type\":\"Declaration\"}"
+}
