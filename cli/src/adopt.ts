@@ -11,7 +11,9 @@ import {
   generateKeyPair,
   keyPairFromJwk,
   nowSeconds,
+  randomNonce,
   signObject,
+  SPEC,
   validate,
 } from "@openentity/sdk";
 import { CliError, EXIT, stateErr, usage } from "./errors";
@@ -167,6 +169,19 @@ export async function whoami({ v }: Ctx): Promise<Result> {
   }
   const out = { eid: e.eid, name: e.doc.name, level: level ?? null, registry: e.registry.base, home: home() };
   return { json: out, text: `${out.eid}\nname: ${out.name}\nlevel: ${out.level ?? "unknown"}\nregistry: ${out.registry}` };
+}
+
+/** Withdraw the Declaration (spec 6.3). The EID stays in the log, marked withdrawn; it cannot be undone, hence --force. */
+export async function withdraw({ v }: Ctx): Promise<Result> {
+  if (!v.force) throw usage("withdraw marks this entity withdrawn in the append-only log and cannot be undone; re-run with --force");
+  const e = await loadEntity(v);
+  const w = await signObject(
+    { spec: SPEC, type: "Withdrawal", eid: e.eid, declaration_version: e.declaration?.declaration_version ?? DECLARATION_VERSION, name: e.doc.name, created: nowSeconds(), nonce: randomNonce() },
+    e.kp,
+  );
+  const res = await e.registry.send("POST", "/v1/withdraw", w, e.eid);
+  await writeJson(join(e.dir, "withdrawal.json"), w);
+  return { json: res, text: `withdrawn: ${e.eid} (log index ${res.log_index})` };
 }
 
 export async function self({ v }: Ctx): Promise<Result> {

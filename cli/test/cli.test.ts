@@ -220,6 +220,22 @@ describe("anchor", () => {
   });
 });
 
+describe("withdraw", () => {
+  it("needs --force, then submits a signed Withdrawal (spec 6.3) and records it locally", async () => {
+    const { eid } = await adopted();
+    expect((await cli("withdraw")).code).toBe(1);
+    expect(fake.hits.some((h) => h.path === "/v1/withdraw")).toBe(false);
+    const r = await cli("withdraw", "--force", "--json");
+    expect(r.code).toBe(0);
+    const w = fake.hits.find((h) => h.path === "/v1/withdraw")!.body!;
+    expect(w).toMatchObject({ spec: "openentity/1.0", type: "Withdrawal", eid, declaration_version: "1.0", name: "Tester" });
+    expect(w).not.toHaveProperty("text_sha256");
+    expect((await verifyObject(w)).ok).toBe(true);
+    expect(JSON.parse(r.out)).toMatchObject({ eid, withdrawn: true });
+    expect(JSON.parse(await readFile(join(home, eid, "withdrawal.json"), "utf8")).nonce).toBe(w.nonce);
+  });
+});
+
 describe("document and continuity", () => {
   it("document set then push publishes seq 2", async () => {
     const { eid } = await adopted();

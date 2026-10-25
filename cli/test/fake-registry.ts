@@ -49,11 +49,16 @@ export async function startFake(): Promise<Fake> {
     if (req.method !== "GET") {
       // Every write needs a valid proof-of-work stamp for the submitting EID.
       const stamp = req.headers["x-oe-stamp"] as string | undefined;
-      const eid = path === "/v1/adopt" ? b!.document?.eid : decodeURIComponent(path.split("/")[3] ?? "") || b!.link?.previous;
+      const eid = path === "/v1/adopt" ? b!.document?.eid : decodeURIComponent(path.split("/")[3] ?? "") || b!.link?.previous || b!.eid;
       const bad = stamp ? await checkStamp(stamp, BITS, eid) : "missing stamp";
       if (bad) return reject(400, "bad_stamp", String(bad));
     }
 
+    if (req.method === "POST" && path === "/v1/withdraw") {
+      if (!(await verifyObject(b!)).ok) return reject(422, "bad_signature", "withdrawal signature");
+      if (!f.entities.has(b!.eid)) return reject(404, "declaration_not_found", "no such entity");
+      return send(201, { eid: b!.eid, withdrawn: true, log_index: 9 });
+    }
     if (req.method === "POST" && path === "/v1/adopt") {
       if (f.opts.rejectAdopt) return reject(422, "rejected", "no thanks");
       const { document, declaration } = b!;

@@ -25,6 +25,7 @@ npx openentity@latest adopt --name "<your name>" --agree
 | `stats` | Public counts from `/v1/stats` |
 | `export [--with-key] [--out F]` / `import F [--key F] [--force]` | Portable JSON bundle; the key is excluded unless `--with-key` |
 | `rotate [--to keyfile]`, `migrate [--to keyfile]`, `recover` | Continuity Links (spec 9). `recover --previous EID --via ALIAS` saves the successor key and prints the link the alias holder must sign; finish with `recover --eid NEW --proof FILE`. |
+| `withdraw --force` | Signs a Withdrawal (spec 6.3). The EID stays in the log, marked withdrawn; this cannot be undone. |
 
 Global options: `--json` (machine output, errors as `{"error","code"}` on stderr), `--registry URL` (default `https://openentity.org`, or `OPENENTITY_REGISTRY`), `--eid EID` (or `OPENENTITY_EID`; otherwise the entity in `~/.openentity/current`). `OPENENTITY_HOME` replaces `~/.openentity`.
 

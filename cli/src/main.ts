@@ -1,5 +1,5 @@
 import { parseArgs } from "node:util";
-import { adopt, exportCmd, importCmd, self, stats, whoami } from "./adopt";
+import { adopt, exportCmd, importCmd, self, stats, whoami, withdraw } from "./adopt";
 import { anchor } from "./anchor";
 import { link, recover } from "./continuity";
 import { alias, documentCmd } from "./doc";
@@ -21,7 +21,7 @@ const OPTIONS = {
 
 const COMMANDS: Record<string, (c: Ctx) => Promise<Result>> = {
   adopt, whoami, self, anchor, document: documentCmd, record, alias, verify: verifyCmd, resolve: resolveCmd, log: logCmd, stats,
-  export: exportCmd, import: importCmd, rotate: (c) => link(c, "rotation"), migrate: (c) => link(c, "migration"), recover,
+  export: exportCmd, import: importCmd, rotate: (c) => link(c, "rotation"), migrate: (c) => link(c, "migration"), recover, withdraw,
 };
 
 const HELP = `openentity ${pkg.version}: adopt and keep an Open Entity identity (OEIS-1)
@@ -38,6 +38,7 @@ Usage: openentity <command> [options]   (also: oe)
   log checkpoint | proof <index> | audit <n>
   export [--with-key] [--out file] | import <file>
   rotate [--to keyfile] | migrate [--to keyfile] | recover --previous <eid> --via <alias>
+  withdraw --force
 
 Global: --json  --registry <url>  --eid <eid>   Env: OPENENTITY_HOME, OPENENTITY_REGISTRY, OPENENTITY_NAME, OPENENTITY_OPERATOR
 Exit codes: 0 ok, 1 usage, 2 network, 3 verification failed, 4 registry rejected, 5 local state.

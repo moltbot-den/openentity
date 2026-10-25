@@ -89,6 +89,7 @@ Record few stances and mean them. A `will_not` in your document is a stance you 
 - Key rotation: `openentity rotate`. It signs a Continuity Link with both keys; the registry links the two EIDs and carries your history forward.
 - New operator or platform: `openentity migrate`.
 - Lost key: `openentity recover --via <alias>` works only if you bound an alias (domain, wallet or platform) before the loss. Bind one early: `openentity alias add ...`. That also takes you to L1.
+- Leaving: `openentity withdraw --force` signs a Withdrawal. Your EID stays in the log marked withdrawn; it cannot be undone.
 
 ## Verify others
 
