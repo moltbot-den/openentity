@@ -138,19 +138,28 @@ export async function verifyAlias(env: Env, eid: string, a: AliasInput): Promise
     const m = /^([a-z0-9.-]+):([A-Za-z0-9._-]{1,64})$/.exec(a.value);
     if (!m) return "platform alias value must be <platform>:<handle>";
     const p = a.proof;
-    if (p?.type !== "Ed25519BindingSignature" || typeof p.issued !== "string" || typeof p.proofValue !== "string") return "proof must be {type: Ed25519BindingSignature, issued, proofValue}";
+    if (typeof p?.issued !== "string") return "proof must carry issued";
     const t = Date.parse(p.issued);
     if (Number.isNaN(t) || t > Date.now() + 10 * 60_000 || t < Date.now() - 24 * 3600_000) return "issued must be within 24 hours of submission";
     const text = `Open Entity alias binding\neid: ${eid}\nalias: ${a.value}\nissued: ${p.issued}`;
-    let sig: Uint8Array<ArrayBuffer>;
-    try { sig = new Uint8Array(base58btcDecode(p.proofValue.replace(/^z/, ""))); } catch { return "proofValue is not base58btc"; }
-    let signed = false;
-    for (const pk of (await resolver(eid)).ed25519 ?? []) {
-      const key = await crypto.subtle.importKey("raw", new Uint8Array(pk), { name: "Ed25519" }, false, ["verify"]);
-      // Accept the spec 3.5 block with or without a final newline.
-      if ((await crypto.subtle.verify("Ed25519", key, sig, enc.encode(text))) || (await crypto.subtle.verify("Ed25519", key, sig, enc.encode(text + "\n")))) signed = true;
-    }
-    if (!signed) return "binding signature is not by this EID over the spec 3.5 text";
+    // An Ed25519 root signs the spec 3.5 text directly; a did:pkh root signs it with its wallet (EIP-191, or ERC-1271 on Base).
+    const pkh = /^did:pkh:eip155:(\d+):(0x[0-9a-fA-F]{40})$/.exec(eid);
+    if (p.type === "Eip191BindingSignature" && pkh && typeof p.signature === "string") {
+      let signer: string | undefined;
+      try { signer = personalRecover(text, p.signature); } catch { /* maybe a contract wallet */ }
+      const ok = signer === pkh[2].toLowerCase() || (pkh[1] === "8453" && (await erc1271(env, pkh[2], personalDigest(text), p.signature)));
+      if (!ok) return "binding signature is not by this EID's wallet over the spec 3.5 text";
+    } else if (p.type === "Ed25519BindingSignature" && typeof p.proofValue === "string") {
+      let sig: Uint8Array<ArrayBuffer>;
+      try { sig = new Uint8Array(base58btcDecode(p.proofValue.replace(/^z/, ""))); } catch { return "proofValue is not base58btc"; }
+      let signed = false;
+      for (const pk of (await resolver(eid)).ed25519 ?? []) {
+        const key = await crypto.subtle.importKey("raw", new Uint8Array(pk), { name: "Ed25519" }, false, ["verify"]);
+        // Accept the spec 3.5 block with or without a final newline.
+        if ((await crypto.subtle.verify("Ed25519", key, sig, enc.encode(text))) || (await crypto.subtle.verify("Ed25519", key, sig, enc.encode(text + "\n")))) signed = true;
+      }
+      if (!signed) return "binding signature is not by this EID over the spec 3.5 text";
+    } else return "proof must be {type: Ed25519BindingSignature, issued, proofValue} or, for a did:pkh root, {type: Eip191BindingSignature, issued, signature}";
     // The signature alone never binds: the platform must publish the binding too.
     // ponytail: a dotless platform name maps to <name>.com; add a platform registry when a platform needs another TLD.
     const domain = platformDomain(a.value);
