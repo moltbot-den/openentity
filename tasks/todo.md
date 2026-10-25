@@ -60,3 +60,4 @@ Verification
 
 ## Phase 3: registry identity, custody exit, redaction, ERC-8004 registration files (PRD 11 Phases 2 and 3)
 - [x] The registry's own signed Entity Document (`did:web:openentity.org`, operator Moltbot Den, custody operator), signed with the registry key, logged once on first read, served at `/.well-known/openentity.json`; the unsigned stand-in is gone (spec 10.1)
+- [x] Custodial key export (spec 10.6): `POST /v1/entities/{eid}/custody/export` with a Presentation to the registry returns the kept key once and deletes it; a Continuity Link away from a custodial EID deletes the old copy; MCP `openentity_export_key` (confirm); spec, PRD 7.6 and the MCP guide updated
