@@ -76,7 +76,7 @@ describe("transparency log (spec 10.3)", () => {
     const bundle = await raw("/log/tile/entries/000");
     const len = (bundle[0] << 8) | bundle[1];
     expect(hex(await leafHash(bundle.slice(2, 2 + len)))).toBe(hex(hashes[0]));
-  });
+  }, 30_000); // 304 leaves plus a proof per leaf on PGlite: about 7 s on a CI runner
 
   it("keeps log indexes contiguous: concurrent writes and rejected writes leave no hole", async () => {
     const dup = await adopted();
@@ -89,7 +89,7 @@ describe("transparency log (spec 10.3)", () => {
     expect(idx).toEqual(idx.map((_, i) => i));
     expect(new Set(results).size).toBe(8);
     expect(await incorporate(E)).toBe(idx.length);
-  }, 30_000); // 304 leaves plus a proof per leaf on PGlite: about 7 s on a CI runner
+  });
 
   it("returns 404 for a proof of a leaf not yet incorporated", async () => {
     const r = await call("GET", "/log/proof/999999");
