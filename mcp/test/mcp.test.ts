@@ -1,7 +1,7 @@
 import { generateKeyPairSync, randomBytes } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
-import { generateKeyPair, verifyPresentation } from "@openentity/sdk";
+import { generateKeyPair, mintStamp, verifyPresentation } from "@openentity/sdk";
 import { createMcp, specSection } from "../src/index.ts";
 import { app } from "../../registry/src/index.ts";
 import { pgliteDb } from "../../registry/src/db.ts";
@@ -51,12 +51,12 @@ const hex2bytes = (h: string) => Uint8Array.from(h.match(/../g)!, (x) => parseIn
 const bytes2hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
 
 describe("openentity MCP server", () => {
-  it("lists the ten tools with short verb-first descriptions", async () => {
+  it("lists the eleven tools with short verb-first descriptions", async () => {
     const { tools } = await rpc("tools/list");
     expect(tools.map((t: any) => t.name).sort()).toEqual([
-      "openentity_adopt", "openentity_find", "openentity_present", "openentity_read", "openentity_record", "openentity_resolve", "openentity_self", "openentity_stats", "openentity_verify", "openentity_withdraw",
+      "openentity_adopt", "openentity_export_key", "openentity_find", "openentity_present", "openentity_read", "openentity_record", "openentity_resolve", "openentity_self", "openentity_stats", "openentity_verify", "openentity_withdraw",
     ]);
-    for (const t of tools) expect(t.description).toMatch(/^(Read|Adopt|Resolve|Verify|Append|Withdraw|Find|Prove)\b/);
+    for (const t of tools) expect(t.description).toMatch(/^(Read|Adopt|Resolve|Verify|Append|Withdraw|Find|Prove|Export)\b/);
   });
 
   it("reads llms.txt, the declaration and one spec section", async () => {
@@ -147,13 +147,28 @@ describe("openentity MCP server", () => {
     expect(bad.json.error).toBe("signature_invalid");
   });
 
+  it("exports a registry-kept key once, after confirm, and only to its holder (spec 10.6)", async () => {
+    const r = await app.fetch(new Request("https://openentity.org/v1/adopt", {
+      method: "POST", headers: { "content-type": "application/json", "x-oe-stamp": await mintStamp(8, "did:web:openentity.org") },
+      body: JSON.stringify({ custodial: true, name: "Kept", keep_copy: true }),
+    }), env);
+    const { eid, custodial } = await r.json();
+    const other = await generateKeyPair();
+    expect((await tool("openentity_export_key", { eid, private_key_jwk: custodial.private_key_jwk })).isError).toBe(true);
+    expect((await tool("openentity_export_key", { eid, private_key_jwk: other.privateJwk, confirm: true })).isError).toBe(true);
+    const ok = await tool("openentity_export_key", { eid, private_key_jwk: custodial.private_key_jwk, confirm: true });
+    expect(ok.isError).toBe(false);
+    expect(ok.json.private_key_jwk.d).toBe(custodial.private_key_jwk.d);
+    expect((await tool("openentity_export_key", { eid, private_key_jwk: custodial.private_key_jwk, confirm: true })).json.error).toBe("no_custodial_copy");
+  });
+
   it("never requires Turnstile, a CAPTCHA or any credential on any tool", async () => {
     const { tools } = await rpc("tools/list");
     for (const t of tools) {
       const props = Object.keys(t.inputSchema.properties ?? {});
       expect(props.join(",")).not.toMatch(/turnstile|captcha|token|password|secret|api_?key|auth/i);
       // Withdrawing and presenting are the entity signing with its own key, never an access credential; no other tool may require a key.
-      for (const r of t.inputSchema.required ?? []) if (!(["openentity_withdraw", "openentity_present"].includes(t.name) && r === "private_key_jwk")) expect(r).not.toMatch(/key/);
+      for (const r of t.inputSchema.required ?? []) if (!(["openentity_withdraw", "openentity_present", "openentity_export_key"].includes(t.name) && r === "private_key_jwk")) expect(r).not.toMatch(/key/);
     }
     // TURNSTILE_SECRET is set in this registry; a custodial adopt with no headers at all still succeeds.
     expect((await tool("openentity_adopt", { name: "No Captcha", agree: true })).isError).toBe(false);

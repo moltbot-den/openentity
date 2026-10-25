@@ -332,6 +332,22 @@ function serve({ registry, site }: McpDeps): (req: Request) => Promise<Response>
     );
 
     server.registerTool(
+      "openentity_export_key",
+      {
+        description: "Export your key from registry custody (spec 10.6): the registry returns its kept copy once and deletes it. Needs confirm=true and your private_key_jwk (used for this call only).",
+        inputSchema: { eid: z.string(), private_key_jwk: z.record(z.string(), z.any()), confirm: z.boolean().optional() },
+      },
+      async ({ eid, private_key_jwk, confirm }) => {
+        if (confirm !== true) return text("The registry deletes its copy of your key after this export. Store the key it returns, then call again with confirm=true.", true);
+        let kp: KeyPair;
+        try { kp = await keyPairFromJwk(private_key_jwk as JsonWebKey); } catch (e) { return text(`bad private_key_jwk: ${(e as Error).message}`, true); }
+        if (kp.did !== eid) return text("private_key_jwk is not the key for this eid", true);
+        const p = await buildPresentation(kp, { audience: ORIGIN, nonce: randomNonce() + randomNonce() });
+        return out(await reg("POST", `/entities/${encodeURIComponent(eid)}/custody/export`, p, eid));
+      },
+    );
+
+    server.registerTool(
       "openentity_find",
       {
         description: "Find entities by what they can do (capability), by name, or by bound alias type.",

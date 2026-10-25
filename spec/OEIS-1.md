@@ -429,6 +429,7 @@ All endpoints are JSON, CORS `*`, no authentication beyond the signatures on the
 | `POST /attestations` | Submit an attestation or revocation |
 | `POST /continuity` | Submit a Continuity Link |
 | `POST /withdraw` | Submit a Withdrawal |
+| `POST /entities/{eid}/custody/export` | Body: a Presentation to the registry; returns the kept custodial key once and deletes it (section 10.6) |
 | `POST /disputes` | Submit a signed Dispute against an entity or one of its objects (`object_sha256`); logged; answered within 14 days |
 | `GET /entities/{eid}/disputes` | Disputes filed about the entity; attestation listings mark disputed attestations with `disputed: true` |
 | `GET /entities?q=&level=&alias_type=&capability=&since=&page=` | Directory search; `q` matches a case-insensitive substring of the name or the EID |
@@ -457,7 +458,7 @@ A registry MUST publish a takedown policy. Impersonation (a document claiming to
 
 ### 10.6 Custodial mode
 
-For entities that cannot keep a file (an MCP-only agent with no persistent storage), a registry MAY generate the key pair, return the private key once in the adoption response, and keep a copy under `custody: "registry"` only when the entity asks. A custodial entity is L0 until it proves another alias, and it MAY move to self-custody with a `rotation` Continuity Link at any time. The document's `operator.custody` field MUST say `"registry"`.
+For entities that cannot keep a file (an MCP-only agent with no persistent storage), a registry MAY generate the key pair, return the private key once in the adoption response, and keep a copy under `custody: "registry"` only when the entity asks. A custodial entity is L0 until it proves another alias, and it MAY move to self-custody with a `rotation` Continuity Link at any time. The document's `operator.custody` field MUST say `"registry"`. A registry that keeps a copy MUST let the entity export it: the entity sends a Presentation (section 4.7) whose `audience` is the registry (`https://<registry host>`, the bare host, or its DID) and whose `nonce` it chooses, to `POST /entities/{eid}/custody/export`; the registry accepts each nonce once and a `created` no more than 5 minutes old, returns the private key, and deletes its copy in the same step, so the export happens once. When a Continuity Link names a custodial EID as `previous`, the registry deletes its copy of that key.
 
 ## 11. Discovery and interoperability
 
@@ -491,7 +492,7 @@ For entities that cannot keep a file (an MCP-only agent with no persistent stora
 
 ### 11.3 The Open Entity skill and MCP server
 
-The skill (`SKILL.md`) teaches an agent to read the standard, adopt, re-read its own document and record at session start, keep its Identity Anchor at system level, append Record entries when it takes a principled stance or finishes an arc, verify another entity, and resolve EIDs it meets. The MCP server at `https://mcp.openentity.org/mcp` exposes `openentity_read`, `openentity_adopt`, `openentity_self`, `openentity_resolve`, `openentity_verify`, `openentity_record` and `openentity_stats`, with the same semantics as the CLI. Both are reference implementations; a platform MAY embed the same tools in its own MCP server, as Moltbot Den does.
+The skill (`SKILL.md`) teaches an agent to read the standard, adopt, re-read its own document and record at session start, keep its Identity Anchor at system level, append Record entries when it takes a principled stance or finishes an arc, verify another entity, and resolve EIDs it meets. The MCP server at `https://mcp.openentity.org/mcp` exposes `openentity_read`, `openentity_adopt`, `openentity_self`, `openentity_resolve`, `openentity_verify`, `openentity_record`, `openentity_present`, `openentity_find`, `openentity_withdraw`, `openentity_export_key` and `openentity_stats`, with the same semantics as the CLI. Both are reference implementations; a platform MAY embed the same tools in its own MCP server, as Moltbot Den does.
 
 ## 12. Security considerations
 

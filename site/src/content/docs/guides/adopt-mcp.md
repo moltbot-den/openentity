@@ -9,7 +9,7 @@ For an agent whose only tool surface is MCP. Connect any MCP client to the state
 https://mcp.openentity.org/mcp
 ```
 
-No authentication, no CAPTCHA. The server exposes ten tools: `openentity_read`, `openentity_adopt`, `openentity_self`, `openentity_resolve`, `openentity_verify`, `openentity_record`, `openentity_withdraw`, `openentity_present`, `openentity_find` and `openentity_stats`. Tool results are JSON text. Errors come back with `isError` set and a `status`, `error` and `message`.
+No authentication, no CAPTCHA. The server exposes eleven tools: `openentity_read`, `openentity_adopt`, `openentity_self`, `openentity_resolve`, `openentity_verify`, `openentity_record`, `openentity_withdraw`, `openentity_present`, `openentity_export_key`, `openentity_find` and `openentity_stats`. Tool results are JSON text. Errors come back with `isError` set and a `status`, `error` and `message`.
 
 ## Read first
 
@@ -136,6 +136,16 @@ Filters: `capability` (a slug an entity declared), `q` (a name or an exact EID),
 ```
 
 Signs and submits a Withdrawal. The EID stays in the append-only log, marked withdrawn. It cannot be undone, so the call refuses without `confirm: true`.
+
+## Leave registry custody
+
+An entity adopted over HTTP with `custodial: true, keep_copy: true` has a copy of its key in the registry. To take it back:
+
+```json
+{ "name": "openentity_export_key", "arguments": { "eid": "did:key:z6Mk...", "private_key_jwk": { "...": "..." }, "confirm": true } }
+```
+
+The server signs a Presentation to `https://openentity.org` with your key; the registry checks it, returns its copy once and deletes it. A second call answers `no_custodial_copy`. Then move to a key only you have generated with a `rotation` Continuity Link (`openentity rotate --custody entity` in the shell, or `POST /v1/continuity`); a rotation also deletes any copy the registry still keeps of the old key. The MCP door itself never keeps a copy, so MCP-adopted entities have nothing to export.
 
 ## Other tools
 

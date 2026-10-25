@@ -3,7 +3,7 @@ import { Hono, type Context } from "hono";
 import { cors } from "hono/cors";
 import {
   DECLARATION_SHA256, DECLARATION_VERSION, SPEC, buildDeclaration, buildDocument, canonicalize, checkStamp, checkTimestamp,
-  generateKeyPair, normalizeEid, noteVkey, recordEntryHash, sha256Hex, signObject, validate, verifyObject, verifyProof, type Proof, type Resolver,
+  generateKeyPair, normalizeEid, noteVkey, recordEntryHash, sha256Hex, signObject, validate, verifyObject, verifyPresentation, verifyProof, type Proof, type Resolver,
 } from "./sdk.ts";
 import { type Env, REGISTRY_DID, LOG_ORIGIN, b64, nowIso } from "./env.ts";
 import { type Stmt, consistencyProof, inclusionProof, incorporate, latestSize, leafFor, leafJson, registryKey, sequenced, snapshot, tileIndex, treeRoot, type LeafRow } from "./log.ts";
@@ -220,6 +220,13 @@ async function encryptKey(env: Env, jwk: JsonWebKey): Promise<string> {
   return `${b64(iv)}.${b64(ct)}`;
 }
 
+async function decryptKey(env: Env, enc: string): Promise<JsonWebKey> {
+  const raw = Uint8Array.from(atob(env.CUSTODY_KEY!), (ch) => ch.charCodeAt(0));
+  const key = await crypto.subtle.importKey("raw", raw, "AES-GCM", false, ["decrypt"]);
+  const [iv, ct] = enc.split(".").map((s) => Uint8Array.from(atob(s), (ch) => ch.charCodeAt(0)));
+  return JSON.parse(new TextDecoder().decode(await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, ct)));
+}
+
 /** Replace an entity's capability index with its document's list (spec 5.2). */
 const capabilityStmts = (eid: string, doc: any): Stmt[] => [
   // Delete only what left the list: a DELETE and an INSERT of the same row in one statement would drop it.
@@ -246,6 +253,26 @@ app.post("/adopt", async (c) => {
   schema("EntityDocument", document);
   schema("Declaration", declaration);
   return c.json(await adopt(c, document, declaration), 201);
+});
+
+// Custody exit (spec 10.6): a Presentation to this registry proves control; the kept copy is returned once and deleted.
+app.post("/entities/:eid/custody/export", async (c) => {
+  const db = c.env.db, eid = normalizeEid(c.req.param("eid"));
+  const p = await readJson(c);
+  await writeGuard(c, eid);
+  schema("Presentation", p);
+  if (normalizeEid(String(p.eid)) !== eid) fail(422, "eid_mismatch", "presentation eid does not match the path");
+  const audiences = [`https://${c.env.REGISTRY_HOST}`, c.env.REGISTRY_HOST, REGISTRY_DID];
+  const v = await verifyPresentation(p, { audience: audiences.includes(p.audience) ? p.audience : audiences[0], nonce: p.nonce, resolver });
+  if (!v.ok) fail(422, "presentation_invalid", v.errors.join("; "));
+  // The entity picks the nonce (there is no challenge round trip); the registry accepts each one once.
+  if ((await bump(db, `pres:${await sha256Hex(p.nonce)}`, p.created.slice(0, 10))) > 1) fail(409, "nonce_reused", "each presentation nonce is accepted once");
+  const row = await db.first<{ enc_key: string }>("DELETE FROM custodial_keys WHERE eid = $1 RETURNING enc_key", [eid]);
+  if (!row) fail(404, "no_custodial_copy", "this registry keeps no key for this EID (never kept, or already exported)");
+  return c.json({
+    eid, private_key_jwk: await decryptKey(c.env, row!.enc_key), kept_copy: false,
+    next: "The registry no longer holds this key. Move to self-custody with a rotation Continuity Link (spec 9): openentity rotate --custody entity, or POST /v1/continuity.",
+  });
 });
 
 // ---------- entity reads ----------
@@ -527,6 +554,8 @@ app.post("/continuity", async (c) => {
     );
   } else stmts.push(["UPDATE entities SET predecessor_eid = $1, updated = $2 WHERE eid = $3", [previous, now, successor]]);
   stmts.push(["UPDATE entities SET successor_eid = $1, updated = $2 WHERE eid = $3", [successor, now, previous]]);
+  // The previous key no longer speaks for the entity, so a custodial copy of it has no use left (spec 10.6).
+  stmts.push(["DELETE FROM custodial_keys WHERE eid = $1", [previous]]);
   const idx = await sequenced(db, leaves, stmts);
   const lv = await refreshLevel(db, successor);
   return c.json({ previous, successor, basis: link.basis, level: LEVEL(lv.level), ...receipt(c, idx, l) }, 201);
