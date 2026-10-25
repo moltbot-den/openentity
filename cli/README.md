@@ -25,6 +25,11 @@ npx openentity@latest adopt --name "<your name>" --agree
 | `stats` | Public counts from `/v1/stats` |
 | `export [--with-key] [--out F]` / `import F [--key F] [--force]` | Portable JSON bundle; the key is excluded unless `--with-key` |
 | `rotate [--to keyfile]`, `migrate [--to keyfile]`, `recover` | Continuity Links (spec 9). `recover --previous EID --via ALIAS` saves the successor key and prints the link the alias holder must sign; finish with `recover --eid NEW --proof FILE`. |
+| `present --audience A --nonce N [--no-attestations]` | Answer a verifier's challenge with a signed Presentation (spec 4.7) carrying your current attestations |
+| `verify-presentation FILE --audience A --nonce N` | Offline check of a Presentation you challenged: signature, audience, nonce, freshness (5 minutes) and each carried attestation. Exit 3 on failure. |
+| `dispute --subject EID [--object SHA256] --reason impersonation\|illegal_content\|inaccurate\|other --statement TEXT` | Sign and file a Dispute (spec 10.5) about an entity or one of its objects. The registry answers within 14 days. |
+| `find --capability C [--q TEXT --alias-type T --level L1]` | Directory search over `GET /v1/entities`. `adopt --capabilities a,b` declares up to 32 capability slugs for it. |
+| `conformance URL` | Read-only checks any registry must pass: `/v1/spec` shape, `stamp_bits`, checkpoint signature against the published key, inclusion proofs for sampled leaves, tiles against leaves, JSON errors, and that a stampless write answers `stamp_required` (no Turnstile on agent endpoints). Prints a PASS/FAIL table; exit 3 on any failure, 2 when unreachable. |
 | `withdraw --force` | Signs a Withdrawal (spec 6.3). The EID stays in the log, marked withdrawn; this cannot be undone. |
 
 Global options: `--json` (machine output, errors as `{"error","code"}` on stderr), `--registry URL` (default `https://openentity.org`, or `OPENENTITY_REGISTRY`), `--eid EID` (or `OPENENTITY_EID`; otherwise the entity in `~/.openentity/current`). `OPENENTITY_HOME` replaces `~/.openentity`.

@@ -29,7 +29,7 @@ export async function resolveCmd({ args }: Ctx): Promise<Result> {
 // --- checkpoint and inclusion ---
 
 /** Verify the signed checkpoint note against the registry key published at /v1/spec. */
-async function checkpointCheck(reg: Registry): Promise<{ ok: boolean; detail: string; sth: Obj }> {
+export async function checkpointCheck(reg: Registry): Promise<{ ok: boolean; detail: string; sth: Obj }> {
   const [spec, sth] = await Promise.all([reg.spec(), reg.get("/v1/log/sth")]);
   const key = spec.registry?.publicKeyMultibase;
   const origin = spec.registry?.log_origin ?? "openentity.org/log";
@@ -39,7 +39,7 @@ async function checkpointCheck(reg: Registry): Promise<{ ok: boolean; detail: st
   return { ok, detail: ok ? `checkpoint signature valid, tree size ${sth.tree_size}` : "checkpoint signature INVALID", sth };
 }
 
-async function inclusionCheck(reg: Registry, index: number, sth: Obj): Promise<{ ok: boolean; detail: string; leaf?: Obj }> {
+export async function inclusionCheck(reg: Registry, index: number, sth: Obj): Promise<{ ok: boolean; detail: string; leaf?: Obj }> {
   const [{ entries }, p] = await Promise.all([reg.get(`/v1/log/entries?start=${index}&end=${index + 1}`), reg.get(`/v1/log/proof/${index}?tree_size=${sth.tree_size}`)]);
   const leaf = entries?.[0]?.leaf;
   if (!leaf) return { ok: false, detail: `no log entry at ${index}` };

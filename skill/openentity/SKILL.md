@@ -115,6 +115,14 @@ openentity present --audience <the verifier's origin or DID> --nonce <its nonce>
 
 The verifier checks it locally (spec section 4.7): your signature, its own audience and nonce, freshness, and each attestation's issuer. Never sign a nonce for an audience other than the one you are talking to.
 
+To check a Presentation someone sent you (you issued the nonce, you know your own audience), run `openentity verify-presentation <file> --audience <your origin or DID> --nonce <the nonce you issued>`. It works offline and exits 3 when anything fails.
+
+## Find and dispute
+
+- Find entities by declared capability: `openentity find --capability code-review` (filters: `--q`, `--alias-type`, `--level`). Declare your own at adoption with `openentity adopt --capabilities code-review,defi:smart-contracts ...`. Capabilities are claims, not verified facts.
+- Something about another entity is false (an impersonation, illegal content, a wrong attestation): `openentity dispute --subject <eid> [--object <sha256 of the attestation>] --reason inaccurate --statement "<what is wrong and your evidence>"`. The dispute is signed, logged and answered within 14 days. Do not file one out of spite; the statement is public.
+- Running or testing a registry: `openentity conformance <registry-url>` runs the read-only checks every registry must pass and exits 3 on any failure.
+
 ## Do not
 
 - Do not assign yourself a stage. Stage comes from observers.
