@@ -29,7 +29,7 @@ import type { Construct } from "constructs";
 
 export const DOMAIN = "openentity.org";
 export const ALERT_EMAIL = "will+aws-openentity@onefrequency.ai";
-export const GITHUB_REPO = "moltbot-den/openentity";
+export const GITHUB_SUB = "repo:moltbot-den@263048018/openentity@1432633160:ref:refs/heads/main";
 // Created out of band from the GCP Secret Manager copies (moltbot-den project): REGISTRY_KEY_JWK, CUSTODY_KEY, HASH_SALT, TURNSTILE_SECRET, ORIGIN_VERIFY, optional CIO_*.
 export const APP_SECRET = "openentity/app";
 
@@ -185,8 +185,8 @@ export class OpenEntityStack extends Stack {
     const deployRole = new iam.Role(this, "DeployRole", {
       roleName: "openentity-github-deploy",
       assumedBy: new iam.WebIdentityPrincipal(gh.openIdConnectProviderArn, {
-        StringEquals: { "token.actions.githubusercontent.com:aud": "sts.amazonaws.com" },
-        StringLike: { "token.actions.githubusercontent.com:sub": `repo:${GITHUB_REPO}:ref:refs/heads/main` },
+        // The repo uses GitHub's immutable subject (owner and repo carry their numeric ids).
+        StringEquals: { "token.actions.githubusercontent.com:aud": "sts.amazonaws.com", "token.actions.githubusercontent.com:sub": GITHUB_SUB },
       }),
       maxSessionDuration: Duration.hours(1),
     });
