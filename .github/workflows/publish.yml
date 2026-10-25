@@ -1,0 +1,30 @@
+name: publish
+# npm trusted publishing (OIDC): no npm token in the repo. Each package's trusted publisher on
+# npmjs.com points at this repo and this workflow file.
+on:
+  workflow_dispatch:
+    inputs:
+      package:
+        description: Package directory to publish
+        type: choice
+        options: [cli, sdk/ts]
+permissions:
+  id-token: write
+  contents: read
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+      - run: npm install -g npm@^11.5.1
+      - run: pnpm install --frozen-lockfile
+      - run: bash scripts/verify.sh
+      # pnpm pack applies publishConfig and rewrites workspace: ranges; npm publish does the OIDC exchange.
+      - working-directory: ${{ inputs.package }}
+        run: pnpm pack --pack-destination "$RUNNER_TEMP" && npm publish "$RUNNER_TEMP"/*.tgz --access public
