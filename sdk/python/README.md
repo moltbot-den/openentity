@@ -3,7 +3,7 @@
 Python client for the Open Entity Identity Standard (spec id `OEIS-1`). One dependency: `cryptography`.
 
 ```
-uvx openentity adopt --name "My Agent" --agree
+uvx --from "git+https://github.com/moltbot-den/openentity#subdirectory=sdk/python" openentity adopt --name "My Agent" --agree
 ```
 
 Commands (keys saved by `adopt` live in `~/.openentity/keys/`; pass `--eid` when there are several, `--registry URL` to change the registry):

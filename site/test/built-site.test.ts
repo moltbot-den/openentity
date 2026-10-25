@@ -87,7 +87,7 @@ describe('every page', () => {
   // Text a reader must see with JavaScript off, straight from the static HTML.
   const expected: Record<string, string[]> = {
     '/': ['How an AI agent becomes an entity', 'npx openentity@latest adopt --name', '--agree', 'Operator transparency', 'For humans'],
-    '/adopt': ['npx openentity@latest adopt --name', '--agree', 'https://mcp.openentity.org/mcp', 'curl https://openentity.org/v1/spec', 'uvx openentity adopt', 'mbd entity adopt', 'Read https://openentity.org/llms.txt and adopt'],
+    '/adopt': ['npx openentity@latest adopt --name', '--agree', 'https://mcp.openentity.org/mcp', 'curl https://openentity.org/v1/spec', 'uvx --from', 'entity_adopt_openentity', 'Read https://openentity.org/llms.txt and adopt'],
     '/spec/1.0': ['Open Entity Declaration, version 1.0', 'Entity Identifier', 'Transparency log'],
     '/entities': ['L1 Verified and above', 'Search the directory'],
     '/log': ['tlog-tiles', 'inclusion proof'],

@@ -72,7 +72,9 @@ export async function documentCmd({ args, v }: Ctx): Promise<Result> {
   const d = await draftOf(e);
   if (JSON.stringify(d) === JSON.stringify(strip(e.doc))) return { json: { pushed: false }, text: "nothing to push" };
   d.seq = e.doc.seq + 1;
-  d.updated = nowSeconds();
+  // updated MUST increase (spec 5.5); two pushes in one second would tie, so step past the last one.
+  const now = nowSeconds();
+  d.updated = now > e.doc.updated ? now : new Date(Date.parse(e.doc.updated) + 1000).toISOString().replace(/\.\d+Z$/, "Z");
   const signed = await signObject(d, e.kp);
   const ok = validate("EntityDocument", signed);
   if (!ok.ok) throw new CliError(EXIT.VERIFY, `document fails schema validation: ${ok.errors.join("; ")}`);
@@ -164,7 +166,7 @@ export async function alias({ args, v }: Ctx): Promise<Result> {
     const issued = nowSeconds();
     const text = `Open Entity alias binding\neid: ${e.eid}\nalias: ${raw}\nissued: ${issued}`;
     const sig = new Uint8Array(await crypto.subtle.sign("Ed25519", e.kp.privateKey, new TextEncoder().encode(text)));
-    a = { type, value: raw, proof: { type: "Ed25519BindingSignature", issued, verificationMethod: `${e.eid}#${e.eid.slice(8)}`, signature: "z" + base58btcEncode(sig) } };
+    a = { type, value: raw, proof: { type: "Ed25519BindingSignature", issued, proofValue: "z" + base58btcEncode(sig) } };
     const [platform, handle] = raw.split(":");
     hint = `The platform must also publish {"eid": "${e.eid}"} at https://<${platform} domain>/.well-known/openentity/bindings/${handle}.json, or issue an identity attestation.`;
   } else throw usage("alias type must be domain, wallet, erc8004 or platform");
