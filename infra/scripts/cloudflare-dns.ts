@@ -1,11 +1,12 @@
 // Idempotent Cloudflare DNS writer for openentity.org. Every record it writes is DNS-only.
-//   tsx scripts/cloudflare-dns.ts validation   # ACM validation CNAME; polls until the cert is issued
-//   tsx scripts/cloudflare-dns.ts apex         # openentity.org -> CloudFront (replaces the old Worker record)
+//   tsx scripts/cloudflare-dns.ts validation   # ACM validation CNAMEs for openentity.org and mcp.openentity.org; polls until both certs are issued
+//   tsx scripts/cloudflare-dns.ts apex         # openentity.org and mcp.openentity.org -> their CloudFront distributions (replaces the old Worker record)
 // Needs: aws CLI (profile openentity) and gcloud (reads the Cloudflare token at runtime; never written out).
 import { execFileSync } from "node:child_process";
 
 const ZONE = "029c9b190e8777ad33c216b9857c674a";
 const DOMAIN = "openentity.org";
+const MCP = "mcp.openentity.org";
 const CF = `https://api.cloudflare.com/client/v4/zones/${ZONE}/dns_records`;
 
 const run = (cmd: string, args: string[]) => execFileSync(cmd, args, { encoding: "utf8" }).trim();
@@ -30,22 +31,31 @@ async function upsert(type: string, name: string, content: string) {
 }
 
 async function validation() {
-  for (const deadline = Date.now() + 20 * 60_000; Date.now() < deadline; await new Promise((r) => setTimeout(r, 15_000))) {
-    const cert = aws("acm", "list-certificates").CertificateSummaryList.find((c: any) => c.DomainName === DOMAIN && c.Status !== "FAILED");
-    if (!cert) continue;
-    const d = aws("acm", "describe-certificate", "--certificate-arn", cert.CertificateArn).Certificate;
-    if (d.Status === "ISSUED") return console.log("certificate issued");
-    for (const o of d.DomainValidationOptions ?? []) if (o.ResourceRecord) await upsert("CNAME", o.ResourceRecord.Name, o.ResourceRecord.Value);
+  const pending = new Set([DOMAIN, MCP]);
+  for (const deadline = Date.now() + 20 * 60_000; pending.size && Date.now() < deadline; await new Promise((r) => setTimeout(r, 15_000))) {
+    for (const name of pending) {
+      const cert = aws("acm", "list-certificates").CertificateSummaryList.find((c: any) => c.DomainName === name && c.Status !== "FAILED");
+      if (!cert) continue;
+      const d = aws("acm", "describe-certificate", "--certificate-arn", cert.CertificateArn).Certificate;
+      if (d.Status === "ISSUED") {
+        pending.delete(name);
+        console.log(`certificate issued: ${name}`);
+        continue;
+      }
+      for (const o of d.DomainValidationOptions ?? []) if (o.ResourceRecord) await upsert("CNAME", o.ResourceRecord.Name, o.ResourceRecord.Value);
+    }
   }
-  throw new Error("certificate not issued within 20 min");
+  if (pending.size) throw new Error(`certificate not issued within 20 min: ${[...pending].join(", ")}`);
 }
 
 async function apex() {
   const outputs = aws("cloudformation", "describe-stacks", "--stack-name", "OpenEntity").Stacks[0].Outputs;
-  const target = outputs.find((o: any) => o.OutputKey === "DistributionDomain").OutputValue;
+  const out = (k: string) => outputs.find((o: any) => o.OutputKey === k).OutputValue;
+  const target = out("DistributionDomain");
   // The old Workers custom-domain record (AAAA 100::) would shadow the CNAME; remove it first.
   for (const r of await cf(`?name=${DOMAIN}`)) if (r.type === "AAAA" || r.type === "A") await cf(`/${r.id}`, { method: "DELETE" });
   await upsert("CNAME", DOMAIN, target);
+  await upsert("CNAME", MCP, out("McpDistributionDomain"));
 }
 
 const phase = process.argv[2];

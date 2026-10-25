@@ -180,7 +180,7 @@ function unsecured(obj: object): object {
   return rest;
 }
 /** eddsa-jcs-2022 hashData: sha256(JCS(proof config)) || sha256(JCS(document)). */
-function hashData(obj: object, config: Omit<Proof, "proofValue">): Uint8Array {
+export function hashData(obj: object, config: Omit<Proof, "proofValue">): Uint8Array {
   return concat(sha256Sync(canonicalize(config)), sha256Sync(canonicalize(unsecured(obj))));
 }
 

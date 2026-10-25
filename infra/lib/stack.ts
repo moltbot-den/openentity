@@ -28,6 +28,7 @@ import {
 import type { Construct } from "constructs";
 
 export const DOMAIN = "openentity.org";
+export const MCP_DOMAIN = "mcp.openentity.org";
 export const ALERT_EMAIL = "will+aws-openentity@onefrequency.ai";
 export const GITHUB_SUB = "repo:moltbot-den@263048018/openentity@1432633160:ref:refs/heads/main";
 // Created out of band from the GCP Secret Manager copies (moltbot-den project): REGISTRY_KEY_JWK, CUSTODY_KEY, HASH_SALT, TURNSTILE_SECRET, ORIGIN_VERIFY, optional CIO_*.
@@ -177,6 +178,35 @@ export class OpenEntityStack extends Stack {
       additionalBehaviors: { "/_astro/*": immutable, "/pagefind/*": immutable },
     });
 
+    // ---- MCP edge: mcp.openentity.org is a second distribution on the same Lambda ----
+    // CloudFront cannot forward the viewer Host to a function URL, so this origin adds x-oe-site and the handler routes on it.
+    // Its own certificate keeps the openentity.org certificate untouched.
+    const mcpCert = new acm.Certificate(this, "McpCert", {
+      domainName: MCP_DOMAIN,
+      validation: acm.CertificateValidation.fromDns(),
+    });
+    const mcpOrigin = new origins.FunctionUrlOrigin(url, {
+      customHeaders: {
+        "x-origin-verify": SecretValue.secretsManager(APP_SECRET, { jsonField: "ORIGIN_VERIFY" }).unsafeUnwrap(),
+        "x-oe-site": "mcp",
+      },
+    });
+    const mcpForward = new cf.OriginRequestPolicy(this, "McpForward", {
+      headerBehavior: cf.OriginRequestHeaderBehavior.allowList(
+        "Accept", "Content-Type", "User-Agent", "Mcp-Session-Id", "Mcp-Protocol-Version", "Last-Event-ID",
+        "CloudFront-Viewer-Address", "CloudFront-Viewer-Country",
+      ),
+      queryStringBehavior: cf.OriginRequestQueryStringBehavior.all(),
+      cookieBehavior: cf.OriginRequestCookieBehavior.none(),
+    });
+    const mcpDist = new cf.Distribution(this, "McpDist", {
+      domainNames: [MCP_DOMAIN],
+      certificate: mcpCert,
+      minimumProtocolVersion: cf.SecurityPolicyProtocol.TLS_V1_2_2021,
+      httpVersion: cf.HttpVersion.HTTP2_AND_3,
+      defaultBehavior: { ...dynamic, origin: mcpOrigin, originRequestPolicy: mcpForward },
+    });
+
     // ---- CI: GitHub Actions deploys from main through OIDC ----
     const gh = new iam.OpenIdConnectProvider(this, "GitHubOidc", {
       url: "https://token.actions.githubusercontent.com",
@@ -222,6 +252,8 @@ export class OpenEntityStack extends Stack {
     const out = (k: string, v: string) => new CfnOutput(this, k, { value: v });
     out("DistributionDomain", dist.distributionDomainName);
     out("DistributionId", dist.distributionId);
+    out("McpDistributionDomain", mcpDist.distributionDomainName);
+    out("McpDistributionId", mcpDist.distributionId);
     out("FunctionName", fn.functionName);
     out("DbClusterArn", db.clusterArn);
     out("DbSecretArn", db.secret!.secretArn);

@@ -25,6 +25,7 @@ async function main() {
   await cp(join(repo, 'spec/declaration-1.0.txt'), join(pub, 'spec/declaration/1.0.txt'));
   await cp(join(repo, 'spec/declaration-1.0.sha256'), join(pub, 'spec/declaration/1.0.sha256'));
   await cp(join(repo, 'spec/schemas/openentity-1.0.json'), join(pub, 'spec/1.0.json'));
+  await cp(join(repo, 'spec/OEIS-1.md'), join(pub, 'spec/OEIS-1.md')); // raw text for the MCP openentity_read tool
 
   // /skill/: the skill directory as-is.
   await rm(join(pub, 'skill'), { recursive: true, force: true });

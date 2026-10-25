@@ -37,6 +37,19 @@ test("CloudFront serves openentity.org, forwards the viewer address and the stam
   });
 });
 
+test("mcp.openentity.org is its own distribution and certificate on the same function URL, tagged with x-oe-site, never cached", () => {
+  t.hasResourceProperties("AWS::CertificateManager::Certificate", { DomainName: "mcp.openentity.org", ValidationMethod: "DNS" });
+  t.hasResourceProperties("AWS::CertificateManager::Certificate", { DomainName: "openentity.org" });
+  const dists = Object.values(t.findResources("AWS::CloudFront::Distribution")) as any[];
+  const mcp = dists.find((d) => d.Properties.DistributionConfig.Aliases?.[0] === "mcp.openentity.org");
+  const main = dists.find((d) => d.Properties.DistributionConfig.Aliases?.[0] === "openentity.org");
+  const header = (d: any) => d.Properties.DistributionConfig.Origins[0].OriginCustomHeaders.map((h: any) => h.HeaderName);
+  expect(header(mcp)).toEqual(expect.arrayContaining(["x-origin-verify", "x-oe-site"]));
+  expect(header(main)).not.toContain("x-oe-site");
+  expect(mcp.Properties.DistributionConfig.DefaultCacheBehavior.CachePolicyId).toBe("4135ea2d-6df8-44a3-9df3-4b5a84be39ad");
+  expect(Object.keys(t.findOutputs("McpDistributionDomain"))).toEqual(["McpDistributionDomain"]);
+});
+
 test("CI can deploy only from main of the public repo", () => {
   t.hasResourceProperties("AWS::IAM::Role", {
     AssumeRolePolicyDocument: Match.objectLike({

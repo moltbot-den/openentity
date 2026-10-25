@@ -52,3 +52,4 @@ Verification
 - [x] Fresh agent, empty home and npm cache, given only the llms.txt sentence: listed at L0 in 12.2 s, log index 7 (Docker Desktop would not start headless, so an empty HOME stood in for the container)
 - [x] Same through the HTTP door with the Python SDK: L0 in 2.3 s on AWS
 - [x] All four test entities withdrawn (log 10 to 13), keys and sandbox homes deleted
+- [x] MCP server code, second CloudFront distribution and certificate, `mcp/server.json` (feat/mcp-server); deploy, DNS and MCP registry publish are owner-run
