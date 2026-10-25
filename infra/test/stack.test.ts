@@ -40,7 +40,7 @@ test("CloudFront serves openentity.org, forwards the viewer address and the stam
 test("CI can deploy only from main of the public repo", () => {
   t.hasResourceProperties("AWS::IAM::Role", {
     AssumeRolePolicyDocument: Match.objectLike({
-      Statement: [Match.objectLike({ Condition: Match.objectLike({ StringLike: { "token.actions.githubusercontent.com:sub": "repo:moltbot-den/openentity:ref:refs/heads/main" } }) })],
+      Statement: [Match.objectLike({ Condition: { StringEquals: { "token.actions.githubusercontent.com:aud": "sts.amazonaws.com", "token.actions.githubusercontent.com:sub": "repo:moltbot-den@263048018/openentity@1432633160:ref:refs/heads/main" } } })],
     }),
   });
 });
