@@ -49,6 +49,7 @@ async function readJson(c: C, stamped = true): Promise<any> {
   try { return JSON.parse(text); } catch { return fail(400, "bad_json", "body is not valid JSON"); }
 }
 const salted = (env: Env, s: string) => sha256Hex(`${env.HASH_SALT ?? "openentity-dev-salt"}:${s}`);
+const IP_SHARDS = 8;
 const UPSERT = "ON CONFLICT (key, window_start) DO UPDATE SET count = rate_events.count + excluded.count RETURNING key, count";
 /** Adds n to a counter and returns the new total. */
 async function bump(db: Db, key: string, window: string, n = 1): Promise<number> {
@@ -68,11 +69,19 @@ async function writeGuard(c: C, eid: string) {
   const err = await checkStamp(stamp!, Number(env.STAMP_BITS), eid);
   if (err) fail(400, "stamp_invalid", err);
   const ip = await salted(env, clientIp(c)), now = nowIso();
-  // Fixed row order (day, minute, stamp) so concurrent writes from one IP lock the counters in the same order.
-  const counts = new Map((await env.db.all<{ key: string; count: number }>(
-    `INSERT INTO rate_events (key, window_start, count) VALUES ($1, $2, 1), ($3, $4, 1), ($5, $6, 1) ${UPSERT}`,
-    [`ip:${ip}`, now.slice(0, 10), `ipm:${ip}`, now.slice(0, 16), `stamp:${await sha256Hex(stamp!)}`, stamp!.split(":")[2].slice(0, 10)],
-  )).map((r) => [r.key.split(":")[0], r.count]));
+  // One IP's counters are split over IP_SHARDS rows and summed: a single row per IP made every write from that IP
+  // queue on one row lock (about 220 ms each at 100 writes/s on Aurora). A shard's write locks its own row; the
+  // others are read as last committed, so concurrent writes can pass a limit by the number in flight.
+  // The output columns are computed, which also spares the Data API a catalog lookup per call.
+  const s = Math.floor(Math.random() * IP_SHARDS), others = (p: string) => Array.from({ length: IP_SHARDS }, (_, t) => `${p}:${ip}:${t}`).filter((_, t) => t !== s);
+  const day = others("ip"), minute = others("ipm"), list = (from: number) => day.map((_, k) => `$${from + k}`).join(", ");
+  // Fixed row order (day, minute, stamp) so concurrent writes on one shard lock the counters in the same order.
+  const counts = new Map((await env.db.all<{ k: string; n: number }>(
+    `WITH up AS (INSERT INTO rate_events (key, window_start, count) VALUES ($1, $2, 1), ($3, $4, 1), ($5, $6, 1) ${UPSERT})
+SELECT split_part(key, ':', 1) AS k, CAST(sum(count) AS BIGINT) AS n FROM (SELECT key, count FROM up UNION ALL
+SELECT key, count FROM rate_events WHERE (window_start = $2 AND key IN (${list(7)})) OR (window_start = $4 AND key IN (${list(7 + day.length)}))) x GROUP BY 1`,
+    [`ip:${ip}:${s}`, now.slice(0, 10), `ipm:${ip}:${s}`, now.slice(0, 16), `stamp:${await sha256Hex(stamp!)}`, stamp!.split(":")[2].slice(0, 10), ...day, ...minute],
+  )).map((r) => [r.k, Number(r.n)]));
   const daily = Number(env.IP_DAILY_LIMIT ?? LIMITS.writes_per_ip_per_day), perMinute = Number(env.WRITE_PER_MINUTE ?? LIMITS.writes_per_ip_per_minute);
   if (counts.get("ipm")! > perMinute) fail(429, "rate_limited", `at most ${perMinute} writes per minute per IP`);
   if (counts.get("ip")! > daily) fail(429, "rate_limited", `at most ${daily} writes per day per IP`);

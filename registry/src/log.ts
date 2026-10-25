@@ -12,20 +12,22 @@ export async function leafFor(type: string, eid: string, objectSha256: string, r
 }
 
 export type Stmt = [sql: string, params: unknown[]];
-const PENDING: [table: string, col: string][] = [
-  ["declarations", "log_index"], ["documents", "log_index"], ["entities", "adopted_log_index"], ["aliases", "log_index"],
-  ["record_entries", "log_index"], ["attestations", "log_index"], ["continuity_links", "log_index"], ["disputes", "log_index"],
-];
-
 /**
  * Group commit, step 1 and 2. Step 1 runs `stmts` and parks `leaves` in log_pending as ONE statement with no
  * log_head lock: atomic (a unique guard or crash leaves nothing behind) and fully parallel. In it, `$i` is a
  * negative placeholder log index (`$i + k` for the k-th leaf) that step 2 rewrites to the real index. Step 2,
- * `sequence`, moves every pending leaf, this write's and everyone else's, into the log under one head lock.
- * Returns the index of this write's first leaf.
+ * `sequence`, moves every pending leaf, this write's and everyone else's, into the log under the log_head lock.
+ * Only one sequencer runs at a time; a write that finds it busy polls until its leaves have an index (the busy
+ * sequencer, or the next one, takes them). Returns the index of this write's first leaf.
  */
-export async function sequenced(db: Db, leaves: Leaf[], stmts: Stmt[]): Promise<number> {
-  return (await sequence(db, await park(db, leaves, stmts)))!;
+export async function sequenced(db: Db, leaves: Leaf[], stmts: Stmt[], sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))): Promise<number> {
+  const wid = await park(db, leaves, stmts);
+  for (const end = Date.now() + 15_000; Date.now() < end;) { // a sequencer holds the lock for tens of milliseconds
+    const i = await sequence(db, wid);
+    if (i !== undefined) return i;
+    await sleep(20 + Math.random() * 20);
+  }
+  throw new Error(`write ${wid} was not sequenced`); // it stays parked; the next sequencer or the cron takes it
 }
 type Leaf = { leaf: object; leaf_hash: string };
 
@@ -46,28 +48,13 @@ export async function park(db: Db, leaves: Leaf[], stmts: Stmt[]): Promise<numbe
 }
 
 /**
- * Step 2. One statement: delete all pending leaves (rows another sequencer already took are skipped once its
- * transaction ends), take their indexes from log_head in one bump, insert them into log_leaves in write order
- * (a write's leaves stay consecutive), and replace the placeholder indexes. Atomic, so the log has no gap or
- * phantom leaf. Returns the first index of write `wid` if this statement moved it, else looks it up (another
- * sequencer moved it, and by then has committed). Without `wid` it just drains the queue.
+ * Step 2 (`log_sequence` in schema.sql): move every pending leaf into the log if no other sequencer holds log_head.
+ * Returns the first index of write `wid` once it is in the log, else undefined (the sequencer was busy).
+ * Without `wid` it just drains the queue.
  */
 export async function sequence(db: Db, wid?: number): Promise<number | undefined> {
-  const fills = PENDING.map(([t, c], k) => `u${k} AS (UPDATE ${t} SET ${c} = n.idx FROM n WHERE ${t}.${c} < 0 AND ${t}.${c} = -n.wid * 1024 + n.o)`);
-  const own = await db.first<{ i: number }>(
-    `WITH mv AS (DELETE FROM log_pending RETURNING *),
-c AS (SELECT count(*) AS k FROM mv),
-h AS (UPDATE log_head SET next = next + (SELECT k FROM c) WHERE id = 1 AND (SELECT k FROM c) > 0 RETURNING next - (SELECT k FROM c) AS b),
-n AS (SELECT m.*, h.b + row_number() OVER (ORDER BY m.g, m.o) - 1 AS idx FROM (SELECT mv.*, min(seq) OVER (PARTITION BY wid) AS g FROM mv) m, h),
-l AS (INSERT INTO log_leaves (idx, leaf_hash, type, eid, object_sha256, received_at, wid) SELECT idx, leaf_hash, type, eid, object_sha256, received_at, wid FROM n),
-${fills.join(",\n")}
-SELECT min(idx) AS i FROM n WHERE wid = $1`,
-    [wid ?? 0],
-  );
-  if (wid === undefined) return undefined;
-  const i = own?.i ?? (await db.first<{ i: number }>("SELECT min(idx) AS i FROM log_leaves WHERE wid = $1", [wid]))?.i;
-  if (i == null) throw new Error(`write ${wid} was not sequenced`);
-  return Number(i);
+  const i = (await db.first<{ i: number | null }>("SELECT log_sequence(CAST($1 AS BIGINT)) AS i", [wid ?? null]))?.i;
+  return wid === undefined || i == null ? undefined : Number(i);
 }
 
 let cachedKey: { jwk: string; kp: KeyPair } | undefined;
@@ -143,7 +130,8 @@ export async function incorporate(env: Env, maxLeaves = 5000): Promise<number> {
   const db = env.db;
   await sequence(db); // picks up leaves a crashed write left pending
   const old = await latestSize(db);
-  const rows = await db.all<LeafRow>("SELECT idx, leaf_hash, type, eid, object_sha256, received_at FROM log_leaves WHERE idx >= $1 ORDER BY idx LIMIT $2", [old, maxLeaves]);
+  // Two columns only: 5000 full rows passed the Data API's 1 MB result limit.
+  const rows = await db.all<Pick<LeafRow, "idx" | "leaf_hash">>("SELECT idx, leaf_hash FROM log_leaves WHERE idx >= $1 ORDER BY idx LIMIT $2", [old, maxLeaves]);
   let size = old;
   for (const r of rows) { if (r.idx !== size) break; size++; }
   if (size === old) return old;

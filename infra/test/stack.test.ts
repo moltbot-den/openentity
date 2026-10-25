@@ -84,6 +84,13 @@ test("the load copy never signs with the production key, has no Object Lock, no 
   l.hasResourceProperties("AWS::Lambda::Function", { Environment: { Variables: Match.objectLike({ WRITE_PER_MINUTE: "10000000" }) } });
 });
 
+test("production keeps 200 reserved concurrent executions and the load copy is capped at 300", () => {
+  const appFn = (tpl: Template) => Object.values(tpl.findResources("AWS::Lambda::Function", { Properties: { Runtime: "nodejs22.x" } })).find((f: any) => f.Properties.Environment?.Variables?.DB_CLUSTER_ARN) as any;
+  const l = Template.fromStack(new OpenEntityStack(new App({ context: { "aws:cdk:bundling-stacks": [] } }), "L", { env: { account: "099705791378", region: "us-east-1" }, load: true }));
+  expect(appFn(t).Properties.ReservedConcurrentExecutions).toBe(200);
+  expect(appFn(l).Properties.ReservedConcurrentExecutions).toBe(300);
+});
+
 test("the app role can read and append to the log bucket but never delete from it", () => {
   const json = JSON.stringify(t.findResources("AWS::IAM::Policy"));
   expect(json).toContain("s3:PutObject");

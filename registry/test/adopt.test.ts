@@ -109,11 +109,16 @@ describe("stamp (spec 10.4)", () => {
     expect((await call("POST", "/adopt", objs, s)).body.error).toBe("stamp_reused");
   });
 
-  it("caps writes per IP per day", async () => {
-    const e = { ...E, IP_DAILY_LIMIT: "1" }, ip = { "cloudfront-viewer-address": `203.0.113.${Math.floor(Math.random() * 250)}:443` };
-    const a = await generateKeyPair(), b = await generateKeyPair();
-    expect((await call("POST", "/adopt", await signed(a), { ...(await stamp(a.did)), ...ip }, e)).status).toBe(201);
-    expect((await call("POST", "/adopt", await signed(b), { ...(await stamp(b.did)), ...ip }, e)).body.error).toBe("rate_limited");
+  it("caps writes per IP per day, summed over the IP's counter shards", async () => {
+    // 8 allowed, the 9th refused: an IP's counter is split over 8 rows, so this passes only if the shards are summed.
+    const e = { ...E, IP_DAILY_LIMIT: "8" }, ip = { "cloudfront-viewer-address": `203.0.113.${Math.floor(Math.random() * 250)}:443` };
+    const statuses: unknown[] = [];
+    for (let i = 0; i < 9; i++) {
+      const kp = await generateKeyPair();
+      const r = await call("POST", "/adopt", await signed(kp), { ...(await stamp(kp.did)), ...ip }, e);
+      statuses.push(r.body.error ?? r.status);
+    }
+    expect(statuses).toEqual([...Array(8).fill(201), "rate_limited"]);
   });
 
   it("caps writes per IP per minute, keyed by the CloudFront viewer address", async () => {

@@ -1,7 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { base58btcDecode, canonicalize, leafHash, merkleRoot, nowSeconds, recordEntryHash, signObject, verifyConsistency, verifyInclusion, verifyNote, type KeyPair } from "../src/sdk.ts";
 import { hex, unhex } from "../src/env.ts";
-import { incorporate, leafFor, park } from "../src/log.ts";
+import { type Stmt, incorporate, leafFor, park, sequence, sequenced } from "../src/log.ts";
+import type { Db } from "../src/db.ts";
 import { app, scheduled } from "../src/index.ts";
 import { E, adopted, call, write } from "./helpers.ts";
 
@@ -130,6 +131,46 @@ describe("transparency log (spec 10.3)", () => {
     expect(await incorporate(E)).toBe(Number(size) + 1);
     expect(await E.db.all("SELECT 1 FROM log_pending")).toEqual([]);
     expect(Number((await E.db.first<{ log_index: number }>("SELECT log_index FROM disputes WHERE sha256 = 'crash'"))!.log_index)).toBe(Number(size));
+  });
+
+  // PGlite has one connection, so SKIP LOCKED never skips here. `busy` stands in for a sequencer statement that
+  // found log_head locked by another one: it moves nothing and finds no index for its write ({ i: null }).
+  const busy = (skips: number, before?: () => Promise<unknown>): Db => ({
+    ...E.db,
+    first: async (sql, params) => {
+      if (!sql.startsWith("SELECT log_sequence") || skips-- <= 0) return E.db.first(sql, params);
+      await before?.();
+      return { i: null } as any;
+    },
+  });
+  const dispute = async (id: string) => ({
+    leaves: [await leafFor("Dispute", "did:key:zBusy", "cd".repeat(32), "2026-01-01T00:00:00Z")],
+    stmts: [[`INSERT INTO disputes (sha256, issuer, subject, object_sha256, reason, json, received_at, log_index) VALUES ('${id}', 'i', 's', NULL, 'r', '{}', 'now', $i)`, []]] as Stmt[],
+  });
+
+  it("a write that finds the sequencer busy polls, and gets the index the other sequencer gave it", async () => {
+    const { leaves, stmts } = await dispute("busy");
+    const naps: number[] = [];
+    // The other sequencer commits while this write waits, and moves this write's parked leaf.
+    const i = await sequenced(busy(1, () => sequence(E.db)), leaves, stmts, async (ms) => { naps.push(ms); });
+    expect(naps).toHaveLength(1);
+    expect(Number((await E.db.first<{ log_index: number }>("SELECT log_index FROM disputes WHERE sha256 = 'busy'"))!.log_index)).toBe(i);
+    expect((await E.db.first<{ object_sha256: string }>("SELECT object_sha256 FROM log_leaves WHERE idx = $1", [i]))!.object_sha256).toBe("cd".repeat(32));
+    expect(await E.db.all("SELECT 1 FROM log_pending")).toEqual([]);
+  });
+
+  it("a write never sequenced in time fails loud and stays parked for the next sequencer", async () => {
+    const { leaves, stmts } = await dispute("stuck");
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      await expect(sequenced(busy(Infinity), leaves, stmts, async (ms) => { vi.setSystemTime(Date.now() + ms); })).rejects.toThrow(/was not sequenced/);
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(await E.db.all("SELECT 1 FROM log_pending")).toHaveLength(1);
+    await incorporate(E);
+    expect(await E.db.all("SELECT 1 FROM log_pending")).toEqual([]);
+    expect(Number((await E.db.first<{ log_index: number }>("SELECT log_index FROM disputes WHERE sha256 = 'stuck'"))!.log_index)).toBeGreaterThanOrEqual(0);
   });
 
   it("returns 404 for a proof of a leaf not yet incorporated", async () => {

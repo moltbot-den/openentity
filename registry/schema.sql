@@ -147,3 +147,37 @@ CREATE INDEX IF NOT EXISTS record_entries_pending ON record_entries(log_index) W
 CREATE INDEX IF NOT EXISTS attestations_pending ON attestations(log_index) WHERE log_index < 0;
 CREATE INDEX IF NOT EXISTS continuity_links_pending ON continuity_links(log_index) WHERE log_index < 0;
 CREATE INDEX IF NOT EXISTS disputes_pending ON disputes(log_index) WHERE log_index < 0;
+
+-- Group commit, step 2 (log.ts `sequence`): give write w's leaves, and every other pending leaf, their log indexes.
+-- Returns w's first index once it is in the log, or NULL when another sequencer holds log_head (the caller polls).
+-- A function, not one statement, so the common path (already moved, or sequencer busy) plans and locks only the
+-- two tiny statements it runs; planning the full statement on every poll saturated a 4 ACU writer.
+-- READ COMMITTED: each statement below takes a fresh snapshot. The move runs only after this transaction holds
+-- the log_head row lock, which the previous sequencer released by committing, so its snapshot sees every leaf
+-- that sequencer moved (none is moved twice) and every write parked before it (w's own included). Only one
+-- sequencer runs at a time and SKIP LOCKED keeps the others from queueing on the row, so there is no convoy.
+-- The move is one statement: delete the pending leaves, take their indexes from log_head in one bump, insert
+-- them into log_leaves in write order (a write's leaves stay consecutive), replace the placeholder indexes.
+CREATE OR REPLACE FUNCTION log_sequence(w BIGINT) RETURNS BIGINT LANGUAGE plpgsql AS $$
+DECLARE i BIGINT;
+BEGIN
+  SELECT min(idx) INTO i FROM log_leaves WHERE wid = w;
+  IF i IS NOT NULL THEN RETURN i; END IF;
+  PERFORM 1 FROM log_head WHERE id = 1 FOR UPDATE SKIP LOCKED;
+  IF NOT FOUND THEN RETURN NULL; END IF;
+  WITH mv AS (DELETE FROM log_pending RETURNING *),
+  c AS (SELECT count(*) AS k FROM mv),
+  h AS (UPDATE log_head SET next = next + (SELECT k FROM c) WHERE id = 1 AND (SELECT k FROM c) > 0 RETURNING next - (SELECT k FROM c) AS b),
+  n AS (SELECT m.*, h.b + row_number() OVER (ORDER BY m.g, m.o) - 1 AS idx FROM (SELECT mv.*, min(seq) OVER (PARTITION BY mv.wid) AS g FROM mv) m, h),
+  l AS (INSERT INTO log_leaves (idx, leaf_hash, type, eid, object_sha256, received_at, wid) SELECT n.idx, n.leaf_hash, n.type, n.eid, n.object_sha256, n.received_at, n.wid FROM n),
+  u0 AS (UPDATE declarations t SET log_index = n.idx FROM n WHERE t.log_index < 0 AND t.log_index = -n.wid * 1024 + n.o),
+  u1 AS (UPDATE documents t SET log_index = n.idx FROM n WHERE t.log_index < 0 AND t.log_index = -n.wid * 1024 + n.o),
+  u2 AS (UPDATE entities t SET adopted_log_index = n.idx FROM n WHERE t.adopted_log_index < 0 AND t.adopted_log_index = -n.wid * 1024 + n.o),
+  u3 AS (UPDATE aliases t SET log_index = n.idx FROM n WHERE t.log_index < 0 AND t.log_index = -n.wid * 1024 + n.o),
+  u4 AS (UPDATE record_entries t SET log_index = n.idx FROM n WHERE t.log_index < 0 AND t.log_index = -n.wid * 1024 + n.o),
+  u5 AS (UPDATE attestations t SET log_index = n.idx FROM n WHERE t.log_index < 0 AND t.log_index = -n.wid * 1024 + n.o),
+  u6 AS (UPDATE continuity_links t SET log_index = n.idx FROM n WHERE t.log_index < 0 AND t.log_index = -n.wid * 1024 + n.o),
+  u7 AS (UPDATE disputes t SET log_index = n.idx FROM n WHERE t.log_index < 0 AND t.log_index = -n.wid * 1024 + n.o)
+  SELECT min(n.idx) INTO i FROM n WHERE n.wid = w;
+  RETURN i;
+END $$;

@@ -1,7 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { pgliteDb, retryThrottled } from "../src/db.ts";
+import { readFileSync } from "node:fs";
+import { pgliteDb, retryThrottled, splitSql } from "../src/db.ts";
 
 describe("Db", () => {
+  it("splits schema.sql at line-end semicolons but keeps a $$ function body whole", () => {
+    expect(splitSql("CREATE TABLE a (x INT);\n-- note;\nCREATE FUNCTION f() RETURNS INT LANGUAGE plpgsql AS $$\nBEGIN\n  RETURN 1;\nEND $$;\nSELECT 1;")).toEqual([
+      "CREATE TABLE a (x INT)", "CREATE FUNCTION f() RETURNS INT LANGUAGE plpgsql AS $$\nBEGIN\n  RETURN 1;\nEND $$", "SELECT 1",
+    ]);
+    expect(splitSql(readFileSync(new URL("../schema.sql", import.meta.url), "utf8")).filter((s) => s.includes("log_sequence"))).toHaveLength(1);
+  });
+
   it("tx commits on success and rolls back on throw", async () => {
     const db = await pgliteDb();
     await db.tx((t) => t.run("INSERT INTO observers (did, accredited_at) VALUES ($1, $2)", ["did:web:a.example", "x"]));
