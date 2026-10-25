@@ -81,7 +81,8 @@ describe("openentity MCP server", () => {
 
     const eid = a.json.eid;
     const direct = await app.fetch(new Request(`https://openentity.org/v1/entities/${eid}`), env);
-    expect((await direct.json()).document.operator.name).toBe("Ada Labs");
+    const { operator } = (await direct.json()).document;
+    expect(operator).toMatchObject({ name: "Ada Labs", custody: "registry" }); // spec 10.6: the server made the key
 
     const rec = await tool("openentity_record", {
       eid, kind: "stance", private_key_jwk: a.json.private_key_jwk,

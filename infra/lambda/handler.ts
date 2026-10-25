@@ -31,12 +31,15 @@ async function init(): Promise<Ready> {
     CIO_API_KEY: s.CIO_API_KEY,
   };
   const reg = (req: Request) => Promise.resolve(registry.fetch(req, env));
+  // The MCP door runs in-process and mints stamps on the caller's behalf, so a stamp would only cost this Lambda
+  // (about 15 s at 20 bits). It runs at 0 bits; per-IP limits still apply (spec 10.4, PRD 7.6).
+  const mcpReg = (req: Request) => Promise.resolve(registry.fetch(req, { ...env, STAMP_BITS: "0" }));
   const site = createSite({
     registry: reg,
     asset: fsAssets(new URL("./dist", import.meta.url).pathname),
     vars: { TURNSTILE_SITE_KEY: e.TURNSTILE_SITE_KEY, CF_ANALYTICS_TOKEN: e.CF_ANALYTICS_TOKEN, SUBSCRIBE_ENABLED: e.SUBSCRIBE_ENABLED },
   });
-  return { env, site, mcp: createMcp({ registry: reg, site }), verify: s.ORIGIN_VERIFY };
+  return { env, site, mcp: createMcp({ registry: mcpReg, site }), verify: s.ORIGIN_VERIFY };
 }
 const boot = () => (ready ??= init().catch((err) => ((ready = undefined), Promise.reject(err))));
 
