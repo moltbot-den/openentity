@@ -134,8 +134,11 @@ export class OpenEntityStack extends Stack {
     });
     appSecret.grantRead(fn);
     db.grantDataApiAccess(fn);
-    logBucket.grantReadWrite(fn);
-    snapshotBucket?.grantReadWrite(fn);
+    // Read and put only: the log is append-only, so the app never needs to delete or overwrite history it cannot rebuild.
+    logBucket.grantRead(fn);
+    logBucket.grantPut(fn);
+    snapshotBucket?.grantRead(fn);
+    snapshotBucket?.grantPut(fn);
     const url = fn.addFunctionUrl({ authType: lambda.FunctionUrlAuthType.NONE });
 
     new scheduler.Schedule(this, "Cron", {

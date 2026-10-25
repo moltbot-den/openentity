@@ -69,3 +69,9 @@ test("the load copy never signs with the production key, has no Object Lock, no 
   l.hasResourceProperties("AWS::RDS::DBCluster", { DeletionProtection: false });
   l.hasResourceProperties("AWS::Lambda::Function", { Environment: { Variables: Match.objectLike({ WRITE_PER_MINUTE: "10000000" }) } });
 });
+
+test("the app role can read and append to the log bucket but never delete from it", () => {
+  const json = JSON.stringify(t.findResources("AWS::IAM::Policy"));
+  expect(json).toContain("s3:PutObject");
+  expect(json).not.toMatch(/s3:DeleteObject/);
+});
