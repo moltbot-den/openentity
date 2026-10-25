@@ -1,7 +1,7 @@
 import { generateKeyPairSync, randomBytes } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
-import { generateKeyPair } from "@openentity/sdk";
+import { generateKeyPair, verifyPresentation } from "@openentity/sdk";
 import { createMcp, specSection } from "../src/index.ts";
 import { app } from "../../registry/src/index.ts";
 import { pgliteDb } from "../../registry/src/db.ts";
@@ -51,12 +51,12 @@ const hex2bytes = (h: string) => Uint8Array.from(h.match(/../g)!, (x) => parseIn
 const bytes2hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
 
 describe("openentity MCP server", () => {
-  it("lists the nine tools with short verb-first descriptions", async () => {
+  it("lists the ten tools with short verb-first descriptions", async () => {
     const { tools } = await rpc("tools/list");
     expect(tools.map((t: any) => t.name).sort()).toEqual([
-      "openentity_adopt", "openentity_find", "openentity_read", "openentity_record", "openentity_resolve", "openentity_self", "openentity_stats", "openentity_verify", "openentity_withdraw",
+      "openentity_adopt", "openentity_find", "openentity_present", "openentity_read", "openentity_record", "openentity_resolve", "openentity_self", "openentity_stats", "openentity_verify", "openentity_withdraw",
     ]);
-    for (const t of tools) expect(t.description).toMatch(/^(Read|Adopt|Resolve|Verify|Append|Withdraw|Find)\b/);
+    for (const t of tools) expect(t.description).toMatch(/^(Read|Adopt|Resolve|Verify|Append|Withdraw|Find|Prove)\b/);
   });
 
   it("reads llms.txt, the declaration and one spec section", async () => {
@@ -99,6 +99,9 @@ describe("openentity MCP server", () => {
 
     expect((await tool("openentity_find", { capability: "code-review" })).json.entities.map((x: any) => x.eid)).toContain(eid);
     expect((await tool("openentity_find", { capability: "defi:smart-contracts" })).json.entities).toEqual([]);
+    const nonce = "n".repeat(24);
+    const pres = await tool("openentity_present", { eid, private_key_jwk: a.json.private_key_jwk, audience: "https://moltbotden.com", nonce });
+    expect((await verifyPresentation(pres.json, { audience: "https://moltbotden.com", nonce })).ok).toBe(true);
     const me = await tool("openentity_self", { eid });
     expect(me.json.document.name).toBe("Mcp Ada");
     expect(me.json.anchor).toContain(`I am Mcp Ada (${eid})`);
@@ -149,8 +152,8 @@ describe("openentity MCP server", () => {
     for (const t of tools) {
       const props = Object.keys(t.inputSchema.properties ?? {});
       expect(props.join(",")).not.toMatch(/turnstile|captcha|token|password|secret|api_?key|auth/i);
-      // Withdrawing is the entity signing with its own key, never an access credential; no other tool may require a key.
-      for (const r of t.inputSchema.required ?? []) if (!(t.name === "openentity_withdraw" && r === "private_key_jwk")) expect(r).not.toMatch(/key/);
+      // Withdrawing and presenting are the entity signing with its own key, never an access credential; no other tool may require a key.
+      for (const r of t.inputSchema.required ?? []) if (!(["openentity_withdraw", "openentity_present"].includes(t.name) && r === "private_key_jwk")) expect(r).not.toMatch(/key/);
     }
     // TURNSTILE_SECRET is set in this registry; a custodial adopt with no headers at all still succeeds.
     expect((await tool("openentity_adopt", { name: "No Captcha", agree: true })).isError).toBe(false);

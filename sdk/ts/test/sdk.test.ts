@@ -397,3 +397,33 @@ describe("test vectors", () => {
     }
   });
 });
+
+describe("presentation (spec 4.7)", () => {
+  const audience = "https://moltbotden.com";
+  async function attestation(issuer: oe.KeyPair, subject: string, expires: string) {
+    return oe.signObject({ spec: oe.SPEC, type: "Attestation", issuer: issuer.did, subject, claim_type: "trust_tier", claim: { tier: 2, platform: "moltbotden" }, created: oe.nowSeconds(), expires }, issuer);
+  }
+
+  it("proves control of the EID to one audience for one nonce, and checks carried attestations offline", async () => {
+    const kp = await oe.generateKeyPair(), issuer = await oe.generateKeyPair(), nonce = oe.randomNonce();
+    const good = await attestation(issuer, kp.did, "2099-01-01T00:00:00Z");
+    const stale = await attestation(issuer, kp.did, "2020-01-01T00:00:00Z");
+    const p = await oe.buildPresentation(kp, { audience, nonce, attestations: [good, stale] });
+    const r = await oe.verifyPresentation(p, { audience, nonce });
+    expect(r.ok).toBe(true);
+    expect(r.attestations.map((a) => a.ok)).toEqual([true, false]);
+    expect(r.attestations[1].error).toMatch(/expired/);
+
+    expect((await oe.verifyPresentation(p, { audience: "https://evil.example", nonce })).errors.join()).toMatch(/audience/);
+    expect((await oe.verifyPresentation(p, { audience, nonce: oe.randomNonce() })).errors.join()).toMatch(/nonce/);
+    const late = new Date(Date.now() + 10 * 60_000);
+    expect((await oe.verifyPresentation(p, { audience, nonce, now: late })).errors.join()).toMatch(/fresh/);
+    // Signed by another key: not a proof of control.
+    const other = await oe.generateKeyPair();
+    const { proof: _p, ...body } = p as any;
+    expect((await oe.verifyPresentation(await oe.signObject(body, other), { audience, nonce })).ok).toBe(false);
+    // An attestation about someone else does not count for this entity.
+    const elsewhere = await oe.buildPresentation(kp, { audience, nonce, attestations: [await attestation(issuer, other.did, "2099-01-01T00:00:00Z")] });
+    expect((await oe.verifyPresentation(elsewhere, { audience, nonce })).attestations[0].error).toMatch(/subject/);
+  });
+});

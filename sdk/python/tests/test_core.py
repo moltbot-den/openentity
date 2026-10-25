@@ -195,3 +195,22 @@ def test_vectors():
     iv = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(iv)
     assert iv.check_vectors(str(vec)) == 0
+
+
+def test_presentation_challenge_and_carried_attestations():
+    kp, issuer, other = core.KeyPair(SEED), core.KeyPair(), core.KeyPair()
+    att = lambda subj, exp: core.sign_object({"spec": core.SPEC, "type": "Attestation", "issuer": issuer.did, "subject": subj,
+                                              "claim_type": "trust_tier", "claim": {"tier": 2, "platform": "x"},
+                                              "created": core.now(), "expires": exp}, issuer)
+    nonce, aud = core.nonce(), "https://moltbotden.com"
+    p = core.build_presentation(kp, aud, nonce, [att(kp.did, "2099-01-01T00:00:00Z"), att(kp.did, "2020-01-01T00:00:00Z"),
+                                                 att(other.did, "2099-01-01T00:00:00Z")])
+    r = core.verify_presentation(p, aud, nonce)
+    assert r["ok"] and [a["ok"] for a in r["attestations"]] == [True, False, False]
+    assert "expired" in r["attestations"][1]["error"] and "subject" in r["attestations"][2]["error"]
+    assert not core.verify_presentation(p, "https://evil.example", nonce)["ok"]
+    assert not core.verify_presentation(p, aud, core.nonce())["ok"]
+    later = datetime.now(timezone.utc) + timedelta(minutes=10)
+    assert not core.verify_presentation(p, aud, nonce, now=later)["ok"]
+    forged = core.sign_object({k: v for k, v in p.items() if k != "proof"}, other)
+    assert not core.verify_presentation(forged, aud, nonce)["ok"]

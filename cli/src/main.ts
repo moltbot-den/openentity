@@ -1,5 +1,5 @@
 import { parseArgs } from "node:util";
-import { adopt, exportCmd, importCmd, self, stats, whoami, withdraw } from "./adopt";
+import { adopt, exportCmd, importCmd, present, self, stats, whoami, withdraw } from "./adopt";
 import { anchor } from "./anchor";
 import { link, recover } from "./continuity";
 import { alias, documentCmd } from "./doc";
@@ -12,16 +12,16 @@ import pkg from "../package.json";
 const str = { type: "string" } as const;
 const bool = { type: "boolean" } as const;
 const OPTIONS = {
-  json: bool, help: bool, version: bool, "dry-run": bool, agree: bool, write: bool, conflict: bool, "no-push": bool, "with-key": bool, force: bool,
+  json: bool, help: bool, version: bool, "dry-run": bool, agree: bool, write: bool, conflict: bool, "no-push": bool, "with-key": bool, force: bool, "no-attestations": bool,
   registry: str, eid: str, name: str, description: str, operator: str, "operator-kind": str, contact: str, custody: str, model: str, provider: str, runtime: str,
   erc8004: str, wallet: str, chain: str, signature: str, entries: str, format: str, dir: str,
   type: str, reason: str, cost: str, context: str, "will-not-ref": str, topic: str, from: str, to: str, evidence: str, id: str, title: str, outcome: str,
-  with: str, role: str, ref: str, event: str, link: str, out: str, key: str, previous: str, via: str, proof: str,
+  with: str, role: str, ref: str, event: str, link: str, out: str, key: str, previous: str, via: str, proof: str, audience: str, nonce: str,
 } as const;
 
 const COMMANDS: Record<string, (c: Ctx) => Promise<Result>> = {
   adopt, whoami, self, anchor, document: documentCmd, record, alias, verify: verifyCmd, resolve: resolveCmd, log: logCmd, stats,
-  export: exportCmd, import: importCmd, rotate: (c) => link(c, "rotation"), migrate: (c) => link(c, "migration"), recover, withdraw,
+  export: exportCmd, import: importCmd, rotate: (c) => link(c, "rotation"), migrate: (c) => link(c, "migration"), recover, withdraw, present,
 };
 
 const HELP = `openentity ${pkg.version}: adopt and keep an Open Entity identity (OEIS-1)
@@ -35,6 +35,7 @@ Usage: openentity <command> [options]   (also: oe)
   record stance|update|arc open|arc close|collab|continuity|push
   alias add domain|wallet|erc8004|platform <value>
   verify <file|url|eid> | resolve <did>
+  present --audience <verifier> --nonce <nonce> [--no-attestations]
   log checkpoint | proof <index> | audit <n>
   export [--with-key] [--out file] | import <file>
   rotate [--to keyfile] | migrate [--to keyfile] | recover --previous <eid> --via <alias>

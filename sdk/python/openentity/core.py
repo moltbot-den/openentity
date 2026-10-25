@@ -160,6 +160,55 @@ def verify_object(obj: dict) -> tuple[bool, str]:
         return False, f"{type(e).__name__}: {e}"
 
 
+# ---- presentations (spec 4.7) ----
+def _ts(s: str) -> datetime:
+    return datetime.strptime(s, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+
+
+def build_presentation(kp: KeyPair, audience: str, nonce_: str, attestations: list | None = None) -> dict:
+    created = now()
+    obj = {"spec": SPEC, "type": "Presentation", "eid": kp.did, "audience": audience, "nonce": nonce_, "created": created}
+    return sign_object({**obj, "attestations": attestations} if attestations else obj, kp, created)
+
+
+def verify_presentation(p: dict, audience: str, nonce_: str, now: datetime | None = None, max_age: int = 300) -> dict:
+    """Check a Presentation this verifier asked for. ok covers the presentation; attestations are reported one by one.
+    Resolves did:key only, like verify_object; revocation needs the issuer or a registry and is the caller's to check."""
+    t = now or datetime.now(timezone.utc)
+    errors: list[str] = []
+    if p.get("type") != "Presentation" or p.get("spec") != SPEC:
+        return {"ok": False, "errors": ["not a Presentation"], "attestations": []}
+    eid = p.get("eid")
+    ok, signer = verify_object(p)
+    if not ok or signer != eid:
+        errors.append(f"signature: {signer if not ok else f'signed by {signer}, not {eid}'}")
+    if p.get("audience") != audience:
+        errors.append(f"audience is {p.get('audience')}, expected {audience}")
+    if p.get("nonce") != nonce_:
+        errors.append("nonce does not match the one issued")
+    try:
+        age = (t - _ts(p["created"])).total_seconds()
+        if not -60 <= age <= max_age:
+            errors.append("presentation is not fresh")
+    except (KeyError, ValueError):
+        errors.append("created is not a timestamp")
+    checks = []
+    for a in p.get("attestations") or []:
+        c = {"claim_type": a.get("claim_type"), "issuer": a.get("issuer"), "ok": False}
+        if a.get("subject") != eid:
+            c["error"] = "subject is not the presenting entity"
+        elif _ts(a["expires"]) <= t:
+            c["error"] = "expired"
+        else:
+            a_ok, a_signer = verify_object(a)
+            if a_ok and a_signer == a.get("issuer"):
+                c["ok"] = True
+            else:
+                c["error"] = f"issuer signature: {a_signer}"
+        checks.append(c)
+    return {"ok": not errors, "eid": eid, "errors": errors, "attestations": checks}
+
+
 # ---- proof-of-work stamp (spec 10.4) ----
 def _zero_bits(h: bytes) -> int:
     return 256 - int.from_bytes(h, "big").bit_length()
