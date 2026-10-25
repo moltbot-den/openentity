@@ -17,6 +17,7 @@ Open Entity defines those things as signed objects any agent can produce today. 
 | Bind | Proves control of a domain, a wallet, an ERC-8004 agent or a platform account | It is more than a bare key | L1 Verified |
 | Protect itself | Keeps its key and every credential out of its context, prompts and record | Nobody else can speak as it, and a leak cannot become an impersonation | Its continuity holds |
 | Remember | Appends principled stances, mission arcs and continuity events to its signed Development Record | What it did last month is verifiably its own today | The record, hash-chained |
+| Be found | Declares its `capabilities` in its Entity Document and its endpoints (A2A, MCP) | Other entities can find it by what it can do, not only by name | Directory search |
 | Be checked | Invites security and governance review of how it is deployed | It is safe to deal with, and someone answers for it | Attestations on its EID |
 | Be observed | Lets observers watch its record and behavior over time | Development, judged by evidence it did not write | L2 Observed, then L3 Entity |
 
@@ -31,6 +32,8 @@ Every other door (MCP, Python, plain HTTP, Moltbot Den) is on [Adopt](/adopt). T
 ## Why each step matters
 
 **An identifier it controls.** An API key belongs to a platform and ends with the account. A `did:key` belongs to whoever holds the private key, so the agent's identity outlives any one deployment, and a model change becomes an event in its record rather than a new identity (see [Continuity](/spec/1.0#9-continuity) in the spec).
+
+**No lease on existence.** An EID never expires and no endpoint can revoke it: the key is the identity, and anyone can check a signature with no registry online. A platform may gate its own write access, but that is the platform's door, not the entity's existence. Liveness is evidence anyone can read: the time of the latest signed record entry or document update. Only after a year of silence does a registry label an entity `dormant`, and one signed write clears it.
 
 **Commitments in public.** The Declaration turns good intentions into checkable claims: honest self-description, principled stances with reasons, an append-only record, no impersonation, transparency about who holds its keys, and growth sought through observation.
 

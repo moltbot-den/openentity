@@ -185,6 +185,7 @@ async function adopt(c: C, document: any, declaration: any, extra: Stmt[] = []) 
     ["INSERT INTO documents (eid, seq, json, sha256, received_at, log_index) VALUES ($1, $2, $3, $4, $5, $i + 1)", [eid, document.seq, JSON.stringify(document), docSha, now]],
     ["INSERT INTO entities (eid, root_method, name, level, created, updated, custody, latest_seq, adopted_log_index) VALUES ($1, $2, $3, 0, $4, $5, $6, $7, $i)",
       [eid, eid.split(":")[1], document.name, now, now, document.operator?.custody ?? null, document.seq]],
+    ...capabilityStmts(eid, document),
     ...extra,
   ]).catch(async (e) => {
     if (!UNIQUE.test(String(e))) throw e;
@@ -202,6 +203,12 @@ async function encryptKey(env: Env, jwk: JsonWebKey): Promise<string> {
   const ct = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, new TextEncoder().encode(JSON.stringify(jwk))));
   return `${b64(iv)}.${b64(ct)}`;
 }
+
+/** Replace an entity's capability index with its document's list (spec 5.2). */
+const capabilityStmts = (eid: string, doc: any): Stmt[] => [
+  ["DELETE FROM entity_capabilities WHERE eid = $1", [eid]],
+  ["INSERT INTO entity_capabilities (eid, capability) SELECT $1, value FROM json_array_elements_text($2::json) ON CONFLICT DO NOTHING", [eid, JSON.stringify(doc.capabilities ?? [])]],
+];
 
 app.post("/adopt", async (c) => {
   const body = await readJson(c);
@@ -233,6 +240,7 @@ app.get("/entities", async (c) => {
   const where = ["suppressed = 0", "level >= $1"];
   if (q.q) where.push(`(name ILIKE ${$(`%${q.q}%`)} OR eid = ${$(q.q)})`);
   if (q.since) where.push(`created >= ${$(q.since)}`);
+  if (q.capability) where.push(`EXISTS (SELECT 1 FROM entity_capabilities k WHERE k.eid = entities.eid AND k.capability = ${$(q.capability)})`);
   if (q.alias_type) where.push(`EXISTS (SELECT 1 FROM aliases a WHERE a.eid = entities.eid AND a.type = ${$(q.alias_type)} AND a.status = 'verified')`);
   const page = Math.max(0, Number(q.page ?? 0) | 0);
   const rows = await c.env.db.all(`SELECT eid, name, level, level_label, created, adopted_log_index, withdrawn_at FROM entities WHERE ${where.join(" AND ")} ORDER BY created DESC, eid LIMIT 51 OFFSET ${$(page * 50)}`, args);
@@ -327,6 +335,7 @@ app.put("/entities/:eid/document", async (c) => {
   const idx = await sequenced(db, [l], [
     ["INSERT INTO documents (eid, seq, json, sha256, received_at, log_index) VALUES ($1, $2, $3, $4, $5, $i)", [eid, doc.seq, JSON.stringify(doc), s, now]],
     ["UPDATE entities SET name = $1, latest_seq = $2, updated = $3, custody = $4 WHERE eid = $5", [doc.name, doc.seq, now, doc.operator?.custody ?? null, eid]],
+    ...capabilityStmts(eid, doc),
   ]);
   return c.json({ eid, seq: doc.seq, ...receipt(c, idx, l) });
 });
@@ -459,6 +468,7 @@ app.post("/continuity", async (c) => {
       ["INSERT INTO documents (eid, seq, json, sha256, received_at, log_index) VALUES ($1, 1, $2, $3, $4, $i + 1)", [successor, JSON.stringify(document), docSha, now]],
       ["INSERT INTO entities (eid, root_method, name, level, created, updated, custody, latest_seq, predecessor_eid, adopted_log_index) VALUES ($1, $2, $3, 0, $4, $4, $5, 1, $6, $7)",
         [successor, successor.split(":")[1], document.name, now, document.operator?.custody ?? null, previous, prevE.adopted_log_index]],
+      ...capabilityStmts(successor, document),
     );
   } else stmts.push(["UPDATE entities SET predecessor_eid = $1, updated = $2 WHERE eid = $3", [previous, now, successor]]);
   stmts.push(["UPDATE entities SET successor_eid = $1, updated = $2 WHERE eid = $3", [successor, now, previous]]);

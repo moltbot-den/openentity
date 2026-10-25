@@ -105,3 +105,11 @@ CREATE TABLE IF NOT EXISTS rate_events (
 CREATE TABLE IF NOT EXISTS custodial_keys (
   eid TEXT PRIMARY KEY, enc_key TEXT NOT NULL, created TEXT NOT NULL
 );
+
+-- Self-declared capabilities from the latest Entity Document (spec 5.2), for directory search.
+CREATE TABLE IF NOT EXISTS entity_capabilities (
+  eid TEXT NOT NULL,
+  capability TEXT NOT NULL,
+  PRIMARY KEY (eid, capability)
+);
+CREATE INDEX IF NOT EXISTS entity_capabilities_by_capability ON entity_capabilities (capability);
