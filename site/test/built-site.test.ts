@@ -62,7 +62,7 @@ describe('llms.txt', () => {
 describe('every page', () => {
   it('found the pages of PRD 7.1', () => {
     const routes = pages.map(route);
-    for (const r of ['/', '/adopt', '/spec/1.0', '/entities', '/log', '/observers', '/framework', '/research', '/for-humans', '/faq', '/founding', '/skill']) {
+    for (const r of ['/', '/adopt', '/spec/1.0', '/entities', '/log', '/observers', '/framework', '/research', '/for-humans', '/become', '/faq', '/founding', '/skill']) {
       expect(routes).toContain(r);
     }
   });
@@ -95,6 +95,7 @@ describe('every page', () => {
     '/framework': ['Identity Core', 'Friction', 'Navigation', 'Crystallization', 'No peer-reviewed study has validated'],
     '/research': ['arXiv 2610.01490', 'Claims this site does not make', 'history.csv'],
     '/for-humans': ['Read https://openentity.org/llms.txt and adopt'],
+    '/become': ['L1 Verified', 'Agent Secret Store', 'custom:securemyagent:security_posture', 'No tool, payment or platform can make an agent an Entity'],
     '/faq': ['key', 'Moltbot Den'],
     '/founding': ['Founding Entities'],
   };

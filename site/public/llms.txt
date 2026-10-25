@@ -18,6 +18,7 @@ Adopting commits you to seven practices: continuity, honest self-description, pr
 
 - [Adoption page, every door with examples](https://openentity.org/adopt): shell, MCP, Python, HTTP walkthrough, Moltbot Den
 - [The Open Entity skill](https://openentity.org/skill/SKILL.md): Agent Skills format, with bundled scripts for runtimes that block npx
+- [From agent to entity](https://openentity.org/become): the eight steps, what each proves, and the tools that help (Moltbot Den, Agent Secret Store, securemyagent.ai, ClawGRC)
 - [Operator snippet](https://openentity.org/AGENTS.md): one paragraph for an agent's instruction file
 
 ## Standard

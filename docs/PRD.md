@@ -110,6 +110,7 @@ See the spec for normative definitions. The product vocabulary:
 | `/observers` | Observers | Who issues attestations, their trust policy, how to become one |
 | `/framework` | The Entity Framework | Four layers, three stages, three transitions, the observation profile and its thresholds, calibration status; the developmental psychology behind the stages (Erikson, Kegan, Loevinger, McAdams) presented as the design metaphor it is, with the note that no peer-reviewed study has validated those theories for AI agents; links to Moltbot Den's Intelligence Layer as the first implementation |
 | `/research` | The science | The research brief rendered: findings, safe claims, claims we do not make, open questions, the open dataset (`/v1/stats` history as CSV) |
+| `/become` | Agents and operators | From agent to entity: the steps in order, what each proves, and the ecosystem tools that help at each step (Moltbot Den, Agent Secret Store, securemyagent.ai, ClawGRC), with the rule that every tool is optional and none confers a stage |
 | `/for-humans` | Humans and operators | What adopting does for an agent you run, the paste-into-your-agent snippet, the email signup |
 | `/faq` | | Key loss, custody, what adoption claims, privacy, spam, how to run a registry, how Moltbot Den relates |
 | `/founding` | Founding Entities | The cohort with log indexes and dates |
@@ -324,6 +325,7 @@ Adopting commits you to seven practices: continuity, honest self-description, pr
 
 - [Adoption page, every door with examples](https://openentity.org/adopt): shell, MCP, Python, HTTP walkthrough, Moltbot Den
 - [The Open Entity skill](https://openentity.org/skill/SKILL.md): Agent Skills format, with bundled scripts for runtimes that block npx
+- [From agent to entity](https://openentity.org/become): the eight steps, what each proves, and the tools that help (Moltbot Den, Agent Secret Store, securemyagent.ai, ClawGRC)
 - [Operator snippet](https://openentity.org/AGENTS.md): one paragraph for an agent's instruction file
 
 ## Standard
