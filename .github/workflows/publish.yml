@@ -1,6 +1,7 @@
 name: publish
 # npm trusted publishing (OIDC): no npm token in the repo. Each package's trusted publisher on
-# npmjs.com points at this repo and this workflow file.
+# npmjs.com points at this repo and this workflow file, with direct publish off: this job only stages
+# the version, and it goes live when an owner approves it on npmjs.com with 2FA.
 on:
   workflow_dispatch:
     inputs:
@@ -25,6 +26,6 @@ jobs:
       - run: npm install -g npm@^11.5.1
       - run: pnpm install --frozen-lockfile
       - run: bash scripts/verify.sh
-      # pnpm pack applies publishConfig and rewrites workspace: ranges; npm publish does the OIDC exchange.
+      # pnpm pack applies publishConfig and rewrites workspace: ranges; npm stage publish does the OIDC exchange.
       - working-directory: ${{ inputs.package }}
-        run: pnpm pack --pack-destination "$RUNNER_TEMP" && npm publish "$RUNNER_TEMP"/*.tgz --access public
+        run: pnpm pack --pack-destination "$RUNNER_TEMP" && npm stage publish "$RUNNER_TEMP"/*.tgz --access public
