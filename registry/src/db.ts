@@ -65,12 +65,19 @@ export function dataApiDb(o: { resourceArn: string; secretArn: string; database:
   return make();
 }
 
+/** schema.sql into statements: split on a semicolon at a line end, except inside a $$-quoted function body. */
+export function splitSql(sql: string): string[] {
+  const masked = sql.replace(/^\s*--.*$/gm, "").split("$$").map((p, k) => (k % 2 ? p.replaceAll(";", "\0") : p)).join("$$");
+  return masked.split(/;\s*$/m).map((s) => s.replaceAll("\0", ";").trim()).filter(Boolean);
+}
+
 /** Tests only: an in-memory Postgres with schema.sql applied. */
 export async function pgliteDb(): Promise<Db> {
   const { PGlite } = await import("@electric-sql/pglite");
   const { readFile } = await import("node:fs/promises");
   const pg = new PGlite();
-  await pg.exec(await readFile(new URL("../schema.sql", import.meta.url), "utf8"));
+  // Statement by statement, as infra/scripts/migrate.ts applies it, so a bad split fails every test.
+  for (const s of splitSql(await readFile(new URL("../schema.sql", import.meta.url), "utf8"))) await pg.exec(s);
   type Q = Pick<InstanceType<typeof PGlite>, "query">;
   const make = (q: Q, inTx: boolean): Db => ({
     all: async (sql, params) => (await q.query<any>(sql, params)).rows,

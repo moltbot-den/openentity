@@ -75,7 +75,8 @@ export class OpenEntityStack extends Stack {
     });
     const db = new rds.DatabaseCluster(this, "Db", {
       engine: rds.DatabaseClusterEngine.auroraPostgres({ version: rds.AuroraPostgresEngineVersion.VER_16_13 }),
-      writer: rds.ClusterInstance.serverlessV2("writer"),
+      // The load copy records per-statement waits (Performance Insights, free 7-day tier) for throughput work.
+      writer: rds.ClusterInstance.serverlessV2("writer", load ? { enablePerformanceInsights: true } : {}),
       serverlessV2MinCapacity: 0.5,
       serverlessV2MaxCapacity: 4,
       enableDataApi: true,
@@ -116,6 +117,9 @@ export class OpenEntityStack extends Stack {
       architecture: lambda.Architecture.ARM_64,
       memorySize: 1024,
       timeout: Duration.seconds(30),
+      // Both copies share the account's 1000 concurrent executions: production keeps 200 guaranteed, the load copy is
+      // capped at 300 so a run can never starve openentity.org, and 500 stay unreserved.
+      reservedConcurrentExecutions: load ? 300 : 200,
       logGroup: new logs.LogGroup(this, "AppFnLogs", { retention: logs.RetentionDays.THREE_MONTHS }),
       bundling: {
         format: nodejs.OutputFormat.ESM,
