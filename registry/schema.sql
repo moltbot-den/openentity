@@ -61,19 +61,29 @@ CREATE TABLE IF NOT EXISTS continuity_links (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS continuity_one_predecessor ON continuity_links(successor);
 
--- The next free log index. Every write takes its indexes from this row in the same statement that
--- inserts its leaves, so a rolled-back write leaves no hole and the index stays contiguous.
+-- The next free log index. Only the sequencer (log.ts) moves it, in the same statement that moves pending
+-- leaves into log_leaves, so the index stays contiguous and gap-free.
 CREATE TABLE IF NOT EXISTS log_head (
   id BIGINT PRIMARY KEY CHECK (id = 1), next BIGINT NOT NULL
 );
 INSERT INTO log_head (id, next) VALUES (1, 0) ON CONFLICT DO NOTHING;
 
--- Leaf indexes are assigned at write time (sequencing); the cron incorporates them.
+-- Group commit: a write inserts its object rows and its leaves here in one statement, without touching
+-- log_head. Its rows carry the placeholder log index -(wid * 1024) + o (negative) until the sequencer
+-- moves the leaves into log_leaves and rewrites the placeholders.
+CREATE TABLE IF NOT EXISTS log_pending (
+  seq BIGSERIAL PRIMARY KEY, wid BIGINT NOT NULL, o INT NOT NULL, leaf_hash TEXT NOT NULL, type TEXT NOT NULL,
+  eid TEXT NOT NULL, object_sha256 TEXT NOT NULL, received_at TEXT NOT NULL
+);
+
+-- Leaf indexes are assigned by the sequencer; the cron incorporates them. wid ties a leaf to its write.
 CREATE TABLE IF NOT EXISTS log_leaves (
   idx BIGINT PRIMARY KEY, leaf_hash TEXT NOT NULL, type TEXT NOT NULL, eid TEXT NOT NULL,
   object_sha256 TEXT NOT NULL, received_at TEXT NOT NULL
 );
+ALTER TABLE log_leaves ADD COLUMN IF NOT EXISTS wid BIGINT;
 CREATE INDEX IF NOT EXISTS log_leaves_received ON log_leaves(received_at);
+CREATE INDEX IF NOT EXISTS log_leaves_wid ON log_leaves(wid);
 
 -- Hash of the complete subtree of 2^level leaves starting at leaf idx * 2^level.
 CREATE TABLE IF NOT EXISTS log_nodes (
@@ -127,3 +137,13 @@ CREATE TABLE IF NOT EXISTS disputes (
 );
 CREATE INDEX IF NOT EXISTS disputes_by_subject ON disputes (subject);
 CREATE INDEX IF NOT EXISTS disputes_by_object ON disputes (object_sha256);
+
+-- Placeholder log indexes (negative) exist only between a write and its sequencing; these tiny indexes let the sequencer find them.
+CREATE INDEX IF NOT EXISTS declarations_pending ON declarations(log_index) WHERE log_index < 0;
+CREATE INDEX IF NOT EXISTS documents_pending ON documents(log_index) WHERE log_index < 0;
+CREATE INDEX IF NOT EXISTS entities_pending ON entities(adopted_log_index) WHERE adopted_log_index < 0;
+CREATE INDEX IF NOT EXISTS aliases_pending ON aliases(log_index) WHERE log_index < 0;
+CREATE INDEX IF NOT EXISTS record_entries_pending ON record_entries(log_index) WHERE log_index < 0;
+CREATE INDEX IF NOT EXISTS attestations_pending ON attestations(log_index) WHERE log_index < 0;
+CREATE INDEX IF NOT EXISTS continuity_links_pending ON continuity_links(log_index) WHERE log_index < 0;
+CREATE INDEX IF NOT EXISTS disputes_pending ON disputes(log_index) WHERE log_index < 0;

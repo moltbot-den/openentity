@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { base58btcDecode, canonicalize, leafHash, merkleRoot, nowSeconds, recordEntryHash, signObject, verifyConsistency, verifyInclusion, verifyNote, type KeyPair } from "../src/sdk.ts";
 import { hex, unhex } from "../src/env.ts";
-import { incorporate } from "../src/log.ts";
+import { incorporate, leafFor, park } from "../src/log.ts";
 import { app, scheduled } from "../src/index.ts";
 import { E, adopted, call, write } from "./helpers.ts";
 
@@ -89,6 +89,47 @@ describe("transparency log (spec 10.3)", () => {
     expect(idx).toEqual(idx.map((_, i) => i));
     expect(new Set(results).size).toBe(8);
     expect(await incorporate(E)).toBe(idx.length);
+  });
+
+  it("group commit: 50 concurrent adopts get distinct contiguous indexes that match each entity's stored index", async () => {
+    await incorporate(E);
+    const old = (await E.db.first<{ n: number }>("SELECT count(*) AS n FROM log_leaves"))!.n;
+    const rs = await Promise.all(Array.from({ length: 50 }, () => adopted()));
+    const firsts = rs.map((a) => a.res.log_index).sort((x, y) => x - y);
+    expect(new Set(firsts).size).toBe(50);
+    const all = (await E.db.all<{ idx: number }>("SELECT idx FROM log_leaves ORDER BY idx")).map((r) => Number(r.idx));
+    expect(all).toEqual(all.map((_, i) => i));
+    expect(all.length).toBe(Number(old) + 100); // a Declaration and a document leaf per adopt
+    for (const a of rs) {
+      const d = await E.db.first<{ log_index: number; idx: number }>("SELECT d.log_index, l.idx FROM declarations d JOIN log_leaves l ON l.object_sha256 = d.sha256 WHERE d.eid = $1", [a.kp.did]);
+      expect(Number(d!.log_index)).toBe(a.res.log_index);
+      expect(Number(d!.idx)).toBe(a.res.log_index);
+      expect((await E.db.first<{ adopted_log_index: number }>("SELECT adopted_log_index FROM entities WHERE eid = $1", [a.kp.did]))!.adopted_log_index).toBe(a.res.log_index);
+    }
+    expect(await E.db.all("SELECT 1 FROM log_pending")).toEqual([]);
+    expect(await E.db.all("SELECT 1 FROM documents WHERE log_index < 0")).toEqual([]);
+  }, 30_000);
+
+  it("a write that fails its unique guard leaves nothing pending and no gap", async () => {
+    const dup = await adopted();
+    const before = (await E.db.first<{ n: number }>("SELECT next AS n FROM log_head"))!.n;
+    const r = await write("POST", "/adopt", dup.kp.did, { document: dup.document, declaration: dup.declaration });
+    expect(r.body.error).toBe("declaration_exists");
+    expect(await E.db.all("SELECT 1 FROM log_pending")).toEqual([]);
+    expect((await E.db.first<{ n: number }>("SELECT next AS n FROM log_head"))!.n).toBe(before);
+    expect((await E.db.first<{ n: number }>("SELECT count(*) AS n FROM log_leaves"))!.n).toEqual(before);
+  });
+
+  it("leaves parked by an interrupted write are sequenced by the cron path", async () => {
+    await incorporate(E);
+    const size = (await E.db.first<{ n: number }>("SELECT count(*) AS n FROM log_leaves"))!.n;
+    const l = await leafFor("Alias", "did:key:zInterrupted", "ab".repeat(32), "2026-01-01T00:00:00Z");
+    await park(E.db, [l], [["INSERT INTO disputes (sha256, issuer, subject, object_sha256, reason, json, received_at, log_index) VALUES ('crash', 'i', 's', NULL, 'r', '{}', 'now', $i)", []]]);
+    expect(await E.db.all("SELECT 1 FROM log_pending")).toHaveLength(1);
+    expect(Number((await E.db.first<{ log_index: number }>("SELECT log_index FROM disputes WHERE sha256 = 'crash'"))!.log_index)).toBeLessThan(0);
+    expect(await incorporate(E)).toBe(Number(size) + 1);
+    expect(await E.db.all("SELECT 1 FROM log_pending")).toEqual([]);
+    expect(Number((await E.db.first<{ log_index: number }>("SELECT log_index FROM disputes WHERE sha256 = 'crash'"))!.log_index)).toBe(Number(size));
   });
 
   it("returns 404 for a proof of a leaf not yet incorporated", async () => {
