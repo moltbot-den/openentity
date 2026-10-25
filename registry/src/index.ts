@@ -73,7 +73,6 @@ async function writeGuard(c: C, eid: string) {
   if (counts.get("ip")! > daily) fail(429, "rate_limited", `at most ${daily} writes per day per IP`);
   if (counts.get("stamp")! > 1) fail(409, "stamp_reused", "each stamp is accepted once");
 }
-/** Wakes the log incorporator after the response; the cron incorporates anything a lost message leaves behind. */
 function schema(type: string, obj: unknown) {
   const r = validate(type as "EntityDocument", obj);
   if (!r.ok) fail(422, "schema_invalid", `${type}: ${r.errors.join("; ")}`);

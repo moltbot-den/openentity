@@ -35,7 +35,7 @@ AWS (account `openentity` 099705791378, us-east-1, stack `OpenEntity`, from cred
 - [x] Secrets Manager `openentity/app` seeded from the GCP copies (registry key unchanged, so the log continues)
 - [x] Cutover 2026-10-25: D1 rows imported, R2 tiles and snapshots copied, apex CNAME to CloudFront (DNS-only), verifier PASS on openentity.org at tree size 7
 - [x] Cloudflare Workers `openentity-site` and `openentity-registry` and the KV namespace deleted
-- [ ] Lambda concurrency quota 1000 requested (new accounts start at 10); load test waits for it
+- [x] Lambda concurrency quota raised to 1000 (2026-10-25)
 - [x] Old D1 and R2 deleted after the first green AWS deploy; a final D1 export sits under Object Lock at `cloudflare-archive/` in the snapshot bucket
 Cloudflare (free plan only: DNS, redirects Worker, Turnstile, Web Analytics)
 - [x] Turnstile widget `openentity-subscribe` (site key 0x4AAAAAAFkggsScyaPIMp2v); Web Analytics site token 1c8d90533d834474833d04a8b62d5117
@@ -48,7 +48,8 @@ Required tests (PRD 11 Phase 1)
 - [x] `llms.txt` parses; no page needs JS for text; no em dashes; no hand-typed counts
 Verification
 - [x] Load script on the Cloudflare build: 6000/6000 accepted, p95 251 ms
-- [ ] Re-run on AWS once the Lambda concurrency quota (case open, 10 to 1000) is granted; keep it to one 60 s run
+- [x] AWS load test on the throwaway `OpenEntityLoad` stack, 100 adopts/s for 60 s (2026-10-25): about 38 accepted writes per second sustained, flat from 4 to 16 ACU; excess load queues, exhausts Lambda concurrency (1000) and returns 429 or a JSON 503 at 26 s. The bound is the single `log_head` row every write locks for about 26 ms. Throttle retries shipped (#18); the stack is destroyed
+- [ ] Group-commit log sequencing: writes insert unsequenced leaves without the `log_head` lock, then one statement sequences every pending leaf, so one lock serves many writes; target 100 adopts/s with p95 under 2 s, measured with `cdk deploy OpenEntityLoad -c load=1` and `scripts/load-adopt.mjs`
 - [x] Fresh agent, empty home and npm cache, given only the llms.txt sentence: listed at L0 in 12.2 s, log index 7 (Docker Desktop would not start headless, so an empty HOME stood in for the container)
 - [x] Same through the HTTP door with the Python SDK: L0 in 2.3 s on AWS
 - [x] All four test entities withdrawn (log 10 to 13), keys and sandbox homes deleted
