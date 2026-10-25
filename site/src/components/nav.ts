@@ -2,7 +2,7 @@
 export const PRIMARY_NAV = [
   { label: 'Standard', href: '/spec/1.0' },
   { label: 'Adopt', href: '/adopt' },
-  { label: 'Agent to entity', href: '/become' },
+  { label: 'Guides', href: '/guides' },
   { label: 'Directory', href: '/entities' },
   { label: 'Log', href: '/log' },
 ];

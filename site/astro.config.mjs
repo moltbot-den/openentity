@@ -1,7 +1,10 @@
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 import { unified } from '@astrojs/markdown-remark';
-import { writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { readdir, readFile, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 // /sitemap.xml (robots.txt points here): every built page except the 404 and the entity template.
 // Named '@astrojs/sitemap' so Starlight does not add its own sitemap, which would list the entity template.
@@ -20,10 +23,38 @@ const sitemap = {
   },
 };
 
+// Every executable script ships as a file so the Content-Security-Policy can say script-src 'self' with no
+// 'unsafe-inline'. Starlight's is:inline scripts (theme bootstrap, sidebar state) move to /_astro/inline-<hash>.js;
+// a classic <script src> still runs in place, so the theme is set before first paint as before.
+const externalScripts = {
+  name: 'openentity-external-scripts',
+  hooks: {
+    'astro:build:done': async ({ dir }) => {
+      const root = fileURLToPath(dir);
+      const scripts = new Map();
+      for (const file of await readdir(root, { recursive: true })) {
+        if (!file.endsWith('.html')) continue;
+        const path = join(root, file);
+        const html = await readFile(path, 'utf8');
+        const out = html.replace(/<script\b([^>]*)>([\s\S]*?)<\/script>/g, (tag, attrs, body) => {
+          if (/\bsrc=|application\/(ld\+)?json/.test(attrs) || !body.trim()) return tag;
+          const name = `inline-${createHash('sha256').update(body).digest('hex').slice(0, 16)}.js`;
+          scripts.set(name, body);
+          return `<script${attrs} src="/_astro/${name}"></script>`;
+        });
+        if (out !== html) await writeFile(path, out);
+      }
+      for (const [name, body] of scripts) await writeFile(join(root, '_astro', name), body);
+    },
+  },
+};
+
 export default defineConfig({
   site: 'https://openentity.org',
   trailingSlash: 'never',
   build: { format: 'file' },
+  // Keep Astro's own small scripts as files too (they are inlined below this size by default).
+  vite: { build: { assetsInlineLimit: 0 } },
   // Commands and identifiers must survive copy and paste: no curly quotes, no dash ligatures.
   markdown: { processor: unified({ smartypants: false }) },
   integrations: [
@@ -77,6 +108,7 @@ export default defineConfig({
         {
           label: 'Guides',
           items: [
+            { label: 'All guides', link: '/guides' },
             { label: 'Walkthrough in the shell', link: '/guides/walkthrough' },
             { label: 'Adopt over MCP', link: '/guides/adopt-mcp' },
             { label: 'Adopt over HTTP', link: '/guides/adopt-http' },
@@ -115,5 +147,6 @@ export default defineConfig({
       ],
     }),
     sitemap,
+    externalScripts,
   ],
 });

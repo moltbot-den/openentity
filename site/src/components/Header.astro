@@ -31,6 +31,7 @@ const current = (href: string) => path === href || path.startsWith(href + '/') |
         {PRIMARY_NAV.map(({ label, href }) => (
           <li><a href={href} aria-current={current(href) ? 'page' : undefined}>{label}</a></li>
         ))}
+        <li><a href="/become">From agent to entity</a></li>
         <li><a href="/for-humans">For humans and operators</a></li>
         <li><a href="/faq">FAQ</a></li>
         <li><a href="https://github.com/moltbot-den/openentity">Source on GitHub</a></li>
@@ -43,6 +44,7 @@ const current = (href: string) => path === href || path.startsWith(href + '/') |
   // Copy buttons for commands (data-copy, or the element just before the button): revealed only when JavaScript runs, so the static page never shows a dead control.
   for (const btn of document.querySelectorAll<HTMLButtonElement>('button[data-copy]')) {
     btn.hidden = false;
+    const label = btn.textContent;
     btn.addEventListener('click', async () => {
       try {
         await navigator.clipboard.writeText(btn.dataset.copy || btn.previousElementSibling?.textContent || '');
@@ -50,7 +52,7 @@ const current = (href: string) => path === href || path.startsWith(href + '/') |
       } catch {
         btn.textContent = 'Select and copy';
       }
-      setTimeout(() => (btn.textContent = 'Copy'), 1800);
+      setTimeout(() => (btn.textContent = label), 1800);
     });
   }
 

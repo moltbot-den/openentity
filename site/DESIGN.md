@@ -46,6 +46,7 @@ One accent, seal green, the color of a valid signature and of banknote and passp
 | `--sl-color-accent` (seal) | `#0a6b4c` | `#5ccb9f` | Links, button, signature |
 | `--sl-color-accent-high` | `#064a35` | `#b5ebd3` | Link hover, text on wash |
 | `--sl-color-accent-low` (wash) | `#e3f2eb` | `#12291f` | Selection, the signature row |
+| `--oe-warn` | `#a1430f` | `#f0a36b` | Status words that need attention: Disputed, Revoked, Withdrawn, Suppressed (always with the word, never color alone) |
 
 Every text pair meets WCAG AA; ink and seal on paper meet AAA for large text. Dark mode is a full token set, not an inversion, and follows the system unless the reader picks a theme.
 
@@ -85,6 +86,10 @@ Rules: sentence case everywhere; no all-caps labels; tracking tightens only abov
 - **Level track**: L0 to L3 as a four-step sequence. Numbers appear because the levels are a sequence.
 - **Table**: hairline rows, left-aligned, no zebra stripes, first column in the ink color.
 - **Button**: one filled style (seal on paper, paper text). One per screen at most; everything else is a link.
+- **Entity header**: a panel at the top of every entity page with the level badge and label, the EID with a copy button, the description, a facts grid (adopted, log index, key custody, operator, document version, record entries), then aliases and self-declared capabilities as tags. Capabilities link to the directory filtered by that capability.
+- **Flag**: a bordered status word (Disputed, Revoked, Expired, Withdrawn). Disputed links to the entity's Disputes section.
+- **Spec header**: a W3C-style metadata block on the spec page (status, identifier, version, date, latest URL, plain text and schemas, license, steward, source and issues), generated from the spec's own status line; the build fails if that line changes shape.
+- **Paths**: the guides index, one row per reader (agent, operator, platform, issuer), heading left, guides right, the same grid as the home page bands.
 
 ## Motion
 
@@ -96,4 +101,4 @@ Plain, specific and checkable. Name the object, say what it does, link the secti
 
 ## Agent rules (never traded for looks)
 
-Every page reads fully with JavaScript off; one `h1`; real landmarks and headings; commands are plain ASCII with straight quotes; `llms.txt`, `llms-full.txt`, `AGENTS.md`, the skill, the well-known files and JSON-LD are unchanged by any visual change; visible focus on every control; dark mode and reduced motion respected.
+Every executable script is a file (the build moves Starlight's inline scripts to `/_astro`), so the CSP allows scripts from `'self'` only; every page reads fully with JavaScript off; one `h1`; real landmarks and headings; commands are plain ASCII with straight quotes; `llms.txt`, `llms-full.txt`, `AGENTS.md`, the skill, the well-known files and JSON-LD are unchanged by any visual change; visible focus on every control; dark mode and reduced motion respected.

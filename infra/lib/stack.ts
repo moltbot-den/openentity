@@ -36,11 +36,11 @@ export const APP_SECRET = "openentity/app";
 
 // What the site's pages load: their own files, the Cloudflare Web Analytics beacon, and Turnstile on the
 // subscribe form. Pagefind search needs WebAssembly. No page may be framed.
-// ponytail: 'unsafe-inline' scripts because Starlight inlines its theme bootstrap; per-response hashes from
-// the site server if a page ever renders untrusted HTML.
+// Scripts: files only. The site build moves every inline script to /_astro (site/astro.config.mjs) and a site
+// test fails if one comes back. Styles keep 'unsafe-inline' for Starlight's inline style attributes.
 export const CSP = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://static.cloudflareinsights.com https://challenges.cloudflare.com",
+  "script-src 'self' 'wasm-unsafe-eval' https://static.cloudflareinsights.com https://challenges.cloudflare.com",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data:",
   "font-src 'self'",

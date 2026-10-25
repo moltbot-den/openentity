@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   didDocument,
   formEnabled,
+  keepFilters,
   levelBadge,
   parseEid,
   registryKeys,
@@ -81,6 +82,47 @@ describe('entity page', () => {
     const p = renderEntity(eid, { ...entity, document: { ...entity.document, description: '</script><b>x' } }, [], []);
     expect(p.html).not.toContain('</script><b>');
     expect(p.html).toContain('class="oe-verify" hidden');
+  });
+});
+
+describe('entity page from the registry listing shapes', () => {
+  const eid = 'did:key:z6Mkreal';
+  const page = renderEntity(
+    eid,
+    { eid, level: 'L1', created: '2026-10-27T15:00:00Z', log_index: 12, aliases: [{ type: 'domain', value: 'a.example', status: 'verified' }], document: { name: 'A', seq: 1, capabilities: ['code-review'] } },
+    { entries: [] },
+    { attestations: [{ sha256: 'ab', attestation: { issuer: 'did:web:o.example', claim_type: 'consistency', claim: { upheld: true }, created: '2026-10-28T00:00:00Z' }, label: 'independent', disputed: true }] },
+    { disputes: [{ dispute: { issuer: eid, reason: 'inaccurate', statement: 'Wrong week.', object_sha256: 'ab'.repeat(32) }, received_at: '2026-10-30T00:00:00Z', log_index: 14 }] },
+  );
+  it('leads with a header: EID with a copy button, adoption date, log index, aliases and capabilities', () => {
+    expect(page.html).toContain('<code class="oe-eid">did:key:z6Mkreal</code><button type="button" class="oe-copy" data-copy="did:key:z6Mkreal" hidden>');
+    expect(page.html).toContain('<dt>Adopted</dt><dd>2026-10-27</dd>');
+    expect(page.html).toContain('<a href="/v1/log/proof/12">12</a>');
+    expect(page.html).toContain('a.example <span class="oe-label oe-ok">verified</span>');
+    expect(page.html).toContain('href="/entities?capability=code-review&amp;level=0"');
+  });
+  it('reads attestations wrapped by the registry, flags disputed ones and lists the disputes', () => {
+    expect(page.html).toContain('did:web:o.example <span class="oe-label">independent</span>');
+    expect(page.html).toContain('<code>consistency</code><a class="oe-flag oe-flag-disputed" href="#disputes">Disputed</a>');
+    expect(page.html).toContain('<h2 id="disputes">Disputes</h2>');
+    expect(page.html).toContain('Wrong week.');
+    expect(page.html).toContain('log index 14');
+  });
+});
+
+describe('directory', () => {
+  it('follows next_page from GET /v1/entities and offers a way out of an empty result', () => {
+    expect(renderEntityList({ entities: [{ eid: 'did:key:z6Mkx', name: 'X', level: 'L1' }], next_page: 1 }, new URLSearchParams('capability=x'))).toContain('/entities?capability=x&amp;page=1');
+    const empty = renderEntityList({ entities: [] }, new URLSearchParams('capability=x&level=1'));
+    expect(empty).toContain('No entities match these filters.');
+    expect(empty).toContain('href="/entities?capability=x&amp;level=0"');
+  });
+  it('keeps the searched filters in the form', () => {
+    const form = '<input type="search" name="q" /><select name="level"><option value="1">a</option><option value="0">b</option></select>';
+    const out = keepFilters(form, new URLSearchParams('q=<x>&level=0'));
+    expect(out).toContain('name="q" value="&lt;x&gt;"');
+    expect(out).toContain('<option value="0" selected>');
+    expect(out).not.toContain('<option value="1" selected>');
   });
 });
 

@@ -49,6 +49,7 @@ test("every response forbids framing and carries a CSP limited to what the pages
   expect(CSP).toContain("frame-ancestors 'none'");
   expect(CSP).toContain("object-src 'none'");
   expect(CSP).not.toMatch(/\*|'unsafe-eval'/);
+  expect(CSP.split('; ').find((d) => d.startsWith('script-src'))).not.toContain("'unsafe-inline'");
 });
 
 test("mcp.openentity.org is its own distribution and certificate on the same function URL, tagged with x-oe-site, never cached", () => {

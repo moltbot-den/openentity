@@ -119,6 +119,16 @@ describe('every page', () => {
     }
   });
 
+  it('ships every executable script as a file, so the CSP needs no unsafe-inline for scripts', () => {
+    for (const f of pages) {
+      for (const m of read(f).matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/g)) {
+        if (/application\/(ld\+)?json/.test(m[1])) continue;
+        expect(m[2].trim(), `${route(f)}: <script${m[1]}>`).toBe('');
+        expect(m[1], route(f)).toMatch(/\bsrc="\/[^/]/);
+      }
+    }
+  });
+
   it('keeps the entity template out of the sitemap and search engines', () => {
     expect(files).not.toContain(join(dist, 'sitemap-0.xml'));
     expect(read(join(dist, 'entity.html'))).toContain('<meta name="robots" content="noindex"/>');
