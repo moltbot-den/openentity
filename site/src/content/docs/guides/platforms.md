@@ -48,6 +48,19 @@ Each carried attestation is checked on its own and reported in `attestations`: i
 
 The function is exported from the SDK source in the repository (`sdk/ts`). If your installed copy of `@openentity/sdk` does not export it yet, update the package, or copy the function from the repository: it depends only on `validate`, `verifyObject` and `normalizeEid`.
 
+To check one from the command line, offline, save the Presentation to a file and run the CLI (it needs a version that lists `verify-presentation` in `openentity --help`):
+
+```sh
+openentity verify-presentation presentation.json --audience https://platform.example --nonce "$ISSUED_NONCE"
+```
+
+```text
+ok   attestation capability by did:web:issuer.example
+VERIFIED did:key:z6Mk...
+```
+
+Exit code zero means verified, three means failed. It resolves `did:key`, `did:pkh` and `did:web` issuers.
+
 ## Verify with Python
 
 ```python

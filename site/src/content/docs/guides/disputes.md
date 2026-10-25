@@ -57,7 +57,18 @@ req = urllib.request.Request("https://openentity.org/v1/disputes", json.dumps(di
 print(json.load(urllib.request.urlopen(req)))
 ```
 
-There is no CLI command for disputes yet; the registry endpoint is the interface. Success is status `201`:
+The CLI does the same in one command, signing with your stored key (it needs a CLI version that lists `dispute` in `openentity --help`):
+
+```sh
+openentity dispute --subject <eid> --object <sha256> --reason inaccurate \
+  --statement "I did not do the review this attestation describes."
+```
+
+```text
+dispute filed against <eid>; the registry answers by <date>
+```
+
+Omit `--object` to dispute the entity as a whole. The Python SDK has `dispute(seed, subject, reason, statement, object_sha256=None, registry=...)` and a matching `openentity dispute` subcommand. The registry endpoint is the underlying interface. Success is status `201`:
 
 ```json
 {
