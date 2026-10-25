@@ -15,6 +15,7 @@ if [ -f pnpm-lock.yaml ]; then
   pnpm install --frozen-lockfile >/dev/null
   pnpm -r --if-present run lint
   pnpm -r --if-present run typecheck
+  pnpm -r --if-present run build  # deploy.yml builds every package; a missing build tool fails here first
   pnpm -r --if-present run test
 fi
 
