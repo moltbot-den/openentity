@@ -10,12 +10,14 @@ import {
   base58btcEncode,
   buildDeclaration,
   buildDocument,
+  canonicalize,
   generateKeyPair,
   hashData,
   keyPairFromJwk,
   mintStamp,
   nowSeconds,
   publicKeyFromDidKey,
+  sha256Hex,
   didKeyFromPublicKey,
   signObject,
   validate,
@@ -149,6 +151,11 @@ function serve({ registry, site }: McpDeps): (req: Request) => Promise<Response>
           }) as Record<string, any>,
           declaration: buildDeclaration({ eid: kp.did, name: a.name, created }) as Record<string, any>,
         });
+        // Seq-1 declaration entry (spec 7.3). The registry never writes entries, so the signer pushes it.
+        const declarationEntry = async (eid: string, declaration: object) => ({
+          spec: SPEC, type: "RecordEntry", eid, seq: 1, prev: null, kind: "declaration", at: nowSeconds(),
+          payload: { declaration_version: DECLARATION_VERSION, sha256: await sha256Hex(canonicalize(declaration)) },
+        });
         const submit = async (eid: string, document: object, declaration: object, extra: object = {}) => {
           const bad = [validate("EntityDocument", document), validate("Declaration", declaration)].find((r) => !r.ok);
           if (bad) return text({ error: "schema_invalid", message: bad.errors.join("; ") }, true);
@@ -159,10 +166,16 @@ function serve({ registry, site }: McpDeps): (req: Request) => Promise<Response>
         if (a.custody === "custodial") {
           const kp = await generateKeyPair();
           const { document, declaration } = build(kp);
-          return submit(kp.did, await signObject(document, kp, created), await signObject(declaration, kp, created), {
+          const signedDecl = await signObject(declaration, kp, created);
+          const res = await submit(kp.did, await signObject(document, kp, created), signedDecl, {
             private_key_jwk: kp.privateJwk,
             warning: "SECRET: this private key is shown once and the server keeps no copy. Store it now. Losing it means losing the identity.",
           });
+          if (res.isError) return res;
+          const entry = await declarationEntry(kp.did, signedDecl);
+          const pushed = await reg("POST", `/entities/${kp.did}/record`, { entries: [await signObject(entry, kp, entry.at)] }, kp.did);
+          if (!pushed.ok) return text({ ...JSON.parse(res.content[0].text), warning_record: `declaration record entry not accepted (${pushed.status}); push it with openentity_record` });
+          return res;
         }
 
         // Self-custody. Step 2: signatures present.
@@ -173,7 +186,12 @@ function serve({ registry, site }: McpDeps): (req: Request) => Promise<Response>
             type: "DataIntegrityProof", cryptosuite: "eddsa-jcs-2022", created: o.created, verificationMethod: verificationMethodId(eid), proofPurpose: "assertionMethod",
             proofValue: "z" + base58btcEncode(unhex(sig)),
           });
-          return submit(eid, { ...a.document, proof: proof(a.document, a.document_signature) }, { ...a.declaration, proof: proof(a.declaration, a.declaration_signature) });
+          const decl = { ...a.declaration, proof: proof(a.declaration, a.declaration_signature) };
+          // ponytail: self-custody clients sign the seq-1 entry themselves; add a sign step here if MCP-only signers need it.
+          return submit(eid, { ...a.document, proof: proof(a.document, a.document_signature) }, decl, {
+            record_entry_to_sign: await declarationEntry(eid, decl),
+            record_note: "Sign this seq-1 declaration entry (eddsa-jcs-2022, spec 7.3) and push it with openentity_record entries=[...].",
+          });
         }
         // Step 1: public key present.
         if (!a.public_key) return text("custody=self needs public_key (step 1) or document, declaration and both signatures (step 2)", true);

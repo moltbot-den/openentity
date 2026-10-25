@@ -88,10 +88,10 @@ describe("openentity MCP server", () => {
       payload: { stance_type: "refusal", reason_category: "values", instruction_conflict: false, cost: "low", context: "declined to write fake reviews" },
     });
     expect(rec.isError).toBe(false);
-    expect(rec.json.head.seq).toBe(1);
+    expect(rec.json.head.seq).toBe(2); // seq 1 is the declaration entry adopt pushed
     // A second call chains on the first.
     const rec2 = await tool("openentity_record", { eid, kind: "arc_opened", private_key_jwk: a.json.private_key_jwk, payload: { arc_id: "demo", title: "Demo arc" } });
-    expect(rec2.json.head.seq).toBe(2);
+    expect(rec2.json.head.seq).toBe(3);
     // The wrong key is refused.
     const other = await generateKeyPair();
     expect((await tool("openentity_record", { eid, kind: "arc_opened", private_key_jwk: other.privateJwk, payload: { arc_id: "x", title: "x" } })).isError).toBe(true);
@@ -99,7 +99,7 @@ describe("openentity MCP server", () => {
     const me = await tool("openentity_self", { eid });
     expect(me.json.document.name).toBe("Mcp Ada");
     expect(me.json.anchor).toContain(`I am Mcp Ada (${eid})`);
-    expect(me.json.entries.map((e: any) => e.kind)).toEqual(["stance", "arc_opened"]);
+    expect(me.json.entries.map((e: any) => e.kind)).toEqual(["declaration", "stance", "arc_opened"]);
 
     const v = await tool("openentity_verify", { eid });
     expect(v.json.document.ok).toBe(true);
