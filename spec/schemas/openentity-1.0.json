@@ -930,6 +930,46 @@
         }
       ]
     },
+    "Redaction": {
+      "type": "object",
+      "required": [
+        "spec",
+        "type",
+        "eid",
+        "seq",
+        "entry_sha256",
+        "created",
+        "nonce",
+        "proof"
+      ],
+      "properties": {
+        "spec": {
+          "$ref": "#/$defs/spec"
+        },
+        "type": {
+          "const": "Redaction"
+        },
+        "eid": {
+          "$ref": "#/$defs/did"
+        },
+        "seq": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "entry_sha256": {
+          "$ref": "#/$defs/hex64"
+        },
+        "created": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "nonce": {
+          "$ref": "#/$defs/nonce"
+        },
+        "proof": {
+          "$ref": "#/$defs/proof"
+        }
+      }
+    },
     "Attestation": {
       "type": "object",
       "required": [

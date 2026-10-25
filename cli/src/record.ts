@@ -1,4 +1,4 @@
-import { nowSeconds, signObject, SPEC, validate } from "@openentity/sdk";
+import { nowSeconds, randomNonce, recordEntryHash, signObject, SPEC, validate } from "@openentity/sdk";
 import { CliError, usage } from "./errors";
 import type { Obj } from "./http";
 import { appendRecord, lastRecordLink, loadEntity, readRecord, saveState, type Ctx, type Entity, type Result } from "./store";
@@ -72,9 +72,21 @@ export async function pushRecord(e: Entity): Promise<number> {
   return pushed;
 }
 
+/** Withdraw a pushed entry from reads (spec 7.4): sign a Redaction naming its seq and exact hash. The local copy stays whole. */
+async function redact(e: Entity, seqArg: string | undefined): Promise<Result> {
+  const seq = Number(seqArg);
+  const entry = (await readRecord(e.dir)).find((x) => x.seq === seq);
+  if (!entry) throw usage("record redact <seq>: the seq of an entry in your local record");
+  const created = nowSeconds();
+  const red = await signObject({ spec: SPEC, type: "Redaction", eid: e.eid, seq, entry_sha256: await recordEntryHash(entry), created, nonce: randomNonce() }, e.kp, created);
+  const r = await e.registry.send("POST", `/v1/entities/${e.eid}/record/redact`, red, e.eid);
+  return { json: { redaction: red, placeholder: r.placeholder }, text: `redacted seq ${seq}: the registry now serves a placeholder that keeps its hash and chain position` };
+}
+
 export async function record({ args, v }: Ctx): Promise<Result> {
   const e = await loadEntity(v);
   const [sub, sub2] = args;
+  if (sub === "redact") return redact(e, sub2);
   let kind: string | undefined;
   switch (sub) {
     case "stance":
@@ -96,7 +108,7 @@ export async function record({ args, v }: Ctx): Promise<Result> {
     case "push":
       break;
     default:
-      throw usage("record stance|update|arc open|arc close|collab|continuity|push");
+      throw usage("record stance|update|arc open|arc close|collab|continuity|push|redact <seq>");
   }
   const entry = kind ? await appendEntry(e, kind, payloadFor(kind, v)) : undefined;
   let pushed = 0;

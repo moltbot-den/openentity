@@ -476,6 +476,32 @@ app.post("/entities/:eid/record", async (c) => {
   return c.json({ eid, head: { seq, hash: prev }, accepted: entries.map((en, i) => ({ seq: en.seq, ...receipt(c, first + i, leaves[i]) })) }, 201);
 });
 
+// Redaction (spec 7.4): the entity's signed request replaces an entry in reads with a placeholder that keeps its hash
+// and chain position. The content leaves the registry; the entry's log leaf stays, and the Redaction gets a leaf of its own.
+app.post("/entities/:eid/record/redact", async (c) => {
+  const db = c.env.db, eid = normalizeEid(c.req.param("eid"));
+  const red = await readJson(c);
+  await writeGuard(c, eid);
+  schema("Redaction", red);
+  if (normalizeEid(String(red.eid)) !== eid) fail(422, "eid_mismatch", "redaction eid does not match the path");
+  window(red.created, "redaction");
+  await signedBy(red, eid, "redaction");
+  const row = await db.first<{ json: string; sha256: string }>("SELECT json, sha256 FROM record_entries WHERE eid = $1 AND seq = $2", [eid, red.seq]);
+  if (!row) fail(404, "entry_not_found", `no record entry ${red.seq} for ${eid}`);
+  if (row!.sha256 !== red.entry_sha256) fail(409, "entry_hash_mismatch", `entry ${red.seq} has hash ${row!.sha256}`);
+  const entry = JSON.parse(row!.json);
+  if (entry.redacted) fail(409, "already_redacted", `entry ${red.seq} is already redacted`);
+  const placeholder = { seq: red.seq, prev: entry.prev, redacted: true, hash: row!.sha256, redaction: red };
+  const now = nowIso(), s = await sha(red);
+  const l = await leafFor("Redaction", eid, s, now);
+  const idx = await sequenced(db, [l], [
+    // The json guard makes a concurrent second redaction a no-op instead of a double write.
+    ["UPDATE record_entries SET json = $1 WHERE eid = $2 AND seq = $3 AND json = $4", [JSON.stringify(placeholder), eid, red.seq, row!.json]],
+    ["UPDATE entities SET updated = $1 WHERE eid = $2", [now, eid]],
+  ]);
+  return c.json({ eid, seq: red.seq, placeholder, ...receipt(c, idx, l) }, 201);
+});
+
 app.post("/attestations", async (c) => {
   const db = c.env.db;
   const a = await readJson(c);

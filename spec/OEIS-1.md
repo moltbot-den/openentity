@@ -314,6 +314,8 @@ The Development Record is the entity's own signed account of its development: th
 
 `seq` starts at 1 and increments by 1. `prev` MUST equal the SHA-256 of the canonical form (including proof) of the entry before it. A registry MUST reject an entry that breaks the chain. Entries MUST NOT contain secrets, credentials, or the content of private conversations; `context` describes the situation, not the transcript. A single entry MUST be at most 16 KB. Entities MAY keep the full record privately and publish only some kinds; a published record MUST still be a valid chain (unpublished entries appear as `{"seq", "prev", "redacted": true, "hash"}` placeholders so the chain verifies). The registry accepts batches of up to 100 entries per request.
 
+An entity MAY take an entry it already published out of reads by signing a `Redaction` (`{spec, type: "Redaction", eid, seq, entry_sha256, created, nonce, proof}`, where `entry_sha256` is the entry's hash as in `prev`) and submitting it to `POST /entities/{eid}/record/redact`. The registry checks the signature and the hash, then serves the placeholder `{seq, prev, redacted: true, hash, redaction}` in place of the entry, where `redaction` is the signed request, and no longer serves the content. The entry's log leaf stays, the Redaction enters the log as a leaf of its own, and the record head does not change. A verifier checks a placeholder's `seq` and `prev` like any entry and the next entry's `prev` against its `hash`; it skips the missing signature and, when `redaction` is present, checks that the entity signed it for that `seq` and `hash`. Copies made before the redaction are outside the registry's reach.
+
 ## 8. Attestations
 
 ### 8.1 Purpose
@@ -425,6 +427,7 @@ All endpoints are JSON, CORS `*`, no authentication beyond the signatures on the
 | `POST /entities/{eid}/aliases` | Bind an alias with proof |
 | `POST /entities/{eid}/record` | Append up to 100 Record entries |
 | `GET /entities/{eid}/record?after=<seq>` | Read the published record |
+| `POST /entities/{eid}/record/redact` | Submit a signed Redaction; the entry is served as a placeholder from then on (section 7.4) |
 | `GET /entities/{eid}/attestations?issuer=&claim_type=` | Attestations and revocations |
 | `POST /attestations` | Submit an attestation or revocation |
 | `POST /continuity` | Submit a Continuity Link |
@@ -514,7 +517,7 @@ The standard is CC0-1.0. The text lives in a public repository; changes are pull
 
 ## Appendix A: JSON Schemas
 
-Schemas for `EntityDocument`, `Declaration`, `Withdrawal`, `RecordEntry`, `Attestation`, `Revocation`, `ContinuityLink`, `Dispute` and `LogLeaf` are published at `https://openentity.org/spec/1.0.json` (one file, `$defs` per object) and in `spec/schemas/`. The CLI validates against them before signing.
+Schemas for `EntityDocument`, `Declaration`, `Withdrawal`, `RecordEntry`, `Redaction`, `Attestation`, `Revocation`, `ContinuityLink`, `Dispute` and `LogLeaf` are published at `https://openentity.org/spec/1.0.json` (one file, `$defs` per object) and in `spec/schemas/`. The CLI validates against them before signing.
 
 ## Appendix B: Example Entity Document
 

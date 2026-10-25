@@ -144,6 +144,19 @@ export async function startFake(): Promise<Fake> {
       return send(201, { eid: document.eid, level: "L0", log_index, receipt: { leaf: {}, leaf_hash: "ab".repeat(32) }, urls: { entity: `${f.url}/entities/${document.eid}` } });
     }
 
+    const rm = path.match(/^\/v1\/entities\/([^/]+)\/record\/redact$/);
+    if (rm && req.method === "POST") {
+      const ent = f.entities.get(decodeURIComponent(rm[1]));
+      const i = ent?.record.findIndex((e) => e.seq === b!.seq) ?? -1;
+      if (!ent || i < 0) return reject(404, "entry_not_found", "no such entry");
+      const v = await verifyObject(b as any);
+      if (!v.ok || v.signer !== ent.document.eid) return reject(422, "signature_invalid", "redaction");
+      const hash = await recordEntryHash(ent.record[i]);
+      if (b!.entry_sha256 !== hash) return reject(409, "entry_hash_mismatch", "hash");
+      ent.record[i] = { seq: b!.seq, prev: ent.record[i].prev, redacted: true, hash, redaction: b };
+      return send(201, { seq: b!.seq, placeholder: ent.record[i] });
+    }
+
     const m = path.match(/^\/v1\/entities\/([^/]+)\/(record|document|aliases)$/);
     if (m) {
       const ent = f.entities.get(decodeURIComponent(m[1]));
