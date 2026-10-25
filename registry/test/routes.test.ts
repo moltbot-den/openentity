@@ -63,10 +63,15 @@ describe("read endpoints", () => {
     expect(s.registry.publicKeyMultibase).toMatch(/^z6Mk/);
   });
 
-  it("directory defaults to L1 and above, with L0 one filter away; founding lists flagged entities", async () => {
+  it("directory defaults to L1 and above, with L0 one filter away, matches name or EID substrings in any case; founding lists flagged entities", async () => {
     const { kp } = await adopted("Findable");
     expect((await call("GET", "/entities?q=Findable")).body.entities).toEqual([]);
     expect((await call("GET", "/entities?q=Findable&level=0")).body.entities[0]).toMatchObject({ eid: kp.did, level: "L0" });
+    const part = kp.did.slice(-12, -4);
+    for (const q of [part.toLowerCase(), part.toUpperCase(), "findABLE"]) {
+      expect((await call("GET", `/entities?q=${q}&level=0`)).body.entities.map((e: any) => e.eid), q).toContain(kp.did);
+    }
+    expect((await call("GET", "/entities?q=%25&level=0")).body.entities.map((e: any) => e.eid)).not.toContain(kp.did);
     await E.db.run("UPDATE entities SET founding = 1 WHERE eid = $1", [kp.did]);
     expect((await call("GET", "/founding")).body.founding.map((f: any) => f.eid)).toContain(kp.did);
   });

@@ -413,6 +413,11 @@ starlight-toc a[aria-current='true'] {
 .oe-doors li > span:not(.oe-door) {
   color: var(--sl-color-gray-3);
 }
+.oe-doors li > span a {
+  margin-inline-start: 0.5rem;
+  font-size: 0.8125rem;
+  white-space: nowrap;
+}
 .oe-copy {
   grid-area: copy;
   margin: 0;
@@ -1206,6 +1211,43 @@ a.oe-flag:hover {
 }
 .oe-att-head > .oe-flag:first-child {
   margin-inline-start: 0;
+}
+/* An attestation claim: field names as quiet labels beside their values; nested values indent. */
+.sl-markdown-content .oe-claim {
+  display: grid;
+  grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
+  gap: 0.25rem 1rem;
+  margin: 0.375rem 0 0;
+}
+.sl-markdown-content .oe-claim dt {
+  margin: 0;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--sl-color-gray-3);
+  padding-top: 0.125rem;
+}
+.sl-markdown-content .oe-claim dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+.sl-markdown-content .oe-claim ul {
+  margin: 0;
+  padding-inline-start: 1.125rem;
+}
+.sl-markdown-content .oe-claim li {
+  margin: 0;
+}
+.sl-markdown-content .oe-raw {
+  margin-top: 0.5rem;
+  font-size: 0.875rem;
+}
+.sl-markdown-content .oe-raw summary {
+  cursor: pointer;
+  color: var(--sl-color-gray-3);
+}
+.sl-markdown-content .oe-raw pre {
+  margin-top: 0.5rem;
 }
 .sl-markdown-content .oe-record {
   list-style: none;

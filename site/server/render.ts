@@ -98,6 +98,23 @@ function recordSummary(e: J): string {
 const flag = (word: string, href?: string) =>
   href ? `<a class="oe-flag oe-flag-${esc(word.toLowerCase())}" href="${esc(href)}">${esc(word)}</a>` : `<span class="oe-flag oe-flag-${esc(word.toLowerCase())}">${esc(word)}</span>`;
 
+/** A claim value as text: scalars as is, flat objects as `key: value` pairs, anything deeper as nested lists. */
+function claimValue(v: unknown): string {
+  if (Array.isArray(v)) return v.length ? `<ul>${v.map((x) => `<li>${claimValue(x)}</li>`).join('')}</ul>` : 'none';
+  if (v && typeof v === 'object') {
+    const entries = Object.entries(v);
+    if (entries.every(([, x]) => x === null || typeof x !== 'object')) return entries.map(([k, x]) => `${esc(k)}: ${esc(x)}`).join(', ');
+    return `<dl class="oe-claim">${entries.map(([k, x]) => `<dt>${esc(k)}</dt><dd>${claimValue(x)}</dd>`).join('')}</dl>`;
+  }
+  return esc(v);
+}
+
+/** An attestation claim: one readable row per field, the exact JSON one click away. */
+const claimHtml = (claim: J) =>
+  `<dl class="oe-claim">${Object.entries(claim)
+    .map(([k, v]) => `<dt>${esc(k)}</dt><dd>${claimValue(v)}</dd>`)
+    .join('')}</dl><details class="oe-raw"><summary>Claim as JSON</summary><pre class="oe-pre"><code>${esc(JSON.stringify(claim, null, 2))}</code></pre></details>`;
+
 /** Attestations grouped by issuer. Accepts the registry listing shape ({sha256, attestation, label, disputed, ...}) or bare objects. */
 function attestationsByIssuer(items: J[], revocations: J[]): string {
   if (!items.length) return '<p>No attestations yet. Attestations come from observers, never from the entity itself.</p>';
@@ -114,16 +131,14 @@ function attestationsByIssuer(items: J[], revocations: J[]): string {
       const rows = xs
         .map((x) => {
           const a: J = x.attestation ?? x;
-          const claim = Object.entries(a.claim ?? {})
-            .map(([k, v]) => `${esc(k)}: ${esc(typeof v === 'object' ? JSON.stringify(v) : v)}`)
-            .join(', ');
+          const claim = a.claim && typeof a.claim === 'object' && Object.keys(a.claim).length ? claimHtml(a.claim) : '';
           const flags = [
             x.revoked_at || a.revoked_at || revoked.has(x.sha256 ?? a.sha256) ? flag('Revoked') : '',
             x.expired ? flag('Expired') : '',
             x.disputed ? flag('Disputed', '#disputes') : '',
           ].join('');
           const inherited = x.inherited_from ? ` Inherited from ${eidLink(x.inherited_from)}.` : '';
-          return `<li><div class="oe-att-head"><code>${esc(a.claim_type)}</code>${flags}</div><p>${claim || 'No claim fields.'}</p><p class="oe-label">Issued ${date(a.created)}${a.expires ? `, expires ${date(a.expires)}` : ''}${x.log_index != null ? `, log index ${esc(x.log_index)}` : ''}.${inherited}</p></li>`;
+          return `<li><div class="oe-att-head"><code>${esc(a.claim_type)}</code>${flags}</div>${claim || '<p>No claim fields.</p>'}<p class="oe-label">Issued ${date(a.created)}${a.expires ? `, expires ${date(a.expires)}` : ''}${x.log_index != null ? `, log index ${esc(x.log_index)}` : ''}.${inherited}</p></li>`;
         })
         .join('');
       return `<h3>${esc(issuer)} <span class="oe-label">${label}</span>${accredited}</h3><ul class="oe-list">${rows}</ul>`;
@@ -248,8 +263,11 @@ export function renderEntityList(res: unknown, query: URLSearchParams): string {
     const all = new URLSearchParams(query);
     all.set('level', '0');
     all.delete('page');
-    const widen = query.get('level') !== '0' ? ` <a href="/entities?${esc(all.toString())}">Include every level</a>, or` : '';
-    return `<div class="oe-empty"><p><strong>No entities match these filters.</strong></p><p>L0 Declared entities are hidden unless you choose every level.${widen} <a href="/entities">clear the filters</a>.</p></div>`;
+    const level = Number(query.get('level') ?? 1);
+    const hint = LEVEL_NAMES[level] && level > 0
+      ? `Entities below L${level} ${LEVEL_NAMES[level]} are hidden by this filter. <a href="/entities?${esc(all.toString())}">Include every level</a>, or`
+      : 'This search already includes every level. Try another name or EID, or';
+    return `<div class="oe-empty"><p><strong>No entities match these filters.</strong></p><p>${hint} <a href="/entities">clear the filters</a>.</p></div>`;
   }
   const body = rows
     .map(
@@ -315,7 +333,10 @@ ${
   leaves.length
     ? `<h3>Recent leaves</h3><table><thead><tr><th>Index</th><th>Type</th><th>Entity</th><th>Received</th></tr></thead><tbody>${[...leaves]
         .reverse()
-        .map((l) => `<tr><td><a href="/v1/log/proof/${esc(l.index)}">${esc(l.index)}</a></td><td><code>${esc(l.type)}</code></td><td>${l.eid ? eidLink(l.eid) : ''}</td><td>${esc(l.received_at)}</td></tr>`)
+        .map((e) => {
+          const l: J = e.leaf ?? e; // GET /v1/log/entries nests the leaf: {index, leaf: {type, eid, received_at}, leaf_hash}
+          return `<tr><td><a href="/v1/log/proof/${esc(e.index)}">${esc(e.index)}</a></td><td><code>${esc(l.type)}</code></td><td>${l.eid ? eidLink(l.eid) : ''}</td><td>${esc(l.received_at)}</td></tr>`;
+        })
         .join('')}</tbody></table>`
     : ''
 }`;

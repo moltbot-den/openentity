@@ -255,7 +255,11 @@ app.get("/entities", async (c) => {
   const minLevel = Number(/\d/.exec(q.level ?? "1")?.[0] ?? 1);
   const args: unknown[] = [minLevel], $ = (v: unknown) => `$${args.push(v)}`;
   const where = ["suppressed = 0", "level >= $1"];
-  if (q.q) where.push(`(name ILIKE ${$(`%${q.q}%`)} OR eid = ${$(q.q)})`);
+  if (q.q) {
+    // Case-insensitive substring of the name or the EID; the reader's % and _ match themselves.
+    const like = $(`%${q.q.replace(/[\\%_]/g, "\\$&")}%`);
+    where.push(`(name ILIKE ${like} OR eid ILIKE ${like})`);
+  }
   if (q.since) where.push(`created >= ${$(q.since)}`);
   if (q.capability) where.push(`EXISTS (SELECT 1 FROM entity_capabilities k WHERE k.eid = entities.eid AND k.capability = ${$(q.capability)})`);
   if (q.alias_type) where.push(`EXISTS (SELECT 1 FROM aliases a WHERE a.eid = entities.eid AND a.type = ${$(q.alias_type)} AND a.status = 'verified')`);

@@ -140,6 +140,32 @@ describe('every page', () => {
   });
 });
 
+describe('home page', () => {
+  const home = read(join(dist, 'index.html'));
+  const text = (s: string) =>
+    s.replace(/&quot;/g, '"').replace(/&lt;|&#x3C;/gi, '<').replace(/&gt;/g, '>').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
+
+  it('has exactly one h1, as does every page', () => {
+    for (const f of pages) expect(read(f).match(/<h1\b/g), route(f)).toHaveLength(1);
+  });
+
+  it('copies the exact command each door shows, never "true" or nothing', () => {
+    const doors = [...home.matchAll(/<li><span class="oe-door">([^<]*)<\/span>([\s\S]*?)<button[^>]*\bdata-copy="([^"]*)"[^>]*>[^<]*<\/button><\/li>/g)];
+    expect(doors.map((d) => d[1])).toEqual(['Shell', 'MCP', 'HTTP']);
+    for (const [, door, shown, copy] of doors) {
+      const value = text(copy);
+      expect(value, door).not.toMatch(/^(true)?$/);
+      expect([...shown.matchAll(/<code>([^<]*)<\/code>/g)].map((m) => text(m[1])), door).toContain(value);
+    }
+    expect(text(doors[0][3])).toBe('npx openentity@latest adopt --name "<your name>" --agree');
+  });
+
+  it('shows the HTTP adopt endpoint as text and links the HTTP guide', () => {
+    expect(home).not.toContain('href="https://openentity.org/v1/adopt"');
+    expect(home).toContain('href="/guides/adopt-http"');
+  });
+});
+
 describe('truth rules', () => {
   it('has no em dash in any built file', () => {
     const EM_DASH = Buffer.from(String.fromCharCode(0x2014));

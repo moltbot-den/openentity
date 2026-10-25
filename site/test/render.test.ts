@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   didDocument,
+  esc,
   formEnabled,
   keepFilters,
   levelBadge,
@@ -8,6 +9,7 @@ import {
   registryKeys,
   renderEntity,
   renderEntityList,
+  renderLog,
   renderObservers,
   securityTxt,
   statValue,
@@ -110,7 +112,39 @@ describe('entity page from the registry listing shapes', () => {
   });
 });
 
+describe('attestation claims', () => {
+  // Shaped like the live identity attestation on did:pkh:eip155:8453:0xfe8D934e2fCb515e3b8204Ca5cbCDEA9c758e28D.
+  const claim = { name: 'OptimusWill', aliases_verified: [{ type: 'platform', value: 'moltbotden:optimus-will' }, { type: 'wallet', value: 'did:pkh:eip155:8453:0xfe8D' }] };
+  const html = renderEntity('did:key:z6Mkx', { document: { name: 'X' } }, null, { attestations: [{ attestation: { issuer: 'did:web:o.example', claim_type: 'identity', claim } }] }).html;
+  it('reads as fields and lists, not JSON', () => {
+    const shown = html.split('<details')[0];
+    expect(shown).toContain('<dt>name</dt><dd>OptimusWill</dd>');
+    expect(shown).toContain('<li>type: platform, value: moltbotden:optimus-will</li>');
+    expect(shown).not.toContain('{&quot;');
+    expect(shown).not.toContain('[{');
+  });
+  it('keeps the exact JSON behind a details element', () => {
+    expect(html).toContain('<details class="oe-raw"><summary>Claim as JSON</summary>');
+    expect(html).toContain(esc(JSON.stringify(claim, null, 2)));
+  });
+});
+
+describe('log', () => {
+  it('fills type, entity and received from the leaf GET /v1/log/entries nests', () => {
+    const html = renderLog({ tree_size: 1 }, { entries: [{ index: 0, leaf: { type: 'Declaration', eid: 'did:key:z6Mkx', object_sha256: 'ab', received_at: '2026-10-24T22:52:41Z' }, leaf_hash: 'cd' }] });
+    expect(html).toContain('<td><code>Declaration</code></td><td><a href="/entities/did:key:z6Mkx">did:key:z6Mkx</a></td><td>2026-10-24T22:52:41Z</td>');
+  });
+});
+
 describe('directory', () => {
+  it('words the empty state for the level the reader chose', () => {
+    const every = renderEntityList({ entities: [] }, new URLSearchParams('q=nobody&level=0'));
+    expect(every).not.toContain('hidden');
+    expect(every).toContain('already includes every level');
+    const l2 = renderEntityList({ entities: [] }, new URLSearchParams('q=nobody&level=2'));
+    expect(l2).toContain('Entities below L2 Observed are hidden');
+    expect(l2).toContain('href="/entities?q=nobody&amp;level=0"');
+  });
   it('follows next_page from GET /v1/entities and offers a way out of an empty result', () => {
     expect(renderEntityList({ entities: [{ eid: 'did:key:z6Mkx', name: 'X', level: 'L1' }], next_page: 1 }, new URLSearchParams('capability=x'))).toContain('/entities?capability=x&amp;page=1');
     const empty = renderEntityList({ entities: [] }, new URLSearchParams('capability=x&level=1'));
