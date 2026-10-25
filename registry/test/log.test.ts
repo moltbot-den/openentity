@@ -89,7 +89,7 @@ describe("transparency log (spec 10.3)", () => {
     expect(idx).toEqual(idx.map((_, i) => i));
     expect(new Set(results).size).toBe(8);
     expect(await incorporate(E)).toBe(idx.length);
-  });
+  }, 30_000); // 304 leaves plus a proof per leaf on PGlite: about 7 s on a CI runner
 
   it("returns 404 for a proof of a leaf not yet incorporated", async () => {
     const r = await call("GET", "/log/proof/999999");
