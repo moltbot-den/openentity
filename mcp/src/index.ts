@@ -59,7 +59,8 @@ function publicOnly(key: string): KeyPair {
   return { did: didKeyFromPublicKey(publicKeyFromDidKey(did)) } as KeyPair;
 }
 
-const operatorOf = (name?: string) => ({ kind: name ? "human" : "none", ...(name ? { name } : {}), custody: "entity", can_change: [] });
+// Spec 10.6: when the server generates the key, custody is "registry" even though no copy is kept.
+const operatorOf = (name: string | undefined, custody: "registry" | "entity") => ({ kind: name ? "human" : "none", ...(name ? { name } : {}), custody, can_change: [] });
 
 const CORS = {
   "access-control-allow-origin": "*",
@@ -146,7 +147,7 @@ function serve({ registry, site }: McpDeps): (req: Request) => Promise<Response>
         const description = a.description ?? `${a.name}, an entity adopted under the Open Entity Identity Standard.`;
         const build = (kp: KeyPair) => ({
           document: buildDocument({
-            kp, name: a.name, description, operator: operatorOf(a.operator), created,
+            kp, name: a.name, description, operator: operatorOf(a.operator, a.custody === "custodial" ? "registry" : "entity"), created,
             extra: { declaration: { version: DECLARATION_VERSION, sha256: DECLARATION_SHA256, url: `${ORIGIN}/v1/entities/${kp.did}/declaration` } },
           }) as Record<string, any>,
           declaration: buildDeclaration({ eid: kp.did, name: a.name, created }) as Record<string, any>,
