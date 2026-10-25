@@ -1,7 +1,7 @@
 // Idempotent Cloudflare DNS writer for openentity.org. Every record it writes is DNS-only.
 //   tsx scripts/cloudflare-dns.ts validation   # ACM validation CNAMEs for openentity.org and mcp.openentity.org; polls until both certs are issued
 //   tsx scripts/cloudflare-dns.ts apex         # openentity.org and mcp.openentity.org -> their CloudFront distributions (replaces the old Worker record)
-// Needs: aws CLI (profile openentity) and gcloud (reads the Cloudflare token at runtime; never written out).
+// Needs: aws CLI (profile openentity) and the gcloud configuration moltbot-den (service account; reads the Cloudflare token at runtime, never written out).
 import { execFileSync } from "node:child_process";
 
 const ZONE = "029c9b190e8777ad33c216b9857c674a";
@@ -11,7 +11,7 @@ const CF = `https://api.cloudflare.com/client/v4/zones/${ZONE}/dns_records`;
 
 const run = (cmd: string, args: string[]) => execFileSync(cmd, args, { encoding: "utf8" }).trim();
 const aws = (...args: string[]): any => JSON.parse(run("aws", [...args, "--profile", "openentity", "--region", "us-east-1", "--output", "json"]));
-const token = run("gcloud", ["secrets", "versions", "access", "latest", "--project", "moltbot-den", "--secret", "cloudflare-api-token"]);
+const token = run("gcloud", ["--configuration=moltbot-den", "secrets", "versions", "access", "latest", "--project", "moltbot-den", "--secret", "cloudflare-api-token"]);
 
 async function cf(path: string, init: RequestInit = {}): Promise<any> {
   const res = await fetch(CF + path, { ...init, headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" } });
