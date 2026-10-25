@@ -299,7 +299,7 @@ app.get("/entities/:eid/attestations", async (c) => {
   const { issuer, claim_type, format } = c.req.query();
   if (issuer) where.push(`a.issuer = $${args.push(issuer)}`);
   if (claim_type) where.push(`a.claim_type = $${args.push(claim_type)}`);
-  const rows = await db.all(`SELECT a.*, o.did AS accredited, o.bootstrap, e.level AS issuer_level FROM attestations a LEFT JOIN observers o ON o.did = a.issuer LEFT JOIN entities e ON e.eid = a.issuer WHERE ${where.join(" AND ")} ORDER BY a.created DESC LIMIT 1000`, args);
+  const rows = await db.all(`SELECT a.*, o.did AS accredited, o.bootstrap, e.level AS issuer_level, EXISTS (SELECT 1 FROM disputes d WHERE d.object_sha256 = a.sha256) AS disputed FROM attestations a LEFT JOIN observers o ON o.did = a.issuer LEFT JOIN entities e ON e.eid = a.issuer WHERE ${where.join(" AND ")} ORDER BY a.created DESC LIMIT 1000`, args);
   const fp = await firstPartyIssuers(db, eid);
   return c.json({
     eid,
@@ -309,7 +309,7 @@ app.get("/entities/:eid/attestations", async (c) => {
       return {
         sha256: r.sha256, attestation: format === "vc" ? vc : a, issuer_level: LEVEL(r.issuer_level), accredited: !!r.accredited, bootstrap: !!r.bootstrap,
         label: fp(r.issuer) ? "first-party" : "independent", inherited_from: r.subject !== eid ? r.subject : null,
-        expired: r.expires <= nowIso(), revoked_at: r.revoked_at, revocation: r.revocation_json ? JSON.parse(r.revocation_json) : null, log_index: r.log_index,
+        expired: r.expires <= nowIso(), revoked_at: r.revoked_at, disputed: !!r.disputed, revocation: r.revocation_json ? JSON.parse(r.revocation_json) : null, log_index: r.log_index,
       };
     }),
   });
@@ -475,6 +475,42 @@ app.post("/continuity", async (c) => {
   const idx = await sequenced(db, leaves, stmts);
   const lv = await refreshLevel(db, successor);
   return c.json({ previous, successor, basis: link.basis, level: LEVEL(lv.level), ...receipt(c, idx, l) }, 201);
+});
+
+// ---------- disputes (spec 10.5) ----------
+
+app.post("/disputes", async (c) => {
+  const db = c.env.db;
+  const d = await readJson(c);
+  const issuer = normalizeEid(String(d?.issuer ?? ""));
+  await writeGuard(c, issuer);
+  schema("Dispute", d);
+  window(d.created, "dispute");
+  await signedBy(d, issuer, "dispute");
+  const subject = normalizeEid(String(d.subject));
+  await mustEntity(db, subject);
+  if (d.object_sha256) {
+    const o = await db.first(
+      "SELECT subject AS eid FROM attestations WHERE sha256 = $1 UNION ALL SELECT eid FROM documents WHERE sha256 = $1 UNION ALL SELECT eid FROM declarations WHERE sha256 = $1 LIMIT 1",
+      [d.object_sha256],
+    );
+    if (!o) fail(404, "object_not_found", `no attestation, document or declaration ${d.object_sha256}`);
+    if (o.eid !== subject) fail(422, "object_not_about_subject", "the disputed object is not about this subject");
+  }
+  const now = nowIso(), s = await sha(d);
+  const l = await leafFor("Dispute", subject, s, now);
+  const idx = await sequenced(db, [l], [
+    ["INSERT INTO disputes (sha256, issuer, subject, object_sha256, reason, json, received_at, log_index) VALUES ($1, $2, $3, $4, $5, $6, $7, $i)",
+      [s, issuer, subject, d.object_sha256 ?? null, d.reason, JSON.stringify(d), now]],
+  ]).catch((e) => (UNIQUE.test(String(e)) ? fail(409, "dispute_exists", "this dispute is already filed") : Promise.reject(e)));
+  return c.json({ sha256: s, subject, answer_by: new Date(Date.parse(now) + 14 * 86400_000).toISOString().replace(/\.\d+Z$/, "Z"), ...receipt(c, idx, l) }, 201);
+});
+
+app.get("/entities/:eid/disputes", async (c) => {
+  const db = c.env.db, eid = normalizeEid(c.req.param("eid"));
+  await mustEntity(db, eid);
+  const rows = await db.all("SELECT sha256, json, received_at, log_index FROM disputes WHERE subject = $1 ORDER BY received_at DESC LIMIT 500", [eid]);
+  return c.json({ eid, disputes: rows.map((r) => ({ sha256: r.sha256, dispute: JSON.parse(r.json), received_at: r.received_at, log_index: r.log_index })) });
 });
 
 app.post("/withdraw", async (c) => {

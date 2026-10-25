@@ -161,3 +161,36 @@ describe("capabilities (spec 5.2)", () => {
     expect((await write("POST", "/adopt", badKp.did, bad)).body.error).toBe("schema_invalid");
   });
 });
+
+describe("disputes (spec 10.5)", () => {
+  const dispute = (by: KeyPair, subject: string, extra: object = {}) =>
+    signObject({ spec: "openentity/1.0", type: "Dispute", issuer: by.did, subject, reason: "inaccurate", statement: "The work was delivered on time; the order log shows it.", created: nowSeconds(), nonce: randomNonce(), ...extra }, by);
+
+  it("logs a signed dispute against an attestation, lists it, and flags the attestation as disputed", async () => {
+    const { kp } = await adopted("Disputing Dee");
+    const grc = await generateKeyPair();
+    const strike = await write("POST", "/attestations", grc.did, await attest(grc, kp.did, "custom:clawgrc:violation", { policy: "declaration:1.0#3", severity: "high", evidence_hash: "a".repeat(64), observed_at: nowSeconds() }));
+    const d = await dispute(kp, kp.did, { object_sha256: strike.body.sha256 });
+    const r = await write("POST", "/disputes", kp.did, d);
+    expect(r.status).toBe(201);
+    expect(r.body.log_index).toBeTypeOf("number");
+    expect((await write("POST", "/disputes", kp.did, d)).status).toBe(409);
+
+    const list = (await call("GET", `/entities/${kp.did}/disputes`)).body.disputes;
+    expect(list.map((x: any) => x.dispute.object_sha256)).toEqual([strike.body.sha256]);
+    const atts = (await call("GET", `/entities/${kp.did}/attestations`)).body.attestations;
+    expect(atts[0]).toMatchObject({ sha256: strike.body.sha256, disputed: true });
+  });
+
+  it("rejects a dispute naming an unknown object, an object about someone else, or a forged signature", async () => {
+    const { kp } = await adopted();
+    const other = await adopted();
+    const peer = await generateKeyPair();
+    const about = await write("POST", "/attestations", peer.did, await attest(peer, other.kp.did, "collaboration", { with: peer.did, outcome: "ok", ref: "x" }));
+    expect((await write("POST", "/disputes", kp.did, await dispute(kp, kp.did, { object_sha256: "b".repeat(64) }))).status).toBe(404);
+    expect((await write("POST", "/disputes", kp.did, await dispute(kp, kp.did, { object_sha256: about.body.sha256 }))).body.error).toBe("object_not_about_subject");
+    const forged = { ...(await dispute(peer, kp.did)), issuer: kp.did };
+    expect((await write("POST", "/disputes", kp.did, forged)).body.error).toBe("signature_invalid");
+    expect((await write("POST", "/disputes", kp.did, await dispute(kp, "did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK"))).status).toBe(404);
+  });
+});
