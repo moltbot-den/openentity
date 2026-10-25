@@ -1,8 +1,8 @@
-import { mkdtemp, readdir, readFile, rm, stat } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { canonicalize, DECLARATION_SHA256, generateKeyPair, nowSeconds, randomNonce, recordEntryHash, sha256Hex, signObject, verifyObject, verifyPresentation } from "@openentity/sdk";
+import { canonicalize, DECLARATION_SHA256, generateKeyPair, nowSeconds, randomNonce, recordEntryHash, sha256Hex, signObject, validate, verifyObject, verifyPresentation } from "@openentity/sdk";
 import { anchorText, ANCHOR_MAX } from "../src/anchor";
 import { run } from "../src/main";
 import { startFake, type Fake } from "./fake-registry";
@@ -21,6 +21,8 @@ beforeEach(async () => {
   fake.opts.declarationHash = DECLARATION_SHA256;
   fake.opts.rejectAdopt = false;
   fake.opts.failRecord = false;
+  fake.opts.broken.clear();
+  fake.disputes.length = 0;
   fake.hits.length = 0;
   fake.entities.clear();
   fake.links.length = 0;
@@ -286,5 +288,111 @@ describe("resolve", () => {
     const r = await cli("resolve", "did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK", "--json");
     expect(r.code).toBe(0);
     expect(JSON.parse(r.out).verificationMethod[0].publicKeyMultibase).toMatch(/^z6Mk/);
+  });
+});
+
+describe("dispute", () => {
+  const SUBJECT = "did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK";
+  it("signs a Dispute that validates and POSTs it with a stamp for the issuer", async () => {
+    const { eid } = await adopted();
+    const obj = "ab".repeat(32);
+    const r = await cli("dispute", "--subject", SUBJECT, "--object", obj, "--reason", "inaccurate", "--statement", "This attestation is wrong.", "--json");
+    expect(r.code).toBe(0);
+    const d = fake.disputes[0];
+    expect(d).toMatchObject({ type: "Dispute", issuer: eid, subject: SUBJECT, object_sha256: obj, reason: "inaccurate", statement: "This attestation is wrong." });
+    expect(validate("Dispute", d).ok).toBe(true);
+    expect((await verifyObject(d)).ok).toBe(true);
+    expect(fake.hits.find((h) => h.path === "/v1/disputes")!.stamp).toBeTruthy();
+    expect(JSON.parse(r.out).answer_by).toBeTruthy();
+  });
+  it("omits object_sha256 when not given and rejects bad flags with exit 1", async () => {
+    await adopted();
+    expect((await cli("dispute", "--subject", SUBJECT, "--reason", "other", "--statement", "x")).code).toBe(0);
+    expect(fake.disputes[0]).not.toHaveProperty("object_sha256");
+    expect((await cli("dispute", "--reason", "other", "--statement", "x")).code).toBe(1);
+    expect((await cli("dispute", "--subject", SUBJECT, "--reason", "spite", "--statement", "x")).code).toBe(1);
+    expect((await cli("dispute", "--subject", SUBJECT, "--reason", "other")).code).toBe(1);
+    expect((await cli("dispute", "--subject", SUBJECT, "--object", "nothex", "--reason", "other", "--statement", "x")).code).toBe(1);
+    expect(fake.disputes).toHaveLength(1);
+  });
+});
+
+describe("verify-presentation", () => {
+  it("accepts a fresh presentation and exits 3 on wrong nonce, wrong audience or tampering", async () => {
+    await adopted();
+    const nonce = randomNonce();
+    const file = join(home, "p.json");
+    await writeFile(file, (await cli("present", "--audience", "https://v.example", "--nonce", nonce, "--no-attestations")).out);
+    const ok = await cli("verify-presentation", file, "--audience", "https://v.example", "--nonce", nonce);
+    expect(ok.code).toBe(0);
+    expect(ok.out).toContain("VERIFIED");
+    expect((await cli("verify-presentation", file, "--audience", "https://v.example", "--nonce", randomNonce())).code).toBe(3);
+    expect((await cli("verify-presentation", file, "--audience", "https://other.example", "--nonce", nonce)).code).toBe(3);
+    const p = JSON.parse(await readFile(file, "utf8"));
+    await writeFile(file, JSON.stringify({ ...p, audience: "https://other.example" }));
+    expect((await cli("verify-presentation", file, "--audience", "https://other.example", "--nonce", nonce)).code).toBe(3);
+    expect((await cli("verify-presentation", file, "--audience", "https://v.example")).code).toBe(1);
+    expect((await cli("verify-presentation", join(home, "missing.json"), "--audience", "a", "--nonce", "n")).code).toBe(1);
+  });
+});
+
+describe("capabilities and find", () => {
+  it("adopt --capabilities puts the slugs in the signed document; invalid slugs exit 3", async () => {
+    const r = await cli(...adoptArgs("--capabilities", "code-review,defi:smart-contracts", "--json"));
+    expect(r.code).toBe(0);
+    expect(fake.entities.get(JSON.parse(r.out).eid)!.document.capabilities).toEqual(["code-review", "defi:smart-contracts"]);
+    expect((await cli(...adoptArgs("--capabilities", "Bad Slug"))).code).toBe(3);
+  });
+  it("find queries the directory with its filters", async () => {
+    await cli(...adoptArgs("--capabilities", "code-review"));
+    const r = await cli("find", "--capability", "code-review", "--q", "Test", "--alias-type", "domain", "--level", "L1", "--registry", fake.url, "--json");
+    expect(r.code).toBe(0);
+    const hit = fake.hits.find((h) => h.path === "/v1/entities")!;
+    expect(new URLSearchParams(hit.search).toString()).toBe("capability=code-review&q=Test&alias_type=domain&level=L1");
+    expect(JSON.parse(r.out).entities).toHaveLength(1);
+    const none = await cli("find", "--capability", "nothing-like-this", "--registry", fake.url);
+    expect(none.code).toBe(0);
+    expect(none.out).toMatch(/no entities/i);
+    expect((await cli("find", "--registry", fake.url)).code).toBe(1);
+  });
+});
+
+describe("conformance", () => {
+  const conf = (...x: string[]) => cli("conformance", fake.url, "--json", ...x);
+  const failed = async (broken: Parameters<Set<string>["add"]>[0]) => {
+    fake.opts.broken.add(broken as any);
+    const r = await conf();
+    return { code: r.code, failed: (JSON.parse(r.out).checks as any[]).filter((c) => !c.ok).map((c) => c.name as string) };
+  };
+  it("passes a conforming registry, read-only", async () => {
+    const r = await cli("conformance", fake.url);
+    expect(r.code).toBe(0);
+    expect(r.out).toMatch(/PASS/);
+    expect(r.out).toContain("CONFORMS");
+    expect(fake.hits.every((h) => h.method === "GET" || !h.stamp)).toBe(true);
+    expect(fake.entities.size).toBe(0);
+  });
+  it("fails a registry whose checkpoint is signed by another key", async () => {
+    const x = await failed("checkpoint");
+    expect(x.code).toBe(3);
+    expect(x.failed).toContain("checkpoint signature");
+  });
+  it("fails broken inclusion proofs", async () => {
+    expect((await failed("inclusion")).failed.some((n) => n.startsWith("inclusion proof"))).toBe(true);
+  });
+  it("fails tiles that do not match the leaves", async () => {
+    expect((await failed("tiles")).failed).toContain("tiles match leaves");
+  });
+  it("fails a Turnstile challenge on an agent endpoint", async () => {
+    expect((await failed("turnstile")).failed).toContain("no Turnstile on agent endpoints");
+  });
+  it("fails non-JSON errors", async () => {
+    expect((await failed("html-errors")).failed).toContain("errors are JSON");
+  });
+  it("fails a malformed spec document", async () => {
+    expect((await failed("stamp-bits")).failed).toContain("stamp_bits");
+  });
+  it("exits 2 when the registry is unreachable", async () => {
+    expect((await cli("conformance", "http://127.0.0.1:1")).code).toBe(2);
   });
 });

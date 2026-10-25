@@ -95,6 +95,7 @@ export async function adopt({ v }: Ctx): Promise<Result> {
     created,
     extra: {
       ...(aliases.length ? { aliases } : {}),
+      ...(v.capabilities ? { capabilities: String(v.capabilities).split(",").map((c) => c.trim()).filter(Boolean) } : {}),
       declaration: { version: DECLARATION_VERSION, sha256: DECLARATION_SHA256, url: `${reg.base}/v1/entities/${eid}/declaration` },
     },
   });

@@ -4,7 +4,9 @@ import { anchor } from "./anchor";
 import { link, recover } from "./continuity";
 import { alias, documentCmd } from "./doc";
 import { CliError, EXIT } from "./errors";
+import { conformance } from "./conformance";
 import { logCmd, resolveCmd, verifyCmd } from "./log";
+import { dispute, find, verifyPresentationCmd } from "./peers";
 import { record } from "./record";
 import type { Ctx, Result } from "./store";
 import pkg from "../package.json";
@@ -17,18 +19,20 @@ const OPTIONS = {
   erc8004: str, wallet: str, chain: str, signature: str, entries: str, format: str, dir: str,
   type: str, reason: str, cost: str, context: str, "will-not-ref": str, topic: str, from: str, to: str, evidence: str, id: str, title: str, outcome: str,
   with: str, role: str, ref: str, event: str, link: str, out: str, key: str, previous: str, via: str, proof: str, audience: str, nonce: str,
+  subject: str, object: str, statement: str, capability: str, capabilities: str, "alias-type": str, level: str, q: str,
 } as const;
 
 const COMMANDS: Record<string, (c: Ctx) => Promise<Result>> = {
   adopt, whoami, self, anchor, document: documentCmd, record, alias, verify: verifyCmd, resolve: resolveCmd, log: logCmd, stats,
   export: exportCmd, import: importCmd, rotate: (c) => link(c, "rotation"), migrate: (c) => link(c, "migration"), recover, withdraw, present,
+  dispute, find, "verify-presentation": verifyPresentationCmd, conformance,
 };
 
 const HELP = `openentity ${pkg.version}: adopt and keep an Open Entity identity (OEIS-1)
 
 Usage: openentity <command> [options]   (also: oe)
 
-  adopt --name <n> --agree [--description --operator --custody --registry --wallet --erc8004 --dry-run]
+  adopt --name <n> --agree [--description --operator --custody --capabilities a,b --registry --wallet --erc8004 --dry-run]
   whoami | self [--entries n] | stats
   anchor [--format text|openclaw|claude|agents] [--write]
   document set <field> <value> | edit | push
@@ -36,6 +40,10 @@ Usage: openentity <command> [options]   (also: oe)
   alias add domain|wallet|erc8004|platform <value>
   verify <file|url|eid> | resolve <did>
   present --audience <verifier> --nonce <nonce> [--no-attestations]
+  verify-presentation <file> --audience <a> --nonce <n>      (offline; exit 3 on failure)
+  dispute --subject <eid> [--object <sha256>] --reason impersonation|illegal_content|inaccurate|other --statement <text>
+  find --capability <c> [--q <text> --alias-type <type> --level L1]
+  conformance <registry-url>                                 (read-only checks any registry must pass; exit 3 on failure)
   log checkpoint | proof <index> | audit <n>
   export [--with-key] [--out file] | import <file>
   rotate [--to keyfile] | migrate [--to keyfile] | recover --previous <eid> --via <alias>
