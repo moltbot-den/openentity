@@ -113,7 +113,34 @@ async function checkSiwe(env: Env, eid: string, proof: any, chainId: string, add
   return { error: "signature does not recover to the message address" };
 }
 
-export const platformDomain = (value: string) => { const p = value.split(":")[0]; return p.includes(".") ? p : `${p}.com`; };
+/** The string an eth_call returned (ABI: offset, length, bytes); "" when malformed. */
+function abiString(result: string): string {
+  try {
+    const h = result.slice(2), off = Number(BigInt("0x" + h.slice(0, 64))) * 2, len = Number(BigInt("0x" + h.slice(off, off + 64))) * 2;
+    return len > 2 * FETCH_MAX_BYTES ? "" : new TextDecoder().decode(unhex(h.slice(off + 64, off + 64 + len)));
+  } catch { return ""; }
+}
+
+/**
+ * ERC-8004 second path (spec 3.4): the agent's registration file (its agentURI, read with tokenURI) lists a `DID`
+ * service whose endpoint is the root EID. https (public host names only), ipfs (through a public gateway) and
+ * on-chain data: URIs; the file is fetched with the same bounds as every other alias proof.
+ */
+async function registrationFile(env: Env, eid: string, registry: string, agentId: bigint): Promise<string | null> {
+  const uri = abiString(await ethCall(env, registry, "0x" + selector("tokenURI(uint256)") + word(agentId)).catch(() => "0x"));
+  let file: any = null;
+  const data = /^data:application\/json(;base64)?,(.*)$/s.exec(uri);
+  if (data) {
+    try { file = JSON.parse(data[1] ? new TextDecoder().decode(Uint8Array.from(atob(data[2]), (c) => c.charCodeAt(0))) : decodeURIComponent(data[2])); } catch { /* not JSON */ }
+  } else if (uri.startsWith("ipfs://")) file = await getJson(`https://ipfs.io/ipfs/${uri.slice(7)}`).catch(() => null);
+  else if (DOMAIN.test(/^https:\/\/([a-z0-9.-]+)(?:[:/?#]|$)/i.exec(uri)?.[1]?.toLowerCase() ?? "")) file = await getJson(uri).catch(() => null);
+  else return "the agent's agentURI must be https:// on a host name, ipfs:// or a data:application/json URI";
+  // ERC-8004 drafts named the list `endpoints`; the final text names it `services`.
+  const services = [...(Array.isArray(file?.services) ? file.services : []), ...(Array.isArray(file?.endpoints) ? file.endpoints : [])];
+  return services.some((s: any) => s?.name === "DID" && s.endpoint === eid) ? null : "the agent's registration file lists no DID service naming this EID";
+}
+
+export const platformDomain =(value: string) => { const p = value.split(":")[0]; return p.includes(".") ? p : `${p}.com`; };
 
 export interface AliasInput { type: string; value: string; proof?: any }
 
@@ -137,6 +164,7 @@ export async function verifyAlias(env: Env, eid: string, a: AliasInput): Promise
     const m = /^eip155:(\d+):(0x[0-9a-fA-F]{40}):(\d+)$/.exec(a.value);
     if (!m) return "erc8004 alias value must be eip155:<chainId>:<identityRegistry>:<agentId>";
     if (m[1] !== "8453") return "only Base (eip155:8453) ERC-8004 registries are supported";
+    if (a.proof?.type !== "Eip4361") return registrationFile(env, eid, m[2], BigInt(m[3]));
     const r = await checkSiwe(env, eid, a.proof, m[1]);
     if (r.error) return r.error;
     const id = word(BigInt(m[3]));
