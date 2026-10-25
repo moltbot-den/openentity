@@ -184,19 +184,20 @@ export function hashData(obj: object, config: Omit<Proof, "proofValue">): Uint8A
   return concat(sha256Sync(canonicalize(config)), sha256Sync(canonicalize(unsecured(obj))));
 }
 
-export async function signProof(obj: object, kp: KeyPair, created: string = nowSeconds()): Promise<Proof> {
+/** `verificationMethod` defaults to the did:key of `kp`; a did:web signer passes its own method id (for example `did:web:x#key-1`). */
+export async function signProof(obj: object, kp: KeyPair, created: string = nowSeconds(), verificationMethod = verificationMethodId(kp.did)): Promise<Proof> {
   const config = {
     type: "DataIntegrityProof",
     cryptosuite: "eddsa-jcs-2022",
     created,
-    verificationMethod: verificationMethodId(kp.did),
+    verificationMethod,
     proofPurpose: "assertionMethod",
   };
   const sig = new Uint8Array(await crypto.subtle.sign({ name: "Ed25519" }, kp.privateKey, hashData(obj, config) as BufferSource));
   return { ...config, proofValue: "z" + base58btcEncode(sig) };
 }
-export async function signObject<T extends object>(obj: T, kp: KeyPair, created?: string): Promise<T & { proof: Proof }> {
-  return { ...obj, proof: await signProof(obj, kp, created) };
+export async function signObject<T extends object>(obj: T, kp: KeyPair, created?: string, verificationMethod?: string): Promise<T & { proof: Proof }> {
+  return { ...obj, proof: await signProof(obj, kp, created, verificationMethod) };
 }
 
 export async function verifyProof(obj: object, proof: Proof, resolver: Resolver = defaultResolver): Promise<VerifyResult> {

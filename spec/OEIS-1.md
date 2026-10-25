@@ -409,7 +409,7 @@ A registry MUST verify every proof, MUST link the two EIDs in both directions, M
 
 ### 10.1 Role
 
-The registry stores, verifies and publishes objects, and keeps an append-only transparency log so that the set of adoptions is auditable. It never holds entity private keys except in `custody: "registry"` mode (10.6). Anyone can run a registry; the reference registry is `openentity.org`, identified as `did:web:openentity.org`.
+The registry stores, verifies and publishes objects, and keeps an append-only transparency log so that the set of adoptions is auditable. It never holds entity private keys except in `custody: "registry"` mode (10.6). Anyone can run a registry; the reference registry is `openentity.org`, identified as `did:web:openentity.org`. A registry is itself an entity: it publishes its own Entity Document, signed with the key in its `did:web` document and entered in its log once, at `/.well-known/openentity.json` and `/v1/entities/<registry DID>/document`. It signs no Declaration, because it is not an AI system adopting the standard.
 
 ### 10.2 API (v1)
 

@@ -80,6 +80,16 @@ describe('site server', () => {
     expect(doc.verificationMethod[0].publicKeyMultibase).toBe('z6MkFixtureRegistryKey');
   });
 
+  it('serves the registry signed Entity Document at /.well-known/openentity.json, never an unsigned stand-in', async () => {
+    const res = await get('/.well-known/openentity.json');
+    expect(res.headers.get('access-control-allow-origin')).toBe('*');
+    expect(await res.json()).toMatchObject({ eid: 'did:web:openentity.org', proof: { verificationMethod: 'did:web:openentity.org#key-1' } });
+    const down = createSite({ registry: async () => Response.json({ error: 'internal' }, { status: 500 }), asset: fsAssets(dist), vars: {} });
+    const r = await down(new Request('https://openentity.org/.well-known/openentity.json'));
+    expect(r.status).toBe(503);
+    expect((await r.json()).eid).toBeUndefined();
+  });
+
   it('proxies /v1/* to the registry', async () => {
     expect(await (await get('/v1/stats')).json()).toMatchObject({ observers: 2 });
   });

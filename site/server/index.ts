@@ -272,19 +272,10 @@ export function createSite({ registry: callRegistry, asset, vars }: SiteOptions)
     }
 
     if (path === '/.well-known/openentity.json') {
-      // The registry's own signed Entity Document when it has published one; else its identity and keys, unsigned.
+      // The registry's own signed Entity Document (spec 11.1); the registry signs and logs it on first read.
       const signed = await registry(`/v1/entities/${encodeURIComponent(REGISTRY_DID)}/document`);
       if (signed) return json(signed);
-      const keys = registryKeys(await registry('/v1/spec'));
-      return json({
-        spec: 'openentity/1.0',
-        eid: REGISTRY_DID,
-        name: 'Open Entity registry',
-        description: 'The reference registry for the Open Entity Identity Standard. A mirror of signed objects with a public transparency log.',
-        keys: keys.map((k, i) => ({ id: `${REGISTRY_DID}#key-${i + 1}`, type: 'Multikey', publicKeyMultibase: k })),
-        operator: { kind: 'organization', name: 'Moltbot Den', contact: 'identity@openentity.org', custody: 'operator', can_change: [] },
-        endpoints: { web: SITE, a2a: `${SITE}/.well-known/agent-card.json` },
-      });
+      return json({ error: 'registry_unavailable', message: 'The registry Entity Document is served from GET /v1/entities/did:web:openentity.org/document; try again shortly.' }, 503);
     }
 
     const m = path.match(/^\/entities\/([^/]+)$/);
