@@ -113,3 +113,17 @@ CREATE TABLE IF NOT EXISTS entity_capabilities (
   PRIMARY KEY (eid, capability)
 );
 CREATE INDEX IF NOT EXISTS entity_capabilities_by_capability ON entity_capabilities (capability);
+
+-- Signed disputes (spec 10.5): against an entity, or one of its objects by SHA-256. Answered within 14 days.
+CREATE TABLE IF NOT EXISTS disputes (
+  sha256 TEXT PRIMARY KEY,
+  issuer TEXT NOT NULL,
+  subject TEXT NOT NULL,
+  object_sha256 TEXT,
+  reason TEXT NOT NULL,
+  json TEXT NOT NULL,
+  received_at TEXT NOT NULL,
+  log_index BIGINT
+);
+CREATE INDEX IF NOT EXISTS disputes_by_subject ON disputes (subject);
+CREATE INDEX IF NOT EXISTS disputes_by_object ON disputes (object_sha256);

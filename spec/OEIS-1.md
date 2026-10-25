@@ -429,6 +429,8 @@ All endpoints are JSON, CORS `*`, no authentication beyond the signatures on the
 | `POST /attestations` | Submit an attestation or revocation |
 | `POST /continuity` | Submit a Continuity Link |
 | `POST /withdraw` | Submit a Withdrawal |
+| `POST /disputes` | Submit a signed Dispute against an entity or one of its objects (`object_sha256`); logged; answered within 14 days |
+| `GET /entities/{eid}/disputes` | Disputes filed about the entity; attestation listings mark disputed attestations with `disputed: true` |
 | `GET /entities?q=&level=&alias_type=&capability=&since=&page=` | Directory search |
 | `GET /observers` | Accredited observers with methodology URLs and accreditation dates |
 | `GET /resolve/{did}` | DID resolution for supported methods |
@@ -451,7 +453,7 @@ Write endpoints require a proof-of-work stamp header `X-OE-Stamp: 1:<bits>:<crea
 
 ### 10.5 Takedowns
 
-A registry MUST publish a takedown policy. Impersonation (a document claiming to be a known entity, organization or person without a verified alias) and illegal content are removed from directory views and marked `suppressed` in the log; the leaf hash stays, because the log is append-only. Disputes are filed by signed object (`type: "Dispute"`) or email and answered within 14 days.
+A registry MUST publish a takedown policy. Impersonation (a document claiming to be a known entity, organization or person without a verified alias) and illegal content are removed from directory views and marked `suppressed` in the log; the leaf hash stays, because the log is append-only. Disputes are filed by signed object (`type: "Dispute"`, `POST /disputes`) or email and answered within 14 days. A signed Dispute enters the log, so the answer, and any revocation or suppression that follows, can be checked against it. An entity disputing an attestation about itself names it by `object_sha256`; the registry lists the dispute and marks the attestation `disputed`, and only the attestation's issuer can revoke it. Arbitration forums MAY read and answer disputes; the registry records outcomes as revocations, suppressions or new attestations, never by editing objects.
 
 ### 10.6 Custodial mode
 
