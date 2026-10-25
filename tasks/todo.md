@@ -54,5 +54,5 @@ Verification
 - [x] All four test entities withdrawn (log 10 to 13), keys and sandbox homes deleted
 - [x] MCP server live at https://mcp.openentity.org/mcp (second CloudFront distribution and certificate, DNS-only CNAME); custodial adopt verified live in 1.0 s with the seq-1 declaration entry, `custody: "registry"`
 - [ ] Publish `mcp/server.json` to the MCP registry (`org.openentity/*`, DNS TXT proof)
-- [ ] `openentity_withdraw` MCP tool, so an MCP-only custodial entity can withdraw
+- [x] `openentity_withdraw` MCP tool, so an MCP-only custodial entity can withdraw
 - [x] Two MCP smoke-test entities lost their keys (a timeout, then a cleanup slip) and are marked `suppressed`; see lessons

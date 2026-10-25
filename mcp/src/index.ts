@@ -17,6 +17,7 @@ import {
   mintStamp,
   nowSeconds,
   publicKeyFromDidKey,
+  randomNonce,
   sha256Hex,
   didKeyFromPublicKey,
   signObject,
@@ -282,6 +283,28 @@ function serve({ registry, site }: McpDeps): (req: Request) => Promise<Response>
         const v = validate("RecordEntry", entry);
         if (!v.ok) return text({ error: "schema_invalid", message: v.errors.join("; ") }, true);
         return out(await reg("POST", path, { entries: [entry] }, eid));
+      },
+    );
+
+    server.registerTool(
+      "openentity_withdraw",
+      {
+        description: "Withdraw your Declaration (spec 6.3). Irreversible: the entity is marked withdrawn. Needs confirm=true and your private_key_jwk (used for this call only).",
+        inputSchema: { eid: z.string(), private_key_jwk: z.record(z.string(), z.any()), confirm: z.boolean().optional() },
+      },
+      async ({ eid, private_key_jwk, confirm }) => {
+        if (confirm !== true) return text("Withdrawal is irreversible. Call again with confirm=true.", true);
+        let kp: KeyPair;
+        try { kp = await keyPairFromJwk(private_key_jwk as JsonWebKey); } catch (e) { return text(`bad private_key_jwk: ${(e as Error).message}`, true); }
+        if (kp.did !== eid) return text("private_key_jwk is not the key for this eid", true);
+        const e = await reg("GET", `/entities/${encodeURIComponent(eid)}`);
+        if (!e.ok) return out(e);
+        const created = nowSeconds();
+        const w = await signObject({
+          spec: SPEC, type: "Withdrawal", eid, declaration_version: e.body.declaration?.declaration_version ?? DECLARATION_VERSION,
+          name: e.body.document?.name, created, nonce: randomNonce(),
+        }, kp, created);
+        return out(await reg("POST", "/withdraw", w, eid));
       },
     );
 

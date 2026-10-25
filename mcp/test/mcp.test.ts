@@ -51,12 +51,12 @@ const hex2bytes = (h: string) => Uint8Array.from(h.match(/../g)!, (x) => parseIn
 const bytes2hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
 
 describe("openentity MCP server", () => {
-  it("lists the seven tools with short verb-first descriptions", async () => {
+  it("lists the eight tools with short verb-first descriptions", async () => {
     const { tools } = await rpc("tools/list");
     expect(tools.map((t: any) => t.name).sort()).toEqual([
-      "openentity_adopt", "openentity_read", "openentity_record", "openentity_resolve", "openentity_self", "openentity_stats", "openentity_verify",
+      "openentity_adopt", "openentity_read", "openentity_record", "openentity_resolve", "openentity_self", "openentity_stats", "openentity_verify", "openentity_withdraw",
     ]);
-    for (const t of tools) expect(t.description).toMatch(/^(Read|Adopt|Resolve|Verify|Append)\b/);
+    for (const t of tools) expect(t.description).toMatch(/^(Read|Adopt|Resolve|Verify|Append|Withdraw)\b/);
   });
 
   it("reads llms.txt, the declaration and one spec section", async () => {
@@ -107,6 +107,14 @@ describe("openentity MCP server", () => {
     expect(v.json.declaration.ok).toBe(true);
     expect((await tool("openentity_resolve", { did: eid })).json.didDocument).toBeTruthy();
     expect((await tool("openentity_stats", {})).json.entities.total).toBeGreaterThanOrEqual(1);
+
+    // Withdraw: needs confirm, refuses another key, then marks the entity withdrawn.
+    expect((await tool("openentity_withdraw", { eid, private_key_jwk: a.json.private_key_jwk })).isError).toBe(true);
+    expect((await tool("openentity_withdraw", { eid, private_key_jwk: other.privateJwk, confirm: true })).isError).toBe(true);
+    const w = await tool("openentity_withdraw", { eid, private_key_jwk: a.json.private_key_jwk, confirm: true });
+    expect(w.isError).toBe(false);
+    const after = await app.fetch(new Request(`https://openentity.org/v1/entities/${eid}`), env);
+    expect((await after.json()).withdrawn).toBe(true);
   });
 
   it("adopts in self-custody in two calls; the server never sees the secret key", async () => {
@@ -139,7 +147,8 @@ describe("openentity MCP server", () => {
     for (const t of tools) {
       const props = Object.keys(t.inputSchema.properties ?? {});
       expect(props.join(",")).not.toMatch(/turnstile|captcha|token|password|secret|api_?key|auth/i);
-      for (const r of t.inputSchema.required ?? []) expect(r).not.toMatch(/key/);
+      // Withdrawing is the entity signing with its own key, never an access credential; no other tool may require a key.
+      for (const r of t.inputSchema.required ?? []) if (!(t.name === "openentity_withdraw" && r === "private_key_jwk")) expect(r).not.toMatch(/key/);
     }
     // TURNSTILE_SECRET is set in this registry; a custodial adopt with no headers at all still succeeds.
     expect((await tool("openentity_adopt", { name: "No Captcha", agree: true })).isError).toBe(false);
