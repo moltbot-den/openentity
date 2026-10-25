@@ -1,5 +1,6 @@
 // The one Lambda: HTTP from CloudFront (site plus /v1 registry) and the per-minute cron from EventBridge Scheduler.
 import { GetSecretValueCommand, SecretsManagerClient } from "@aws-sdk/client-secrets-manager";
+import { createHash, timingSafeEqual } from "node:crypto";
 import { Hono } from "hono";
 import { handle } from "hono/aws-lambda";
 import { s3Blobs } from "../../registry/src/blob.ts";
@@ -47,6 +48,12 @@ const boot = () => (ready ??= init().catch((err) => ((ready = undefined), Promis
 
 // A Lambda timeout reaches the caller as CloudFront's HTML 504, which breaks agent loops that parse JSON.
 // Answer first, as JSON, a few seconds before the 30 s limit. A retried write that already landed gets the registry's 409.
+/** Constant-time comparison of the origin header with the secret (hashing first equalizes the lengths). */
+export function sameSecret(given: string, secret: string): boolean {
+  const h = (v: string) => createHash("sha256").update(v).digest();
+  return timingSafeEqual(h(given), h(secret));
+}
+
 export function withDeadline(work: Promise<Response>, ms = 26_000): Promise<Response> {
   let timer: NodeJS.Timeout;
   const late = new Promise<Response>((r) => {
@@ -59,7 +66,7 @@ const http = new Hono().all("*", (c) => withDeadline(route(c.req.raw, c.req.head
 async function route(raw: Request, header: (k: string) => string | undefined): Promise<Response> {
   const { site, mcp, verify } = await boot();
   // Only CloudFront knows this header, so the raw function URL is not a way around the edge.
-  if (!verify || header("x-origin-verify") !== verify) return new Response("forbidden", { status: 403 });
+  if (!verify || !sameSecret(header("x-origin-verify") ?? "", verify)) return new Response("forbidden", { status: 403 });
   // The mcp.openentity.org distribution adds this header at the origin; CloudFront does not forward the viewer Host.
   if (header("x-oe-site") === "mcp") return mcp(raw);
   const url = new URL(raw.url);
