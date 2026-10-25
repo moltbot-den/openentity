@@ -59,7 +59,7 @@ const http = new Hono().all("*", (c) => withDeadline(route(c.req.raw, c.req.head
 async function route(raw: Request, header: (k: string) => string | undefined): Promise<Response> {
   const { site, mcp, verify } = await boot();
   // Only CloudFront knows this header, so the raw function URL is not a way around the edge.
-  if (header("x-origin-verify") !== verify) return new Response("forbidden", { status: 403 });
+  if (!verify || header("x-origin-verify") !== verify) return new Response("forbidden", { status: 403 });
   // The mcp.openentity.org distribution adds this header at the origin; CloudFront does not forward the viewer Host.
   if (header("x-oe-site") === "mcp") return mcp(raw);
   const url = new URL(raw.url);

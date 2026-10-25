@@ -68,6 +68,11 @@ describe('site server', () => {
     expect(await (await get('/v1/stats')).json()).toMatchObject({ observers: 2 });
   });
 
+  it('answers /v1 itself from the registry as JSON, never the HTML 404', async () => {
+    const res = await get('/v1');
+    expect(res.headers.get('content-type')).toMatch(/application\/json/);
+  });
+
   it('renders entity pages server-side, and a readable 404 for unknown EIDs', async () => {
     const page = await get('/entities/did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK');
     expect(page.status).toBe(200);

@@ -7,6 +7,7 @@ import {
   registryKeys,
   renderEntity,
   renderEntityList,
+  renderObservers,
   securityTxt,
   statValue,
   subscribeForm,
@@ -113,5 +114,13 @@ describe('helpers', () => {
     expect(doc.id).toBe('did:web:openentity.org');
     expect(doc.verificationMethod[0]).toMatchObject({ type: 'Multikey', publicKeyMultibase: 'z6MkA', controller: 'did:web:openentity.org' });
     expect(doc.assertionMethod).toEqual(['did:web:openentity.org#key-1']);
+  });
+});
+
+describe('observer links', () => {
+  it('never renders a javascript: URL into an href', () => {
+    const html = renderObservers({ observers: [{ did: 'did:web:o.example', name: 'O', methodology_url: 'javascript:alert(1)' }] });
+    expect(html).not.toContain('javascript:');
+    expect(renderObservers({ observers: [{ did: 'did:web:o.example', methodology_url: 'https://o.example/m' }] })).toContain('href="https://o.example/m"');
   });
 });
