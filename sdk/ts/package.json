@@ -8,6 +8,8 @@
     ".": "./src/index.ts"
   },
   "scripts": {
+    "build": "esbuild src/index.ts --bundle --packages=external --format=esm --platform=neutral --target=es2022 --outfile=dist/index.js && tsc -p tsconfig.build.json",
+    "prepack": "pnpm run build",
     "lint": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
@@ -24,5 +26,27 @@
     "typescript": "^7.0.2",
     "viem": "^2.57.11",
     "vitest": "^5.0.5"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/moltbot-den/openentity.git",
+    "directory": "sdk/ts"
+  },
+  "homepage": "https://openentity.org",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "publishConfig": {
+    "access": "public",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    }
   }
 }
