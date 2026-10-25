@@ -146,6 +146,13 @@ class _Stub(BaseHTTPRequestHandler):
 
     def do_POST(self):
         body = json.loads(self.rfile.read(int(self.headers["content-length"])))
+        if self.path.endswith("/record"):  # spec 7.3: the seq-1 entry names the Declaration's hash
+            (e,) = body["entries"]
+            assert core.check_stamp(self.headers["x-oe-stamp"], 8, e["eid"]) is None and core.verify_object(e)[0]
+            assert (e["seq"], e["prev"], e["kind"]) == (1, None, "declaration")
+            assert e["payload"]["sha256"] == core.canonical_hash(_Stub.seen["decl"]).hex()
+            _Stub.seen["entry"] = e
+            return self._send(200, {"accepted": 1})
         doc, decl = body["document"], body["declaration"]
         stamp = self.headers["x-oe-stamp"]
         _Stub.seen = {"stamp": stamp, "doc": doc, "decl": decl}
@@ -163,6 +170,7 @@ def test_adopt_and_cli(tmp_path, monkeypatch, capsys):
         from openentity import adopt
         res = adopt("Tester", registry=url, seed=SEED)
         assert res["eid"] == res["did"] == core.KeyPair(SEED).did
+        assert res["record_pushed"] and _Stub.seen["entry"]["eid"] == res["eid"]
         monkeypatch.setenv("OPENENTITY_HOME", str(tmp_path))
         assert cli.main(["adopt", "--name", "T2", "--agree", "--registry", url, "--json"]) == 0
         out = json.loads(capsys.readouterr().out)

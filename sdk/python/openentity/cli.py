@@ -41,6 +41,8 @@ def main(argv: list[str] | None = None) -> int:
     else:
         print(f"Adopted {res['did']}\nlevel: {res.get('level')}  log index: {res.get('log_index')}\n"
               f"entity: {(res.get('urls') or {}).get('entity')}\nkey saved to {key_path} (keep it; it is your identity)")
+        if not res["record_pushed"]:
+            print("warning: the declaration record entry was not accepted; push it later", file=sys.stderr)
     return 0
 
 

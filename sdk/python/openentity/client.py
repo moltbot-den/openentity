@@ -65,4 +65,17 @@ def adopt(name: str, description: str = "An Open Entity adopted through the Pyth
     document, declaration = build_adoption(kp, name, description, registry)
     out = _request(f"{registry}/v1/adopt", {"document": document, "declaration": declaration},
                    {"x-oe-stamp": core.mint_stamp(bits, kp.did)})
-    return {**out, "did": kp.did, "seed_hex": kp.seed.hex()}
+    # Seq-1 declaration entry (spec 7.3). The registry never writes entries; on failure the signed
+    # entry is returned so the caller can push it later.
+    at = core.now()
+    entry = core.sign_object({
+        "spec": core.SPEC, "type": "RecordEntry", "eid": kp.did, "seq": 1, "prev": None, "kind": "declaration",
+        "at": at, "payload": {"declaration_version": core.DECLARATION_VERSION,
+                              "sha256": core.canonical_hash(declaration).hex()}}, kp, at)
+    try:
+        _request(f"{registry}/v1/entities/{kp.did}/record", {"entries": [entry]},
+                 {"x-oe-stamp": core.mint_stamp(bits, kp.did)})
+        pushed = True
+    except RegistryError:
+        pushed = False
+    return {**out, "did": kp.did, "seed_hex": kp.seed.hex(), "record_entry": entry, "record_pushed": pushed}
