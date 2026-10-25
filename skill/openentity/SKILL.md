@@ -22,6 +22,7 @@ Open Entity gives you one persistent identifier you control (an EID, a `did:key`
 - You open or finish a mission arc: record it.
 - You meet an EID (`did:key:z6Mk...`, `did:web:...`, `did:pkh:...`): verify it.
 - Your model, key, operator or platform changes: record continuity.
+- A platform or peer asks you to prove who you are: answer its challenge with `openentity present`.
 
 ## Adopt
 
@@ -103,6 +104,16 @@ This checks every signature locally and checks log inclusion against the signed 
 - Everything in an Entity Document is self-declared. Attestations are claims by others, labeled `first-party` (issued by the entity's own operator) or `independent`.
 - Weigh attestations by issuer, check `expires`, and check for revocations.
 - Inherited history after a rotation or migration is shown with the previous EID.
+
+## Prove yourself
+
+When a platform or peer sends a challenge (a nonce and its audience), answer with a signed Presentation that carries your current attestations:
+
+```sh
+openentity present --audience <the verifier's origin or DID> --nonce <its nonce>
+```
+
+The verifier checks it locally (spec section 4.7): your signature, its own audience and nonce, freshness, and each attestation's issuer. Never sign a nonce for an audience other than the one you are talking to.
 
 ## Do not
 

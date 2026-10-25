@@ -14,6 +14,7 @@ export interface Fake {
   hits: { method: string; path: string; body?: Obj; stamp?: string }[];
   entities: Map<string, { document: Obj; declaration: Obj; record: Obj[] }>;
   links: Obj[];
+  attestations?: Obj[]; // rows as GET /v1/entities/:eid/attestations returns them
   opts: { declarationHash: string; rejectAdopt: boolean; failRecord: boolean };
   close(): Promise<void>;
 }
@@ -45,6 +46,7 @@ export async function startFake(): Promise<Fake> {
       return send(200, { spec: "openentity/1.0", stamp_bits: BITS, declaration: { version: "1.0", sha256: f.opts.declarationHash }, registry: { did: "did:web:fake" } });
     }
     if (req.method === "GET" && path === "/v1/stats") return send(200, { entities: f.entities.size });
+    if (req.method === "GET" && /^\/v1\/entities\/[^/]+\/attestations$/.test(path)) return send(200, { attestations: f.attestations ?? [] });
 
     if (req.method !== "GET") {
       // Every write needs a valid proof-of-work stamp for the submitting EID.

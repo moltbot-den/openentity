@@ -1136,6 +1136,52 @@
         }
       }
     },
+    "Presentation": {
+      "type": "object",
+      "required": [
+        "spec",
+        "type",
+        "eid",
+        "audience",
+        "nonce",
+        "created",
+        "proof"
+      ],
+      "properties": {
+        "spec": {
+          "$ref": "#/$defs/spec"
+        },
+        "type": {
+          "const": "Presentation"
+        },
+        "eid": {
+          "$ref": "#/$defs/did"
+        },
+        "audience": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "nonce": {
+          "type": "string",
+          "minLength": 16,
+          "maxLength": 128
+        },
+        "created": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "attestations": {
+          "type": "array",
+          "maxItems": 20,
+          "items": {
+            "$ref": "#/$defs/Attestation"
+          }
+        },
+        "proof": {
+          "$ref": "#/$defs/proof"
+        }
+      }
+    },
     "LogLeaf": {
       "type": "object",
       "additionalProperties": false,

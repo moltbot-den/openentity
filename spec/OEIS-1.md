@@ -173,6 +173,12 @@ To verify any Open Entity object: (1) resolve the `verificationMethod` DID to it
 
 The repository publishes `test-vectors/` with a fixed seed, its EID, a signed Entity Document, a signed Declaration, a Record entry and an Attestation, plus the expected canonical bytes and hashes. An implementation that reproduces every vector is interoperable.
 
+### 4.7 Presentations (proof of control)
+
+A platform or peer that needs to know it is talking to the holder of an EID issues a challenge: a `nonce` of at least 16 random bytes and its own `audience` (its origin URL or DID). The entity answers with a signed `Presentation`: `{spec, type: "Presentation", eid, audience, nonce, created, attestations?, proof}`, signed by a key of `eid`. `attestations` MAY carry up to 20 current attestations about the entity, so that a verifier can weigh its trust in the same exchange, with no registry call.
+
+A verifier accepts a Presentation only if: it passes the schema; its signature verifies (section 4.5) and the signer is `eid` itself; `audience` is the verifier's own; `nonce` is one it issued and has not accepted before; and `created` is no more than 5 minutes old. Each carried attestation counts only if its `subject` is `eid`, it has not expired, and its signature verifies against its `issuer`. Revocation (section 8.4) needs the issuer or a registry, so a verifier that is online SHOULD check it; one that is offline weighs the attestation as unchecked for revocation. A Presentation is a session proof and is never submitted to a registry or logged.
+
 ## 5. Entity Document
 
 ### 5.1 Purpose

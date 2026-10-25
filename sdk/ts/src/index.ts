@@ -327,6 +327,7 @@ type ObjectType =
   | "Revocation"
   | "ContinuityLink"
   | "Dispute"
+  | "Presentation"
   | "LogLeaf";
 const BUNDLE_ID = "https://openentity.org/spec/1.0.json";
 const MAX_BYTES: Record<string, number> = { RecordEntry: 16 * 1024 };
@@ -552,4 +553,48 @@ export async function verifyNote(note: string, keyName: string, publicKey: Uint8
       return true;
   }
   return false;
+}
+
+// ---------- presentations (spec 4.7) ----------
+
+/** Sign a proof of control of `kp`'s EID for one audience and one verifier-issued nonce, optionally carrying attestations. */
+export async function buildPresentation(kp: KeyPair, opts: { audience: string; nonce: string; attestations?: object[] }): Promise<object> {
+  const created = nowSeconds();
+  return signObject({ spec: SPEC, type: "Presentation", eid: kp.did, audience: opts.audience, nonce: opts.nonce, created, ...(opts.attestations?.length ? { attestations: opts.attestations } : {}) }, kp, created);
+}
+
+type AttestationCheck = { claim_type?: string; issuer?: string; ok: boolean; error?: string };
+
+/**
+ * Check a presentation the verifier asked for: schema, signature by the EID itself, audience, nonce, freshness (5 minutes).
+ * Each carried attestation is checked for subject, expiry and its issuer's signature; revocation needs the issuer or a
+ * registry and is the caller's to check when online. `ok` covers the presentation; attestations are reported one by one.
+ */
+export async function verifyPresentation(
+  p: any,
+  opts: { audience: string; nonce: string; now?: Date; maxAgeSeconds?: number; resolver?: Resolver },
+): Promise<{ ok: boolean; eid?: string; errors: string[]; attestations: AttestationCheck[] }> {
+  const errors: string[] = [];
+  const v = validate("Presentation", p);
+  if (!v.ok) return { ok: false, errors: v.errors, attestations: [] };
+  const eid = normalizeEid(p.eid), now = (opts.now ?? new Date()).getTime();
+  const sig = await verifyObject(p, opts.resolver);
+  if (!sig.ok || normalizeEid(sig.signer ?? "") !== eid) errors.push(`signature: ${sig.error ?? `signed by ${sig.signer}, not ${eid}`}`);
+  if (p.audience !== opts.audience) errors.push(`audience is ${p.audience}, expected ${opts.audience}`);
+  if (p.nonce !== opts.nonce) errors.push("nonce does not match the one issued");
+  const age = (now - Date.parse(p.created)) / 1000;
+  if (!(age <= (opts.maxAgeSeconds ?? 300) && age >= -60)) errors.push("presentation is not fresh");
+  const attestations: AttestationCheck[] = [];
+  for (const a of p.attestations ?? []) {
+    const c: AttestationCheck = { claim_type: a.claim_type, issuer: a.issuer, ok: false };
+    if (normalizeEid(String(a.subject)) !== eid) c.error = "subject is not the presenting entity";
+    else if (Date.parse(a.expires) <= now) c.error = "expired";
+    else {
+      const r = await verifyObject(a, opts.resolver);
+      if (!r.ok || normalizeEid(r.signer ?? "") !== normalizeEid(String(a.issuer))) c.error = `issuer signature: ${r.error ?? `signed by ${r.signer}`}`;
+      else c.ok = true;
+    }
+    attestations.push(c);
+  }
+  return { ok: errors.length === 0, eid, errors, attestations };
 }

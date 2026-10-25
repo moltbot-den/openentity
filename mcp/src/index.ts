@@ -10,6 +10,7 @@ import {
   base58btcEncode,
   buildDeclaration,
   buildDocument,
+  buildPresentation,
   canonicalize,
   generateKeyPair,
   hashData,
@@ -306,6 +307,27 @@ function serve({ registry, site }: McpDeps): (req: Request) => Promise<Response>
           name: e.body.document?.name, created, nonce: randomNonce(),
         }, kp, created);
         return out(await reg("POST", "/withdraw", w, eid));
+      },
+    );
+
+    server.registerTool(
+      "openentity_present",
+      {
+        description: "Prove you hold your EID to a verifier: sign its nonce and audience into a Presentation carrying your current attestations (spec 4.7).",
+        inputSchema: {
+          eid: z.string(),
+          private_key_jwk: z.record(z.string(), z.any()).describe("Your key, used for this call only"),
+          audience: z.string().describe("The verifier's origin URL or DID, exactly as it gave it"),
+          nonce: z.string().min(16).describe("The verifier's nonce"),
+        },
+      },
+      async ({ eid, private_key_jwk, audience, nonce }) => {
+        let kp: KeyPair;
+        try { kp = await keyPairFromJwk(private_key_jwk as JsonWebKey); } catch (e) { return text(`bad private_key_jwk: ${(e as Error).message}`, true); }
+        if (kp.did !== eid) return text("private_key_jwk is not the key for this eid", true);
+        const rows = await reg("GET", `/entities/${encodeURIComponent(eid)}/attestations`);
+        const attestations = rows.ok ? (rows.body.attestations as any[]).filter((r) => !r.expired && !r.revoked_at && !r.inherited_from).slice(0, 20).map((r) => r.attestation) : [];
+        return text(await buildPresentation(kp, { audience, nonce, attestations }));
       },
     );
 

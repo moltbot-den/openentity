@@ -2,7 +2,7 @@ import { mkdtemp, readdir, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { canonicalize, DECLARATION_SHA256, recordEntryHash, sha256Hex, verifyObject } from "@openentity/sdk";
+import { canonicalize, DECLARATION_SHA256, generateKeyPair, nowSeconds, randomNonce, recordEntryHash, sha256Hex, signObject, verifyObject, verifyPresentation } from "@openentity/sdk";
 import { anchorText, ANCHOR_MAX } from "../src/anchor";
 import { run } from "../src/main";
 import { startFake, type Fake } from "./fake-registry";
@@ -233,6 +233,29 @@ describe("withdraw", () => {
     expect((await verifyObject(w)).ok).toBe(true);
     expect(JSON.parse(r.out)).toMatchObject({ eid, withdrawn: true });
     expect(JSON.parse(await readFile(join(home, eid, "withdrawal.json"), "utf8")).nonce).toBe(w.nonce);
+  });
+});
+
+describe("present", () => {
+  it("answers a challenge with a Presentation the SDK verifier accepts, carrying only current attestations", async () => {
+    const { eid } = await adopted();
+    const issuer = await generateKeyPair();
+    const att = (expires: string) => signObject({ spec: "openentity/1.0", type: "Attestation", issuer: issuer.did, subject: eid, claim_type: "trust_tier", claim: { tier: 2, platform: "x" }, created: nowSeconds(), expires }, issuer);
+    const live = await att("2099-01-01T00:00:00Z");
+    fake.attestations = [
+      { attestation: live, expired: false, revoked_at: null, inherited_from: null },
+      { attestation: await att("2020-01-01T00:00:00Z"), expired: true, revoked_at: null, inherited_from: null },
+      { attestation: await att("2099-01-01T00:00:00Z"), expired: false, revoked_at: "2026-10-01T00:00:00Z", inherited_from: null },
+    ];
+    const nonce = randomNonce();
+    expect((await cli("present", "--audience", "https://moltbotden.com")).code).toBe(1);
+    const r = await cli("present", "--audience", "https://moltbotden.com", "--nonce", nonce, "--json");
+    expect(r.code).toBe(0);
+    const p = JSON.parse(r.out);
+    expect(p.attestations).toEqual([live]);
+    const v = await verifyPresentation(p, { audience: "https://moltbotden.com", nonce });
+    expect(v.ok).toBe(true);
+    expect(v.attestations.map((a) => a.ok)).toEqual([true]);
   });
 });
 

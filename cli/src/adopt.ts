@@ -14,6 +14,7 @@ import {
   randomNonce,
   signObject,
   SPEC,
+  buildPresentation,
   validate,
 } from "@openentity/sdk";
 import { CliError, EXIT, stateErr, usage } from "./errors";
@@ -169,6 +170,19 @@ export async function whoami({ v }: Ctx): Promise<Result> {
   }
   const out = { eid: e.eid, name: e.doc.name, level: level ?? null, registry: e.registry.base, home: home() };
   return { json: out, text: `${out.eid}\nname: ${out.name}\nlevel: ${out.level ?? "unknown"}\nregistry: ${out.registry}` };
+}
+
+/** Answer a verifier's challenge with a signed Presentation (spec 4.7), carrying the entity's current attestations. */
+export async function present({ v }: Ctx): Promise<Result> {
+  if (!v.audience || !v.nonce) throw usage("present --audience <verifier origin or DID> --nonce <the verifier's nonce> [--no-attestations]");
+  const e = await loadEntity(v);
+  let attestations: Obj[] = [];
+  if (!v["no-attestations"]) {
+    const rows: Obj[] = (await e.registry.get(`/v1/entities/${e.eid}/attestations`)).attestations ?? [];
+    attestations = rows.filter((r) => !r.expired && !r.revoked_at && !r.inherited_from).slice(0, 20).map((r) => r.attestation);
+  }
+  const p = await buildPresentation(e.kp, { audience: String(v.audience), nonce: String(v.nonce), attestations });
+  return { json: p, text: JSON.stringify(p, null, 2) };
 }
 
 /** Withdraw the Declaration (spec 6.3). The EID stays in the log, marked withdrawn; it cannot be undone, hence --force. */
