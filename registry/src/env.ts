@@ -1,22 +1,21 @@
+import type { Db } from "./db.ts";
+import type { Blobs } from "./blob.ts";
+
 export interface Env {
-  DB: D1Database;
-  KV: KVNamespace;
-  LOG: R2Bucket;
-  WRITE_LIMITER?: { limit(o: { key: string }): Promise<{ success: boolean }> };
+  db: Db;
+  log: Blobs; // tiles, checkpoint, snapshots
+  snapshots?: Blobs; // off-site Object Lock copy of the daily snapshots
   STAMP_BITS: string;
-  IP_DAILY_LIMIT?: string; // preview only, for the load test
   REGISTRY_HOST: string;
   BASE_RPC_URL: string;
-  S3_BUCKET?: string;
-  S3_REGION?: string;
   REGISTRY_KEY_JWK?: string;
   CUSTODY_KEY?: string;
   HASH_SALT?: string;
   TURNSTILE_SECRET?: string;
   CIO_SITE_ID?: string;
   CIO_API_KEY?: string;
-  AWS_ACCESS_KEY_ID?: string;
-  AWS_SECRET_ACCESS_KEY?: string;
+  IP_DAILY_LIMIT?: string; // overrides LIMITS.writes_per_ip_per_day (load test)
+  WRITE_PER_MINUTE?: string; // overrides LIMITS.writes_per_ip_per_minute (load test)
 }
 
 export const REGISTRY_DID = "did:web:openentity.org";

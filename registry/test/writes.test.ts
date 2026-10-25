@@ -113,7 +113,7 @@ describe("levels (spec 2.2, 8.4)", () => {
     let r = await write("POST", "/attestations", stranger.did, await attest(stranger, kp.did, "stage", { stage: "entity", profile: "entity-framework/1.0" }));
     expect(r.status).toBe(201);
     expect(r.body.subject_level).toBe("L0");
-    await E.DB.prepare("INSERT INTO observers (did, name, accredited_at, bootstrap) VALUES (?, 'Obs', ?, 1)").bind(obs.did, nowSeconds()).run();
+    await E.db.run("INSERT INTO observers (did, name, accredited_at, bootstrap) VALUES ($1, 'Obs', $2, 1)", [obs.did, nowSeconds()]);
     const layer = await attest(obs, kp.did, "layer_scores", { cognition: 0.7, presence: 0.7, identity_core: 0.7, mission: 0.7, profile: "entity-framework/1.0" });
     r = await write("POST", "/attestations", obs.did, layer);
     expect(r.body.subject_level).toBe("L2");
@@ -134,7 +134,7 @@ describe("levels (spec 2.2, 8.4)", () => {
     const { kp } = await adopted("Op", { operator: { kind: "organization", name: "Den", contact: "ops@den.example", custody: "operator", can_change: [] } });
     const obs = await generateKeyPair();
     mockFetch({ "den.example/.well-known/did.json": () => didWebDoc("den.example", obs) });
-    await E.DB.prepare("INSERT INTO observers (did, name, accredited_at, bootstrap) VALUES ('did:web:den.example', 'Den', ?, 1)").bind(nowSeconds()).run();
+    await E.db.run("INSERT INTO observers (did, name, accredited_at, bootstrap) VALUES ('did:web:den.example', 'Den', $1, 1)", [nowSeconds()]);
     const unsigned = { spec: "openentity/1.0", type: "Attestation", issuer: "did:web:den.example", subject: kp.did, claim_type: "identity", claim: { name: "Op", aliases_verified: [] }, created: nowSeconds(), expires: later(86400) };
     const r = await write("POST", "/attestations", "did:web:den.example", { ...unsigned, proof: await signAs(unsigned, obs, "did:web:den.example#k") });
     expect(r.status).toBe(201);

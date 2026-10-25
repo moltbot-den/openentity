@@ -50,8 +50,9 @@ describe("no human-only challenge on agent endpoints (spec 10.4)", () => {
     expect(cio[0].url).toBe("https://track.customer.io/api/v1/customers/a%40b.example");
     expect(cio[0].headers.get("authorization")).toBe(`Basic ${btoa("s:k")}`);
     expect(await cio[0].json()).toMatchObject({ source: "openentity.org", operator: true });
-    const stored = await E.DB.prepare("SELECT key FROM rate_events WHERE key LIKE 'sub:%'").all<{ key: string }>();
-    expect(JSON.stringify(stored.results)).not.toContain("b.example");
+    const stored = await E.db.all("SELECT key FROM rate_events WHERE key LIKE 'sub:%'");
+    expect(stored).toHaveLength(1);
+    expect(JSON.stringify(stored)).not.toContain("b.example");
   });
 });
 
@@ -66,7 +67,7 @@ describe("read endpoints", () => {
     const { kp } = await adopted("Findable");
     expect((await call("GET", "/entities?q=Findable")).body.entities).toEqual([]);
     expect((await call("GET", "/entities?q=Findable&level=0")).body.entities[0]).toMatchObject({ eid: kp.did, level: "L0" });
-    await E.DB.prepare("UPDATE entities SET founding = 1 WHERE eid = ?").bind(kp.did).run();
+    await E.db.run("UPDATE entities SET founding = 1 WHERE eid = $1", [kp.did]);
     expect((await call("GET", "/founding")).body.founding.map((f: any) => f.eid)).toContain(kp.did);
   });
 

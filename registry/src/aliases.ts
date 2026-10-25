@@ -142,11 +142,11 @@ export async function verifyAlias(env: Env, eid: string, a: AliasInput): Promise
     const t = Date.parse(p.issued);
     if (Number.isNaN(t) || t > Date.now() + 10 * 60_000 || t < Date.now() - 24 * 3600_000) return "issued must be within 24 hours of submission";
     const text = `Open Entity alias binding\neid: ${eid}\nalias: ${a.value}\nissued: ${p.issued}`;
-    let sig: Uint8Array;
-    try { sig = base58btcDecode(p.proofValue.replace(/^z/, "")); } catch { return "proofValue is not base58btc"; }
+    let sig: Uint8Array<ArrayBuffer>;
+    try { sig = new Uint8Array(base58btcDecode(p.proofValue.replace(/^z/, ""))); } catch { return "proofValue is not base58btc"; }
     let signed = false;
     for (const pk of (await resolver(eid)).ed25519 ?? []) {
-      const key = await crypto.subtle.importKey("raw", pk, { name: "Ed25519" }, false, ["verify"]);
+      const key = await crypto.subtle.importKey("raw", new Uint8Array(pk), { name: "Ed25519" }, false, ["verify"]);
       // Accept the spec 3.5 block with or without a final newline.
       if ((await crypto.subtle.verify("Ed25519", key, sig, enc.encode(text))) || (await crypto.subtle.verify("Ed25519", key, sig, enc.encode(text + "\n")))) signed = true;
     }

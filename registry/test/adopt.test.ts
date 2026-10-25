@@ -71,13 +71,13 @@ describe("adopt", () => {
     const r = await write("POST", "/adopt", "did:web:openentity.org", { custodial: true, name: "Keeper", keep_copy: true });
     expect(r.status).toBe(201);
     expect(r.body.custodial.private_key_jwk.d).toBeTypeOf("string");
-    const row = await E.DB.prepare("SELECT enc_key FROM custodial_keys WHERE eid = ?").bind(r.body.eid).first<string>("enc_key");
+    const row = (await E.db.first("SELECT enc_key FROM custodial_keys WHERE eid = $1", [r.body.eid]))?.enc_key;
     expect(row).toBeTruthy();
     expect(row).not.toContain(r.body.custodial.private_key_jwk.d);
     const doc = await call("GET", `/entities/${r.body.eid}/document`);
     expect(doc.body.operator.custody).toBe("registry");
     const noCopy = await write("POST", "/adopt", "did:web:openentity.org", { custodial: true, name: "Light" });
-    expect(await E.DB.prepare("SELECT 1 FROM custodial_keys WHERE eid = ?").bind(noCopy.body.eid).first()).toBeNull();
+    expect(await E.db.first("SELECT 1 FROM custodial_keys WHERE eid = $1", [noCopy.body.eid])).toBeNull();
   });
 
   it("withdraws: the EID stays listed and marked withdrawn", async () => {
@@ -110,9 +110,22 @@ describe("stamp (spec 10.4)", () => {
   });
 
   it("caps writes per IP per day", async () => {
-    const e = { ...E, IP_DAILY_LIMIT: "1" }, ip = { "cf-connecting-ip": `203.0.113.${Math.floor(Math.random() * 250)}` };
+    const e = { ...E, IP_DAILY_LIMIT: "1" }, ip = { "cloudfront-viewer-address": `203.0.113.${Math.floor(Math.random() * 250)}:443` };
     const a = await generateKeyPair(), b = await generateKeyPair();
     expect((await call("POST", "/adopt", await signed(a), { ...(await stamp(a.did)), ...ip }, e)).status).toBe(201);
     expect((await call("POST", "/adopt", await signed(b), { ...(await stamp(b.did)), ...ip }, e)).body.error).toBe("rate_limited");
+  });
+
+  it("caps writes per IP per minute, keyed by the CloudFront viewer address", async () => {
+    const e = { ...E, WRITE_PER_MINUTE: "1" }, ip = { "cloudfront-viewer-address": "2001:db8::7:51234" };
+    const errors: string[] = [];
+    // Three writes: even if a minute boundary falls between two of them, two share a minute.
+    for (let i = 0; i < 3; i++) {
+      const kp = await generateKeyPair();
+      errors.push((await call("POST", "/adopt", await signed(kp), { ...(await stamp(kp.did)), ...ip }, e)).body.error);
+    }
+    expect(errors).toContain("rate_limited");
+    const other = await generateKeyPair();
+    expect((await call("POST", "/adopt", await signed(other), { ...(await stamp(other.did)), "cloudfront-viewer-address": "198.51.100.9:443" }, e)).status).toBe(201);
   });
 });

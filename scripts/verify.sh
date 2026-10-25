@@ -15,7 +15,7 @@ if [ -f pnpm-lock.yaml ]; then
   pnpm install --frozen-lockfile >/dev/null
   pnpm -r --if-present run lint
   pnpm -r --if-present run typecheck
-  pnpm -r --workspace-concurrency=1 --if-present run test  # two workerd suites in parallel fail to start
+  pnpm -r --if-present run test
 fi
 
 # Independent Python implementation: its own tests, and every TS-generated vector must verify.

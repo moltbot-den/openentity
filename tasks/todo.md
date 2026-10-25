@@ -20,21 +20,25 @@ SDK and CLI
 - [ ] `sdk/ts`: did:key, JCS, eddsa-jcs-2022 sign and verify, EIP-712 verify, stamp, Merkle proofs
 - [ ] `cli/` (`openentity`, `oe`): adopt, whoami, self, anchor, document, record, alias, verify, resolve, log, stats, export and import; `--json`, `--dry-run`, stable exit codes
 - [ ] CLI published to npm
-Registry (`registry/`, Hono, D1, KV, R2, Queues)
+Registry (`registry/`, Hono on Node, Aurora PostgreSQL via Data API, S3)
 - [ ] `schema.sql` per PRD 8
 - [ ] Spec 10.2 endpoints: spec, adopt, entities, document, aliases (domain, wallet, erc8004, platform), record, attestations, continuity, withdraw, observers, resolve, verify, stats, subscribe, stats history CSV, founding
-- [ ] tlog-tiles log: leaves, tiles on R2, signed checkpoint, inclusion and consistency proofs, sth, entries, daily snapshot plus S3 Object Lock copy
+- [x] tlog-tiles log: leaves, tiles on S3, signed checkpoint, inclusion and consistency proofs, sth, entries, daily snapshot plus S3 Object Lock copy
 - [ ] Stamps, per-IP and per-EID limits, schema validation before signatures
-Site (`site/`, Astro with Starlight, Workers static assets)
+Site (`site/`, Astro with Starlight, served by the app Lambda through CloudFront)
 - [x] Every page in PRD 7.1; brand mark SVG; JSON-LD; no page needs JavaScript to read
 - [x] `llms.txt` (Appendix A), `llms-full.txt`, `skill/openentity/SKILL.md`, `AGENTS.md`, well-known files, robots.txt with Content-Signal, sitemap, security.txt
-- [ ] Human form: Turnstile plus Customer.io Track API (form not rendered until credentials exist). Site side done: rendered by the site Worker only when `SUBSCRIBE_ENABLED = "true"`; posts form-encoded `email`, `operator`, `cf-turnstile-response` to `/v1/subscribe`
-Cloudflare
-- [x] Resources: D1 `openentity-registry` (f24dd781-d0c2-41a7-95cd-60c52588891d), KV `openentity-registry` (04fc64a9acac4853bc94edb36afaa92a), R2 `openentity-log`. No Queues: the account is on the Queues free tier (10K operations a day), which one load test used up, so a per-minute cron incorporates leaves instead
+- [ ] Human form: Turnstile plus Customer.io Track API (form not rendered until credentials exist). Site side done: rendered by `site/server` only when `SUBSCRIBE_ENABLED = "true"`; posts form-encoded `email`, `operator`, `cf-turnstile-response` to `/v1/subscribe`
+AWS (account `openentity` 099705791378, us-east-1, stack `OpenEntity`, from credits)
+- [x] CDK stack `infra/`: CloudFront (openentity.org, ACM cert), one Lambda (site plus /v1, origin header check), Aurora Serverless v2 PostgreSQL 16 with Data API, log bucket, snapshot bucket (Object Lock compliance 1 year), EventBridge Scheduler every minute, GitHub OIDC deploy role, alarms, $150 budget
+- [x] Secrets Manager `openentity/app` seeded from the GCP copies (registry key unchanged, so the log continues)
+- [x] Cutover 2026-10-25: D1 rows imported, R2 tiles and snapshots copied, apex CNAME to CloudFront (DNS-only), verifier PASS on openentity.org at tree size 7
+- [x] Cloudflare Workers `openentity-site` and `openentity-registry` and the KV namespace deleted
+- [ ] Lambda concurrency quota 1000 requested (new accounts start at 10); load test waits for it
+- [ ] Old D1 `openentity-registry` and R2 `openentity-log` kept as cold copies; delete after the Phase 1 PR merges
+Cloudflare (free plan only: DNS, redirects Worker, Turnstile, Web Analytics)
 - [x] Turnstile widget `openentity-subscribe` (site key 0x4AAAAAAFkggsScyaPIMp2v); Web Analytics site token 1c8d90533d834474833d04a8b62d5117
-- [x] WAF custom rule on openentity.org: skip security level, browser integrity check, managed rules, rate limiting and Super Bot Fight Mode on every path (token `moltbot-den/cloudflare-api-token` cannot edit zone settings directly, so the skip rule does it)
-- [ ] Zone settings (PRD 7.7): AI crawler categories allowed, Bot Fight Mode off, no challenges, Web Analytics
-- [ ] `deploy.yml` (`wrangler deploy` on merge to `main`) and the post-deploy fetch check
+- [x] `deploy.yml`: `cdk deploy` through OIDC, schema through the Data API, redirects through wrangler, then the post-deploy fetch check
 Required tests (PRD 11 Phase 1)
 - [ ] Vectors round-trip in TS and Python
 - [ ] Wrong Declaration text hash rejected; second Declaration rejected; broken record chain rejected; wrong `seq` rejected; alias bound to another EID rejected

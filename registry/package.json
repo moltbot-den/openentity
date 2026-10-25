@@ -4,25 +4,24 @@
   "license": "MIT",
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
     "lint": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
   "dependencies": {
+    "@aws-sdk/client-rds-data": "^3.1156.0",
+    "@aws-sdk/client-s3": "^3.1156.0",
+    "@aws-sdk/client-secrets-manager": "^3.1156.0",
     "@noble/curves": "^2.4.0",
     "@noble/hashes": "^2.4.0",
     "@openentity/sdk": "workspace:*",
-    "aws4fetch": "^1.0.20",
     "canonicalize": "^5.1.0",
     "hono": "^4.13.13"
   },
   "devDependencies": {
-    "@cloudflare/vitest-plugin": "^1.4.7",
-    "@cloudflare/workers-types": "^5.20261024.1",
+    "@electric-sql/pglite": "^0.5.11",
+    "@types/node": "^26.6.5",
     "typescript": "^5.9.3",
-    "vitest": "^5.0.5",
-    "wrangler": "^4.152.0"
+    "vitest": "^5.0.5"
   }
 }

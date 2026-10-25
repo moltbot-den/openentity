@@ -110,7 +110,7 @@ describe('every page', () => {
     }
   });
 
-  it('ships no human form in the static build (the Worker adds it only when enabled)', () => {
+  it('ships no human form in the static build (the server adds it only when enabled)', () => {
     for (const f of pages) expect(read(f)).not.toContain('/v1/subscribe');
     for (const r of ['adopt', 'for-humans']) expect(read(join(dist, `${r}.html`))).toContain('data-subscribe');
   });

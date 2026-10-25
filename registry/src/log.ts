@@ -1,21 +1,36 @@
-// Transparency log (spec 10.3): RFC 6962 Merkle tree over D1, C2SP tlog-tiles on R2, signed checkpoints.
-import { AwsClient } from "aws4fetch";
+// Transparency log (spec 10.3): RFC 6962 Merkle tree over Postgres, C2SP tlog-tiles on S3, signed checkpoints.
 import { canonicalize, checkpointBody, keyPairFromJwk, leafHash, logLeaf, nodeHash, sha256, signNote, type KeyPair } from "./sdk.ts";
-import { type Env, LOG_ORIGIN, b64, hex, nowIso, unhex } from "./env.ts";
+import { type Env, LOG_ORIGIN, hex, nowIso, unhex } from "./env.ts";
+import type { Db } from "./db.ts";
 
 const enc = new TextEncoder();
 
-/** Leaf for an accepted object, plus the D1 statement that sequences it (index = previous max + 1). */
-export async function leafFor(db: D1Database, type: string, eid: string, objectSha256: string, receivedAt: string) {
+/** Leaf and leaf hash for an accepted object. */
+export async function leafFor(type: string, eid: string, objectSha256: string, receivedAt: string) {
   const leaf = logLeaf(type, eid, objectSha256, receivedAt);
-  const leaf_hash = hex(await leafHash(enc.encode(canonicalize(leaf))));
-  const stmt = db
-    .prepare("INSERT INTO log_leaves (idx, leaf_hash, type, eid, object_sha256, received_at) VALUES ((SELECT COALESCE(MAX(idx) + 1, 0) FROM log_leaves), ?, ?, ?, ?, ?) RETURNING idx")
-    .bind(leaf_hash, type, eid, objectSha256, receivedAt);
-  return { leaf, leaf_hash, stmt };
+  return { leaf, leaf_hash: hex(await leafHash(enc.encode(canonicalize(leaf)))) };
 }
-/** SQL expression for the index of the leaf inserted just before, inside the same batch. */
-export const LAST_INDEX = "(SELECT MAX(idx) FROM log_leaves)";
+
+export type Stmt = [sql: string, params: unknown[]];
+/**
+ * Sequences `leaves` at consecutive log indexes and runs `stmts`, all as one SQL statement: atomic and one
+ * round trip. The indexes come from the single log_head row, locked only for this statement, so a write that
+ * fails (a unique guard, a crash) rolls its indexes back with it and the log stays gap-free and contiguous.
+ * Each stmt uses its own $1.. params; `$i` in it is the first new index. Returns that index.
+ */
+export async function sequenced(db: Db, leaves: { leaf: object; leaf_hash: string }[], stmts: Stmt[]): Promise<number> {
+  const n = leaves.length, params: unknown[] = [JSON.stringify(leaves.map((l, o) => ({ ...l.leaf, leaf_hash: l.leaf_hash, o })))];
+  const ctes = [
+    `h AS (UPDATE log_head SET next = next + ${n} WHERE id = 1 RETURNING next - ${n} AS i)`,
+    "l AS (INSERT INTO log_leaves (idx, leaf_hash, type, eid, object_sha256, received_at) SELECT h.i + x.o, x.leaf_hash, x.type, x.eid, x.object_sha256, x.received_at FROM h, json_to_recordset(CAST($1 AS json)) AS x(o int, leaf_hash text, type text, eid text, object_sha256 text, received_at text))",
+    ...stmts.map(([sql, ps], k) => {
+      const off = params.length;
+      params.push(...ps);
+      return `s${k} AS (${sql.replace(/\$(\d+)/g, (_, d) => `$${Number(d) + off}`).replaceAll("$i", "(SELECT i FROM h)")})`;
+    }),
+  ];
+  return (await db.first<{ i: number }>(`WITH ${ctes.join(",\n")}\nSELECT i FROM h`, params))!.i;
+}
 
 let cachedKey: { jwk: string; kp: KeyPair } | undefined;
 export async function registryKey(env: Env): Promise<KeyPair> {
@@ -26,12 +41,12 @@ export async function registryKey(env: Env): Promise<KeyPair> {
 class Nodes {
   cache = new Map<string, string>();
   fresh: [number, number, string][] = [];
-  constructor(private db: D1Database) {}
+  constructor(private db: Db) {}
   async get(level: number, idx: number): Promise<string> {
     const k = `${level}:${idx}`;
     let h = this.cache.get(k);
     if (!h) {
-      h = (await this.db.prepare("SELECT hash FROM log_nodes WHERE level = ? AND idx = ?").bind(level, idx).first<string>("hash")) ?? undefined;
+      h = (await this.db.first<{ hash: string }>("SELECT hash FROM log_nodes WHERE level = $1 AND idx = $2", [level, idx]))?.hash;
       if (!h) throw new Error(`missing log node ${k}`);
       this.cache.set(k, h);
     }
@@ -69,9 +84,9 @@ async function subproof(nodes: Nodes, m: number, lo: number, n: number, b: boole
     ? [...(await subproof(nodes, m, lo, k, b)), await mth(nodes, lo + k, n - k)]
     : [...(await subproof(nodes, m - k, lo + k, n - k, false)), await mth(nodes, lo, k)];
 }
-export const inclusionProof = (db: D1Database, index: number, size: number) => path(new Nodes(db), index, 0, size);
-export const consistencyProof = (db: D1Database, m: number, n: number) => subproof(new Nodes(db), m, 0, n, true);
-export const treeRoot = (db: D1Database, size: number) => rootOf(new Nodes(db), size);
+export const inclusionProof = (db: Db, index: number, size: number) => path(new Nodes(db), index, 0, size);
+export const consistencyProof = (db: Db, m: number, n: number) => subproof(new Nodes(db), m, 0, n, true);
+export const treeRoot = (db: Db, size: number) => rootOf(new Nodes(db), size);
 
 /** C2SP tile index: 1234067 -> x001/x234/067. */
 export function tileIndex(n: number): string {
@@ -81,15 +96,15 @@ export function tileIndex(n: number): string {
   return g.map((x, i) => (i < g.length - 1 ? "x" + x : x)).join("/");
 }
 
-export async function latestSize(db: D1Database): Promise<number> {
-  return (await db.prepare("SELECT COALESCE(MAX(tree_size), 0) AS n FROM checkpoints").first<number>("n")) ?? 0;
+export async function latestSize(db: Db): Promise<number> {
+  return (await db.first<{ n: number }>("SELECT COALESCE(MAX(tree_size), 0) AS n FROM checkpoints"))?.n ?? 0;
 }
 
 /** Incorporate sequenced leaves into the tree, write tiles, sign a checkpoint. Idempotent. Returns the new size. */
 export async function incorporate(env: Env, maxLeaves = 5000): Promise<number> {
-  const db = env.DB;
+  const db = env.db;
   const old = await latestSize(db);
-  const rows = (await db.prepare("SELECT idx, leaf_hash, type, eid, object_sha256, received_at FROM log_leaves WHERE idx >= ? ORDER BY idx LIMIT ?").bind(old, maxLeaves).all<LeafRow>()).results;
+  const rows = await db.all<LeafRow>("SELECT idx, leaf_hash, type, eid, object_sha256, received_at FROM log_leaves WHERE idx >= $1 ORDER BY idx LIMIT $2", [old, maxLeaves]);
   let size = old;
   for (const r of rows) { if (r.idx !== size) break; size++; }
   if (size === old) return old;
@@ -99,8 +114,12 @@ export async function incorporate(env: Env, maxLeaves = 5000): Promise<number> {
     nodes.put(0, i, rows[i - old].leaf_hash);
     for (let level = 0, j = i; j & 1; level++, j >>= 1) nodes.put(level + 1, j >> 1, await H(await nodes.get(level, j - 1), await nodes.get(level, j)));
   }
-  const ins = db.prepare("INSERT OR IGNORE INTO log_nodes (level, idx, hash) VALUES (?, ?, ?)");
-  for (let i = 0; i < nodes.fresh.length; i += 500) await db.batch(nodes.fresh.slice(i, i + 500).map((n) => ins.bind(...n)));
+  for (let i = 0; i < nodes.fresh.length; i += 500) {
+    await db.run(
+      "INSERT INTO log_nodes (level, idx, hash) SELECT * FROM json_to_recordset(CAST($1 AS json)) AS x(level bigint, idx bigint, hash text) ON CONFLICT DO NOTHING",
+      [JSON.stringify(nodes.fresh.slice(i, i + 500).map(([level, idx, hash]) => ({ level, idx, hash })))],
+    );
+  }
 
   // Hash tiles: level L holds the subtree hashes of height 8L, 256 per tile.
   for (let L = 0; ; L++) {
@@ -109,28 +128,28 @@ export async function incorporate(env: Env, maxLeaves = 5000): Promise<number> {
     if (cNew === cOld) continue;
     for (let N = Math.floor(cOld / 256); N <= Math.floor((cNew - 1) / 256); N++) {
       const from = N * 256, to = Math.min(from + 256, cNew);
-      const hs = (await db.prepare("SELECT hash FROM log_nodes WHERE level = ? AND idx >= ? AND idx < ? ORDER BY idx").bind(8 * L, from, to).all<{ hash: string }>()).results;
+      const hs = await db.all<{ hash: string }>("SELECT hash FROM log_nodes WHERE level = $1 AND idx >= $2 AND idx < $3 ORDER BY idx", [8 * L, from, to]);
       const body = new Uint8Array(32 * hs.length);
       hs.forEach((h, i) => body.set(unhex(h.hash), 32 * i));
-      await env.LOG.put(`tile/${L}/${tileIndex(N)}${to - from < 256 ? `.p/${to - from}` : ""}`, body);
+      await env.log.put(`tile/${L}/${tileIndex(N)}${to - from < 256 ? `.p/${to - from}` : ""}`, body);
     }
   }
   // Entry bundles: big-endian uint16 length + canonical leaf bytes.
   for (let N = Math.floor(old / 256); N <= Math.floor((size - 1) / 256); N++) {
     const from = N * 256, to = Math.min(from + 256, size);
-    const ls = (await db.prepare("SELECT type, eid, object_sha256, received_at FROM log_leaves WHERE idx >= ? AND idx < ? ORDER BY idx").bind(from, to).all<LeafRow>()).results;
+    const ls = await db.all<LeafRow>("SELECT type, eid, object_sha256, received_at FROM log_leaves WHERE idx >= $1 AND idx < $2 ORDER BY idx", [from, to]);
     const parts = ls.map((l) => enc.encode(leafJson(l)));
     const body = new Uint8Array(parts.reduce((a, p) => a + 2 + p.length, 0));
     let o = 0;
     for (const p of parts) { body[o] = p.length >> 8; body[o + 1] = p.length & 255; body.set(p, o + 2); o += 2 + p.length; }
-    await env.LOG.put(`tile/entries/${tileIndex(N)}${to - from < 256 ? `.p/${to - from}` : ""}`, body);
+    await env.log.put(`tile/entries/${tileIndex(N)}${to - from < 256 ? `.p/${to - from}` : ""}`, body);
   }
 
   const root = await rootOf(nodes, size);
   const note = await signNote(checkpointBody(LOG_ORIGIN, size, unhex(root)), LOG_ORIGIN, await registryKey(env));
   const timestamp = nowIso();
-  await env.LOG.put("checkpoint", note, { httpMetadata: { contentType: "text/plain; charset=utf-8" } });
-  await db.prepare("INSERT OR IGNORE INTO checkpoints (tree_size, root_hash, timestamp, signed_note) VALUES (?, ?, ?, ?)").bind(size, root, timestamp, note).run();
+  await env.log.put("checkpoint", note, "text/plain; charset=utf-8");
+  await db.run("INSERT INTO checkpoints (tree_size, root_hash, timestamp, signed_note) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING", [size, root, timestamp, note]);
   return rows.length === maxLeaves ? incorporate(env, maxLeaves) : size;
 }
 
@@ -138,19 +157,16 @@ export interface LeafRow { idx: number; leaf_hash: string; type: string; eid: st
 export const leafJson = (l: Pick<LeafRow, "type" | "eid" | "object_sha256" | "received_at">) =>
   canonicalize(logLeaf(l.type, l.eid, l.object_sha256, l.received_at));
 
-/** Daily snapshot: one JSON line per leaf of `date`, then the latest checkpoint. Copied to S3 when configured. */
+/** Daily snapshot: one JSON line per leaf of `date`, then the latest checkpoint. Copied to the Object Lock bucket when configured. */
 export async function snapshot(env: Env, date: string): Promise<boolean> {
   const key = `snapshots/${date}.jsonl`;
-  if (await env.LOG.head(key)) return false;
-  const leaves = (await env.DB.prepare("SELECT * FROM log_leaves WHERE received_at >= ? AND received_at < ? ORDER BY idx").bind(`${date}T00:00:00Z`, `${date}T99`).all<LeafRow>()).results;
-  const cp = await env.DB.prepare("SELECT tree_size, root_hash, timestamp, signed_note FROM checkpoints ORDER BY tree_size DESC LIMIT 1").first();
-  // ponytail: whole day in one string; stream to R2 if a day's leaves outgrow Worker memory.
+  if (await env.log.get(key)) return false;
+  const leaves = await env.db.all<LeafRow>("SELECT * FROM log_leaves WHERE received_at >= $1 AND received_at < $2 ORDER BY idx", [`${date}T00:00:00Z`, `${date}T99`]);
+  const cp = await env.db.first("SELECT tree_size, root_hash, timestamp, signed_note FROM checkpoints ORDER BY tree_size DESC LIMIT 1");
+  // ponytail: whole day in one string; stream to S3 if a day's leaves outgrow Lambda memory.
   const body = leaves.map((l) => JSON.stringify({ index: l.idx, leaf: JSON.parse(leafJson(l)), leaf_hash: l.leaf_hash })).join("\n") + "\n" + JSON.stringify({ checkpoint: cp }) + "\n";
-  await env.LOG.put(key, body, { httpMetadata: { contentType: "application/jsonl" } });
-  if (env.S3_BUCKET && env.AWS_ACCESS_KEY_ID && env.AWS_SECRET_ACCESS_KEY) {
-    const aws = new AwsClient({ accessKeyId: env.AWS_ACCESS_KEY_ID, secretAccessKey: env.AWS_SECRET_ACCESS_KEY, service: "s3", region: env.S3_REGION || "us-east-1" });
-    const res = await aws.fetch(`https://${env.S3_BUCKET}.s3.${env.S3_REGION || "us-east-1"}.amazonaws.com/${key}`, { method: "PUT", body, headers: { "content-type": "application/jsonl", "x-amz-checksum-sha256": b64(await sha256(body)) } }); // Object Lock buckets require a checksum
-    if (!res.ok) throw new Error(`S3 snapshot copy failed: ${res.status} ${await res.text()}`);
-  } else console.log(`snapshot ${key}: S3 copy skipped, S3_BUCKET or AWS credentials not set`);
+  await env.log.put(key, body, "application/jsonl");
+  if (env.snapshots) await env.snapshots.put(key, body, "application/jsonl");
+  else console.log(`snapshot ${key}: off-site copy skipped, no snapshots bucket`);
   return true;
 }

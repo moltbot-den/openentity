@@ -10,7 +10,7 @@ import {
   securityTxt,
   statValue,
   subscribeForm,
-} from '../worker/render';
+} from '../server/render';
 
 describe('live counts', () => {
   it('reads a dot path from /v1/stats', () => {

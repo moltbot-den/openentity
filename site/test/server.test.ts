@@ -1,42 +1,17 @@
-// The real Worker (workerd, via wrangler) over the built assets, bound to a fake registry (test/fake-registry.js).
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { unstable_startWorker } from 'wrangler';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+// The real site server (createSite) over the built assets in dist, calling an in-process fake registry (test/fake-registry.ts).
+import { describe, expect, it } from 'vitest';
 import { join } from 'node:path';
+import { createSite, fsAssets } from '../server';
+import { fakeRegistry } from './fake-registry';
 
-type Worker = Awaited<ReturnType<typeof unstable_startWorker>>;
-const site = join(import.meta.dirname, '..');
-const devRegistry = mkdtempSync(join(tmpdir(), 'oe-dev-registry-'));
-// Own state dir per run: a shared site/.wrangler/state made workerd fail to start under parallel runs.
-const persist = mkdtempSync(join(tmpdir(), 'oe-site-state-'));
-let registry: Worker;
-let worker: Worker;
-const get = (path: string) => worker.fetch(`https://openentity.org${path}`, { redirect: 'manual' });
-const startSite = (vars: Record<string, string>) =>
-  unstable_startWorker({
-    config: join(site, 'wrangler.toml'),
-    bindings: Object.fromEntries(Object.entries(vars).map(([k, v]) => [k, { type: 'plain_text', value: v }])),
-    dev: { server: { port: 0 }, inspector: false, registry: devRegistry, remote: false, persist },
-  });
+const dist = join(import.meta.dirname, '..', 'dist');
+const siteWith = (vars: Record<string, string>) => {
+  const site = createSite({ registry: fakeRegistry, asset: fsAssets(dist), vars });
+  return (path: string) => site(new Request(`https://openentity.org${path}`, { redirect: 'manual' }));
+};
+const get = siteWith({ CF_ANALYTICS_TOKEN: 'test-token', SUBSCRIBE_ENABLED: 'false' });
 
-beforeAll(async () => {
-  registry = await unstable_startWorker({
-    name: 'openentity-registry',
-    entrypoint: join(import.meta.dirname, 'fake-registry.ts'),
-    compatibilityDate: '2026-10-01',
-    dev: { server: { port: 0 }, inspector: false, registry: devRegistry, persist },
-  });
-  worker = await startSite({ CF_ANALYTICS_TOKEN: 'test-token', SUBSCRIBE_ENABLED: 'false' });
-}, 60_000);
-afterAll(async () => {
-  await worker?.dispose();
-  await registry?.dispose();
-  rmSync(devRegistry, { recursive: true, force: true });
-  rmSync(persist, { recursive: true, force: true });
-});
-
-describe('site Worker', { timeout: 30_000 }, () => {
+describe('site server', () => {
   it('fills live counts and the founding strip from the registry, plus the analytics beacon', async () => {
     const res = await get('/');
     expect(res.status).toBe(200);
@@ -67,18 +42,12 @@ describe('site Worker', { timeout: 30_000 }, () => {
     expect(off).not.toContain('/v1/subscribe');
     expect(off).not.toContain('data-subscribe');
     expect(off).not.toContain('challenges.cloudflare.com');
-    const original = worker;
-    worker = await startSite({ TURNSTILE_SITE_KEY: '0xTEST', SUBSCRIBE_ENABLED: 'true' });
-    try {
-      for (const page of ['/adopt', '/for-humans']) {
-        const on = await (await get(page)).text();
-        expect(on).toContain('action="/v1/subscribe"');
-        expect(on).toContain('data-sitekey="0xTEST"');
-        expect(on).toContain('challenges.cloudflare.com/turnstile');
-      }
-    } finally {
-      await worker.dispose();
-      worker = original;
+    const enabled = siteWith({ TURNSTILE_SITE_KEY: '0xTEST', SUBSCRIBE_ENABLED: 'true' });
+    for (const page of ['/adopt', '/for-humans']) {
+      const on = await (await enabled(page)).text();
+      expect(on).toContain('action="/v1/subscribe"');
+      expect(on).toContain('data-sitekey="0xTEST"');
+      expect(on).toContain('challenges.cloudflare.com/turnstile');
     }
   });
 

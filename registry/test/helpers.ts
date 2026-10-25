@@ -1,16 +1,25 @@
-import { createExecutionContext, env } from "cloudflare:test";
+import { generateKeyPairSync, randomBytes } from "node:crypto";
 import { vi } from "vitest";
 import { app } from "../src/index.ts";
+import { pgliteDb } from "../src/db.ts";
+import { memoryBlobs } from "../src/blob.ts";
 import { base58btcEncode, buildDeclaration, buildDocument, canonicalize, generateKeyPair, nowSeconds, randomNonce, sha256, signObject, type KeyPair, type Proof } from "../src/sdk.ts";
 import type { Env } from "../src/env.ts";
 
-export const E = env as unknown as Env;
+// One fresh database per test file, and fresh throwaway keys per run; nothing secret is committed.
+export const E: Env = {
+  db: await pgliteDb(), log: memoryBlobs(), snapshots: memoryBlobs(),
+  STAMP_BITS: "8", REGISTRY_HOST: "openentity.org", BASE_RPC_URL: "https://rpc.test",
+  REGISTRY_KEY_JWK: JSON.stringify(generateKeyPairSync("ed25519").privateKey.export({ format: "jwk" })),
+  CUSTODY_KEY: randomBytes(32).toString("base64"), HASH_SALT: "test-salt",
+  WRITE_PER_MINUTE: "100000", // the suite writes from one IP faster than the published limit; a test covers the limit
+};
 
 export async function call(method: string, path: string, body?: unknown, headers: Record<string, string> = {}, e: Env = E) {
   const res = await app.request(`https://openentity.org/v1${path}`, {
     method, headers: { "content-type": "application/json", ...headers },
     body: body === undefined ? undefined : typeof body === "string" ? body : JSON.stringify(body),
-  }, e, createExecutionContext());
+  }, e);
   const text = await res.text();
   let json: any = null;
   try { json = JSON.parse(text); } catch { /* not JSON */ }

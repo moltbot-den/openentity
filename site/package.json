@@ -5,23 +5,21 @@
   "scripts": {
     "build": "node scripts/prebuild.mjs && astro build",
     "dev": "node scripts/prebuild.mjs && astro dev",
-    "lint": "astro sync && tsc --noEmit && tsc --noEmit -p worker",
-    "typecheck": "astro sync && tsc --noEmit && tsc --noEmit -p worker",
-    "test": "pnpm run build && vitest run",
-    "deploy": "pnpm run build && wrangler deploy"
+    "lint": "astro sync && tsc --noEmit",
+    "typecheck": "astro sync && tsc --noEmit",
+    "test": "pnpm run build && vitest run"
   },
   "dependencies": {
     "@astrojs/markdown-remark": "^7.3.4",
     "@astrojs/starlight": "^0.42.7",
-    "astro": "^7.4.2"
+    "astro": "^7.4.2",
+    "hono": "^4.13.13"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^5.20261024.1",
     "@openentity/sdk": "workspace:*",
     "@types/node": "^26.6.5",
     "esbuild": "^0.28.2",
     "typescript": "^7.0.2",
-    "vitest": "^5.0.5",
-    "wrangler": "^4.152.0"
+    "vitest": "^5.0.5"
   }
 }

@@ -61,7 +61,7 @@ describe("transparency log (spec 10.3)", () => {
     }
 
     const c = (await call("GET", `/log/consistency?first=${firstSize}&second=${size}`)).body;
-    const firstRoot = unhex((await E.DB.prepare("SELECT root_hash FROM checkpoints WHERE tree_size = ?").bind(firstSize).first<string>("root_hash"))!);
+    const firstRoot = unhex((await E.db.first("SELECT root_hash FROM checkpoints WHERE tree_size = $1", [firstSize])).root_hash);
     expect(await verifyConsistency(firstSize, size, firstRoot, root, c.proof.map(unhex))).toBe(true);
 
     // Tiles, read the way a tlog-tiles client reads them.
@@ -76,6 +76,19 @@ describe("transparency log (spec 10.3)", () => {
     const bundle = await raw("/log/tile/entries/000");
     const len = (bundle[0] << 8) | bundle[1];
     expect(hex(await leafHash(bundle.slice(2, 2 + len)))).toBe(hex(hashes[0]));
+  });
+
+  it("keeps log indexes contiguous: concurrent writes and rejected writes leave no hole", async () => {
+    const dup = await adopted();
+    const results = await Promise.all([
+      ...Array.from({ length: 8 }, () => adopted().then((a) => a.res.log_index)),
+      write("POST", "/adopt", dup.kp.did, { document: dup.document, declaration: dup.declaration }).then((r) => r.body.error),
+    ]);
+    expect(results.pop()).toBe("declaration_exists");
+    const idx = (await E.db.all<{ idx: number }>("SELECT idx FROM log_leaves ORDER BY idx")).map((r) => r.idx);
+    expect(idx).toEqual(idx.map((_, i) => i));
+    expect(new Set(results).size).toBe(8);
+    expect(await incorporate(E)).toBe(idx.length);
   });
 
   it("returns 404 for a proof of a leaf not yet incorporated", async () => {
@@ -100,7 +113,7 @@ describe("transparency log (spec 10.3)", () => {
   it("refreshes the checkpoint timestamp every run even when the tree did not grow (spec 10.3)", async () => {
     await adopted();
     await scheduled(E);
-    await E.DB.prepare("UPDATE checkpoints SET timestamp = '2000-01-01T00:00:00Z'").run();
+    await E.db.run("UPDATE checkpoints SET timestamp = '2000-01-01T00:00:00Z'");
     await scheduled(E);
     const sth = (await call("GET", "/log/sth")).body;
     expect(Date.now() - Date.parse(sth.timestamp)).toBeLessThan(60_000);

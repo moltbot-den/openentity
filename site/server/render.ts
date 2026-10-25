@@ -1,4 +1,4 @@
-// Pure HTML/JSON renderers for the site Worker. No Workers globals here, so they run in Node tests too.
+// Pure HTML/JSON renderers for the site server. Plain strings in, strings out, so they run in Node tests too.
 // Registry response shapes follow spec 10.2; where the spec leaves a shape open, each reader accepts
 // either a bare array or an object wrapping it (`{entities: [...]}`), and unknown fields are ignored.
 
