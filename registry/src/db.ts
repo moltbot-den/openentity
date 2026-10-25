@@ -16,15 +16,33 @@ const param = (v: unknown, i: number): SqlParameter => {
   return { name, value: { stringValue: String(v) } };
 };
 
+// Aurora answers bursts above its current capacity with these while it scales up; they are safe to retry
+// outside a transaction because the statement never ran.
+const RETRYABLE = /throttled because of insufficient resources|ThrottlingException|DatabaseResumingException|Cannot find DBInstance/;
+
+/** Retry `fn` on a throttle with jittered exponential backoff: 6 tries, about 3 s in the worst case. */
+export async function retryThrottled<T>(fn: () => Promise<T>, sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))): Promise<T> {
+  for (let n = 0; ; n++) {
+    try {
+      return await fn();
+    } catch (e) {
+      if (n >= 5 || !RETRYABLE.test(`${(e as Error).name}: ${(e as Error).message}`)) throw e;
+      await sleep(Math.random() * 100 * 2 ** n);
+    }
+  }
+}
+
 export function dataApiDb(o: { resourceArn: string; secretArn: string; database: string }): Db {
   const client = new RDSDataClient({});
   const base = { resourceArn: o.resourceArn, secretArn: o.secretArn, database: o.database };
   const make = (transactionId?: string): Db => {
-    const exec = (sql: string, params: unknown[] = []) =>
-      client.send(new ExecuteStatementCommand({
+    const exec = (sql: string, params: unknown[] = []) => {
+      const send = () => client.send(new ExecuteStatementCommand({
         ...base, transactionId, formatRecordsAs: "JSON",
         sql: sql.replace(/\$(\d+)/g, ":p$1"), parameters: params.map(param),
       }));
+      return transactionId ? send() : retryThrottled(send);
+    };
     const all = async (sql: string, params?: unknown[]) => JSON.parse((await exec(sql, params)).formattedRecords ?? "[]");
     return {
       all,

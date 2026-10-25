@@ -206,7 +206,8 @@ async function encryptKey(env: Env, jwk: JsonWebKey): Promise<string> {
 
 /** Replace an entity's capability index with its document's list (spec 5.2). */
 const capabilityStmts = (eid: string, doc: any): Stmt[] => [
-  ["DELETE FROM entity_capabilities WHERE eid = $1", [eid]],
+  // Delete only what left the list: a DELETE and an INSERT of the same row in one statement would drop it.
+  ["DELETE FROM entity_capabilities WHERE eid = $1 AND capability NOT IN (SELECT json_array_elements_text($2::json))", [eid, JSON.stringify(doc.capabilities ?? [])]],
   ["INSERT INTO entity_capabilities (eid, capability) SELECT $1, value FROM json_array_elements_text($2::json) ON CONFLICT DO NOTHING", [eid, JSON.stringify(doc.capabilities ?? [])]],
 ];
 
