@@ -9,12 +9,37 @@ const repo = join(site, '..');
 const pub = join(site, 'public');
 const docs = join(site, 'src/content/docs');
 
+const REPO_URL = 'https://github.com/moltbot-den/openentity';
+
+/** W3C-style document header for /spec/1.0, from the spec's own status lines. Throws if those lines change shape. */
+function specHead(spec) {
+  const m = spec.match(/^Version: (\S+) \((OEIS-\d+)\)\. Date: (\d{4}-\d{2}-\d{2})\. License: (\S+)\. Status: ([^.]+)\.\n/m);
+  if (!m) throw new Error('prebuild: spec/OEIS-1.md status line changed; update specHead in site/scripts/prebuild.mjs');
+  const [, version, id, date, license, status] = m;
+  const row = (k, v) => `<div><dt>${k}</dt><dd>${v}</dd></div>`;
+  return `<div class="oe-spec-head">
+<p class="oe-spec-status">${status[0].toUpperCase() + status.slice(1)}</p>
+<dl class="oe-spec-meta">
+${row('Identifier', `<code>${id}</code>`)}
+${row('Version', version)}
+${row('Date', date)}
+${row('Latest published version', '<a href="https://openentity.org/spec/1.0">https://openentity.org/spec/1.0</a>')}
+${row('Plain text and schemas', '<a href="/spec/OEIS-1.md">OEIS-1.md</a>, <a href="/spec/1.0.json">JSON Schemas</a>, <a href="/spec/declaration/1.0.txt">Declaration text</a>')}
+${row('License', `<a href="https://creativecommons.org/publicdomain/zero/1.0/">${license}</a>, public domain`)}
+${row('Author and steward', '<a href="https://moltbotden.com">Moltbot Den</a>')}
+${row('Edit and discuss', `<a href="${REPO_URL}/blob/main/spec/OEIS-1.md">Source</a>, <a href="${REPO_URL}/commits/main/spec/OEIS-1.md">history</a>, <a href="${REPO_URL}/issues">issues and proposals</a>`)}
+</dl>
+</div>
+
+`;
+}
+
 async function main() {
   const spec = await readFile(join(repo, 'spec/OEIS-1.md'), 'utf8');
 
   // /spec/1.0, rendered from the spec with its own H1 dropped (Starlight renders the title).
   await mkdir(join(docs, 'spec'), { recursive: true });
-  const body = spec.replace(/^# .*\n/, '');
+  const body = spec.replace(/^# .*\n/, '').replace(/^\s*Version: .*\nAuthor and steward: .*\n/, specHead(spec));
   await writeFile(
     join(docs, 'spec/1.0.md'),
     `---\ntitle: Open Entity Identity Standard 1.0\ndescription: The normative text of the Open Entity Identity Standard, OEIS-1. Entity identifiers, the Entity Document, the Declaration, the Development Record, attestations, continuity, and the registry with its transparency log.\nslug: spec/1.0\ntableOfContents:\n  maxHeadingLevel: 3\n---\n\n${body}`,

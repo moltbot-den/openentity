@@ -21,6 +21,7 @@ import {
   securityTxt,
   statValue,
   subscribeForm,
+  keepFilters,
 } from './render';
 
 export interface SiteOptions {
@@ -141,7 +142,7 @@ export function createSite({ registry: callRegistry, asset, vars }: SiteOptions)
     switch (kind) {
       case 'entities': {
         const q = new URLSearchParams();
-        for (const k of ['q', 'level', 'alias_type', 'sort', 'page']) {
+        for (const k of ['q', 'level', 'capability', 'alias_type', 'sort', 'page']) {
           const v = url.searchParams.get(k);
           if (v) q.set(k, v);
         }
@@ -182,6 +183,7 @@ export function createSite({ registry: callRegistry, asset, vars }: SiteOptions)
       return frag === null ? null : `${open}${frag}</${tag}>`;
     });
     html = await mapElements(html, 'data-subscribe', () => (formOn ? subscribeForm(vars.TURNSTILE_SITE_KEY!) : ''));
+    if (path === '/entities') html = keepFilters(html, url.searchParams);
     if (formOn && FORM_PAGES.has(path)) html = insertBefore(html, '</head>', TURNSTILE_SCRIPT);
     if (vars.CF_ANALYTICS_TOKEN) html = insertBefore(html, '</body>', analyticsBeacon(vars.CF_ANALYTICS_TOKEN));
     return html;
@@ -196,15 +198,16 @@ export function createSite({ registry: callRegistry, asset, vars }: SiteOptions)
 
   async function entityPage(url: URL, eid: string): Promise<Response> {
     const enc = encodeURIComponent(eid);
-    const [entity, record, atts] = await Promise.all([
+    const [entity, record, atts, disputes] = await Promise.all([
       registry(`/v1/entities/${enc}`),
       registry(`/v1/entities/${enc}/record`),
       registry(`/v1/entities/${enc}/attestations`),
+      registry(`/v1/entities/${enc}/disputes`),
     ]);
     const shell = await asset('/entity.html');
     if (!shell) return new Response('Not found', { status: 404 });
     const page = entity
-      ? renderEntity(eid, entity, record, atts)
+      ? renderEntity(eid, entity, record, atts, disputes)
       : {
           title: 'Entity not found | Open Entity',
           description: 'No entity with this EID is in the Open Entity registry.',

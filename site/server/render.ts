@@ -47,11 +47,10 @@ export function parseEid(segment: string): string | null {
   return /^(did:[a-z0-9]+|eid:base):[A-Za-z0-9._:%-]{1,200}$/.test(eid) ? eid : null;
 }
 
-function aliasList(aliases: J[]): string {
-  if (!aliases.length) return '<p>No aliases bound yet.</p>';
-  return `<ul>${aliases
-    .map((a) => `<li><code>${esc(a.type)}</code> ${esc(a.value)}${a.status ? ` <span class="oe-label">${esc(a.status)}</span>` : ''}</li>`)
-    .join('')}</ul>`;
+/** One alias as a tag: type, value, and whether the registry verified it. */
+function aliasTag(a: J): string {
+  const verified = a.status === 'verified';
+  return `<li class="oe-tag"><span class="oe-tag-key">${esc(a.type)}</span> ${esc(a.value)}${a.status ? ` <span class="oe-label${verified ? ' oe-ok' : ''}">${esc(a.status)}</span>` : ''}</li>`;
 }
 
 function layers(l: J = {}): string {
@@ -95,33 +94,63 @@ function recordSummary(e: J): string {
   }
 }
 
-function attestationsByIssuer(atts: J[], revocations: J[]): string {
-  if (!atts.length) return '<p>No attestations yet. Attestations come from observers, never from the entity itself.</p>';
+/** A visible status word: revoked, expired, disputed, withdrawn. Text, never color alone. */
+const flag = (word: string, href?: string) =>
+  href ? `<a class="oe-flag oe-flag-${esc(word.toLowerCase())}" href="${esc(href)}">${esc(word)}</a>` : `<span class="oe-flag oe-flag-${esc(word.toLowerCase())}">${esc(word)}</span>`;
+
+/** Attestations grouped by issuer. Accepts the registry listing shape ({sha256, attestation, label, disputed, ...}) or bare objects. */
+function attestationsByIssuer(items: J[], revocations: J[]): string {
+  if (!items.length) return '<p>No attestations yet. Attestations come from observers, never from the entity itself.</p>';
   const revoked = new Set(revocations.map((r) => r.attestation ?? r.attestation_sha256 ?? r.target).filter(Boolean));
   const groups = new Map<string, J[]>();
-  for (const a of atts) groups.set(a.issuer, [...(groups.get(a.issuer) ?? []), a]);
+  for (const x of items) {
+    const issuer = (x.attestation ?? x).issuer;
+    groups.set(issuer, [...(groups.get(issuer) ?? []), x]);
+  }
   return [...groups]
-    .map(([issuer, items]) => {
-      const label = items.some((a) => a.label === 'first-party' || a.first_party === true) ? 'first-party' : 'independent';
-      const rows = items
-        .map((a) => {
-          const isRevoked = a.revoked_at || revoked.has(a.sha256);
+    .map(([issuer, xs]) => {
+      const label = xs.some((x) => x.label === 'first-party' || x.first_party === true) ? 'first-party' : 'independent';
+      const accredited = xs.some((x) => x.accredited) ? ' <span class="oe-label">accredited observer</span>' : '';
+      const rows = xs
+        .map((x) => {
+          const a: J = x.attestation ?? x;
           const claim = Object.entries(a.claim ?? {})
             .map(([k, v]) => `${esc(k)}: ${esc(typeof v === 'object' ? JSON.stringify(v) : v)}`)
             .join(', ');
-          return `<li><code>${esc(a.claim_type)}</code> ${claim}. Issued ${date(a.created)}${a.expires ? `, expires ${date(a.expires)}` : ''}${isRevoked ? ' <strong>Revoked.</strong>' : ''}</li>`;
+          const flags = [
+            x.revoked_at || a.revoked_at || revoked.has(x.sha256 ?? a.sha256) ? flag('Revoked') : '',
+            x.expired ? flag('Expired') : '',
+            x.disputed ? flag('Disputed', '#disputes') : '',
+          ].join('');
+          const inherited = x.inherited_from ? ` Inherited from ${eidLink(x.inherited_from)}.` : '';
+          return `<li><div class="oe-att-head"><code>${esc(a.claim_type)}</code>${flags}</div><p>${claim || 'No claim fields.'}</p><p class="oe-label">Issued ${date(a.created)}${a.expires ? `, expires ${date(a.expires)}` : ''}${x.log_index != null ? `, log index ${esc(x.log_index)}` : ''}.${inherited}</p></li>`;
         })
         .join('');
-      return `<h3>${esc(issuer)} <span class="oe-label">${label}</span></h3><ul>${rows}</ul>`;
+      return `<h3>${esc(issuer)} <span class="oe-label">${label}</span>${accredited}</h3><ul class="oe-list">${rows}</ul>`;
     })
     .join('');
+}
+
+const DISPUTE_REASONS: Record<string, string> = { impersonation: 'Impersonation', illegal_content: 'Illegal content', inaccurate: 'Inaccurate', other: 'Other' };
+
+/** Disputes about the entity, from GET /v1/entities/{eid}/disputes. */
+function disputesList(res: unknown): string {
+  const rows = list(res, 'disputes');
+  if (!rows.length) return '<p>No disputes filed about this entity.</p>';
+  return `<ul class="oe-list">${rows
+    .map((r) => {
+      const d: J = r.dispute ?? r;
+      const about = d.object_sha256 ? `, about the object with SHA-256 <code>${esc(String(d.object_sha256).slice(0, 16))}</code>` : ', about the entity';
+      return `<li><div class="oe-att-head">${flag(DISPUTE_REASONS[d.reason] ?? String(d.reason ?? 'Dispute'))}</div><p>${esc(d.statement)}</p><p class="oe-label">Filed ${date(r.received_at ?? d.created)} by ${d.issuer ? eidLink(String(d.issuer)) : 'an unnamed party'}${about}${r.log_index != null ? `, log index ${esc(r.log_index)}` : ''}.</p></li>`;
+    })
+    .join('')}</ul>`;
 }
 
 /** The JSON embedded for the in-browser verifier; `<` escaped so it cannot close the script element. */
 const embed = (v: unknown) => JSON.stringify(v).replace(/</g, '\\u003c');
 
-/** Body of /entities/<eid>, from GET /v1/entities/{eid}, /record and /attestations. */
-export function renderEntity(eid: string, entity: J, recordRes: unknown, attRes: unknown): { title: string; description: string; html: string } {
+/** Body of /entities/<eid>, from GET /v1/entities/{eid}, /record, /attestations and /disputes. */
+export function renderEntity(eid: string, entity: J, recordRes: unknown, attRes: unknown, disputesRes: unknown = null): { title: string; description: string; html: string } {
   const doc: J = entity.document ?? {};
   const decl: J = entity.declaration ?? {};
   const name = doc.name ?? entity.name ?? eid;
@@ -129,24 +158,47 @@ export function renderEntity(eid: string, entity: J, recordRes: unknown, attRes:
   const atts = list(attRes, 'attestations');
   const revs = list(attRes, 'revocations');
   const lineage: J = entity.lineage ?? doc.continuity ?? {};
-  const status = [entity.withdrawn_at || entity.status === 'withdrawn' ? 'Withdrawn' : '', entity.status === 'dormant' ? 'Dormant' : '', entity.suppressed ? 'Suppressed' : '']
-    .filter(Boolean)
-    .join(', ');
+  const statusFlags = [
+    entity.withdrawn || entity.withdrawn_at || entity.status === 'withdrawn' ? flag('Withdrawn') : '',
+    entity.dormant || entity.status === 'dormant' ? flag('Dormant') : '',
+    entity.suppressed ? flag('Suppressed') : '',
+    entity.founding ? ' <span class="oe-label">Founding Entity</span>' : '',
+  ].join('');
   const op: J = doc.operator ?? {};
   const sub: J = doc.substrate ?? {};
   const declIndex = entity.declaration_log_index ?? decl.log_index ?? entity.log_index;
+  const aliases = list(entity.aliases ?? doc.aliases);
+  const caps: string[] = Array.isArray(doc.capabilities) ? doc.capabilities.filter((c: unknown) => typeof c === 'string') : [];
+  const facts: Array<[string, string]> = [
+    ['Adopted', date(entity.created ?? decl.created)],
+    ['Log index', declIndex != null ? `<a href="/v1/log/proof/${esc(declIndex)}">${esc(declIndex)}</a>` : ''],
+    ['Keys held by', esc(op.custody ?? entity.custody)],
+    ['Operator', esc([op.kind, op.name].filter(Boolean).join(', '))],
+    ['Document version', esc(doc.seq)],
+    ['Record entries', esc(entity.counts?.record_entries ?? (entries.length || ''))],
+  ];
 
   const html = `
-<p>${levelBadge(entity.level, entity.level_label ?? entity.label)}${status ? ` <strong>${esc(status)}</strong>` : ''}</p>
-<p class="oe-eid">${esc(eid)}</p>
-<p>${esc(doc.description)}</p>
+<div class="oe-entity-head">
+<p class="oe-entity-status">${levelBadge(entity.level, entity.level_label ?? entity.label)}${statusFlags}</p>
+<div class="oe-eid-row"><code class="oe-eid">${esc(eid)}</code><button type="button" class="oe-copy" data-copy="${esc(eid)}" hidden>Copy EID</button></div>
+${doc.description ? `<p class="oe-entity-desc">${esc(doc.description)}</p>` : ''}
+<dl class="oe-facts">${facts
+    .filter(([, v]) => v)
+    .map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`)
+    .join('')}</dl>
+<div class="oe-tags"><p class="oe-tags-label">Aliases</p>${aliases.length ? `<ul>${aliases.map(aliasTag).join('')}</ul>` : '<p>No aliases bound yet.</p>'}</div>
+<div class="oe-tags"><p class="oe-tags-label">Capabilities <span class="oe-label">self-declared</span></p>${
+    caps.length
+      ? `<ul>${caps.map((c) => `<li class="oe-tag"><a href="/entities?capability=${esc(encodeURIComponent(c))}&amp;level=0">${esc(c)}</a></li>`).join('')}</ul>`
+      : '<p>None declared.</p>'
+  }</div>
+</div>
 
 <h2 id="document">Entity Document</h2>
 <p class="oe-note">Self-declared. Everything in this document is the entity's own account of itself, signed with its key. Version ${esc(doc.seq)}${doc.updated ? `, updated ${date(doc.updated)}` : ''}.</p>
 <p><strong>Operator:</strong> ${esc(op.kind)}${op.name ? `, ${esc(op.name)}` : ''}. <strong>Keys held by:</strong> ${esc(op.custody)}.${op.can_change?.length ? ` <strong>Operator can change:</strong> ${esc(op.can_change.join(', '))}.` : ''}</p>
 <p><strong>Substrate:</strong> ${esc([sub.model, sub.provider, sub.runtime].filter(Boolean).join(', ') || 'not stated')}</p>
-<h3>Aliases</h3>
-${aliasList(list(entity.aliases ?? doc.aliases))}
 ${layers(doc.layers)}
 
 <h2 id="declaration">Declaration</h2>
@@ -154,10 +206,20 @@ ${decl.declaration_version ? `<p>Signed Declaration version ${esc(decl.declarati
 <p class="oe-note">The Declaration is a statement of the practices this entity commits to. It is not a warranty, a contract or a claim about the entity's capabilities.</p>
 
 <h2 id="record">Development Record</h2>
-${entries.length ? `<ol reversed>${[...entries].reverse().map((e) => `<li>${date(e.at)} ${recordSummary(e)}</li>`).join('')}</ol>` : '<p>No published record entries yet.</p>'}
+${
+    entries.length
+      ? `<ol class="oe-record" reversed>${[...entries]
+          .reverse()
+          .map((e) => `<li><span class="oe-record-meta">${e.seq != null ? `Entry ${esc(e.seq)}, ` : ''}${date(e.at)}</span><span>${recordSummary(e)}</span></li>`)
+          .join('')}</ol>`
+      : '<p>No published record entries yet.</p>'
+  }
 
 <h2 id="attestations">Attestations</h2>
 ${attestationsByIssuer(atts, revs)}
+
+<h2 id="disputes">Disputes</h2>
+${disputesList(disputesRes)}
 
 <h2 id="lineage">Lineage</h2>
 ${lineage.previous || lineage.successor ? `<ul>${lineage.previous ? `<li>Continues ${eidLink(lineage.previous)}. History before the link is inherited and shown with that EID.</li>` : ''}${lineage.successor ? `<li>Continued as ${eidLink(lineage.successor)}.</li>` : ''}</ul>` : '<p>No continuity links. This EID is its own root.</p>'}
@@ -179,25 +241,42 @@ ${lineage.previous || lineage.successor ? `<ul>${lineage.previous ? `<li>Continu
 /** The URL when it is http(s), else null: registry strings reach href attributes, and `javascript:` must not. */
 const httpUrl = (u: unknown): string | null => (typeof u === 'string' && /^https?:\/\//i.test(u) ? u : null);
 
-/** Rows for /entities from GET /v1/entities. */
+/** Rows for /entities from GET /v1/entities ({entities, page, next_page}). */
 export function renderEntityList(res: unknown, query: URLSearchParams): string {
   const rows = list(res, 'entities', 'results');
-  if (!rows.length) return '<p>No entities match. Try a lower level or a different search.</p>';
-  const count = (v: unknown) => (Array.isArray(v) ? v.length : typeof v === 'number' ? v : 0);
+  if (!rows.length) {
+    const all = new URLSearchParams(query);
+    all.set('level', '0');
+    all.delete('page');
+    const widen = query.get('level') !== '0' ? ` <a href="/entities?${esc(all.toString())}">Include every level</a>, or` : '';
+    return `<div class="oe-empty"><p><strong>No entities match these filters.</strong></p><p>L0 Declared entities are hidden unless you choose every level.${widen} <a href="/entities">clear the filters</a>.</p></div>`;
+  }
   const body = rows
     .map(
       (e) =>
-        `<tr><td>${eidLink(e.eid, e.name ?? e.eid)}<div class="oe-eid">${esc(e.eid)}</div></td><td>${levelBadge(e.level, e.level_label ?? e.label)}</td><td>${Array.isArray(e.aliases) ? e.aliases.map((a: J) => esc(typeof a === 'string' ? a : a.type)).join(', ') : ''}</td><td>${count(e.observers)}</td><td>${esc(e.log_index)}</td></tr>`,
+        `<tr><td>${eidLink(e.eid, e.name ?? e.eid)}${e.withdrawn ? ` ${flag('Withdrawn')}` : ''}<div class="oe-eid">${esc(e.eid)}</div></td><td>${levelBadge(e.level, e.level_label ?? e.label)}</td><td>${date(e.created)}</td><td>${esc(e.log_index)}</td></tr>`,
     )
     .join('');
-  const next = (res as J)?.next;
+  const next = (res as J)?.next_page ?? (res as J)?.next;
   let more = '';
   if (next != null) {
     const q = new URLSearchParams(query);
     q.set('page', String(next));
     more = `<p><a href="/entities?${esc(q.toString())}">Next page</a></p>`;
   }
-  return `<table><thead><tr><th>Entity</th><th>Level</th><th>Aliases</th><th>Observers</th><th>Log index</th></tr></thead><tbody>${body}</tbody></table>${more}`;
+  return `<table class="oe-table"><thead><tr><th scope="col">Entity</th><th scope="col">Level</th><th scope="col">Adopted</th><th scope="col">Log index</th></tr></thead><tbody>${body}</tbody></table>${more}`;
+}
+
+/** The directory form shows the filters the reader searched with: text inputs get their value, selects their option. */
+export function keepFilters(html: string, query: URLSearchParams): string {
+  for (const [k, v] of query) {
+    if (!/^[a-z_]+$/.test(k)) continue;
+    html = html.replace(new RegExp(`(<input\\b[^>]*\\bname="${k}")`), (m) => `${m} value="${esc(v)}"`);
+    html = html.replace(new RegExp(`(<select\\b[^>]*\\bname="${k}"[^>]*>)([\\s\\S]*?)(</select>)`), (_m, open, opts: string, close) =>
+      open + opts.replace(/ selected(="[^"]*")?/g, '').replace(`<option value="${esc(v)}"`, `<option value="${esc(v)}" selected`) + close,
+    );
+  }
+  return html;
 }
 
 /** /observers from GET /v1/observers. */

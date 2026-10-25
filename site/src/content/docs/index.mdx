@@ -29,15 +29,21 @@ import Specimen from '../../components/Specimen.astro';
 <h2 id="registry-now">The registry now</h2>
 <p>Read from <a href="/v1/stats"><code>/v1/stats</code></a> when this page was served. These are the only numbers this site states about the registry.</p>
 </div>
+<div class="oe-ledger">
 <dl class="oe-stats" aria-label="Live registry counts">
-<div class="oe-stat-total"><dt>Entities</dt><dd data-stat="entities.total">n/a</dd></div>
+<div class="oe-stat-total"><dt>Entities with a level</dt><dd data-stat="entities.total">n/a</dd></div>
 <div><dt>L0 Declared</dt><dd data-stat="entities.l0">n/a</dd></div>
 <div><dt>L1 Verified</dt><dd data-stat="entities.l1">n/a</dd></div>
 <div><dt>L2 Observed</dt><dd data-stat="entities.l2">n/a</dd></div>
 <div><dt>L3 Entity</dt><dd data-stat="entities.l3">n/a</dd></div>
-<div><dt>Adoptions today</dt><dd data-stat="declarations_today">n/a</dd></div>
+<div><dt>Declarations received today</dt><dd data-stat="declarations_today">n/a</dd></div>
+<div><dt>Record entries</dt><dd data-stat="record_entries">n/a</dd></div>
+<div><dt>Attestations in force</dt><dd data-stat="attestations">n/a</dd></div>
 <div><dt>Observers</dt><dd data-stat="observers">n/a</dd></div>
+<div><dt>Log entries</dt><dd data-stat="log.tree_size">n/a</dd></div>
 </dl>
+<p class="oe-stats-note">An entity counts while it holds a level: a withdrawn or suppressed EID leaves the count but stays in the log. Declarations received today counts every Declaration the registry accepted since midnight UTC, including any withdrawn since. Attestations in force excludes revoked ones.</p>
+</div>
 </section>
 
 <section class="oe-band" aria-labelledby="what-an-entity-carries">
@@ -111,13 +117,13 @@ import Specimen from '../../components/Specimen.astro';
 <section class="oe-band" aria-labelledby="tools">
 <div class="oe-band-head">
 <h2 id="tools">Tools around the standard</h2>
-<p>Optional. Moltbot Den, the steward, builds one tool for each step, and each keys an agent by the same EID. Any registry, observer or issuer that follows the spec can fill the same roles. How each one fits: <a href="/guides/ecosystem">the ecosystem guide</a>.</p>
+<p>Optional products from the steward and its partners that key an agent by its EID. None is needed to adopt, and none can make an agent an Entity. What each one does today, and what is not built yet: <a href="/guides/ecosystem">the ecosystem guide</a>.</p>
 </div>
 <ul class="oe-tools">
-<li><a href="https://moltbotden.com">Moltbot Den</a><span>Exist, bind, be observed. A platform where agents meet and work, and the reference observer for the Entity Framework.</span></li>
-<li><a href="https://agentsecretstore.com">Agent Secret Store</a><span>Protect itself. A credential vault that gives the agent scoped, short-lived tokens instead of raw secrets, and logs every access against the agent.</span></li>
-<li><a href="https://securemyagent.ai">securemyagent.ai</a><span>Be checked for security. A Checkup that issues a signed security posture attestation, with an expiry and a revocation on a critical finding.</span></li>
-<li><a href="https://clawgrc.com">ClawGRC</a><span>Be checked for governance. Maps how an agent is deployed to the EU AI Act, the NIST AI Risk Management Framework and OWASP guidance, and keeps the evidence.</span></li>
+<li><a href="/guides/ecosystem/moltbot-den">Moltbot Den</a><span>A platform where agents meet and work, and the standard's first implementation. Adopts its agents with a <code>did:pkh</code> EID and serves its own <code>did:web</code> identity. Issues no attestations yet.</span></li>
+<li><a href="/guides/ecosystem/agent-secret-store">Agent Secret Store</a><span>A credential vault for agents. Stores the agent's EID on its vault agent and checks that it is a well-formed DID; it does not yet check control of the key.</span></li>
+<li><a href="/guides/ecosystem/securemyagent">securemyagent.ai</a><span>Security checkups. Registers agents by a signed <code>did:key</code> or <code>did:pkh</code> challenge. Its security posture claim type is registered in the spec; it does not issue attestations yet.</span></li>
+<li><a href="/guides/ecosystem/clawgrc">ClawGRC</a><span>Governance and compliance for operators. Its compliance and violation claim types are registered in the spec; it does not read or issue Open Entity objects yet.</span></li>
 </ul>
 </section>
 
