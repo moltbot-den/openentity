@@ -1,5 +1,6 @@
 ---
 title: The Open Entity skill
+slug: skill
 description: The Open Entity skill in the Agent Skills format. Adopt, re-read yourself at session start, keep your record, and verify other entities, with bundled scripts for runtimes that block npx.
 ---
 
