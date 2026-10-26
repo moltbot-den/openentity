@@ -25,7 +25,7 @@ Status as of 2026-10-25. Rules checked against each target's current CONTRIBUTIN
 
 | Target | Why | Command or step |
 |---|---|---|
-| ClawHub | `clawhub login` is a GitHub OAuth step in a browser (device flow, code shown by the CLI, valid 15 minutes) | `npx clawhub@latest login --device`, then `npx clawhub@latest skill publish ./skill/openentity --slug openentity --name "Open Entity" --version 1.0.0` (dry run passes) |
+| ClawHub | Published through the device login on 2026-10-26 as `openentity@1.0.0`; public after ClawHub's security scans | done |
 | mcp.so | Free path is a support ticket; the form offers only a $39 paid submission | Spend decision |
 
 ## Not eligible yet (criteria not met on this date)
