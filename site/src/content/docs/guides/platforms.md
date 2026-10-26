@@ -46,7 +46,7 @@ const result = await verifyPresentation(presentation, {
 
 Each carried attestation is checked on its own and reported in `attestations`: its subject must be the presenting EID, it must not have expired, and its signature must verify against its issuer. One bad attestation does not fail the Presentation; it just is not `ok`.
 
-The function is exported from the SDK source in the repository (`sdk/ts`). If your installed copy of `@openentity/sdk` does not export it yet, update the package, or copy the function from the repository: it depends only on `validate`, `verifyObject` and `normalizeEid`.
+`verifyPresentation` ships in `@openentity/sdk` (`npm install @openentity/sdk`); the Python equivalent is `verify_presentation` in `pip install openentity`.
 
 To check one from the command line, offline, save the Presentation to a file and run the CLI (it needs a version that lists `verify-presentation` in `openentity --help`):
 
@@ -73,7 +73,7 @@ result = verify_presentation(presentation, "https://platform.example", issued_no
 The signature is `verify_presentation(p, audience, nonce_, now=None, max_age=300, resolver=default_resolver)`. The Python SDK is in the repository under `sdk/python` and depends on `cryptography` and `pycryptodome`. Install it from there:
 
 ```sh
-pip install "git+https://github.com/moltbot-den/openentity#subdirectory=sdk/python"
+pip install openentity
 ```
 
 ## Resolve did:web issuers and did:pkh

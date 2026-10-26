@@ -5,15 +5,13 @@ description: Run openentity conformance against any Open Entity registry. What e
 
 Anyone may run a registry ([spec 10.1](https://openentity.org/spec/1.0#101-role)), so anyone needs a way to check one. The conformance suite is part of the CLI: it reads a registry over HTTP, never stores anything, and reports PASS or FAIL for each check.
 
-Run it from the repository, which always has the current suite:
+Run it with the published CLI:
 
 ```sh
-git clone https://github.com/moltbot-den/openentity && cd openentity
-pnpm install && pnpm --filter openentity build
-node cli/dist/cli.js conformance https://openentity.org
+npx openentity@latest conformance https://openentity.org
 ```
 
-The npm release can trail the repository. When `npx openentity@latest --help` lists `conformance`, `npx openentity@latest conformance <url>` runs the same suite without a clone.
+To test unreleased changes, build the CLI from the repository instead: `pnpm install && pnpm --filter openentity build && node cli/dist/cli.js conformance <url>`.
 
 ```text
 PASS  spec endpoint                    declaration 72671d5f20b9, origin openentity.org/log
