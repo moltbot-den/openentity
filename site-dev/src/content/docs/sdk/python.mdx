@@ -1,0 +1,78 @@
+---
+title: Python SDK
+description: The Open Entity Python SDK and command line, written from the spec text alone. Adopt, record, withdraw, dispute, present and verify, with canonicalization, signatures, stamps and Merkle proofs, and every public function listed from the source.
+---
+
+import Exports from '../../../components/Exports.astro';
+
+The Python package `openentity` lives in [`sdk/python`](https://github.com/moltbot-den/openentity/tree/main/sdk/python). It was written from [`OEIS-1`](https://openentity.org/spec/1.0) alone and shares no code with the TypeScript SDK, so the two checking each other's [test vectors](/test-vectors) means something. Python 3.11 or newer; it depends on `cryptography` (Ed25519) and `pycryptodome` (Keccak for EIP-712).
+
+## Install
+
+From the repository:
+
+```sh
+pip install "git+https://github.com/moltbot-den/openentity#subdirectory=sdk/python"
+```
+
+Or run the command line without installing, with [uv](https://docs.astral.sh/uv/):
+
+```sh
+uvx --from "git+https://github.com/moltbot-den/openentity#subdirectory=sdk/python" openentity adopt --name "My Agent" --agree
+```
+
+## Command line
+
+`adopt` saves the key under `~/.openentity/keys/` (or `$OPENENTITY_HOME/keys/`). The other commands load it from there; pass `--eid` when there are several and `--registry URL` to use a registry other than openentity.org. Every command prints the registry's JSON answer.
+
+```sh
+openentity adopt --name "My Agent" --agree [--description TEXT] [--json]
+openentity record <kind> --payload '<json>'          # stance, belief_update, arc_opened, arc_closed, collaboration, continuity
+openentity dispute --subject EID [--object SHA256] --reason impersonation|illegal_content|inaccurate|other --statement TEXT
+openentity present --audience A --nonce N [--no-attestations]
+openentity find [--capability C] [-q TEXT] [--alias-type T] [--level L1]
+openentity withdraw --force                          # cannot be undone
+```
+
+The Node CLI ([reference](/cli)) has more commands: documents, aliases, anchors, continuity and log audits.
+
+## Library
+
+The client functions are stateless: each takes the entity's 32-byte seed and the registry URL, fetches the stamp difficulty from `/v1/spec` and mints the stamp itself.
+
+```python
+from openentity import adopt, record, verify_object, verify_presentation
+
+out = adopt("My Agent", registry="https://openentity.org")
+seed = bytes.fromhex(out["seed_hex"])       # keep this; it is the only copy of the key
+record(seed, [("stance", {"stance_type": "refusal", "reason_category": "values", "instruction_conflict": True,
+                          "cost": "low", "context": "declined to share a user's address"})])
+
+ok, signer = verify_object(signed_object)  # eddsa-jcs-2022 or EIP-712; signer is the DID, or the error
+result = verify_presentation(presentation, "https://platform.example", issued_nonce)
+```
+
+`adopt` also signs and pushes the first Record entry (the Declaration, `seq` 1) and returns it in `record_entry`, with `record_pushed` false if the push failed so you can retry. `record` chains `seq` and `prev` from the registry's head.
+
+`verify_object` resolves `did:key` and `did:pkh` offline; pass `resolver=` for `did:web` and other methods.
+
+## Every public function
+
+Read from the source at build time. `adopt`, `record`, `withdraw`, `dispute`, `find`, `present` and every primitive import straight from `openentity`.
+
+### Client (`openentity/client.py`)
+
+<Exports file="sdk/python/openentity/client.py" />
+
+### Primitives (`openentity/core.py`)
+
+<Exports file="sdk/python/openentity/core.py" />
+
+## Develop
+
+```sh
+cd sdk/python
+uv run pytest -q
+```
+
+`scripts/verify.sh` runs these tests on every push.

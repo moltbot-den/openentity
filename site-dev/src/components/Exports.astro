@@ -1,0 +1,59 @@
+---
+// The public functions of an SDK source file, read at build time, so the reference never drifts from the code.
+// TypeScript: `export [async] function` with its /** */ comment. Python: top-level `def` without a leading underscore, with its docstring.
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+interface Props {
+  /** Repository-relative source file, such as sdk/ts/src/index.ts. */
+  file: string;
+}
+const { file } = Astro.props;
+const src = readFileSync(join(process.cwd(), '..', file), 'utf8');
+const squash = (s: string) => s.replace(/\s+/g, ' ').replace(/\( /g, '(').replace(/,? \)/g, ')').trim();
+
+/** Text from an opening parenthesis at `i` to its match. */
+function parens(s: string, i: number): string {
+  for (let d = 0, j = i; j < s.length; j++) {
+    if (s[j] === '(') d++;
+    else if (s[j] === ')' && --d === 0) return s.slice(i, j + 1);
+  }
+  throw new Error(`Exports: unbalanced parameters in ${file}`);
+}
+
+const rows: { sig: string; doc: string }[] = [];
+if (file.endsWith('.ts')) {
+  for (const m of src.matchAll(/(?:\/\*\*((?:(?!\*\/)[\s\S])*)\*\/\s*)?export (?:async )?function (\w+)(?:<[^(]*>)?\(/g)) {
+    const doc = (m[1] ?? '').replace(/^\s*\* ?/gm, '').trim();
+    rows.push({ sig: m[2] + squash(parens(src, m.index! + m[0].length - 1)), doc: squash(doc) });
+  }
+} else {
+  for (const m of src.matchAll(/^def ([a-z]\w*)\(/gm)) {
+    const params = parens(src, m.index! + m[0].length - 1);
+    const after = src.slice(m.index! + m[0].length - 1 + params.length);
+    const doc = after.match(/^[^\n]*:\n\s+"""([\s\S]*?)"""/)?.[1] ?? '';
+    rows.push({ sig: m[1] + squash(params), doc: squash(doc) });
+  }
+}
+if (!rows.length) throw new Error(`Exports: no public functions found in ${file}`);
+---
+
+<dl class="oe-exports">
+  {rows.map((r) => (
+    <>
+      <dt><code>{r.sig}</code></dt>
+      {r.doc && <dd>{r.doc.split('`').map((part, i) => (i % 2 ? <code>{part}</code> : part))}</dd>}
+    </>
+  ))}
+</dl>
+
+<style>
+  .oe-exports dt {
+    margin-top: 1rem;
+    overflow-wrap: anywhere;
+  }
+  .oe-exports dd {
+    margin: 0.25rem 0 0;
+    color: var(--sl-color-gray-2);
+  }
+</style>

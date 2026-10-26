@@ -29,6 +29,7 @@ import type { Construct } from "constructs";
 
 export const DOMAIN = "openentity.org";
 export const MCP_DOMAIN = "mcp.openentity.org";
+export const HUB_DOMAIN = "oeis.dev";
 export const ALERT_EMAIL = "will+aws-openentity@onefrequency.ai";
 export const GITHUB_SUB = "repo:moltbot-den@263048018/openentity@1432633160:ref:refs/heads/main";
 // Created out of band from the GCP Secret Manager copies (moltbot-den project): REGISTRY_KEY_JWK, CUSTODY_KEY, HASH_SALT, TURNSTILE_SECRET, ORIGIN_VERIFY, optional CIO_*.
@@ -129,11 +130,11 @@ export class OpenEntityStack extends Stack {
         externalModules: ["@electric-sql/pglite"], // test-only, dynamically imported
         mainFields: ["module", "main"],
         banner: "import{createRequire}from'module';const require=createRequire(import.meta.url);",
-        // The built site (about 2 MB) ships inside the bundle; the handler serves it from ./dist.
+        // The built sites ship inside the bundle; the handler serves openentity.org from ./dist and oeis.dev from ./dist-dev.
         commandHooks: {
           beforeBundling: () => [],
           beforeInstall: () => [],
-          afterBundling: (_in: string, out: string) => [`cp -R ${root("site/dist")} ${out}/dist`],
+          afterBundling: (_in: string, out: string) => [`cp -R ${root("site/dist")} ${out}/dist`, `cp -R ${root("site-dev/dist")} ${out}/dist-dev`],
         },
       },
       environment: {
@@ -252,6 +253,27 @@ export class OpenEntityStack extends Stack {
       defaultBehavior: { ...dynamic, origin: mcpOrigin, originRequestPolicy: mcpForward },
     });
 
+    // ---- Developer hub: oeis.dev is a third distribution on the same Lambda, tagged x-oe-site: dev ----
+    // Static pages only (site-dev/dist); the hub has no API of its own, so it shares the site's cache and header policies.
+    const hubCert = new acm.Certificate(this, "HubCert", {
+      domainName: HUB_DOMAIN,
+      validation: acm.CertificateValidation.fromDns(),
+    });
+    const hubOrigin = new origins.FunctionUrlOrigin(url, {
+      customHeaders: {
+        "x-origin-verify": SecretValue.secretsManager(secretName, { jsonField: "ORIGIN_VERIFY" }).unsafeUnwrap(),
+        "x-oe-site": "dev",
+      },
+    });
+    const hubDist = new cf.Distribution(this, "HubDist", {
+      domainNames: [HUB_DOMAIN],
+      certificate: hubCert,
+      minimumProtocolVersion: cf.SecurityPolicyProtocol.TLS_V1_2_2021,
+      httpVersion: cf.HttpVersion.HTTP2_AND_3,
+      defaultBehavior: { ...dynamic, origin: hubOrigin, allowedMethods: cf.AllowedMethods.ALLOW_GET_HEAD },
+      additionalBehaviors: { "/_astro/*": { ...immutable, origin: hubOrigin }, "/pagefind/*": { ...immutable, origin: hubOrigin } },
+    });
+
     // ---- CI: GitHub Actions deploys from main through OIDC ----
     const gh = new iam.OpenIdConnectProvider(this, "GitHubOidc", {
       url: "https://token.actions.githubusercontent.com",
@@ -297,6 +319,7 @@ export class OpenEntityStack extends Stack {
     out("DistributionId", dist.distributionId);
     out("McpDistributionDomain", mcpDist.distributionDomainName);
     out("McpDistributionId", mcpDist.distributionId);
+    out("HubDistributionDomain", hubDist.distributionDomainName);
     out("SnapshotBucketName", snapshotBucket!.bucketName);
     out("DeployRoleArn", deployRole.roleArn);
   }

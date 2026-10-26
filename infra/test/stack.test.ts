@@ -65,6 +65,18 @@ test("mcp.openentity.org is its own distribution and certificate on the same fun
   expect(Object.keys(t.findOutputs("McpDistributionDomain"))).toEqual(["McpDistributionDomain"]);
 });
 
+test("oeis.dev is its own distribution and certificate on the same function URL, tagged x-oe-site: dev, read-only", () => {
+  t.hasResourceProperties("AWS::CertificateManager::Certificate", { DomainName: "oeis.dev", ValidationMethod: "DNS" });
+  const dists = Object.values(t.findResources("AWS::CloudFront::Distribution")) as any[];
+  const hub = dists.find((d) => d.Properties.DistributionConfig.Aliases?.[0] === "oeis.dev").Properties.DistributionConfig;
+  const headers = hub.Origins[0].OriginCustomHeaders.map((h: any) => [h.HeaderName, h.HeaderValue]);
+  expect(headers).toContainEqual(["x-oe-site", "dev"]);
+  expect(headers.map((h: any) => h[0])).toContain("x-origin-verify");
+  expect(hub.DefaultCacheBehavior.AllowedMethods).toEqual(["GET", "HEAD"]);
+  expect(hub.CacheBehaviors.map((b: any) => b.PathPattern)).toEqual(["/_astro/*", "/pagefind/*"]);
+  expect(Object.keys(t.findOutputs("HubDistributionDomain"))).toEqual(["HubDistributionDomain"]);
+});
+
 test("CI can deploy only from main of the public repo", () => {
   t.hasResourceProperties("AWS::IAM::Role", {
     AssumeRolePolicyDocument: Match.objectLike({

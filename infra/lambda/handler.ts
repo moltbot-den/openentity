@@ -11,7 +11,8 @@ import { createSite, fsAssets } from "../../site/server/index.ts";
 import { createMcp } from "../../mcp/src/index.ts";
 
 const e = process.env;
-type Ready = { env: Env; site: (req: Request) => Promise<Response>; mcp: (req: Request) => Promise<Response>; verify: string };
+type Handle = (req: Request) => Promise<Response>;
+type Ready = { env: Env; site: Handle; mcp: Handle; hub: Handle; verify: string };
 let ready: Promise<Ready> | undefined;
 
 async function init(): Promise<Ready> {
@@ -42,7 +43,9 @@ async function init(): Promise<Ready> {
     asset: fsAssets(new URL("./dist", import.meta.url).pathname),
     vars: { TURNSTILE_SITE_KEY: e.TURNSTILE_SITE_KEY, CF_ANALYTICS_TOKEN: e.CF_ANALYTICS_TOKEN, SUBSCRIBE_ENABLED: e.SUBSCRIBE_ENABLED },
   });
-  return { env, site, mcp: createMcp({ registry: mcpReg, site }), verify: s.ORIGIN_VERIFY };
+  // oeis.dev: the developer hub's static build, with no registry of its own (see hubRoute).
+  const hub = createSite({ registry: () => Promise.resolve(new Response(null, { status: 404 })), asset: fsAssets(new URL("./dist-dev", import.meta.url).pathname), vars: {} });
+  return { env, site, mcp: createMcp({ registry: mcpReg, site }), hub, verify: s.ORIGIN_VERIFY };
 }
 const boot = () => (ready ??= init().catch((err) => ((ready = undefined), Promise.reject(err))));
 
@@ -62,15 +65,30 @@ export function withDeadline(work: Promise<Response>, ms = 26_000): Promise<Resp
   return Promise.race([work, late]).finally(() => clearTimeout(timer));
 }
 
+export const HUB_HOST = "oeis.dev";
+/**
+ * oeis.dev serves only the hub's pages. The standard's API and well-known files live on openentity.org, the only domain
+ * the standard emits (CLAUDE.md "Domains"), so those paths redirect there instead of answering from a second origin.
+ */
+export function hubRoute(url: URL, registryHost: string): URL | null {
+  return /^\/(v1|\.well-known)(\/|$)/.test(url.pathname) ? new URL(url.pathname + url.search, `https://${registryHost}`) : null;
+}
+
 const http = new Hono().all("*", (c) => withDeadline(route(c.req.raw, c.req.header.bind(c.req))));
 async function route(raw: Request, header: (k: string) => string | undefined): Promise<Response> {
-  const { site, mcp, verify } = await boot();
+  const { site, mcp, hub, verify } = await boot();
   // Only CloudFront knows this header, so the raw function URL is not a way around the edge.
   if (!verify || !sameSecret(header("x-origin-verify") ?? "", verify)) return new Response("forbidden", { status: 403 });
   // The mcp.openentity.org distribution adds this header at the origin; CloudFront does not forward the viewer Host.
   if (header("x-oe-site") === "mcp") return mcp(raw);
   const url = new URL(raw.url);
   url.protocol = "https:";
+  // The oeis.dev distribution adds x-oe-site: dev the same way.
+  if (header("x-oe-site") === "dev") {
+    url.host = HUB_HOST;
+    const away = hubRoute(url, e.REGISTRY_HOST!);
+    return away ? Response.redirect(away, 301) : hub(new Request(url, raw));
+  }
   url.host = e.REGISTRY_HOST!;
   return site(new Request(url, raw));
 }

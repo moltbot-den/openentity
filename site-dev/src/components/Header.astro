@@ -1,0 +1,59 @@
+---
+// Hub header: the openentity.org header (site/src/components/Header.astro) with the hub's own sections.
+import Search from 'virtual:starlight/components/Search';
+import SiteTitle from 'virtual:starlight/components/SiteTitle';
+import SocialIcons from 'virtual:starlight/components/SocialIcons';
+import ThemeSelect from 'virtual:starlight/components/ThemeSelect';
+
+const NAV = [
+  { label: 'Contribute', href: '/contribute', section: ['/contribute', '/propose'] },
+  { label: 'SDKs', href: '/sdk/typescript', section: ['/sdk'] },
+  { label: 'CLI', href: '/cli', section: ['/cli'] },
+  { label: 'Conformance', href: '/conformance', section: ['/conformance', '/test-vectors'] },
+  { label: 'Operate', href: '/registry', section: ['/registry', '/observers'] },
+];
+const path = Astro.url.pathname.replace(/\.html$/, '').replace(/\/index$/, '/');
+const current = (section: string[]) => section.some((s) => path === s || path.startsWith(s + '/'));
+---
+
+<div class="oe-header">
+  <SiteTitle />
+  <nav class="oe-nav" aria-label="Primary">
+    <ul>
+      {NAV.map(({ label, href, section }) => (
+        <li><a href={href} aria-current={current(section) ? 'page' : undefined}>{label}</a></li>
+      ))}
+    </ul>
+  </nav>
+  <div class="oe-header-search print:hidden"><Search /></div>
+  <div class="oe-header-right print:hidden">
+    <div class="oe-social"><SocialIcons /></div>
+    <ThemeSelect />
+  </div>
+  <details class="oe-menu print:hidden">
+    <summary>Menu</summary>
+    <nav aria-label="Site">
+      <ul>
+        {NAV.map(({ label, href, section }) => (
+          <li><a href={href} aria-current={current(section) ? 'page' : undefined}>{label}</a></li>
+        ))}
+        <li><a href="https://openentity.org/spec/1.0">The standard</a></li>
+        <li><a href="https://openentity.org">openentity.org</a></li>
+        <li><a href="https://github.com/moltbot-den/openentity">Source on GitHub</a></li>
+      </ul>
+    </nav>
+  </details>
+</div>
+
+<script>
+  // Pagefind builds its search box without a name; give it one so every form field is identifiable.
+  const dialog = document.getElementById('starlight__search');
+  if (dialog) {
+    new MutationObserver((_, obs) => {
+      const input = dialog.querySelector('input:not([name])');
+      if (!input) return;
+      input.setAttribute('name', 'q');
+      obs.disconnect();
+    }).observe(dialog, { childList: true, subtree: true });
+  }
+</script>
