@@ -14,6 +14,11 @@ dependencies = [
     "pycryptodome>=3.20",
 ]
 
+[project.urls]
+Homepage = "https://openentity.org"
+Documentation = "https://oeis.dev"
+Source = "https://github.com/moltbot-den/openentity"
+
 [project.scripts]
 openentity = "openentity.cli:main"
 

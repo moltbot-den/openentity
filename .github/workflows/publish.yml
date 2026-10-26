@@ -1,19 +1,21 @@
 name: publish
-# npm trusted publishing (OIDC): no npm token in the repo. Each package's trusted publisher on
-# npmjs.com points at this repo and this workflow file, with direct publish off: this job only stages
-# the version, and it goes live when an owner approves it on npmjs.com with 2FA.
+# Trusted publishing (OIDC) for npm and PyPI: no token in the repo. npm: each package's trusted publisher
+# points at this repo and this workflow file, with direct publish off, so the job only stages the version
+# and it goes live when an owner approves it on npmjs.com with 2FA. PyPI: the trusted publisher for
+# `openentity` points at this workflow too, and publishes directly.
 on:
   workflow_dispatch:
     inputs:
       package:
         description: Package directory to publish
         type: choice
-        options: [cli, sdk/ts]
+        options: [cli, sdk/ts, sdk/python]
 permissions:
   id-token: write
   contents: read
 jobs:
   publish:
+    if: inputs.package != 'sdk/python'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -30,3 +32,22 @@ jobs:
       # pnpm pack applies publishConfig and rewrites workspace: ranges; npm stage publish does the OIDC exchange.
       - working-directory: ${{ inputs.package }}
         run: pnpm pack --pack-destination "$RUNNER_TEMP" && npm stage publish "$RUNNER_TEMP"/*.tgz --access public
+
+  pypi:
+    if: inputs.package == 'sdk/python'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - uses: astral-sh/setup-uv@v6
+      - run: bash scripts/verify.sh
+      - working-directory: sdk/python
+        run: uv build
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: sdk/python/dist
