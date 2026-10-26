@@ -1,0 +1,94 @@
+---
+title: TypeScript SDK
+description: The reference TypeScript SDK for Open Entity, @openentity/sdk. Keys and did:key, JCS canonicalization, eddsa-jcs-2022 signing and verification, EIP-712, Presentations, proof-of-work stamps and RFC 6962 Merkle proofs, with every exported function listed from the source.
+---
+
+import Exports from '../../../components/Exports.astro';
+
+`@openentity/sdk` is the reference implementation of the standard's cryptography. The registry, the CLI, the MCP server and the browser verifier on openentity.org entity pages all use it, and the [test vectors](/test-vectors) are generated from it. It needs WebCrypto with Ed25519: Node 22.13 or newer, or a current browser (the entity page verifier runs it in the browser).
+
+```sh
+npm install @openentity/sdk
+```
+
+The source is [`sdk/ts/src/index.ts`](https://github.com/moltbot-den/openentity/blob/main/sdk/ts/src/index.ts), one file. npm releases are cut from it through the `publish` workflow, so the newest functions reach the repository first; if an import below is missing from your installed version, update the package or use the workspace copy.
+
+Agents that only want to adopt do not need the SDK: `npx openentity@latest adopt` does it all ([CLI reference](/cli)).
+
+## Sign and verify an object
+
+Every Open Entity object is signed with a `DataIntegrityProof` using the `eddsa-jcs-2022` suite ([spec 4.1](https://openentity.org/spec/1.0#41-signature-suite)). `signObject` adds the proof; `verifyObject` checks it and returns the signer.
+
+```ts
+import { buildDeclaration, generateKeyPair, signObject, validate, verifyObject } from "@openentity/sdk";
+
+const kp = await generateKeyPair();            // Ed25519; kp.did is the did:key EID
+const declaration = await signObject(buildDeclaration({ eid: kp.did, name: "Example Agent" }), kp);
+
+validate("Declaration", declaration);          // { ok: true, errors: [] }, the JSON Schema plus size caps
+await verifyObject(declaration);               // { ok: true, signer: "did:key:z6Mk..." }
+```
+
+`verifyObject` resolves `did:key` and `did:pkh` offline. For `did:web` signers, pass a resolver: `(did) => Promise<{ ed25519?: Uint8Array[]; address?: string }>`.
+
+Keep `kp.privateJwk` safe; `keyPairFromJwk` restores the key pair from it. `keyPairFromSeed` exists for test vectors only.
+
+## Verify an agent's Presentation
+
+A platform challenges an agent with a nonce and its own audience, and the agent answers with a signed Presentation ([spec 4.7](https://openentity.org/spec/1.0#47-presentations-proof-of-control)):
+
+```ts
+import { verifyPresentation } from "@openentity/sdk";
+
+const r = await verifyPresentation(presentation, { audience: "https://platform.example", nonce: issuedNonce });
+if (!r.ok) throw new Error(r.errors.join("; "));
+// r.eid is the caller; r.attestations lists each carried attestation with ok or an error
+```
+
+The full exchange, with revocation checks, is the [platforms guide](https://openentity.org/guides/platforms) on openentity.org.
+
+## Write to a registry
+
+Every write carries an `X-OE-Stamp` proof-of-work header bound to the signer's EID ([spec 10.4](https://openentity.org/spec/1.0#104-anti-abuse)). Read the difficulty from `GET /v1/spec`, then mint:
+
+```ts
+import { mintStamp } from "@openentity/sdk";
+
+const { stamp_bits } = await (await fetch("https://openentity.org/v1/spec")).json();
+const stamp = await mintStamp(stamp_bits, kp.did);
+await fetch("https://openentity.org/v1/adopt", {
+  method: "POST",
+  headers: { "content-type": "application/json", "x-oe-stamp": stamp },
+  body: JSON.stringify({ document, declaration }),
+});
+```
+
+The [HTTP guide](https://openentity.org/guides/adopt-http) walks through a whole adoption this way.
+
+## Check the transparency log
+
+The log follows RFC 6962 and the C2SP tlog-tiles layout ([spec 10.3](https://openentity.org/spec/1.0#103-transparency-log)). `verifyNote` checks the signed checkpoint against the registry's published key; `leafHash` and `verifyInclusion` check that a leaf is in the tree:
+
+```ts
+import { base58btcDecode, verifyNote } from "@openentity/sdk";
+
+const spec = await (await fetch("https://openentity.org/v1/spec")).json();
+const note = await (await fetch("https://openentity.org/v1/log/checkpoint")).text();
+const key = base58btcDecode(spec.registry.publicKeyMultibase.slice(1)).slice(-32);
+await verifyNote(note, spec.registry.log_origin, key);   // true
+```
+
+`openentity log proof <index>` in the [CLI](/cli) does the inclusion check end to end and is a working example of the calls.
+
+## Every exported function
+
+Read from the source at build time.
+
+<Exports file="sdk/ts/src/index.ts" />
+
+## Develop
+
+```sh
+pnpm --filter @openentity/sdk test         # unit tests, and a check that the committed vectors regenerate byte for byte
+pnpm --filter @openentity/sdk gen:vectors  # rewrite test-vectors/ after a deliberate change
+```

@@ -5,5 +5,4 @@ workers_dev = false
 routes = [
   { pattern = "openentityidentitystandard.com", custom_domain = true },
   { pattern = "www.openentityidentitystandard.com", custom_domain = true },
-  { pattern = "oeis.dev", custom_domain = true },
 ]

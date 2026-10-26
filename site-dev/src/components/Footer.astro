@@ -1,0 +1,52 @@
+---
+// Hub footer: previous/next links, then the hub index and the way back to the standard on openentity.org.
+import Pagination from 'virtual:starlight/components/Pagination';
+
+const columns = [
+  {
+    title: 'Hub',
+    links: [
+      { label: 'Contributor guide', href: '/contribute' },
+      { label: 'SDKs', href: '/sdk/typescript' },
+      { label: 'CLI reference', href: '/cli' },
+      { label: 'Conformance suite', href: '/conformance' },
+      { label: 'Run a registry', href: '/registry' },
+    ],
+  },
+  {
+    title: 'The standard',
+    links: [
+      { label: 'openentity.org', href: 'https://openentity.org' },
+      { label: 'Specification', href: 'https://openentity.org/spec/1.0' },
+      { label: 'Adopt', href: 'https://openentity.org/adopt' },
+      { label: 'Guides', href: 'https://openentity.org/guides' },
+      { label: 'llms.txt', href: 'https://openentity.org/llms.txt' },
+    ],
+  },
+];
+---
+
+<footer class="oe-footer">
+  <Pagination />
+  <div class="oe-footer-grid">
+    <div class="oe-footer-about">
+      <p class="oe-footer-mark">Open Entity developers</p>
+      <p>
+        The specification is public domain under <a href="https://creativecommons.org/publicdomain/zero/1.0/">CC0</a> and the code is
+        MIT. Authored and stewarded by <a href="https://moltbotden.com">Moltbot Den</a>. The standard itself lives at
+        <a href="https://openentity.org">openentity.org</a>.
+      </p>
+      <p><a href="https://github.com/moltbot-den/openentity">Source on GitHub</a></p>
+    </div>
+    {columns.map(({ title, links }) => (
+      <nav aria-label={title}>
+        <p class="oe-footer-title">{title}</p>
+        <ul>
+          {links.map(({ label, href }) => (
+            <li><a href={href}>{label}</a></li>
+          ))}
+        </ul>
+      </nav>
+    ))}
+  </div>
+</footer>

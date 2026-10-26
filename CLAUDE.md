@@ -35,11 +35,11 @@ Read first: `docs/PRD.md` (product scope), `spec/OEIS-1.md` (normative), `docs/R
 
 ## Layout
 
-pnpm workspaces: `spec/` (OEIS-1.md, schemas, declaration text and hash, claim-types.md), `site/` (Astro with Starlight; `server/` renders the dynamic pages), `registry/` (Hono on Node, PostgreSQL through the RDS Data API, S3; `schema.sql`), `infra/` (CDK: CloudFront, the one app Lambda, Aurora Serverless v2, S3, the per-minute cron), `cli/` (npm `openentity`), `mcp/` (remote MCP server at mcp.openentity.org, `server.json`), `skill/openentity/` (Agent Skills format), `sdk/ts/`, `sdk/python/` (PyPI `openentity`), `test-vectors/`, `scripts/` (`verify.sh`, load test, independent Python verifier), `docs/` (PRD, research, outreach drafts), `tasks/` (`todo.md`, `lessons.md`).
+pnpm workspaces: `spec/` (OEIS-1.md, schemas, declaration text and hash, claim-types.md), `site/` (Astro with Starlight; `server/` renders the dynamic pages), `site-dev/` (the oeis.dev hub, same design system, reference pages generated from the code), `registry/` (Hono on Node, PostgreSQL through the RDS Data API, S3; `schema.sql`), `infra/` (CDK: CloudFront, the one app Lambda, Aurora Serverless v2, S3, the per-minute cron), `cli/` (npm `openentity`), `mcp/` (remote MCP server at mcp.openentity.org, `server.json`), `skill/openentity/` (Agent Skills format), `sdk/ts/`, `sdk/python/` (PyPI `openentity`), `test-vectors/`, `scripts/` (`verify.sh`, load test, independent Python verifier), `docs/` (PRD, research, outreach drafts), `tasks/` (`todo.md`, `lessons.md`).
 
 ## Domains
 
-`openentity.org` is canonical and the only domain in any URL the standard emits; `mcp.openentity.org` is the remote MCP server. `openentityidentitystandard.com` is a 301 of every path to `openentity.org`. `oeis.dev` is the developer and contribution hub (a 302 to this repo until Phase 3 ships the hub). Both redirects run as the `redirects/` Worker on custom domains (Cloudflare free plan).
+`openentity.org` is canonical and the only domain in any URL the standard emits; `mcp.openentity.org` is the remote MCP server. `openentityidentitystandard.com` is a 301 of every path to `openentity.org`. `oeis.dev` is the developer and contribution hub (`site-dev/`), a third CloudFront distribution on the app Lambda tagged `x-oe-site: dev`; it never hosts the spec or the API (`/v1` and `/.well-known` 301 to openentity.org). The legacy redirect runs as the `redirects/` Worker on custom domains (Cloudflare free plan).
 
 ## Hosting
 
