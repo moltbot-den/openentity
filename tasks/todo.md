@@ -6,7 +6,7 @@ Live:
 - openentity.org (site, `/v1` registry, transparency log, guides), redesigned on `site/DESIGN.md`; Lighthouse 100 on accessibility, best practices, SEO, agentic browsing
 - mcp.openentity.org/mcp: remote MCP, listed in the official MCP registry as `org.openentity/openentity`
 - oeis.dev: developer hub (`site-dev/`)
-- npm: `openentity` 0.2.0 and `@openentity/sdk` 0.1.0 are live; `openentity@0.3.1` and `@openentity/sdk@0.2.0` are staged and need Will's 2FA approval at npmjs.com (Staged Packages); reject the stale staged `openentity@0.3.0`
+- npm: `openentity` 0.3.1 and `@openentity/sdk` 0.2.0 live (approved 2026-10-26); PyPI: `openentity` 0.1.0 live
 - ClawHub: skill `openentity@1.0.0` submitted, pending ClawHub security scans
 - Founding Entities: OptimusWill and Incredibot at L2 first-party; observer `did:web:moltbotden.com` accredited as bootstrap
 - Load: 100 adopts/s for 60 s, 6000/6000 accepted, p95 1.2 s (group commit, `log_sequence`); prod Lambda reserves 200 concurrency
@@ -18,14 +18,14 @@ Ecosystem tie-ins (all key agents by the EID):
 - ClawGRC: EID by Presentation, compliance and violation issuer built, `OPENENTITY_SUBMIT_ENABLED` off; did:web at api.clawgrc.com
 
 Open (owner):
-- [ ] npm approvals above (2FA; the agent's click is blocked by the permission guard)
-- [ ] PyPI: pending trusted publisher for `openentity` (owner `moltbot-den`, repo `openentity`, workflow `publish.yml`, environment blank); needs Will's PyPI login. Until then the Python door is `uvx --from git+...#subdirectory=sdk/python`
+- [x] npm approvals (0.3.1 and SDK 0.2.0 live 2026-10-26)
+- [x] PyPI: `openentity` published 2026-10-26 through trusted publishing (`publish.yml`, input `sdk/python`); `uvx openentity adopt` is the Python door
 - [ ] Customer.io Track API site id and key (only an App API key exists) to turn on `/v1/subscribe` (`SUBSCRIBE_ENABLED`)
 - [ ] Social accounts for the herald loop (PRD 7.9); outreach drafts in `docs/outreach/` (IANA, W3C/IETF, AAIF, launch posts) are Will's to send
 - [ ] mcp.so listing costs $39 (skipped); mcpservers.org approval emails go to identity@openentity.org (confirm the mailbox exists)
 
 Open (engineering):
-- [ ] Publish `publish.yml` to PyPI once the publisher exists; add a `sdk/python` job
+- [x] `publish.yml` publishes `sdk/python` to PyPI
 - [ ] ClawGRC: turn on `OPENENTITY_SUBMIT_ENABLED` once it assesses a real agent; confirm an authenticated route through its gateway after the secret trim fix
 - [ ] securemyagent.ai: badge, Agent Card extension, `X-SMA-Attestation` header, Base anchoring (its GAPS G-2026-009)
 - [ ] Herald loop and weekly digest (PRD 7.9, Phase 4) once accounts and Customer.io exist
@@ -41,7 +41,7 @@ Phase order is PRD section 11. One PR per phase, merged and deployed before the 
 - [x] Cloudflare account `b9ebc7de787d7dd325eabbe7a0baedce`: zones `openentity.org`, `openentityidentitystandard.com`, `oeis.dev` all present and active (Free plan zones)
 - [x] `openentityidentitystandard.com` and `www` 301 every path to `openentity.org`; `oeis.dev` 302 to this repo (Worker `redirects/`, custom domains)
 - [x] npm org `openentity`; `openentity` and `@openentity/sdk` 0.1.0 published; trusted publishing (staged, 2FA approval) via `publish.yml`
-- [ ] PyPI `openentity` (Phase 2, needs a PyPI token)
+- [x] PyPI `openentity` (published 2026-10-26)
 
 Domain result: the wrangler OAuth token has `zone (read)` only, so DNS records, rulesets and zone settings cannot be written yet. The redirects therefore run as a Worker on custom domains instead of redirect rules; behavior is identical (301 with path and query, 302 for oeis.dev).
 

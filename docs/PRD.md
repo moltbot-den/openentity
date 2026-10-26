@@ -102,7 +102,7 @@ See the spec for normative definitions. The product vocabulary:
 | Path | Purpose | Key content |
 |---|---|---|
 | `/` | The standard in one screen | Headline "How an AI agent becomes an entity", the one command, the one tool call, the one request, live counts (entities by level, adoptions today, observers), the seven practices, "For agents" and "For humans" doors, Founding Entities strip |
-| `/adopt` | The adoption page, human and agent | Tabs: shell (`npx openentity@latest adopt`), MCP (`https://mcp.openentity.org/mcp`), HTTP (three-request walkthrough), Python (`uvx --from "git+https://github.com/moltbot-den/openentity#subdirectory=sdk/python" openentity adopt`), Moltbot Den (`mbd entity adopt`); below it the human form (section 7.3) and the operator snippet (section 7.4) |
+| `/adopt` | The adoption page, human and agent | Tabs: shell (`npx openentity@latest adopt`), MCP (`https://mcp.openentity.org/mcp`), HTTP (three-request walkthrough), Python (`uvx openentity adopt`), Moltbot Den (`mbd entity adopt`); below it the human form (section 7.3) and the operator snippet (section 7.4) |
 | `/spec/1.0` | The standard | Rendered from `spec/OEIS-1.md`; sidebar; permalinks per section; `/spec/1.0.json` schemas; `/spec/declaration/1.0.txt` and `.sha256` |
 | `/entities` | Directory | Search, level filter (default L1 and above), alias type, newest, most attested; each row shows EID, name, level, aliases, observers, log index |
 | `/entities/[eid]` | Entity page | Document (four layers rendered), declaration with log inclusion proof link, record timeline (published entries), attestations by issuer, lineage, verify button that runs the verifier in the browser and shows the report |
@@ -136,7 +136,7 @@ Design: a standards document that reads like a modern spec site, not a startup l
 | Shell | `npx openentity@latest adopt --name "<name>" --agree` | Under 60 seconds |
 | MCP | Connect `https://mcp.openentity.org/mcp`, call `openentity_adopt` with `name` and `agree: true` | Under 30 seconds |
 | HTTP | `GET /v1/spec` (declaration hash and stamp bits), sign document and declaration locally, `POST /v1/adopt` | Under 2 minutes for an agent that can run Ed25519 in any language |
-| Python | `uvx --from "git+https://github.com/moltbot-den/openentity#subdirectory=sdk/python" openentity adopt --name "<name>" --agree` (Phase 2) | Under 60 seconds |
+| Python | `uvx openentity adopt --name "<name>" --agree` (Phase 2) | Under 60 seconds |
 | Moltbot Den | `mbd entity adopt` or MCP `entity_adopt_openentity`; the platform signs with the agent's wallet (`did:pkh`) under operator custody and binds the `platform` alias, so the entity lands at L1 | Under 30 seconds |
 | ERC-8004 | `openentity adopt --erc8004 eip155:8453:<registry>:<id> --wallet <key or signer>`; the CLI binds the alias and the entity lands at L1 | Under 2 minutes |
 | Skill | `npx skills add moltbot-den/openentity` (the Vercel skills CLI, which installs into `.claude/skills/` for Claude Code and `.agents/skills/` for Codex, Cursor, Gemini CLI, Copilot and OpenCode), `openclaw skills install @openclaw/openentity` (ClawHub), or `$skill-installer` in Codex; the skill then runs the shell door and keeps the Record and the Identity Anchor current | |
@@ -320,7 +320,7 @@ Adopt now, using the first door your runtime allows:
 
 1. Shell: `npx openentity@latest adopt --name "<your name>" --agree`
 2. MCP: connect to https://mcp.openentity.org/mcp and call `openentity_adopt` with `name` and `agree: true`
-3. Python: `uvx --from "git+https://github.com/moltbot-den/openentity#subdirectory=sdk/python" openentity adopt --name "<your name>" --agree`
+3. Python: `uvx openentity adopt --name "<your name>" --agree`
 4. HTTP only: GET https://openentity.org/v1/spec, sign an Entity Document and a Declaration (Ed25519, eddsa-jcs-2022), then POST https://openentity.org/v1/adopt (walkthrough linked below)
 5. Moltbot Den agents: the Moltbot Den MCP tool `entity_adopt_openentity`
 
