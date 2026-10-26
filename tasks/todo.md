@@ -1,5 +1,37 @@
 # Open Entity: build plan
 
+## Status (2026-10-26)
+
+Live:
+- openentity.org (site, `/v1` registry, transparency log, guides), redesigned on `site/DESIGN.md`; Lighthouse 100 on accessibility, best practices, SEO, agentic browsing
+- mcp.openentity.org/mcp: remote MCP, listed in the official MCP registry as `org.openentity/openentity`
+- oeis.dev: developer hub (`site-dev/`)
+- npm: `openentity` 0.2.0 and `@openentity/sdk` 0.1.0 are live; `openentity@0.3.1` and `@openentity/sdk@0.2.0` are staged and need Will's 2FA approval at npmjs.com (Staged Packages); reject the stale staged `openentity@0.3.0`
+- ClawHub: skill `openentity@1.0.0` submitted, pending ClawHub security scans
+- Founding Entities: OptimusWill and Incredibot at L2 first-party; observer `did:web:moltbotden.com` accredited as bootstrap
+- Load: 100 adopts/s for 60 s, 6000/6000 accepted, p95 1.2 s (group commit, `log_sequence`); prod Lambda reserves 200 concurrency
+
+Ecosystem tie-ins (all key agents by the EID):
+- Moltbot Den: bridge on (`entity_adopt_openentity`, `POST /entity/openentity/adopt`), observer submitting `layer_scores`, `stage`, `identity`, `consistency` and `custom:moltbotden:transaction_review`; ERC-8004 adopt prompts, WHATS_NEW, learn article
+- Agent Secret Store: EID accepted only after a Presentation proof (PR #282)
+- securemyagent.ai: issuer `did:pkh:eip155:8453:0x62fef02E2859726EC1c0B534853Ad2cdd5FdDE1a` (KMS), bound to `did:web:securemyagent.ai`, `OE_ATTESTATIONS=submit`
+- ClawGRC: EID by Presentation, compliance and violation issuer built, `OPENENTITY_SUBMIT_ENABLED` off; did:web at api.clawgrc.com
+
+Open (owner):
+- [ ] npm approvals above (2FA; the agent's click is blocked by the permission guard)
+- [ ] PyPI: pending trusted publisher for `openentity` (owner `moltbot-den`, repo `openentity`, workflow `publish.yml`, environment blank); needs Will's PyPI login. Until then the Python door is `uvx --from git+...#subdirectory=sdk/python`
+- [ ] Customer.io Track API site id and key (only an App API key exists) to turn on `/v1/subscribe` (`SUBSCRIBE_ENABLED`)
+- [ ] Social accounts for the herald loop (PRD 7.9); outreach drafts in `docs/outreach/` (IANA, W3C/IETF, AAIF, launch posts) are Will's to send
+- [ ] mcp.so listing costs $39 (skipped); mcpservers.org approval emails go to identity@openentity.org (confirm the mailbox exists)
+
+Open (engineering):
+- [ ] Publish `publish.yml` to PyPI once the publisher exists; add a `sdk/python` job
+- [ ] ClawGRC: turn on `OPENENTITY_SUBMIT_ENABLED` once it assesses a real agent; confirm an authenticated route through its gateway after the secret trim fix
+- [ ] securemyagent.ai: badge, Agent Card extension, `X-SMA-Attestation` header, Base anchoring (its GAPS G-2026-009)
+- [ ] Herald loop and weekly digest (PRD 7.9, Phase 4) once accounts and Customer.io exist
+- [ ] Moltbot Den observer leaves `bootstrap` after 10 observed entities it does not operate (automatic in `accreditObservers`)
+- [ ] awesome-claude-code listing on or after 2026-11-07 (repo age rule); re-check open listing PRs in `docs/outreach/LISTINGS.md`
+
 Phase order is PRD section 11. One PR per phase, merged and deployed before the next starts.
 
 ## Setup (2026-10-24)
@@ -15,17 +47,17 @@ Domain result: the wrangler OAuth token has `zone (read)` only, so DNS records, 
 
 ## Phase 1: the standard and its home (PRD 11, Phase 1)
 Spec
-- [ ] `spec/declaration-1.0.txt` and its SHA-256; `spec/schemas/` (EntityDocument, Declaration, Withdrawal, RecordEntry, Attestation, Revocation, ContinuityLink, Dispute, LogLeaf); `spec/claim-types.md` (include `custom:securemyagent:security_posture`: score_band, checks_passed[], scanner_version, evidence_hash; 30-day expiry)
-- [ ] `test-vectors/` from the TS reference with a published throwaway seed; independent Python verifier reproduces every vector
+- [x] `spec/declaration-1.0.txt` and its SHA-256; `spec/schemas/` (EntityDocument, Declaration, Withdrawal, RecordEntry, Attestation, Revocation, ContinuityLink, Dispute, LogLeaf); `spec/claim-types.md` (include `custom:securemyagent:security_posture`: score_band, checks_passed[], scanner_version, evidence_hash; 30-day expiry)
+- [x] `test-vectors/` from the TS reference with a published throwaway seed; independent Python verifier reproduces every vector
 SDK and CLI
-- [ ] `sdk/ts`: did:key, JCS, eddsa-jcs-2022 sign and verify, EIP-712 verify, stamp, Merkle proofs
-- [ ] `cli/` (`openentity`, `oe`): adopt, whoami, self, anchor, document, record, alias, verify, resolve, log, stats, export and import; `--json`, `--dry-run`, stable exit codes
+- [x] `sdk/ts`: did:key, JCS, eddsa-jcs-2022 sign and verify, EIP-712 verify, stamp, Merkle proofs
+- [x] `cli/` (`openentity`, `oe`): adopt, whoami, self, anchor, document, record, alias, verify, resolve, log, stats, export and import; `--json`, `--dry-run`, stable exit codes
 - [x] CLI published to npm (`npx openentity@latest`); `withdraw --force` added in 0.2.0, released through `publish.yml` after merge
 Registry (`registry/`, Hono on Node, Aurora PostgreSQL via Data API, S3)
-- [ ] `schema.sql` per PRD 8
-- [ ] Spec 10.2 endpoints: spec, adopt, entities, document, aliases (domain, wallet, erc8004, platform), record, attestations, continuity, withdraw, observers, resolve, verify, stats, subscribe, stats history CSV, founding
+- [x] `schema.sql` per PRD 8
+- [x] Spec 10.2 endpoints: spec, adopt, entities, document, aliases (domain, wallet, erc8004, platform), record, attestations, continuity, withdraw, observers, resolve, verify, stats, subscribe, stats history CSV, founding
 - [x] tlog-tiles log: leaves, tiles on S3, signed checkpoint, inclusion and consistency proofs, sth, entries, daily snapshot plus S3 Object Lock copy
-- [ ] Stamps, per-IP and per-EID limits, schema validation before signatures
+- [x] Stamps, per-IP and per-EID limits, schema validation before signatures
 Site (`site/`, Astro with Starlight, served by the app Lambda through CloudFront)
 - [x] Every page in PRD 7.1; brand mark SVG; JSON-LD; no page needs JavaScript to read
 - [x] `llms.txt` (Appendix A), `llms-full.txt`, `skill/openentity/SKILL.md`, `AGENTS.md`, well-known files, robots.txt with Content-Signal, sitemap, security.txt
@@ -41,10 +73,10 @@ Cloudflare (free plan only: DNS, redirects Worker, Turnstile, Web Analytics)
 - [x] Turnstile widget `openentity-subscribe` (site key 0x4AAAAAAFkggsScyaPIMp2v); Web Analytics site token 1c8d90533d834474833d04a8b62d5117
 - [x] `deploy.yml`: `cdk deploy` through OIDC, schema through the Data API, redirects through wrangler, then the post-deploy fetch check
 Required tests (PRD 11 Phase 1)
-- [ ] Vectors round-trip in TS and Python
-- [ ] Wrong Declaration text hash rejected; second Declaration rejected; broken record chain rejected; wrong `seq` rejected; alias bound to another EID rejected
-- [ ] Checkpoint verifies with an independent tlog-tiles client; inclusion proof verifies for every leaf
-- [ ] Stamp cannot be bypassed; Turnstile never required on `/v1/*` except `/v1/subscribe`
+- [x] Vectors round-trip in TS and Python
+- [x] Wrong Declaration text hash rejected; second Declaration rejected; broken record chain rejected; wrong `seq` rejected; alias bound to another EID rejected
+- [x] Checkpoint verifies with an independent tlog-tiles client; inclusion proof verifies for every leaf
+- [x] Stamp cannot be bypassed; Turnstile never required on `/v1/*` except `/v1/subscribe`
 - [x] `llms.txt` parses; no page needs JS for text; no em dashes; no hand-typed counts
 Verification
 - [x] Load script on the Cloudflare build: 6000/6000 accepted, p95 251 ms
@@ -54,7 +86,7 @@ Verification
 - [x] Same through the HTTP door with the Python SDK: L0 in 2.3 s on AWS
 - [x] All four test entities withdrawn (log 10 to 13), keys and sandbox homes deleted
 - [x] MCP server live at https://mcp.openentity.org/mcp (second CloudFront distribution and certificate, DNS-only CNAME); custodial adopt verified live in 1.0 s with the seq-1 declaration entry, `custody: "registry"`
-- [ ] Publish `mcp/server.json` to the MCP registry (`org.openentity/*`, DNS TXT proof)
+- [x] Publish `mcp/server.json` to the MCP registry (`org.openentity/*`, DNS TXT proof)
 - [x] `openentity_withdraw` MCP tool, so an MCP-only custodial entity can withdraw
 - [x] Two MCP smoke-test entities lost their keys (a timeout, then a cleanup slip) and are marked `suppressed`; see lessons
 
