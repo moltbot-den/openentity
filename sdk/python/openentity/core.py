@@ -135,15 +135,39 @@ def nonce() -> str:
 # ---- eddsa-jcs-2022 (spec 4.1) ----
 def _signing_input(obj: dict, proof: dict) -> bytes:
     config = {k: v for k, v in proof.items() if k != "proofValue"}
-    doc = {k: v for k, v in obj.items() if k != "proof"}
+    doc = {k: v for k, v in obj.items() if k not in ("proof", "proofs")}  # a ContinuityLink carries proofs[]
     return canonical_hash(config) + canonical_hash(doc)
 
 
-def sign_object(obj: dict, kp: KeyPair, created: str | None = None) -> dict:
+def sign_proof(obj: dict, kp: KeyPair, created: str | None = None) -> dict:
     proof = {"type": "DataIntegrityProof", "cryptosuite": "eddsa-jcs-2022", "created": created or now(),
              "verificationMethod": verification_method(kp.did), "proofPurpose": "assertionMethod"}
     sig = kp.private.sign(_signing_input(obj, proof))
-    return {**{k: v for k, v in obj.items() if k != "proof"}, "proof": {**proof, "proofValue": "z" + b58encode(sig)}}
+    return {**proof, "proofValue": "z" + b58encode(sig)}
+
+
+def sign_object(obj: dict, kp: KeyPair, created: str | None = None) -> dict:
+    return {**{k: v for k, v in obj.items() if k != "proof"}, "proof": sign_proof(obj, kp, created)}
+
+
+# ---- continuity (spec 9) ----
+def successor_document(prev: dict, nxt: KeyPair, created: str | None = None) -> dict:
+    """The successor's unsigned seq 1 document: `prev` re-keyed, aliases dropped (their proofs name the old EID)."""
+    created = created or now()
+    d = {k: v for k, v in prev.items() if k not in ("proof", "aliases")}
+    return {**d, "eid": nxt.did, "created": created, "updated": created, "seq": 1,
+            "keys": [{"id": verification_method(nxt.did), "type": "Multikey", "publicKeyMultibase": nxt.did.removeprefix("did:key:")}],
+            "continuity": {**d.get("continuity", {}), "previous": prev["eid"]}}
+
+
+def build_rotation(previous: KeyPair, successor: KeyPair, document: dict, basis: str = "rotation",
+                   created: str | None = None, nonce_: str | None = None) -> dict:
+    """The body of POST /v1/continuity: a link signed by both keys, and the successor's document signed by it."""
+    created = created or now()
+    body = {"spec": SPEC, "type": "ContinuityLink", "previous": previous.did, "successor": successor.did,
+            "basis": basis, "created": created, "nonce": nonce_ or nonce()}
+    link = {**body, "proofs": [sign_proof(body, previous, created), sign_proof(body, successor, created)]}
+    return {"link": link, "document": sign_object(document, successor, created)}
 
 
 # ---- EIP-712 for did:pkh (spec 4.2) ----

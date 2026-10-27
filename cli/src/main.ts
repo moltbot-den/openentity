@@ -48,7 +48,7 @@ Usage: openentity <command> [options]   (also: oe)
   conformance <registry-url>                                 (read-only checks any registry must pass; exit 3 on failure)
   log checkpoint | proof <index> | audit <n>
   export [--with-key] [--out file] | import <file>
-  rotate [--to keyfile] | migrate [--to keyfile] | recover --previous <eid> --via <alias>
+  rotate [--to keyfile] [--dry-run] | migrate [--to keyfile] | recover --previous <eid> --via <alias>
   withdraw --force
 
 Global: --json  --registry <url>  --eid <eid>   Env: OPENENTITY_HOME, OPENENTITY_REGISTRY, OPENENTITY_NAME, OPENENTITY_OPERATOR

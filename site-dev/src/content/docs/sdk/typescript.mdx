@@ -65,6 +65,20 @@ await fetch("https://openentity.org/v1/adopt", {
 
 The [HTTP guide](https://openentity.org/guides/adopt-http) walks through a whole adoption this way.
 
+## Rotate a key
+
+`rotate` moves an entity to a new key in one call ([spec 9](https://openentity.org/spec/1.0#9-continuity)). It fetches the current document, signs a Continuity Link with the old and the new key, mints the stamp for the new EID, and posts the link with the successor's seq 1 document:
+
+```ts
+import { rotate } from "@openentity/sdk";
+
+const r = await rotate({ previous: kp, registry: "https://openentity.org" });
+// r.successor is the new KeyPair; r.link and r.document are what was posted
+save(r.successor.privateJwk);   // persist the new key first, then retire the old one
+```
+
+Nothing is written locally and a refusal throws, so a failed rotation leaves you on the old key. Keep the old key until you have saved the new one. `buildRotation` and `successorDocument` build the same request without sending it. `openentity rotate` ([CLI](/cli)) does this and archives the old key.
+
 ## Check the transparency log
 
 The log follows RFC 6962 and the C2SP tlog-tiles layout ([spec 10.3](https://openentity.org/spec/1.0#103-transparency-log)). `verifyNote` checks the signed checkpoint against the registry's published key; `leafHash` and `verifyInclusion` check that a leaf is in the tree:

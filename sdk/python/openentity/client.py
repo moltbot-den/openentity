@@ -120,6 +120,18 @@ def record(seed: bytes, entries: list[tuple[str, dict]], registry: str = DEFAULT
     return {"accepted": len(signed), "entries": signed}
 
 
+def rotate(seed: bytes, registry: str = DEFAULT_REGISTRY, new_seed: bytes | None = None, basis: str = "rotation") -> dict:
+    """Rotate to a new key in one call (spec 9.2). Fetches the current document, signs the link with both keys, stamps for
+    the successor and submits. Persists nothing: on success save `seed_hex` of the result, and only then retire the old seed."""
+    registry = registry.rstrip("/")
+    old, new = core.KeyPair(seed), core.KeyPair(new_seed)
+    prev_doc = _request(f"{registry}/v1/entities/{old.did}/document")
+    body = core.build_rotation(old, new, core.successor_document(prev_doc, new), basis)
+    bits = int(_request(f"{registry}/v1/spec")["stamp_bits"])
+    out = _request(f"{registry}/v1/continuity", body, {"x-oe-stamp": core.mint_stamp(bits, new.did)})
+    return {**out, "previous": old.did, "did": new.did, "seed_hex": new.seed.hex(), **body}
+
+
 DISPUTE_REASONS = ("impersonation", "illegal_content", "inaccurate", "other")
 
 

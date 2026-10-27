@@ -80,6 +80,15 @@ def check_vectors(d):
     res = []
     for f in sorted(Path(d).glob("*.json")):
         v = json.loads(f.read_text())
+        if "request" in v:  # rotation: POST /v1/continuity body; link signed by previous and successor, document by the successor
+            l, doc = v["request"]["link"], v["request"]["document"]
+            try:
+                signers = []
+                for p in l["proofs"]: verify_sig(l, p); signers.append(p["verificationMethod"].split("#")[0])
+                verify_sig(doc)
+                good = signers == [l["previous"], l["successor"]] and doc["eid"] == l["successor"] and doc["seq"] == 1 and doc["continuity"]["previous"] == l["previous"]
+            except (InvalidSignature, ValueError, KeyError): good = False
+            res.append((f.name, "rotation", good)); continue
         if "object" not in v: continue
         o = v["object"]; c = jcs(o)
         res += [(f.name, "canonical", v["canonical"] == c), (f.name, "sha256", v["sha256"] == H(c).hex()),
