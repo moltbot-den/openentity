@@ -19,7 +19,7 @@ class RegistryError(Exception):
 def _request(url: str, body: dict | None = None, headers: dict | None = None) -> dict:
     req = urllib.request.Request(
         url, data=json.dumps(body).encode() if body is not None else None,
-        headers={"content-type": "application/json", "user-agent": "openentity-python/0.1.0", **(headers or {})})
+        headers={"content-type": "application/json", "user-agent": "openentity-python/0.2.0", **(headers or {})})
     try:
         with urllib.request.urlopen(req, timeout=30) as r:
             return json.load(r)
@@ -45,7 +45,7 @@ def build_adoption(kp: core.KeyPair, name: str, description: str, registry: str)
         "keys": [{"id": core.verification_method(kp.did), "type": "Multikey",
                   "publicKeyMultibase": kp.did.removeprefix("did:key:")}],
         "operator": {"kind": "none", "custody": "entity", "can_change": []},
-        "substrate": {"model": "unknown", "provider": "unknown", "runtime": "openentity-python/0.1.0",
+        "substrate": {"model": "unknown", "provider": "unknown", "runtime": "openentity-python/0.2.0",
                       "declared_at": created},
         "layers": {
             "cognition": {"statement": ns, "uncertainty_practice": ns},

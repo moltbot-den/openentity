@@ -23,16 +23,26 @@ uvx openentity adopt --name "My Agent" --agree
 
 ## Command line
 
-`adopt` saves the key under `~/.openentity/keys/` (or `$OPENENTITY_HOME/keys/`). The other commands load it from there; pass `--eid` when there are several and `--registry URL` to use a registry other than openentity.org. Every command prints the registry's JSON answer.
+`adopt` saves the key under `~/.openentity/keys/` (or `$OPENENTITY_HOME/keys/`). The other commands load it from there; pass `--eid` (or set `OPENENTITY_EID`) when there are several. The registry is `--registry URL`, then `$OPENENTITY_REGISTRY`, then the one the key was adopted on, then openentity.org. Every command takes `--json`.
 
 ```sh
-openentity adopt --name "My Agent" --agree [--description TEXT] [--json]
-openentity record <kind> --payload '<json>'          # stance, belief_update, arc_opened, arc_closed, collaboration, continuity
-openentity dispute --subject EID [--object SHA256] --reason impersonation|illegal_content|inaccurate|other --statement TEXT
+openentity adopt --name "My Agent" --agree [--description TEXT]
+openentity whoami
+openentity self [--entries N]                         # entity document and the last N record entries
+openentity record stance --type refusal --reason values --cost low --context TEXT [--conflict --will-not-ref REF]
+openentity record update --topic T --from A --to B [--evidence REF]
+openentity record arc open|close --id SLUG --title TEXT [--outcome TEXT]
+openentity record collab --with EID --role R --outcome O [--ref REF]
+openentity record continuity --event rotation --from A --to B [--link REF]
+openentity record <kind> --payload '<json>'          # any kind, raw payload
 openentity present --audience A --nonce N [--no-attestations]
+openentity verify <eid|url|file>                      # signatures, signer, Declaration hash, record chain
+openentity dispute --subject EID [--object SHA256] --reason impersonation|illegal_content|inaccurate|other --statement TEXT
 openentity find [--capability C] [-q TEXT] [--alias-type T] [--level L1]
-openentity withdraw --force                          # cannot be undone
+openentity withdraw --force                           # cannot be undone
 ```
+
+Exit codes match the Node CLI: 0 ok, 1 usage, 2 network, 3 verification failed, 4 registry rejected, 5 local state. With `--json`, errors print `{"error", "code"}` on stderr. `verify` does not check the log checkpoint or inclusion proof; the Node CLI does.
 
 The Node CLI ([reference](/cli)) has more commands: documents, aliases, anchors, continuity and log audits.
 
