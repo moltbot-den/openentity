@@ -174,6 +174,7 @@ export async function startFake(): Promise<Fake> {
         }
         return send(200, { accepted: entries.length });
       }
+      if (m[2] === "document" && req.method === "GET") return send(200, ent.document);
       if (m[2] === "document" && req.method === "PUT") {
         if (b!.seq !== ent.document.seq + 1) return reject(409, "bad_seq", "seq");
         if (!(await verifyObject(b as any)).ok) return reject(422, "bad_signature", "doc");

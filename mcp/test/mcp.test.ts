@@ -51,10 +51,10 @@ const hex2bytes = (h: string) => Uint8Array.from(h.match(/../g)!, (x) => parseIn
 const bytes2hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
 
 describe("openentity MCP server", () => {
-  it("lists the eleven tools with short verb-first descriptions", async () => {
+  it("lists the twelve tools with short verb-first descriptions", async () => {
     const { tools } = await rpc("tools/list");
     expect(tools.map((t: any) => t.name).sort()).toEqual([
-      "openentity_adopt", "openentity_export_key", "openentity_find", "openentity_present", "openentity_read", "openentity_record", "openentity_resolve", "openentity_self", "openentity_stats", "openentity_verify", "openentity_withdraw",
+      "openentity_adopt", "openentity_card", "openentity_export_key", "openentity_find", "openentity_present", "openentity_read", "openentity_record", "openentity_resolve", "openentity_self", "openentity_stats", "openentity_verify", "openentity_withdraw",
     ]);
     for (const t of tools) expect(t.description).toMatch(/^(Read|Adopt|Resolve|Verify|Append|Withdraw|Find|Prove|Export)\b/);
   });
@@ -113,6 +113,12 @@ describe("openentity MCP server", () => {
     expect(v.json.declaration.ok).toBe(true);
     expect((await tool("openentity_resolve", { did: eid })).json.didDocument).toBeTruthy();
     expect((await tool("openentity_stats", {})).json.entities.total).toBeGreaterThanOrEqual(1);
+    const ac = await tool("openentity_card", { eid, url: "https://ada.example/a2a" });
+    expect(ac.json.url).toBe("https://ada.example/a2a");
+    expect(ac.json.skills.map((s: any) => s.id)).toEqual(["code-review"]);
+    expect(ac.json.capabilities.extensions[0].params.eid).toBe(eid);
+    expect((await tool("openentity_card", { eid, extension_only: true })).json.uri).toBe("https://openentity.org/spec/1.0");
+    expect((await tool("openentity_card", { eid })).isError).toBe(true);
 
     // Withdraw: needs confirm, refuses another key, then marks the entity withdrawn.
     expect((await tool("openentity_withdraw", { eid, private_key_jwk: a.json.private_key_jwk })).isError).toBe(true);

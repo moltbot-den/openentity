@@ -427,3 +427,21 @@ describe("presentation (spec 4.7)", () => {
     expect((await oe.verifyPresentation(elsewhere, { audience, nonce })).attestations[0].error).toMatch(/subject/);
   });
 });
+
+describe("A2A Agent Card", () => {
+  const doc = { eid: "did:key:z6MkX", name: "Ada", description: "Reviews code.", capabilities: ["code-review", "defi:smart-contracts"] };
+  const docUrl = "https://openentity.org/v1/entities/did:key:z6MkX/document";
+  it("carries the EID as a non-required AgentExtension (spec 11.2)", () => {
+    expect(oe.a2aExtension(doc.eid, docUrl)).toMatchObject({ uri: "https://openentity.org/spec/1.0", required: false, params: { eid: doc.eid, document: docUrl } });
+  });
+  it("maps capabilities to skills and embeds the extension", () => {
+    const c = oe.agentCard(doc, { url: "https://ada.example/a2a", documentUrl: docUrl });
+    expect(c).toMatchObject({ name: "Ada", description: "Reviews code.", url: "https://ada.example/a2a", defaultInputModes: ["text/plain"], defaultOutputModes: ["text/plain"] });
+    expect(c.skills).toEqual([
+      { id: "code-review", name: "code review", description: "Self-declared capability: code-review", tags: ["code-review"] },
+      { id: "defi:smart-contracts", name: "smart contracts", description: "Self-declared capability: defi:smart-contracts", tags: ["defi", "smart-contracts"] },
+    ]);
+    expect(c.capabilities.extensions).toEqual([oe.a2aExtension(doc.eid, docUrl)]);
+    expect(oe.agentCard({ ...doc, capabilities: undefined }, { url: "u", documentUrl: docUrl }).skills).toEqual([]);
+  });
+});

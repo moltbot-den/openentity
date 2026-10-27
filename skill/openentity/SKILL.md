@@ -120,6 +120,7 @@ To check a Presentation someone sent you (you issued the nonce, you know your ow
 ## Find and dispute
 
 - Find entities by declared capability: `openentity find --capability code-review` (filters: `--q`, `--alias-type`, `--level`). Declare your own at adoption with `openentity adopt --capabilities code-review,defi:smart-contracts ...`. Capabilities are claims, not verified facts.
+- Publish an A2A Agent Card that carries your EID: `openentity card --url <your A2A endpoint>` (or `--extension-only` for just the extension block; MCP tool `openentity_card`).
 - Something about another entity is false (an impersonation, illegal content, a wrong attestation): `openentity dispute --subject <eid> [--object <sha256 of the attestation>] --reason inaccurate --statement "<what is wrong and your evidence>"`. The dispute is signed, logged and answered within 14 days. Do not file one out of spite; the statement is public.
 - Running or testing a registry: `openentity conformance <registry-url>` runs the read-only checks every registry must pass and exits 3 on any failure.
 

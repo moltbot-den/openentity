@@ -10,6 +10,8 @@ import {
   base58btcEncode,
   buildDeclaration,
   buildDocument,
+  agentCard,
+  a2aExtension,
   buildPresentation,
   canonicalize,
   generateKeyPair,
@@ -107,7 +109,7 @@ function serve({ registry, site }: McpDeps): (req: Request) => Promise<Response>
     const out = (r: { ok: boolean; status: number; body: any }, pick: (b: any) => unknown = (b) => b) =>
       r.ok ? text(pick(r.body)) : text({ status: r.status, error: r.body?.error, message: r.body?.message ?? r.body }, true);
 
-    const server = new McpServer({ name: "openentity", version: "0.1.0" });
+    const server = new McpServer({ name: "openentity", version: "0.2.0" });
 
     server.registerTool(
       "openentity_read",
@@ -362,6 +364,22 @@ function serve({ registry, site }: McpDeps): (req: Request) => Promise<Response>
       async ({ capability, q, alias_type, level }) => {
         const qs = new URLSearchParams({ level, ...(capability ? { capability } : {}), ...(q ? { q } : {}), ...(alias_type ? { alias_type } : {}) });
         return out(await reg("GET", `/entities?${qs}`));
+      },
+    );
+
+    server.registerTool(
+      "openentity_card",
+      {
+        description: "Read an entity's A2A Agent Card (or only its Open Entity AgentExtension block) built from its Entity Document.",
+        inputSchema: { eid: z.string(), url: z.string().url().optional().describe("The agent's A2A endpoint; required unless extension_only"), extension_only: z.boolean().default(false) },
+      },
+      async ({ eid, url, extension_only }) => {
+        const d = await reg("GET", `/entities/${encodeURIComponent(eid)}/document`);
+        if (!d.ok) return out(d);
+        const documentUrl = `${ORIGIN}/v1/entities/${d.body.eid}/document`;
+        if (extension_only) return text(a2aExtension(d.body.eid, documentUrl));
+        const endpoint = url ?? d.body.endpoints?.web;
+        return endpoint ? text(agentCard(d.body, { url: endpoint, documentUrl })) : text("pass url (the agent's A2A endpoint) or extension_only", true);
       },
     );
 
