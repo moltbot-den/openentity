@@ -141,3 +141,28 @@ def test_rebuild_catches_wrong_root_missing_leaf_and_bad_tile(tmp_path):
     t = tmp_path / "t"; t.mkdir()
     n, root = _bucket(t, tamper=True)
     assert not iv.rebuild(t, (n, root))[0]
+
+
+def test_rebuild_checks_objects_against_leaves(tmp_path):
+    n, root = _bucket(tmp_path)
+    obj = {"type": "Declaration", "eid": "did:key:z1", "n": 1}
+    sha = core.canonical_hash(obj).hex()
+    leaf = core.log_leaf("Declaration", "did:key:z1", sha, "2026-10-25T00:00:00Z")
+    # replace leaf 0 of the bucket with one that commits to obj
+    snap = tmp_path / "snapshots/2026-10-25.jsonl"; rows = snap.read_text().splitlines()
+    leaves = [json.loads(r)["leaf"] for r in rows[:-1]]; leaves[0] = leaf
+    hs = [core.leaf_hash(core.canonicalize(lf).encode()) for lf in leaves]; root = core.merkle_root(hs)
+    snap.write_text("\n".join([json.dumps({"index": i, "leaf": lf, "leaf_hash": hs[i].hex()}) for i, lf in enumerate(leaves)]
+                              + [json.dumps({"checkpoint": {"tree_size": n, "root_hash": root.hex()}})]) + "\n")
+    (tmp_path / "tile/0/000.p" / str(n)).write_bytes(b"".join(hs))
+    (tmp_path / "tile/entries/000.p" / str(n)).write_bytes(b"".join(len(b).to_bytes(2, "big") + b for b in (core.canonicalize(lf).encode() for lf in leaves)))
+    (tmp_path / "objects").mkdir()
+    line = {"idx": 0, "type": "Declaration", "eid": "did:key:z1", "object_sha256": sha, "object": obj}
+    (tmp_path / "objects/2026-10-25.jsonl").write_text(json.dumps(line) + "\n")
+    ok, lines = iv.rebuild(tmp_path, (n, root))
+    assert ok and any("objects: 1 of" in x for x in lines), lines
+    (tmp_path / "objects/2026-10-25.jsonl").write_text(json.dumps({**line, "object": {**obj, "n": 2}}) + "\n")
+    assert not iv.rebuild(tmp_path, (n, root))[0]
+    red = {"seq": 2, "redacted": True, "hash": sha, "redaction": {}}
+    (tmp_path / "objects/2026-10-25.jsonl").write_text(json.dumps({**line, "object": red}) + "\n")
+    assert iv.rebuild(tmp_path, (n, root))[0]

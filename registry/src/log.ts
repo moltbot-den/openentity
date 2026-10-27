@@ -1,5 +1,5 @@
 // Transparency log (spec 10.3): RFC 6962 Merkle tree over Postgres, C2SP tlog-tiles on S3, signed checkpoints.
-import { canonicalize, checkpointBody, keyPairFromJwk, leafHash, logLeaf, nodeHash, sha256, signNote, type KeyPair } from "./sdk.ts";
+import { canonicalize, checkpointBody, keyPairFromJwk, leafHash, logLeaf, nodeHash, sha256, sha256Hex, signNote, type KeyPair } from "./sdk.ts";
 import { type Env, LOG_ORIGIN, hex, nowIso, unhex } from "./env.ts";
 import type { Db } from "./db.ts";
 
@@ -196,4 +196,56 @@ export async function snapshot(env: Env, date: string): Promise<boolean> {
   if (env.snapshots) await env.snapshots.put(key, body, "application/jsonl");
   else console.log(`snapshot ${key}: off-site copy skipped, no snapshots bucket`);
   return true;
+}
+
+/**
+ * Daily object export: the signed objects behind the leaves of `date`, one line `{idx, type, eid, object_sha256, object}` per
+ * leaf in `objects/<date>.jsonl`, so a database lost beyond the Aurora backup window can be rebuilt from the Object Lock bucket.
+ * Every line hash-checks: sha256 of the canonical `object` equals `object_sha256`. A redacted record entry is exported as its
+ * placeholder (its content is gone by design); the placeholder's `hash` is the leaf's object_sha256. A leaf whose object the
+ * database no longer holds (a re-verified Alias overwrote its proof) is left out and counted in the log.
+ */
+export async function exportObjects(env: Env, date: string): Promise<boolean> {
+  const key = `objects/${date}.jsonl`;
+  if (await env.log.get(key)) return false;
+  const leaves = await env.db.all<LeafRow>("SELECT * FROM log_leaves WHERE received_at >= $1 AND received_at < $2 ORDER BY idx", [`${date}T00:00:00Z`, `${date}T99`]);
+  const found = new Map<string, any>();
+  const add = async (o: any): Promise<void> => {
+    if (o?.redacted) { found.set(o.hash, o); await add(o.redaction); } else found.set(await sha256Hex(canonicalize(o)), o);
+  };
+  if (leaves.length) {
+    const shas = JSON.stringify(leaves.map((l) => l.object_sha256)), eids = JSON.stringify([...new Set(leaves.map((l) => l.eid))]);
+    const S = "sha256 IN (SELECT value FROM json_array_elements_text(CAST($1 AS json)))", E = "IN (SELECT value FROM json_array_elements_text(CAST($1 AS json)))";
+    const json = async (sql: string, p: string) => { for (const r of await env.db.all<{ json: string }>(sql, [p])) await add(JSON.parse(r.json)); };
+    for (const t of ["documents", "declarations", "record_entries", "attestations", "continuity_links", "disputes"]) await json(`SELECT json FROM ${t} WHERE ${S}`, shas);
+    // Objects stored inside another row: withdrawals, revocations, the redaction in a placeholder, an alias's proof.
+    await json(`SELECT withdrawal_json AS json FROM declarations WHERE withdrawal_json IS NOT NULL AND eid ${E}`, eids);
+    await json(`SELECT revocation_json AS json FROM attestations WHERE revocation_json IS NOT NULL AND subject ${E}`, eids);
+    await json(`SELECT json FROM record_entries WHERE json LIKE '%"redacted":true%' AND eid ${E}`, eids);
+    for (const r of await env.db.all<{ eid: string; type: string; value: string; proof_json: string | null }>(`SELECT eid, type, value, proof_json FROM aliases WHERE eid ${E}`, [eids]))
+      await add({ eid: r.eid, type: r.type, value: r.value, proof: r.proof_json == null ? null : JSON.parse(r.proof_json) });
+  }
+  const lines: string[] = [];
+  let missing = 0;
+  for (const l of leaves) {
+    const object = found.get(l.object_sha256);
+    if (object) lines.push(JSON.stringify({ idx: l.idx, type: l.type, eid: l.eid, object_sha256: l.object_sha256, object }) + "\n");
+    else missing++;
+  }
+  if (missing) console.error(`objects ${key}: ${missing} of ${leaves.length} objects are not in the database`);
+  const body = lines.join("");
+  await env.log.put(key, body, "application/jsonl");
+  if (env.snapshots) await env.snapshots.put(key, body, "application/jsonl");
+  return true;
+}
+
+/** One-off: write the objects file of every day from the first leaf through `lastDate` that has none yet. Returns the days written. */
+export async function backfillObjects(env: Env, lastDate: string): Promise<string[]> {
+  const first = (await env.db.first<{ d: string | null }>("SELECT MIN(received_at) AS d FROM log_leaves"))?.d?.slice(0, 10);
+  const done: string[] = [];
+  for (let t = first ? Date.parse(first) : NaN; t <= Date.parse(lastDate); t += 86400_000) {
+    const d = new Date(t).toISOString().slice(0, 10);
+    if (await exportObjects(env, d)) done.push(d);
+  }
+  return done;
 }

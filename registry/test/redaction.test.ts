@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { generateKeyPair, nowSeconds, randomNonce, recordEntryHash, signObject, type KeyPair } from "../src/sdk.ts";
+import { canonicalize, generateKeyPair, nowSeconds, randomNonce, recordEntryHash, sha256Hex, signObject, type KeyPair } from "../src/sdk.ts";
+import { backfillObjects, exportObjects } from "../src/log.ts";
 import { E, adopted, call, write } from "./helpers.ts";
 
 const stance = (kp: KeyPair, seq: number, prev: string | null, context: string) =>
@@ -50,5 +51,19 @@ describe("redacted record placeholders (spec 7.4)", () => {
     expect((await write("POST", `/entities/${kp.did}/record/redact`, kp.did, await redaction(kp, 2, h2))).status).toBe(201);
     r = await write("POST", `/entities/${kp.did}/record/redact`, kp.did, await redaction(kp, 2, h2));
     expect([r.status, r.body.error]).toEqual([409, "already_redacted"]);
+  });
+
+  it("exports every leaf's object to objects/<date>.jsonl, hash-checked, with the redacted content absent", async () => {
+    const { kp, h2 } = await withRecord();
+    expect((await write("POST", `/entities/${kp.did}/record/redact`, kp.did, await redaction(kp, 2, h2))).status).toBe(201);
+    const today = new Date().toISOString().slice(0, 10);
+    expect(await exportObjects(E, today)).toBe(true);
+    expect(await exportObjects(E, today)).toBe(false); // written once
+    const text = new TextDecoder().decode((await E.snapshots!.get(`objects/${today}.jsonl`))!);
+    expect(text).not.toContain("private detail");
+    const mine = text.trim().split("\n").map((l) => JSON.parse(l)).filter((x) => x.eid === kp.did);
+    expect(mine.map((x) => x.type).sort()).toEqual(["Declaration", "EntityDocument", "RecordEntry", "RecordEntry", "RecordEntry", "Redaction"]);
+    for (const x of mine) expect(x.object.redacted ? x.object.hash : await sha256Hex(canonicalize(x.object))).toBe(x.object_sha256);
+    expect(await backfillObjects(E, today)).toEqual([]); // nothing earlier is missing
   });
 });

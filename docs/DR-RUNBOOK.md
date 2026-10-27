@@ -7,11 +7,11 @@ Last drill: 2026-10-27 UTC (account `openentity`, 099705791378, us-east-1, profi
 | Data | Where | Protection |
 | --- | --- | --- |
 | Log tiles (`tile/0/...`, `tile/entries/...`), `checkpoint`, a copy of each daily snapshot | S3 log bucket (stack output `LogBucketName`, `openentity-logbucket...`) | Versioning on, retained on stack delete, S3-managed encryption. The registry can regenerate it from the database. |
-| Daily snapshots `snapshots/<YYYY-MM-DD>.jsonl` | S3 snapshot bucket (`SnapshotBucketName`, `openentity-snapshotbucket...`) | Object Lock, compliance mode, 365 days default retention, versioning, retained on stack delete. Written once a day by the cron for the previous UTC day. |
+| Daily snapshots `snapshots/<YYYY-MM-DD>.jsonl` and signed objects `objects/<YYYY-MM-DD>.jsonl` | S3 snapshot bucket (`SnapshotBucketName`, `openentity-snapshotbucket...`) | Object Lock, compliance mode, 365 days default retention, versioning, retained on stack delete. Written once a day by the cron for the previous UTC day (the objects file right after the snapshot). |
 | Entities, documents, declarations, record entries, attestations, aliases, continuity links, leaves, nodes, checkpoints | Aurora Serverless v2 PostgreSQL (cluster `openentity-db...`) | Encrypted, 14 days automated backups with point-in-time restore, deletion protection on. |
 | Registry signing key, custody key, Customer.io and Turnstile secrets | Secrets Manager `openentity/app` | The signing key also has a backup in GCP Secret Manager (PRD section 7). |
 
-A daily snapshot holds one JSON line per log leaf received that day (`index`, `leaf`, `leaf_hash`) and a last line with the latest checkpoint (`tree_size`, `root_hash`, `timestamp`, `signed_note`). A day with no new leaves holds only the checkpoint line. Leaves are what the log commits to: type, EID, SHA-256 of the signed object and receive time. The signed objects themselves are not in the snapshots (see Gaps).
+A daily snapshot holds one JSON line per log leaf received that day (`index`, `leaf`, `leaf_hash`) and a last line with the latest checkpoint (`tree_size`, `root_hash`, `timestamp`, `signed_note`). A day with no new leaves holds only the checkpoint line. Leaves are what the log commits to: type, EID, SHA-256 of the signed object and receive time. The signed objects are in the matching `objects/<date>.jsonl`: one line per leaf, `{idx, type, eid, object_sha256, object}`, where the sha256 of the canonical `object` equals `object_sha256` (a leaf whose object the database no longer held is left out and logged). Entity Documents, Declarations, record entries, Redactions, Withdrawals, attestations, Revocations, continuity links, disputes and aliases are all there. A redacted record entry is exported as its placeholder (`redacted`, `hash`, `redaction`), never its content; its `hash` is the leaf's `object_sha256`.
 
 ## Verify (the check that proves a restore)
 
@@ -19,7 +19,7 @@ A daily snapshot holds one JSON line per log leaf received that day (`index`, `l
 
     uv run scripts/independent_verifier.py https://openentity.org --rebuild DIR
 
-It fetches the live checkpoint and verifies its Ed25519 signature against the key in `/v1/spec`. Then it reads every leaf from `DIR/snapshots/*.jsonl` (leaves must be contiguous from 0 and agree across files), recomputes each leaf hash, recomputes the RFC 6962 root at the size of every embedded snapshot checkpoint, byte-compares the level 0 hash tiles and the entry bundles under `DIR/tile` with the rebuilt leaves, and compares the rebuilt root at the live size with the signed root. It exits 1 on any mismatch. Tiles missing from the copy are reported as skipped; leaves are the authority.
+It fetches the live checkpoint and verifies its Ed25519 signature against the key in `/v1/spec`. Then it reads every leaf from `DIR/snapshots/*.jsonl` (leaves must be contiguous from 0 and agree across files), recomputes each leaf hash, recomputes the RFC 6962 root at the size of every embedded snapshot checkpoint, byte-compares the level 0 hash tiles and the entry bundles under `DIR/tile` with the rebuilt leaves, and compares the rebuilt root at the live size with the signed root. It exits 1 on any mismatch. If `DIR/objects/*.jsonl` exists it also checks every line against its leaf (type, EID, hash) and reports how many leaves have a matching object. Tiles missing from the copy are reported as skipped; leaves are the authority.
 
 ## Restore the log bucket into a fresh bucket
 
@@ -28,6 +28,7 @@ It fetches the live checkpoint and verifies its Ed25519 signature against the ke
     aws s3api put-public-access-block --bucket $B --public-access-block-configuration BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
     aws s3 sync s3://<log bucket>/ s3://$B/
     aws s3 sync s3://<snapshot bucket>/snapshots/ s3://$B/snapshots/   # fills days the log bucket copy lacks
+    aws s3 sync s3://<snapshot bucket>/objects/ s3://$B/objects/
 
 To rebuild instead of copy (log bucket lost, snapshots intact), put every snapshot in `DIR/snapshots/` and run the verify command above. The tiles are a pure function of the leaves: level 0 tile N holds the 32-byte leaf hashes 256*N to 256*N+255, an entry bundle holds each leaf as a big-endian uint16 length plus canonical JSON, partial tiles live at `<tile>.p/<count>`. A fresh registry regenerates all of them with `incorporate()` once `log_leaves` is filled (next section).
 
@@ -52,7 +53,18 @@ Drilled: point-in-time restore of the live cluster. The restore needs the DB sub
 
 Compare that root with `curl -s https://openentity.org/v1/log/checkpoint` (second line is the size, third the root, base64) or with the hex root the verifier prints. Then point the app at the new cluster: set `DB_CLUSTER_ARN` on the app Lambda to the restored cluster (`aws lambda update-function-configuration`), and bring the CDK stack in line with `cdk import` or by changing the stack to use the restored cluster, so the next deploy does not revert it.
 
-If the database is lost beyond the 14 day window and no backup helps, the snapshots rebuild `log_leaves`, `log_nodes` and `checkpoints` only (the log, not the entities). Not drilled: insert each snapshot line into `log_leaves (idx, leaf_hash, type, eid, object_sha256, received_at)` and the last checkpoint row into `checkpoints`, then run the cron once. `log_nodes` fills from `incorporate()` only for new leaves, so for a full rebuild insert level 0 nodes and recompute the parents from the verifier's tree. Entities, documents and declarations then have to be re-submitted by their owners, who hold the signed objects.
+If the database is lost beyond the 14 day window, rebuild it from the snapshot bucket alone. Download `snapshots/` and `objects/` to `DIR` and run the verify command first: PASS proves the leaves and the objects are intact. Then, with the schema applied (`registry/schema.sql`):
+
+1. Insert each snapshot line into `log_leaves (idx, leaf_hash, type, eid, object_sha256, received_at)` (`index`, `leaf_hash` and the `leaf` fields), the last checkpoint row into `checkpoints`, and set `log_head.next` to the tree size. Run the cron once; `log_nodes` fills from `incorporate()` for the leaves, so insert level 0 nodes and recompute the parents from the verifier's tree for a full rebuild.
+2. Replay `objects/*.jsonl` in `idx` order. Per type, with `json` the canonical JSON of `object`, `sha256` the line's `object_sha256`, `received_at` the leaf's, `log_index` the line's `idx`:
+   - `EntityDocument`: `documents (eid, seq, json, sha256, received_at, log_index)`; the highest `seq` per EID is the entity's `latest_seq` and `name`.
+   - `Declaration`: `declarations (eid, version, ...)`; a later `Withdrawal` line sets that row's `withdrawn_at` (its leaf time) and `withdrawal_json`, and the entity's `withdrawn_at`.
+   - `RecordEntry`: `record_entries (eid, seq, kind, ...)`; a redacted placeholder is inserted as is. The entity's `record_seq` and `record_head_hash` are the last entry's `seq` and sha256. A `Redaction` line needs no row of its own: its placeholder already carries it.
+   - `Attestation`: `attestations`; a `Revocation` line sets `revoked_at` and `revocation_json` on the attestation named by its `attestation_sha256`.
+   - `ContinuityLink`: `continuity_links`; `Dispute`: `disputes`; `Alias`: `aliases` with `proof_json` = `object.proof`, status `verified`.
+3. Recompute `entities.level` (the registry does it on each write) by re-saving each entity's latest document, or run the level refresh from `registry/src/index.ts` over every EID.
+
+Not drilled end to end: the replay SQL above is the documented procedure, the hash checks are tested.
 
 ## Measured in the drill
 
@@ -80,6 +92,6 @@ Aurora time grows with data size; the database was a few MB. Budget 15 minutes p
 
 ## Gaps
 
-1. The Object Lock bucket lacks the snapshots of 2026-10-23 and 2026-10-24 (they pre-date the bucket and exist only in the versioned log bucket), so leaves 0 to 4 are not in the tamper-proof copy. Copy those two files into the snapshot bucket (an Object Lock write to production, so owner-run once): `aws s3 cp s3://<log bucket>/snapshots/2026-10-23.jsonl s3://<snapshot bucket>/snapshots/ --checksum-algorithm SHA256`, same for 2026-10-24.
-2. Snapshots carry leaves, not the signed objects. After a database loss beyond the 14 day Aurora window the entity documents, declarations, record entries and attestations are not recoverable from AWS. Aurora backups are in the same account and region as the cluster. Closing this needs a larger change (a daily export of the signed objects into the Object Lock bucket, or AWS Backup with a cross-region or cross-account copy of the cluster), not done in this change.
-3. The leaves-only database rebuild in the section above is documented but not drilled.
+1. Closed 2026-10-26. The owner copied the 2026-10-23 and 2026-10-24 snapshots into the Object Lock bucket; the Object Lock copy alone now verifies leaves 0 to 40.
+2. Closed 2026-10-26. The daily job writes `objects/<date>.jsonl` next to each snapshot (same Object Lock bucket), and a one-off `backfill-objects` job wrote every earlier day. To rerun it (idempotent, it only writes missing days): `aws lambda invoke --function-name <app function> --cli-binary-format raw-in-base64-out --payload '{"source":"openentity.job","job":"backfill-objects"}' out.json`.
+3. The leaves-and-objects database rebuild above is documented but not drilled. Aurora backups are in the same account and region as the cluster; a cross-region copy is not set up.
