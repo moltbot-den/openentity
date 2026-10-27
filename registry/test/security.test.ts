@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { generateKeyPair } from "../src/sdk.ts";
-import { scheduled } from "../src/index.ts";
+import { clientIp, scheduled } from "../src/index.ts";
 import { E, adopted, call, mockFetch, signed, write } from "./helpers.ts";
 import { app } from "../src/index.ts";
 
@@ -66,4 +66,50 @@ describe("browser agents and uniform guards", () => {
     const res = await app.request("https://openentity.org/v1", {}, E);
     expect(res.headers.get("content-type")).toMatch(/json/);
   });
+});
+
+describe("SSRF guard on fetches to writer-chosen hosts", () => {
+  const value = "eip155:8453:0x8004a169fb4a3325136eb29fa0ceb6d2e539a432:7";
+  const abiString = (s: string) => {
+    const h = Array.from(new TextEncoder().encode(s), (b) => b.toString(16).padStart(2, "0")).join("");
+    return "0x" + (32).toString(16).padStart(64, "0") + (h.length / 2).toString(16).padStart(64, "0") + h.padEnd(Math.ceil(h.length / 64) * 64, "0");
+  };
+  const bindVia = async (uri: string, dnsAnswers: Record<string, string> = {}) => {
+    const { kp } = await adopted();
+    const hits: string[] = [];
+    mockFetch({
+      "rpc.test": () => ({ jsonrpc: "2.0", id: 1, result: abiString(uri) }),
+      "": (req) => { hits.push(req.url); return { services: [{ name: "DID", endpoint: kp.did }] }; },
+    }, dnsAnswers);
+    const r = await write("POST", `/entities/${kp.did}/aliases`, kp.did, { type: "erc8004", value });
+    return { r, hits: hits.filter((u) => !u.includes("rpc.test")) };
+  };
+  it("does not follow a userinfo trick that hides an IP literal behind a host name", async () => {
+    const { r, hits } = await bindVia("https://agents.example:80@127.0.0.1/reg.json");
+    expect(hits).toEqual([]);
+    expect(r.body.error).toBe("alias_proof_invalid");
+  });
+  it.each(["https://0x7f.1/r.json", "https://2130706433/r.json", "https://017700000001/r.json", "https://[::1]/r.json", "https://[::ffff:127.0.0.1]/r.json", "https://169.254.169.254/r.json"])("refuses the IP literal %s", async (uri) => {
+    const { hits } = await bindVia(uri);
+    expect(hits).toEqual([]);
+  });
+  it.each(["127.0.0.1", "169.254.169.254", "10.1.2.3", "100.64.0.1", "192.168.0.9", "::1", "fe80::1", "fd00::1", "::ffff:169.254.169.254"])("refuses a host name that resolves to %s (DNS rebinding to a private address)", async (address) => {
+    const { r, hits } = await bindVia("https://rebind.example/r.json", { "rebind.example": address });
+    expect(hits).toEqual([]);
+    expect(r.body.error).toBe("alias_proof_invalid");
+  });
+  it("still fetches a host name that resolves to a public address", async () => {
+    const { r, hits } = await bindVia("https://agents.example/r.json");
+    expect(hits).toEqual(["https://agents.example/r.json"]);
+    expect(r.status).toBe(201);
+  });
+});
+
+describe("per-IP limit key", () => {
+  const ip = (viewer: string) => clientIp({ req: { header: (k: string) => (k === "cloudfront-viewer-address" ? viewer : undefined) } } as any);
+  it("is the same for every address in one IPv6 /64, since a single host owns that whole block", () => {
+    expect(ip("2001:db8:1:2:aaaa::1:443")).toBe(ip("2001:db8:1:2:bbbb:cccc:dddd:eeee:5000"));
+    expect(ip("2001:db8:1:2::1:443")).not.toBe(ip("2001:db8:1:3::1:443"));
+  });
+  it("leaves IPv4 alone", () => expect(ip("203.0.113.9:5555")).toBe("203.0.113.9"));
 });

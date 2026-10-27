@@ -1,4 +1,6 @@
 // DID resolution and alias proofs (spec 3.2, 3.4, 3.5).
+import dns from "node:dns/promises";
+import { BlockList, isIP } from "node:net";
 import { keccak_256 } from "@noble/hashes/sha3.js";
 import { secp256k1 } from "@noble/curves/secp256k1.js";
 import { base58btcDecode, publicKeyFromDidKey, type Resolver } from "./sdk.ts";
@@ -9,8 +11,25 @@ export const DOMAIN = /^(?=.{1,253}$)([a-z0-9-]{1,63}\.)+[a-z]{2,63}$/;
 
 const FETCH_TIMEOUT_MS = 5_000, FETCH_MAX_BYTES = 256 * 1024;
 
-/** GET JSON from a host the caller does not control: no redirects, 5 s overall, 256 KB at most. Null on any failure. */
+// Addresses a writer-chosen host name must never reach: loopback, private, link-local (cloud metadata, the Lambda runtime API),
+// CGNAT, reserved and multicast. BlockList treats IPv4-mapped IPv6 as the IPv4 address.
+const PRIVATE = new BlockList();
+for (const [net, bits] of [["0.0.0.0", 8], ["10.0.0.0", 8], ["100.64.0.0", 10], ["127.0.0.0", 8], ["169.254.0.0", 16], ["172.16.0.0", 12], ["192.0.0.0", 24], ["192.168.0.0", 16], ["198.18.0.0", 15], ["224.0.0.0", 3]] as const) PRIVATE.addSubnet(net, bits, "ipv4");
+for (const [net, bits] of [["::", 128], ["::1", 128], ["64:ff9b::", 96], ["fc00::", 7], ["fe80::", 10], ["ff00::", 8], ["2001:db8::", 32]] as const) PRIVATE.addSubnet(net, bits, "ipv6");
+
+/** https only, no credentials, a DNS name (never an IP literal in any notation), and every address it resolves to is public. */
+async function publicHttps(url: string): Promise<boolean> {
+  let u: URL;
+  try { u = new URL(url); } catch { return false; }
+  if (u.protocol !== "https:" || u.username || u.password || isIP(u.hostname.replace(/^\[|\]$/g, "")) || !DOMAIN.test(u.hostname)) return false;
+  // ponytail: resolved here, then fetch resolves again; a rebind between the two is the ceiling. Pin the address with a custom https agent if that matters.
+  const addrs = await dns.lookup(u.hostname, { all: true }).catch(() => []);
+  return addrs.length > 0 && addrs.every((a) => !PRIVATE.check(a.address, a.family === 6 ? "ipv6" : "ipv4"));
+}
+
+/** GET JSON from a host the caller does not control: public https hosts only, no redirects, 5 s overall, 256 KB at most. Null on any failure. */
 export async function getJson(url: string): Promise<any> {
+  if (!(await publicHttps(url))) return null;
   const res = await fetch(url, { headers: { accept: "application/json" }, redirect: "manual", signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
   if (!res.ok || !res.body) return null;
   const reader = res.body.getReader(), parts: Uint8Array[] = [];
@@ -133,7 +152,7 @@ async function registrationFile(env: Env, eid: string, registry: string, agentId
   if (data) {
     try { file = JSON.parse(data[1] ? new TextDecoder().decode(Uint8Array.from(atob(data[2]), (c) => c.charCodeAt(0))) : decodeURIComponent(data[2])); } catch { /* not JSON */ }
   } else if (uri.startsWith("ipfs://")) file = await getJson(`https://ipfs.io/ipfs/${uri.slice(7)}`).catch(() => null);
-  else if (DOMAIN.test(/^https:\/\/([a-z0-9.-]+)(?:[:/?#]|$)/i.exec(uri)?.[1]?.toLowerCase() ?? "")) file = await getJson(uri).catch(() => null);
+  else if (uri.startsWith("https://")) file = await getJson(uri).catch(() => null);
   else return "the agent's agentURI must be https:// on a host name, ipfs:// or a data:application/json URI";
   // ERC-8004 drafts named the list `endpoints`; the final text names it `services`.
   const services = [...(Array.isArray(file?.services) ? file.services : []), ...(Array.isArray(file?.endpoints) ? file.endpoints : [])];
