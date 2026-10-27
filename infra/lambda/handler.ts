@@ -7,6 +7,7 @@ import { s3Blobs } from "../../registry/src/blob.ts";
 import { dataApiDb } from "../../registry/src/db.ts";
 import type { Env } from "../../registry/src/env.ts";
 import { incorporate, app as registry, scheduled } from "../../registry/src/index.ts";
+import { backfillObjects } from "../../registry/src/log.ts";
 import { createSite, fsAssets } from "../../site/server/index.ts";
 import { createMcp } from "../../mcp/src/index.ts";
 
@@ -95,6 +96,10 @@ async function route(raw: Request, header: (k: string) => string | undefined): P
 const onHttp = handle(http);
 
 export const handler = async (event: any, context: any) => {
+  if (event?.source === "openentity.job") {
+    // One-off, by `aws lambda invoke`: write objects/<date>.jsonl for every past day that lacks one (idempotent).
+    return event.job === "backfill-objects" ? backfillObjects((await boot()).env, new Date(Date.now() - 86400_000).toISOString().slice(0, 10)) : undefined;
+  }
   if (event?.source !== "openentity.cron") return onHttp(event, context);
   const { env } = await boot();
   // Same split as before: leaves every minute, stats, snapshot, accreditation and cleanup every tenth minute.

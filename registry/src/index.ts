@@ -6,7 +6,7 @@ import {
   generateKeyPair, normalizeEid, noteVkey, recordEntryHash, sha256Hex, signObject, validate, verifyObject, verifyPresentation, verifyProof, type Proof, type Resolver,
 } from "./sdk.ts";
 import { type Env, REGISTRY_DID, LOG_ORIGIN, b64, nowIso } from "./env.ts";
-import { type Stmt, consistencyProof, inclusionProof, incorporate, latestSize, leafFor, leafJson, registryKey, sequenced, snapshot, tileIndex, treeRoot, type LeafRow } from "./log.ts";
+import { type Stmt, consistencyProof, exportObjects, inclusionProof, incorporate, latestSize, leafFor, leafJson, registryKey, sequenced, snapshot, tileIndex, treeRoot, type LeafRow } from "./log.ts";
 import type { Db } from "./db.ts";
 import { DOMAIN, getJson, platformDomain, resolveDid, resolver, verifyAlias } from "./aliases.ts";
 
@@ -826,7 +826,9 @@ export async function scheduled(env: Env) {
      adoptions = excluded.adoptions, record_entries = excluded.record_entries, attestations = excluded.attestations, observers = excluded.observers`,
     [d, s.entities.l0, s.entities.l1, s.entities.l2, s.entities.l3, s.declarations_today, s.record_entries, s.attestations, s.observers],
   );
-  await snapshot(env, new Date(Date.now() - 86400_000).toISOString().slice(0, 10));
+  const yesterday = new Date(Date.now() - 86400_000).toISOString().slice(0, 10);
+  await snapshot(env, yesterday);
+  await exportObjects(env, yesterday);
   await accreditObservers(env);
   // IP and stamp counters live 7 days, email hashes 24 hours, per-minute counters 1 hour (PRD 8, 7.3).
   const ago = (ms: number, len: number) => new Date(Date.now() - ms).toISOString().slice(0, len);

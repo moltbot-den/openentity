@@ -8,7 +8,7 @@
   uv run scripts/independent_verifier.py --vectors test-vectors
   uv run scripts/independent_verifier.py https://openentity.org --rebuild DIR
 --rebuild DIR: DIR is a copy of the log bucket (snapshots/*.jsonl, tile/...); rebuilds the leaves from the snapshots,
-cross-checks the tiles, and compares the Merkle root with the live signed checkpoint. Exit 1 on any mismatch.
+cross-checks the tiles and any objects/*.jsonl against the leaves, and compares the Merkle root with the live signed checkpoint. Exit 1 on any mismatch.
 Checks the signed checkpoint (C2SP note, key from /v1/spec), N random RFC 6962 inclusion proofs and N random
 object signatures (eddsa-jcs-2022, did:key). Prints a report, exits 1 on any failure."""
 import argparse, base64, hashlib, json, random, sys, urllib.request
@@ -143,6 +143,16 @@ def rebuild(d, checkpoint):
                 while o < len(b): l = int.from_bytes(b[o:o + 2], "big"); got.append(b[o + 2:o + 2 + l]); o += 2 + l
                 good = got == [jcs(leaves[256 * N + j]["leaf"]).encode() for j in range(n)]
             ok &= good; out.append(f"{'ok  ' if good else 'FAIL'} {kind}/{p.relative_to(d / kind)}: {n} entries")
+    seen, bad = set(), 0  # objects/<date>.jsonl: each line must be its leaf's object (a redacted entry is its placeholder)
+    for f in sorted((d / "objects").glob("*.jsonl")):
+        for line in filter(None, f.read_text().splitlines()):
+            x = json.loads(line); lf = leaves.get(x["idx"], {}).get("leaf", {}); o = x["object"]
+            good = (lf.get("type"), lf.get("eid"), lf.get("object_sha256")) == (x["type"], x["eid"], x["object_sha256"]) and \
+                (o["hash"] if o.get("redacted") else H(jcs(o)).hex()) == x["object_sha256"]
+            if good: seen.add(x["idx"])
+            else: bad += 1; out.append(f"FAIL {f.name}: object of leaf {x['idx']} does not match its leaf")
+    if seen or bad: out.append(f"{'ok  ' if not bad else 'FAIL'} objects: {len(seen)} of {size} leaves have a matching object")
+    ok &= not bad
     got = mth(hs)
     out.append(f"{'ok  ' if got == root else 'FAIL'} live checkpoint: size {size}, rebuilt root {got.hex()}, signed root {root.hex()}")
     return ok and got == root, out
