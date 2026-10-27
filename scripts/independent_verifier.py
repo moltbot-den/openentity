@@ -6,6 +6,9 @@
 """Open Entity independent verifier. Read-only. Written from spec/OEIS-1.md; shares no code with any SDK.
   uv run scripts/independent_verifier.py https://openentity.org [--samples 100]
   uv run scripts/independent_verifier.py --vectors test-vectors
+  uv run scripts/independent_verifier.py https://openentity.org --rebuild DIR
+--rebuild DIR: DIR is a copy of the log bucket (snapshots/*.jsonl, tile/...); rebuilds the leaves from the snapshots,
+cross-checks the tiles, and compares the Merkle root with the live signed checkpoint. Exit 1 on any mismatch.
 Checks the signed checkpoint (C2SP note, key from /v1/spec), N random RFC 6962 inclusion proofs and N random
 object signatures (eddsa-jcs-2022, did:key). Prints a report, exits 1 on any failure."""
 import argparse, base64, hashlib, json, random, sys, urllib.request
@@ -100,13 +103,60 @@ def check_vectors(d):
     bad = sum(not r[2] for r in res); print(f"vectors: {len(res)} checks, {bad} failed")
     return 1 if bad or not res else 0
 
+def mth(hs):  # RFC 6962 Merkle tree hash over leaf hashes
+    if not hs: return H(b"")
+    if len(hs) == 1: return hs[0]
+    k = 1 << (len(hs) - 1).bit_length() - 1
+    return H(b"\x01" + mth(hs[:k]) + mth(hs[k:]))
+
+def tile_path(n):  # C2SP: 1234067 -> x001/x234/067
+    s = str(n); s = s.rjust(-(-len(s) // 3) * 3, "0"); g = [s[i:i + 3] for i in range(0, len(s), 3)]
+    return "/".join(("x" if i < len(g) - 1 else "") + x for i, x in enumerate(g))
+
+def rebuild(d, checkpoint):
+    """Leaves from d/snapshots/*.jsonl, tiles from d/tile; returns (ok, report lines). checkpoint = (size, root)."""
+    d, out, leaves, snaps = Path(d), [], {}, []
+    for f in sorted((d / "snapshots").glob("*.jsonl")):
+        for line in filter(None, f.read_text().splitlines()):  # snapshots of leafless days start with a blank line
+            r = json.loads(line)
+            if "checkpoint" in r: snaps.append((f.name, r["checkpoint"])); continue
+            if leaves.setdefault(r["index"], r) != r: return False, [f"FAIL {f.name}: leaf {r['index']} differs between snapshots"]
+    size, root = checkpoint; hs = []
+    for i in range(size):
+        r = leaves.get(i)
+        if not r: return False, out + [f"FAIL leaf {i} is in no snapshot (leaves found: {len(leaves)})"]
+        h = H(b"\x00" + jcs(r["leaf"]).encode())
+        if h.hex() != r["leaf_hash"]: return False, out + [f"FAIL leaf {i}: leaf_hash does not match its leaf"]
+        hs.append(h)
+    ok = True
+    for name, cp in snaps:  # each snapshot embeds the checkpoint current when it was taken
+        n = cp["tree_size"]; good = n <= size and mth(hs[:n]).hex() == cp["root_hash"]; ok &= good
+        out.append(f"{'ok  ' if good else 'FAIL'} snapshot {name}: size {n}, rebuilt root {mth(hs[:n]).hex() if n <= size else '?'}, recorded {cp['root_hash']}")
+    for kind, want in (("tile/0", lambda i: hs[i]), ("tile/entries", None)):  # the newest partial or full tile of each kind
+        for N in range(-(-size // 256)):
+            n = min(256, size - 256 * N); p = d / kind / (tile_path(N) + (f".p/{n}" if n < 256 else ""))
+            if not p.exists(): out.append(f"skip {kind}/{p.name}: not in the copy"); continue
+            b, good = p.read_bytes(), True
+            if want: good = b == b"".join(want(256 * N + j) for j in range(n))
+            else:
+                o, got = 0, []
+                while o < len(b): l = int.from_bytes(b[o:o + 2], "big"); got.append(b[o + 2:o + 2 + l]); o += 2 + l
+                good = got == [jcs(leaves[256 * N + j]["leaf"]).encode() for j in range(n)]
+            ok &= good; out.append(f"{'ok  ' if good else 'FAIL'} {kind}/{p.relative_to(d / kind)}: {n} entries")
+    got = mth(hs)
+    out.append(f"{'ok  ' if got == root else 'FAIL'} live checkpoint: size {size}, rebuilt root {got.hex()}, signed root {root.hex()}")
+    return ok and got == root, out
+
 def main():
     ap = argparse.ArgumentParser(); ap.add_argument("registry", nargs="?"); ap.add_argument("--samples", type=int, default=100)
-    ap.add_argument("--vectors"); a = ap.parse_args()
+    ap.add_argument("--vectors"); ap.add_argument("--rebuild"); a = ap.parse_args()
     if a.vectors: return check_vectors(a.vectors)
     base, fails, inc, sig, skipped = a.registry.rstrip("/") + "/v1", [], 0, 0, 0
     origin, size, root = check_checkpoint(get(base + "/log/checkpoint"), base64.b64decode(get(base + "/spec")["registry"]["note_key"].split("+")[2])[1:])
     print(f"checkpoint: signature ok, origin {origin}, size {size}")
+    if a.rebuild:
+        ok, lines = rebuild(a.rebuild, (size, root)); print(*lines, f"RESULT: {'PASS' if ok else 'FAIL'}", sep="\n")
+        return 0 if ok else 1
     for i in sorted(random.sample(range(size), min(a.samples, size))):
         try:
             e = get(f"{base}/log/entries?start={i}&end={i + 1}")["entries"][0]; leaf = e["leaf"]
