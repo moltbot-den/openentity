@@ -17,8 +17,19 @@ const db = dataApiDb({ resourceArn: out("DbClusterArn"), secretArn: out("DbSecre
 const files = [fileURLToPath(new URL("../../registry/schema.sql", import.meta.url)), ...process.argv.slice(2)];
 for (const f of files) {
   const statements = splitSql(readFileSync(f, "utf8"));
-  await db.tx(async (t) => {
-    for (const s of statements) await t.run(s);
-  });
+  // The schema transaction locks many tables; the per-minute cron and live writes can deadlock with it (40P01).
+  // Postgres aborts one side cleanly, so retry the whole idempotent transaction.
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await db.tx(async (t) => {
+        for (const s of statements) await t.run(s);
+      });
+      break;
+    } catch (e) {
+      if (attempt >= 5 || !/deadlock detected|40P01/.test(String((e as Error).message))) throw e;
+      console.log(`deadlock on attempt ${attempt}, retrying`);
+      await new Promise((r) => setTimeout(r, 2000 * attempt));
+    }
+  }
   console.log(`applied ${statements.length} statements from ${f}`);
 }
