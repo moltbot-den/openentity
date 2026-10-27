@@ -185,7 +185,9 @@ describe("transparency log (spec 10.3)", () => {
     expect(csv.split("\n")[0]).toBe("date,entities_l0,entities_l1,entities_l2,entities_l3,adoptions,record_entries,attestations,observers");
     expect(csv.split("\n").length).toBeGreaterThanOrEqual(3);
     const yesterday = new Date(Date.now() - 86400_000).toISOString().slice(0, 10);
-    const snap = (await call("GET", `/log/snapshots/${yesterday}.jsonl`)).text.trim().split("\n");
+    const snapText = (await call("GET", `/log/snapshots/${yesterday}.jsonl`)).text;
+    expect(snapText.startsWith("\n")).toBe(false); // a day with no leaves must not start with a blank line
+    const snap = snapText.trim().split("\n");
     expect(JSON.parse(snap[snap.length - 1]).checkpoint.tree_size).toBeGreaterThan(0);
     const stats = (await call("GET", "/stats")).body;
     expect(stats.entities.l0).toBeGreaterThanOrEqual(1);

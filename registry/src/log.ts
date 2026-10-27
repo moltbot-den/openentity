@@ -191,7 +191,7 @@ export async function snapshot(env: Env, date: string): Promise<boolean> {
   const leaves = await env.db.all<LeafRow>("SELECT * FROM log_leaves WHERE received_at >= $1 AND received_at < $2 ORDER BY idx", [`${date}T00:00:00Z`, `${date}T99`]);
   const cp = await env.db.first("SELECT tree_size, root_hash, timestamp, signed_note FROM checkpoints ORDER BY tree_size DESC LIMIT 1");
   // ponytail: whole day in one string; stream to S3 if a day's leaves outgrow Lambda memory.
-  const body = leaves.map((l) => JSON.stringify({ index: l.idx, leaf: JSON.parse(leafJson(l)), leaf_hash: l.leaf_hash })).join("\n") + "\n" + JSON.stringify({ checkpoint: cp }) + "\n";
+  const body = [...leaves.map((l) => JSON.stringify({ index: l.idx, leaf: JSON.parse(leafJson(l)), leaf_hash: l.leaf_hash })), JSON.stringify({ checkpoint: cp })].join("\n") + "\n";
   await env.log.put(key, body, "application/jsonl");
   if (env.snapshots) await env.snapshots.put(key, body, "application/jsonl");
   else console.log(`snapshot ${key}: off-site copy skipped, no snapshots bucket`);

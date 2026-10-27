@@ -110,3 +110,34 @@ def test_vector_format(tmp_path):
     assert iv.check_vectors(str(tmp_path)) == 0
     (tmp_path / "v.json").write_text(json.dumps({**vec, "sha256": "0" * 64}))
     assert iv.check_vectors(str(tmp_path)) == 1
+
+
+def _bucket(tmp_path, n=5, tamper=False):
+    kps = [core.KeyPair(bytes([i + 1]) * 32) for i in range(n)]
+    leaves = [core.log_leaf("Declaration", k.did, "ab" * 32, "2026-10-25T00:00:00Z") for k in kps]
+    hs = [core.leaf_hash(core.canonicalize(lf).encode()) for lf in leaves]
+    root = core.merkle_root(hs)
+    (tmp_path / "snapshots").mkdir(); (tmp_path / "tile/0/000.p").mkdir(parents=True); (tmp_path / "tile/entries/000.p").mkdir(parents=True)
+    rows = [json.dumps({"index": i, "leaf": lf, "leaf_hash": hs[i].hex()}) for i, lf in enumerate(leaves)]
+    cp = json.dumps({"checkpoint": {"tree_size": n, "root_hash": root.hex()}})
+    (tmp_path / "snapshots/2026-10-25.jsonl").write_text("\n".join(rows + [cp]) + "\n")
+    (tmp_path / f"tile/0/000.p/{n}").write_bytes(b"".join(hs))
+    ent = b"".join(len(b).to_bytes(2, "big") + b for b in (core.canonicalize(lf).encode() for lf in leaves))
+    (tmp_path / f"tile/entries/000.p/{n}").write_bytes(ent[:-1] + b"x" if tamper else ent)
+    return n, root
+
+
+def test_rebuild_matches_checkpoint(tmp_path):
+    n, root = _bucket(tmp_path)
+    ok, lines = iv.rebuild(tmp_path, (n, root))
+    assert ok, lines
+    assert iv.tile_path(1234067) == "x001/x234/067"
+
+
+def test_rebuild_catches_wrong_root_missing_leaf_and_bad_tile(tmp_path):
+    n, root = _bucket(tmp_path)
+    assert not iv.rebuild(tmp_path, (n, b"\0" * 32))[0]
+    assert not iv.rebuild(tmp_path, (n + 1, root))[0]
+    t = tmp_path / "t"; t.mkdir()
+    n, root = _bucket(t, tamper=True)
+    assert not iv.rebuild(t, (n, root))[0]
