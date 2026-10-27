@@ -175,7 +175,7 @@ def test_adopt_and_cli(tmp_path, monkeypatch, capsys):
         assert cli.main(["adopt", "--name", "T2", "--agree", "--registry", url, "--json"]) == 0
         out = json.loads(capsys.readouterr().out)
         assert "seed_hex" not in out and Path(out["key_file"]).exists()
-        assert cli.main(["adopt", "--name", "T3", "--registry", url]) == 2  # no --agree, nothing signed
+        assert cli.main(["adopt", "--name", "T3", "--registry", url]) == 1  # no --agree, nothing signed
     finally:
         srv.shutdown()
 
@@ -183,7 +183,7 @@ def test_adopt_and_cli(tmp_path, monkeypatch, capsys):
 def test_cli_version(capsys):
     with pytest.raises(SystemExit) as e:
         cli.main(["--version"])
-    assert e.value.code == 0 and "0.1.0" in capsys.readouterr().out
+    assert e.value.code == 0 and "0.2.0" in capsys.readouterr().out
 
 
 # ---- shared vectors, checked with the independent verifier's own logic ----
