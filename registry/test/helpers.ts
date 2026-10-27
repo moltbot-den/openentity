@@ -1,3 +1,4 @@
+import dns from "node:dns/promises";
 import { generateKeyPairSync, randomBytes } from "node:crypto";
 import { vi } from "vitest";
 import { app } from "../src/index.ts";
@@ -66,7 +67,9 @@ export const didWebDoc = (domain: string, kp: KeyPair) => ({
 });
 
 /** Routes outbound fetches by URL substring; unmatched URLs get a 404. */
-export function mockFetch(routes: Record<string, (req: Request) => unknown>) {
+export function mockFetch(routes: Record<string, (req: Request) => unknown>, dnsAnswers: Record<string, string> = {}) {
+  // Every host resolves to a public address unless the test says otherwise (see the SSRF guard in aliases.ts).
+  vi.spyOn(dns, "lookup").mockImplementation((async (host: string) => { const address = dnsAnswers[host] ?? "93.184.216.34"; return [{ address, family: address.includes(":") ? 6 : 4 }]; }) as any);
   return vi.spyOn(globalThis, "fetch").mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
     const req = new Request(input as RequestInfo, init);
     for (const [k, f] of Object.entries(routes)) if (req.url.includes(k)) { const r = await f(req); return r instanceof Response ? r : Response.json(r); }

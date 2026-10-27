@@ -55,10 +55,16 @@ const UPSERT = "ON CONFLICT (key, window_start) DO UPDATE SET count = rate_event
 async function bump(db: Db, key: string, window: string, n = 1): Promise<number> {
   return (await db.first<{ count: number }>(`INSERT INTO rate_events (key, window_start, count) VALUES ($1, $2, $3) ${UPSERT}`, [key, window, n]))!.count;
 }
+/** The limit key for an address: an IPv6 host owns its whole /64, so the key is the /64 and rotating inside it buys nothing. */
+const limitKey = (ip: string) => {
+  if (!ip.includes(":")) return ip;
+  const [head, tail = ""] = ip.split("::"), h = head.split(":").filter(Boolean), t = tail.split(":").filter(Boolean);
+  return [...h, ...Array(Math.max(0, 8 - h.length - t.length)).fill("0"), ...t].slice(0, 4).map((g) => g.replace(/^0+(?=.)/, "")).join(":") + "::/64";
+};
 /** Client IP: CloudFront's viewer address ("ip:port", IPv6 unbracketed), else the first X-Forwarded-For hop. */
 export function clientIp(c: C): string {
   const v = c.req.header("cloudfront-viewer-address");
-  if (v?.includes(":")) return v.slice(0, v.lastIndexOf(":"));
+  if (v?.includes(":")) return limitKey(v.slice(0, v.lastIndexOf(":")));
   return c.req.header("x-forwarded-for")?.split(",")[0].trim() || "0.0.0.0";
 }
 /** Every write: per-IP limits, then a single-use proof-of-work stamp naming the writing EID (spec 10.4). All three counters in one round trip. */
