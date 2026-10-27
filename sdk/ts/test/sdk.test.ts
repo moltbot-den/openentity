@@ -443,6 +443,9 @@ describe("A2A Agent Card", () => {
     ]);
     expect(c.capabilities.extensions).toEqual([oe.a2aExtension(doc.eid, docUrl)]);
     expect(oe.agentCard({ ...doc, capabilities: undefined }, { url: "u", documentUrl: docUrl }).skills).toEqual([]);
+  });
+});
+
 describe("rotation", () => {
   const vec = () => JSON.parse(read("test-vectors/rotation.json").toString()).request;
   it("the rotation vector: both link proofs and the successor document verify, and both validate", async () => {
