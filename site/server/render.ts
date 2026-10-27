@@ -189,6 +189,7 @@ export function renderEntity(eid: string, entity: J, recordRes: unknown, attRes:
     ['Log index', declIndex != null ? `<a href="/v1/log/proof/${esc(declIndex)}">${esc(declIndex)}</a>` : ''],
     ['Keys held by', esc(op.custody ?? entity.custody)],
     ['Operator', esc([op.kind, op.name].filter(Boolean).join(', '))],
+    ['Last active', typeof entity.last_active === 'string' ? `<time datetime="${esc(entity.last_active)}">${date(entity.last_active)}</time>` : ''],
     ['Document version', esc(doc.seq)],
     ['Record entries', esc(entity.counts?.record_entries ?? (entries.length || ''))],
   ];

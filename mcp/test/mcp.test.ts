@@ -106,6 +106,7 @@ describe("openentity MCP server", () => {
     expect(me.json.document.name).toBe("Mcp Ada");
     expect(me.json.anchor).toContain(`I am Mcp Ada (${eid})`);
     expect(me.json.entries.map((e: any) => e.kind)).toEqual(["declaration", "stance", "arc_opened"]);
+    expect(me.json.last_active).toMatch(/^\d{4}-\d\d-\d\dT/);
 
     const v = await tool("openentity_verify", { eid });
     expect(v.json.document.ok).toBe(true);
