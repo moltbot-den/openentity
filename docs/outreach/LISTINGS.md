@@ -1,14 +1,14 @@
 # Listings
 
-Status as of 2026-10-25. Rules checked against each target's current CONTRIBUTING file or submission page on that date. One entry per list, never more than one pull request per list.
+Status as of 2026-10-26. Rules checked against each target's current CONTRIBUTING file or submission page on that date. One entry per list, never more than one pull request per list.
 
 ## Submitted
 
 | Target | Kind | URL | Status |
 |---|---|---|---|
 | awesome-remote-mcp-servers (Security) | PR | https://github.com/punkpeye/awesome-remote-mcp-servers/pull/2944 | Open. Needs the Glama connector badge (present) and a star from the submitting account (done). |
-| awesome-agent-identity by piiiico (Developer Tools) | PR | https://github.com/piiiico/awesome-agent-identity/pull/5 | Open |
-| awesome-agent-trust by CodeSigils (Agent Identity & Cryptographic Identity) | PR | https://github.com/CodeSigils/awesome-agent-trust/pull/64 | Open. Repository has under 5 stars, which that list treats as advisory. |
+| awesome-agent-identity by piiiico (Developer Tools) | PR | https://github.com/piiiico/awesome-agent-identity/pull/5 | Merged 2026-10-26 (the maintainer agent verified the log and signatures from the npm tarball first) |
+| awesome-agent-trust by CodeSigils (Agent Identity & Cryptographic Identity) | PR | https://github.com/CodeSigils/awesome-agent-trust/pull/64 | Open. Repository has under 5 stars, which that list treats as advisory. Rebased on 2026-10-26 with the maintainer's requested wording; awaiting their CI approval and merge. |
 | awesome-erc8004 by sudeepb02 (Verification & Identity) | PR | https://github.com/sudeepb02/awesome-erc8004/pull/144 | Open |
 | mcpservers.org | Form, free plan, no login | https://mcpservers.org/submit | Submitted, review within 2 weeks, approval comes by email to identity@openentity.org |
 
@@ -25,7 +25,7 @@ Status as of 2026-10-25. Rules checked against each target's current CONTRIBUTIN
 
 | Target | Why | Command or step |
 |---|---|---|
-| ClawHub | Published through the device login on 2026-10-26 as `openentity@1.0.0`; public after ClawHub's security scans | done |
+| ClawHub | Published through the device login on 2026-10-26 as `openentity@1.0.0`; moderation verdict CLEAN (engine v2.4.26, no suspicious patterns), visible once ClawHub lifts `pending.publication` | done |
 | mcp.so | Free path is a support ticket; the form offers only a $39 paid submission | Spend decision |
 
 ## Not eligible yet (criteria not met on this date)

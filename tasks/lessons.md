@@ -9,3 +9,8 @@ Rule: keep replies short; when Will must act, ask for exactly one action per mes
 - Never mint a proof-of-work stamp server side on a request path. The MCP door minted two 20-bit stamps per adopt (about 15 s each on Lambda), timed out after the adopt committed, and lost the generated key. A stamp the registry computes for itself protects nothing; in-process doors write at 0 bits under the caller's per-IP limits.
 - Keep a test entity's key until its withdrawal returns 200. A cleanup `rm` chained after a failing withdraw deleted the only key and left an orphan that had to be suppressed by hand. Delete keys in a separate step, after checking the status.
 - A load test in the production AWS account shares the account-level Lambda concurrency pool (1000) with openentity.org. On 2026-10-25 a load run used all of it and the live site returned ConcurrentInvocationLimitExceeded. Cap the load stack's function with reserved concurrency (300) and watch the live site return 200 during any run.
+
+## 2026-10-26: No per-agent summaries
+While eight parallel agents finished, each completion got a multi-bullet chat summary. Will: "don't send these long as summaries just do work and kick ass".
+Rule: while agents run, acknowledge a finished one in one line at most and keep working; one short report at the very end.
+- Worktree agents cannot remove their own worktree; the lead removes each one (`git worktree remove --force`, `git branch -D`) when the agent reports.
