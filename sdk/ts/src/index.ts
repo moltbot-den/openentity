@@ -314,6 +314,58 @@ export function buildDeclaration(input: { eid: string; name: string; created?: s
   };
 }
 
+/** The successor's unsigned seq 1 Entity Document: `prev` re-keyed, aliases dropped (their proofs name the old EID), `continuity.previous` set. */
+export function successorDocument(prev: Record<string, any>, next: KeyPair, created: string = nowSeconds()): Record<string, any> {
+  const { proof: _p, aliases: _a, ...d } = structuredClone(prev);
+  return {
+    ...d,
+    eid: next.did,
+    keys: [{ id: verificationMethodId(next.did), type: "Multikey", publicKeyMultibase: next.did.slice("did:key:".length) }],
+    created,
+    updated: created,
+    seq: 1,
+    continuity: { ...d.continuity, previous: prev.eid },
+  };
+}
+
+/** A Continuity Link signed by both keys (spec 9.2) plus the successor's document signed by the successor: the body of `POST /v1/continuity`. */
+export async function buildRotation(
+  previous: KeyPair,
+  successor: KeyPair,
+  document: Record<string, any>,
+  o: { basis?: "rotation" | "migration"; created?: string; nonce?: string } = {},
+): Promise<{ link: Record<string, any>; document: Record<string, any> }> {
+  const created = o.created ?? nowSeconds();
+  const body = { spec: SPEC, type: "ContinuityLink", previous: previous.did, successor: successor.did, basis: o.basis ?? "rotation", created, nonce: o.nonce ?? randomNonce() };
+  const link = { ...body, proofs: [await signProof(body, previous, created), await signProof(body, successor, created)] };
+  return { link, document: await signObject(document, successor, created) };
+}
+
+/**
+ * Rotate `previous` to a new key in one call: fetch the current document, build and sign the link, mint the stamp for the
+ * successor and submit. Nothing is persisted: on success the caller saves `successor` (its `privateJwk`) and only then retires
+ * the old key. Throws on any non-2xx answer.
+ */
+export async function rotate(o: { previous: KeyPair; registry?: string; successor?: KeyPair; basis?: "rotation" | "migration" }) {
+  const registry = (o.registry ?? "https://openentity.org").replace(/\/+$/, "");
+  const call = async (path: string, init?: RequestInit) => {
+    const r = await fetch(registry + path, init);
+    const text = await r.text();
+    if (!r.ok) throw new Error(`registry ${r.status} for ${path}: ${text.slice(0, 200)}`);
+    return JSON.parse(text);
+  };
+  const next = o.successor ?? (await generateKeyPair());
+  const prevDoc = await call(`/v1/entities/${o.previous.did}/document`);
+  const { link, document } = await buildRotation(o.previous, next, successorDocument(prevDoc, next), { basis: o.basis });
+  const { stamp_bits } = await call("/v1/spec");
+  const response = await call("/v1/continuity", {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-oe-stamp": await mintStamp(stamp_bits, next.did) },
+    body: JSON.stringify({ link, document }),
+  });
+  return { successor: next, link, document, response };
+}
+
 /** sha256 hex of the canonical entry INCLUDING its proof: the next entry's `prev` (spec 7.4). */
 export async function recordEntryHash(entry: object): Promise<string> {
   return sha256Hex(canonicalize(entry));

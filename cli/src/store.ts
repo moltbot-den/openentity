@@ -57,7 +57,7 @@ export async function currentEid(v: Obj): Promise<string> {
   }
   let dirs: string[] = [];
   try {
-    dirs = (await readdir(home(), { withFileTypes: true })).filter((d) => d.isDirectory()).map((d) => d.name);
+    dirs = (await readdir(home(), { withFileTypes: true })).filter((d) => d.isDirectory() && !d.name.startsWith(".")).map((d) => d.name);
   } catch {
     /* no home */
   }

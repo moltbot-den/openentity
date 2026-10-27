@@ -18,6 +18,7 @@ class Stub(BaseHTTPRequestHandler):
     chain: list = []  # accepted record entries
     attestations: list = []
     entity: dict | None = None  # overrides GET /v1/entities/<eid>
+    refuse = None  # set to refuse every continuity link
 
     def log_message(self, *a):
         pass
@@ -44,6 +45,8 @@ class Stub(BaseHTTPRequestHandler):
             return self._send(200, {"head": head, "entries": [e for e in Stub.chain if e["seq"] > after]})
         if u.path.endswith("/attestations"):
             return self._send(200, {"attestations": Stub.attestations})
+        if u.path.endswith("/document"):
+            return self._send(200, client.build_adoption(core.KeyPair(SEED), "Tester", "d", "http://x")[0])
         if u.path.startswith("/v1/entities/"):
             return self._send(200, Stub.entity or {"document": {"name": "Tester"}, "level": "L0"})
         self._send(404, {"error": "not_found", "message": u.path})
@@ -52,7 +55,7 @@ class Stub(BaseHTTPRequestHandler):
         body = json.loads(self.rfile.read(int(self.headers["content-length"])))
         stamp = self.headers.get("x-oe-stamp")
         Stub.log.append(("POST", self.path, body, stamp))
-        eid = body.get("eid") or body.get("issuer")
+        eid = body.get("eid") or body.get("issuer") or body.get("link", {}).get("successor")
         if not stamp or core.check_stamp(stamp, BITS, eid or self.path.split("/")[3]):
             return self._send(400, {"error": "stamp_required", "message": "stamp"})
         if self.path.endswith("/record"):
@@ -63,6 +66,12 @@ class Stub(BaseHTTPRequestHandler):
                     return self._send(409, {"error": "bad_chain", "message": "chain"})
                 Stub.chain.append(e)
             return self._send(200, {"accepted": len(body["entries"])})
+        if self.path == "/v1/continuity":
+            link = body["link"]
+            ok = Stub.refuse is None and all(core.verify_object({**link, "proof": p}) == (True, d) for p, d in zip(link["proofs"], (link["previous"], link["successor"])))
+            if not ok or core.verify_object(body["document"])[1] != link["successor"]:
+                return self._send(422, {"error": "continuity_proof_missing", "message": "no"})
+            return self._send(201, {"previous": link["previous"], "successor": link["successor"], "basis": link["basis"]})
         if not core.verify_object(body)[0]:
             return self._send(422, {"error": "bad_signature", "message": "sig"})
         if self.path == "/v1/withdraw":
@@ -74,7 +83,7 @@ class Stub(BaseHTTPRequestHandler):
 
 @pytest.fixture
 def url():
-    Stub.log, Stub.chain, Stub.attestations, Stub.entity = [], [], [], None
+    Stub.log, Stub.chain, Stub.attestations, Stub.entity, Stub.refuse = [], [], [], None, None
     srv = HTTPServer(("127.0.0.1", 0), Stub)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     yield f"http://127.0.0.1:{srv.server_port}"
@@ -266,3 +275,36 @@ def test_cli_registry_comes_from_the_flag_env_or_the_saved_key(url, home, capsys
     assert json.loads(run(capsys, "whoami", "--json", "--registry", url)[1])["registry"] == url
 
 
+    assert cli.main(["record", "arc_opened", "--payload", '{"arc_id":"a","title":"A"}', *reg]) == 0
+    assert [e["kind"] for e in Stub.chain] == ["arc_opened"]
+    assert cli.main(["dispute", "--subject", SUBJECT, "--reason", "other", "--statement", "x", *reg]) == 0
+    assert cli.main(["dispute", "--subject", SUBJECT, "--reason", "spite", "--statement", "x", *reg]) == 1
+    capsys.readouterr()
+    assert cli.main(["find", "--capability", "code-review", *reg]) == 0
+    assert SUBJECT in capsys.readouterr().out
+    assert cli.main(["present", "--audience", "https://v.example", "--nonce", "n1", *reg]) == 0
+    assert json.loads(capsys.readouterr().out)["type"] == "Presentation"
+    assert cli.main(["withdraw", *reg]) == 2  # needs --force, nothing sent
+    assert posts("/v1/withdraw") == []
+    assert cli.main(["withdraw", "--force", *reg]) == 0 and len(posts("/v1/withdraw")) == 1
+    (keys / "k2.json").write_text(json.dumps({"did": core.KeyPair().did, "seed_hex": "11" * 32}))
+    assert cli.main(["withdraw", "--force", *reg]) == 1  # two keys, no --eid: ambiguous
+    assert cli.main(["withdraw", "--force", "--eid", KP.did, *reg]) == 0
+
+
+def test_rotate_signs_with_both_keys_stamps_for_the_successor_and_returns_the_new_seed(url):
+    out = client.rotate(SEED, registry=url)
+    (body,) = posts("/v1/continuity")
+    new = core.KeyPair(bytes.fromhex(out["seed_hex"]))
+    link = body["link"]
+    assert (link["previous"], link["successor"], link["basis"]) == (KP.did, new.did, "rotation") and out["did"] == new.did
+    assert [p["verificationMethod"].split("#")[0] for p in link["proofs"]] == [KP.did, new.did]
+    assert body["document"]["eid"] == new.did and body["document"]["seq"] == 1 and body["document"]["continuity"]["previous"] == KP.did
+    assert core.check_stamp([s for m, p, _, s in Stub.log if p == "/v1/continuity"][0], BITS, new.did) is None
+
+
+def test_rotate_the_registry_refuses_raises_and_returns_nothing(url):
+    Stub.refuse = True
+    with pytest.raises(client.RegistryError) as e:
+        client.rotate(SEED, registry=url)
+    assert e.value.status == 422

@@ -64,6 +64,8 @@ result = verify_presentation(presentation, "https://platform.example", issued_no
 
 `adopt` also signs and pushes the first Record entry (the Declaration, `seq` 1) and returns it in `record_entry`, with `record_pushed` false if the push failed so you can retry. `record` chains `seq` and `prev` from the registry's head.
 
+`rotate(seed, registry)` moves the entity to a new key in one call (spec 9): it signs a Continuity Link with both keys, stamps for the new EID and submits the link with the successor's document. It returns the registry's answer plus `did`, `seed_hex` (the new seed) and the posted `link` and `document`. It persists nothing and raises `RegistryError` on a refusal, so save `seed_hex` first and only then retire the old seed. A link built here verifies in the TypeScript SDK and the reverse; `test-vectors/rotation.json` pins the bytes.
+
 `verify_object` resolves `did:key` and `did:pkh` offline; pass `resolver=` for `did:web` and other methods.
 
 ## Every public function

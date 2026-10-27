@@ -9,6 +9,8 @@ import {
   buildDeclaration,
   signObject,
   signProof,
+  buildRotation,
+  successorDocument,
   recordEntryHash,
   base58btcEncode,
   logLeaf,
@@ -31,6 +33,7 @@ export const SEEDS = { entity: seq(0x01), second: seq(0x21), log: seq(0x41) };
 const T0 = "2026-10-24T19:00:00Z";
 const T1 = "2026-10-24T19:05:00Z";
 const T2 = "2026-10-24T19:10:00Z";
+const T3 = "2026-10-24T19:15:00Z";
 const LOG_ORIGIN = "openentity.org/log";
 
 async function vector(description: string, object: object) {
@@ -137,7 +140,15 @@ export async function buildVectors(): Promise<Record<string, object>> {
     ["continuity-link", "Rotation ContinuityLink signed by previous and successor keys (spec 9.2)", link, a.did],
   ];
 
+  // The whole POST /v1/continuity body from buildRotation: entity -> second key, successor document re-keyed from `document`.
+  const rotation = await buildRotation(a, b, successorDocument(document, b, T3), { created: T3, nonce: nonce(0xc0) });
+
   const out: Record<string, object> = {
+    rotation: {
+      description: "POST /v1/continuity body for a rotation: link signed by both keys, successor seq 1 document signed by the successor and re-keyed from entity-document (spec 9.2)",
+      previous_document: "entity-document.json",
+      request: rotation,
+    },
     keys: {
       warning: "PUBLISHED THROWAWAY KEYS FOR TEST VECTORS ONLY. Anyone can sign as these EIDs. Never use them for anything real.",
       entity: { seed: hex(SEEDS.entity), eid: a.did, publicKeyHex: hex(a.publicKey) },

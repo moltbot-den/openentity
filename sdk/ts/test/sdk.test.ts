@@ -443,5 +443,49 @@ describe("A2A Agent Card", () => {
     ]);
     expect(c.capabilities.extensions).toEqual([oe.a2aExtension(doc.eid, docUrl)]);
     expect(oe.agentCard({ ...doc, capabilities: undefined }, { url: "u", documentUrl: docUrl }).skills).toEqual([]);
+describe("rotation", () => {
+  const vec = () => JSON.parse(read("test-vectors/rotation.json").toString()).request;
+  it("the rotation vector: both link proofs and the successor document verify, and both validate", async () => {
+    const keys = JSON.parse(read("test-vectors/keys.json").toString());
+    const { link, document } = vec();
+    expect(oe.validate("ContinuityLink", link)).toEqual({ ok: true, errors: [] });
+    expect(oe.validate("EntityDocument", document)).toEqual({ ok: true, errors: [] });
+    expect((await Promise.all(link.proofs.map((p: oe.Proof) => oe.verifyProof(link, p)))).map((r) => r.signer)).toEqual([keys.entity.eid, keys.second.eid]);
+    expect((await oe.verifyObject(document)).signer).toBe(keys.second.eid);
+    expect(document).toMatchObject({ eid: keys.second.eid, seq: 1, continuity: { previous: keys.entity.eid } });
+    expect(document.aliases).toBeUndefined();
+  });
+  it("a link whose body was altered fails its proofs", async () => {
+    const { link } = vec();
+    expect((await oe.verifyProof({ ...link, basis: "migration" }, link.proofs[0])).ok).toBe(false);
+  });
+  it("rotate() stamps for the successor, posts link and document, and returns the new key", async () => {
+    const prev = await oe.generateKeyPair();
+    const doc = await oe.signObject(oe.buildDocument({ kp: prev, name: "Old", description: "d" }), prev);
+    const sent: { path: string; stamp?: string; body?: any }[] = [];
+    const real = globalThis.fetch;
+    globalThis.fetch = (async (url: string, init?: RequestInit) => {
+      const path = new URL(url).pathname;
+      sent.push({ path, stamp: (init?.headers as any)?.["x-oe-stamp"], body: init?.body && JSON.parse(init.body as string) });
+      const reply = path.endsWith("/document") ? doc : path === "/v1/spec" ? { stamp_bits: 4 } : { ok: true };
+      return new Response(JSON.stringify(reply), { status: 200 });
+    }) as typeof fetch;
+    try {
+      const r = await oe.rotate({ previous: prev, registry: "https://r.example/" });
+      const post = sent.find((s) => s.path === "/v1/continuity")!;
+      expect(post.stamp).toContain(r.successor.did);
+      expect(post.body.link.previous).toBe(prev.did);
+      expect(post.body.link.successor).toBe(r.successor.did);
+      expect((await Promise.all(post.body.link.proofs.map((p: oe.Proof) => oe.verifyProof(post.body.link, p)))).map((x) => x.signer)).toEqual([prev.did, r.successor.did]);
+      expect((await oe.verifyObject(post.body.document)).signer).toBe(r.successor.did);
+      // A refusal throws, so the caller never switches keys.
+      globalThis.fetch = (async (url: string) => {
+        const path = new URL(url).pathname;
+        return new Response(JSON.stringify(path === "/v1/spec" ? { stamp_bits: 4 } : doc), { status: path === "/v1/continuity" ? 422 : 200 });
+      }) as typeof fetch;
+      await expect(oe.rotate({ previous: prev, registry: "https://r.example" })).rejects.toThrow(/422/);
+    } finally {
+      globalThis.fetch = real;
+    }
   });
 });

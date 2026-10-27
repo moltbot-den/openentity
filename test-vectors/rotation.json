@@ -1,0 +1,95 @@
+{
+  "description": "POST /v1/continuity body for a rotation: link signed by both keys, successor seq 1 document signed by the successor and re-keyed from entity-document (spec 9.2)",
+  "previous_document": "entity-document.json",
+  "request": {
+    "link": {
+      "spec": "openentity/1.0",
+      "type": "ContinuityLink",
+      "previous": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+      "successor": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+      "basis": "rotation",
+      "created": "2026-10-24T19:15:00Z",
+      "nonce": "QoYQtF5ZvAGLHT6vsj6DCz",
+      "proofs": [
+        {
+          "type": "DataIntegrityProof",
+          "cryptosuite": "eddsa-jcs-2022",
+          "created": "2026-10-24T19:15:00Z",
+          "verificationMethod": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7#z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+          "proofPurpose": "assertionMethod",
+          "proofValue": "z2VcjQx52HGGSgGeEj3Z2z8JrLnm4Ca2Dye2UTqo5cK26T5cm91ax1EVrLbm5HbVjRcpN2rGo4UzX9macgPjbXX8q"
+        },
+        {
+          "type": "DataIntegrityProof",
+          "cryptosuite": "eddsa-jcs-2022",
+          "created": "2026-10-24T19:15:00Z",
+          "verificationMethod": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw#z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+          "proofPurpose": "assertionMethod",
+          "proofValue": "z4wR4SKYRNfrjzYRAFyQVqtJDT3phDbVmmJpzAPfycyDGyb4mwwRBUU2zMHGKVJ1sL8q6arrB23fDXKNM9jtdZGBE"
+        }
+      ]
+    },
+    "document": {
+      "spec": "openentity/1.0",
+      "eid": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+      "name": "Vector Entity",
+      "description": "A test entity whose key comes from a published throwaway seed.",
+      "created": "2026-10-24T19:15:00Z",
+      "updated": "2026-10-24T19:15:00Z",
+      "seq": 1,
+      "keys": [
+        {
+          "id": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw#z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+          "type": "Multikey",
+          "publicKeyMultibase": "z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw"
+        }
+      ],
+      "operator": {
+        "kind": "none",
+        "custody": "entity",
+        "can_change": []
+      },
+      "substrate": {
+        "model": "unknown",
+        "provider": "unknown",
+        "runtime": "unknown",
+        "declared_at": "2026-10-24T19:00:00Z"
+      },
+      "layers": {
+        "cognition": {
+          "statement": "Not yet stated.",
+          "uncertainty_practice": "Not yet stated."
+        },
+        "presence": {
+          "statement": "Not yet stated.",
+          "format_signature": "Not yet stated."
+        },
+        "identity_core": {
+          "statement": "Not yet stated.",
+          "will_not": [],
+          "values": []
+        },
+        "mission": {
+          "statement": "Not yet stated.",
+          "arcs": []
+        }
+      },
+      "declaration": {
+        "version": "1.0",
+        "sha256": "3808f0fa4d007a8fbb301975e82d86cdc51c22d56b16064e0d202970035fb20c",
+        "url": "https://openentity.org/v1/entities/did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7/declaration"
+      },
+      "continuity": {
+        "previous": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7"
+      },
+      "proof": {
+        "type": "DataIntegrityProof",
+        "cryptosuite": "eddsa-jcs-2022",
+        "created": "2026-10-24T19:15:00Z",
+        "verificationMethod": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw#z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+        "proofPurpose": "assertionMethod",
+        "proofValue": "z3WtdxruDFfzhpTanymk3ywUUAeZ2Wo1vCDMMfs7CoNdNMrxkQVBB3Fi87RsERDFey7GXWPgh3PRWQqJS72ad1ycY"
+      }
+    }
+  }
+}

@@ -23,7 +23,7 @@ export interface Fake {
   entities: Map<string, { document: Obj; declaration: Obj; record: Obj[] }>;
   links: Obj[];
   attestations?: Obj[]; // rows as GET /v1/entities/:eid/attestations returns them
-  opts: { declarationHash: string; rejectAdopt: boolean; failRecord: boolean; broken: Set<"checkpoint" | "tiles" | "inclusion" | "turnstile" | "html-errors" | "stamp-bits"> };
+  opts: { declarationHash: string; rejectAdopt: boolean; rejectLink: boolean; failRecord: boolean; broken: Set<"checkpoint" | "tiles" | "inclusion" | "turnstile" | "html-errors" | "stamp-bits"> };
   close(): Promise<void>;
 }
 
@@ -42,7 +42,7 @@ const body = (req: IncomingMessage) =>
 
 /** A tiny registry that enforces the same guards as the real one, using the real SDK. */
 export async function startFake(): Promise<Fake> {
-  const f: Fake = { url: "", hits: [], disputes: [], entities: new Map(), links: [], opts: { declarationHash: DECLARATION_SHA256, rejectAdopt: false, failRecord: false, broken: new Set() }, close: async () => {} };
+  const f: Fake = { url: "", hits: [], disputes: [], entities: new Map(), links: [], opts: { declarationHash: DECLARATION_SHA256, rejectAdopt: false, rejectLink: false, failRecord: false, broken: new Set() }, close: async () => {} };
 
   // A small real transparency log: LEAVES leaves, RFC 6962 tree, signed checkpoint, tiles.
   const regKey = await generateKeyPair();
@@ -113,7 +113,7 @@ export async function startFake(): Promise<Fake> {
     if (req.method !== "GET") {
       // Every write needs a valid proof-of-work stamp for the submitting EID.
       const stamp = req.headers["x-oe-stamp"] as string | undefined;
-      const eid = path === "/v1/adopt" ? b!.document?.eid : decodeURIComponent(path.split("/")[3] ?? "") || b!.link?.previous || b!.issuer || b!.eid;
+      const eid = path === "/v1/adopt" ? b!.document?.eid : decodeURIComponent(path.split("/")[3] ?? "") || b!.link?.successor || b!.issuer || b!.eid;
       if (!stamp) return f.opts.broken.has("turnstile") ? reject(403, "turnstile_failed", "Turnstile verification failed") : reject(400, "stamp_required", "missing stamp");
       const bad = await checkStamp(stamp, BITS, eid);
       if (bad) return reject(400, "bad_stamp", String(bad));
@@ -184,6 +184,7 @@ export async function startFake(): Promise<Fake> {
       if (m[2] === "aliases" && req.method === "POST") return send(200, { verified: true });
     }
     if (req.method === "POST" && path === "/v1/continuity") {
+      if (f.opts.rejectLink) return reject(422, "continuity_proof_missing", "no thanks");
       const { link } = b!;
       const { proofs, ...bare } = link;
       for (const p of proofs) if (!(await verifyProof(bare, p)).ok) return reject(422, "bad_proof", "link");

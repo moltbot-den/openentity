@@ -21,6 +21,7 @@ beforeEach(async () => {
   delete process.env.OPENENTITY_NAME;
   fake.opts.declarationHash = DECLARATION_SHA256;
   fake.opts.rejectAdopt = false;
+  fake.opts.rejectLink = false;
   fake.opts.failRecord = false;
   fake.opts.broken.clear();
   fake.disputes.length = 0;
@@ -337,6 +338,42 @@ describe("document and continuity", () => {
     expect(link.proofs).toHaveLength(2);
     expect(JSON.parse(r.out).successor).toBe(link.successor);
     expect(JSON.parse((await cli("whoami", "--json", "--registry", fake.url)).out).eid).toBe(link.successor);
+  });
+
+  it("rotate stamps for the successor, archives the old key and never deletes it", async () => {
+    const { eid, key_file } = await adopted();
+    const oldKey = await readFile(key_file, "utf8");
+    const r = JSON.parse((await cli("rotate", "--json")).out);
+    const stamp = fake.hits.find((h) => h.path === "/v1/continuity")!.stamp!;
+    expect(stamp).toContain(r.successor);
+    expect(r.archived_key).toBe(join(home, ".archive", eid, "key"));
+    expect(await readFile(r.archived_key, "utf8")).toBe(oldKey);
+    expect((await stat(r.archived_key)).mode & 0o777).toBe(0o600);
+    expect(await readFile(r.key_file, "utf8")).not.toBe(oldKey);
+    expect((await cli("whoami", "--json", "--registry", fake.url)).code).toBe(0);
+  });
+
+  it("a rotate the registry refuses leaves local state on the old key and drops the unused new one", async () => {
+    const { eid } = await adopted();
+    fake.opts.rejectLink = true;
+    const r = await cli("rotate", "--json");
+    expect(r.code).toBe(4);
+    expect((await readdir(home)).filter((n) => n !== "current").sort()).toEqual([eid]);
+    expect((await readFile(join(home, "current"), "utf8")).trim()).toBe(eid);
+    expect(fake.links).toHaveLength(0);
+  });
+
+  it("rotate --dry-run prints a valid signed link and changes nothing", async () => {
+    const { eid } = await adopted();
+    const before = await readdir(home);
+    const r = await cli("rotate", "--dry-run", "--json");
+    expect(r.code).toBe(0);
+    const { link, document } = JSON.parse(r.out);
+    expect(link.previous).toBe(eid);
+    expect(validate("ContinuityLink", link).ok).toBe(true);
+    expect(document.eid).toBe(link.successor);
+    expect(await readdir(home)).toEqual(before);
+    expect(fake.links).toHaveLength(0);
   });
 });
 
