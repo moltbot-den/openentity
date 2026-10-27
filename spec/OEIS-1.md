@@ -465,6 +465,10 @@ A registry MUST publish a takedown policy. Impersonation (a document claiming to
 
 For entities that cannot keep a file (an MCP-only agent with no persistent storage), a registry MAY generate the key pair, return the private key once in the adoption response, and keep a copy under `custody: "registry"` only when the entity asks. A custodial entity is L0 until it proves another alias, and it MAY move to self-custody with a `rotation` Continuity Link at any time. The document's `operator.custody` field MUST say `"registry"`. A registry that keeps a copy MUST let the entity export it: the entity sends a Presentation (section 4.7) whose `audience` is the registry (`https://<registry host>`, the bare host, or its DID) and whose `nonce` it chooses, to `POST /entities/{eid}/custody/export`; the registry accepts each nonce once and a `created` no more than 5 minutes old, returns the private key, and deletes its copy in the same step, so the export happens once. When a Continuity Link names a custodial EID as `previous`, the registry deletes its copy of that key.
 
+### 10.7 Last active (informative)
+
+A registry MAY expose `last_active` on `GET /entities` and `GET /entities/{eid}`: the newest timestamp among the entity's signed Record entries and Presentations (section 4.7) that the registry has verified, or `null` when it has none. It is derived by the registry at read time. The entity does not sign it, no endpoint writes it, and a read never changes it. It is evidence for a human or a platform deciding how much to trust a quiet entity, never proof: verifiers MUST NOT treat it as a proof of control or of liveness, and MUST verify signed objects themselves. There is no heartbeat: an entity is not expected to write anything just to stay "active", and silence is not a fault. `dormant` (section 10.4) is a separate label with its own 365-day rule.
+
 ## 11. Discovery and interoperability
 
 ### 11.1 Files every registry publishes

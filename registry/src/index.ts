@@ -291,9 +291,9 @@ app.get("/entities", async (c) => {
   if (q.capability) where.push(`EXISTS (SELECT 1 FROM entity_capabilities k WHERE k.eid = entities.eid AND k.capability = ${$(q.capability)})`);
   if (q.alias_type) where.push(`EXISTS (SELECT 1 FROM aliases a WHERE a.eid = entities.eid AND a.type = ${$(q.alias_type)} AND a.status = 'verified')`);
   const page = Math.max(0, Number(q.page ?? 0) | 0);
-  const rows = await c.env.db.all(`SELECT eid, name, level, level_label, created, adopted_log_index, withdrawn_at FROM entities WHERE ${where.join(" AND ")} ORDER BY created DESC, eid LIMIT 51 OFFSET ${$(page * 50)}`, args);
+  const rows = await c.env.db.all(`SELECT eid, name, level, level_label, created, adopted_log_index, withdrawn_at, (SELECT received_at FROM record_entries r WHERE r.eid = entities.eid ORDER BY seq DESC LIMIT 1) AS last_active FROM entities WHERE ${where.join(" AND ")} ORDER BY created DESC, eid LIMIT 51 OFFSET ${$(page * 50)}`, args);
   return c.json({
-    entities: rows.slice(0, 50).map((r) => ({ eid: r.eid, name: r.name, level: LEVEL(r.level), level_label: r.level_label, created: r.created, log_index: r.adopted_log_index, withdrawn: !!r.withdrawn_at })),
+    entities: rows.slice(0, 50).map((r) => ({ eid: r.eid, name: r.name, level: LEVEL(r.level), level_label: r.level_label, created: r.created, log_index: r.adopted_log_index, withdrawn: !!r.withdrawn_at, last_active: r.last_active })),
     page, next_page: rows.length > 50 ? page + 1 : null,
   });
 });
@@ -306,8 +306,10 @@ app.get("/entities/:eid", async (c) => {
   const decl = await db.first(`SELECT eid, json, log_index, withdrawn_at FROM declarations WHERE eid IN (${IN(chain)}) ORDER BY received_at DESC LIMIT 1`, chain);
   const aliases = await db.all("SELECT type, value, status, verified_at, log_index FROM aliases WHERE eid = $1", [eid]);
   const attestations = (await db.first(`SELECT COUNT(*) AS n FROM attestations WHERE subject IN (${IN(chain)}) AND revoked_at IS NULL`, chain))?.n;
+  // Spec 10.7: derived at read time from the newest verified record entry; the registry never stores or accepts it.
+  const last_active = (await db.first("SELECT received_at FROM record_entries WHERE eid = $1 ORDER BY seq DESC LIMIT 1", [eid]))?.received_at ?? null;
   return c.json({
-    eid, name: e.name, document: doc ? JSON.parse(doc) : null,
+    eid, name: e.name, last_active, document: doc ? JSON.parse(doc) : null,
     declaration: decl ? JSON.parse(decl.json) : null, declaration_note: DECLARATION_NOTE,
     declaration_inherited_from: decl && decl.eid !== eid ? decl.eid : null,
     level: LEVEL(e.level), level_label: e.level_label, aliases, log_index: e.adopted_log_index,

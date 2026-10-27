@@ -228,6 +228,7 @@ function serve({ registry, site }: McpDeps): (req: Request) => Promise<Response>
         return text({
           eid: e.body.eid,
           level: e.body.level,
+          last_active: e.body.last_active,
           document: e.body.document,
           anchor: e.body.document ? anchorText(e.body.document, `${ORIGIN}/v1/entities/${e.body.eid}/record`) : null,
           record_head: e.body.record_head,
