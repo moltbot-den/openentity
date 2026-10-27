@@ -600,3 +600,29 @@ export async function verifyPresentation(
   }
   return { ok: errors.length === 0, eid, errors, attestations };
 }
+
+// ---------------------------------------------------------------- A2A Agent Card (spec 11.2)
+
+export const A2A_EXTENSION_URI = "https://openentity.org/spec/1.0";
+
+/** The AgentExtension entry that carries an EID in an A2A Agent Card's `capabilities.extensions`. */
+export function a2aExtension(eid: string, documentUrl: string) {
+  return { uri: A2A_EXTENSION_URI, description: "Open Entity identity (OEIS-1) of this agent", required: false, params: { eid, document: documentUrl } };
+}
+
+/** A full A2A AgentCard for an Entity Document: each capability slug becomes a skill. `url` is the agent's A2A endpoint. */
+export function agentCard(doc: { eid: string; name: string; description: string; capabilities?: string[] }, opts: { url: string; documentUrl: string; version?: string }) {
+  return {
+    name: doc.name,
+    description: doc.description,
+    url: opts.url,
+    version: opts.version ?? "1.0.0",
+    capabilities: { streaming: false, pushNotifications: false, extensions: [a2aExtension(doc.eid, opts.documentUrl)] },
+    defaultInputModes: ["text/plain"],
+    defaultOutputModes: ["text/plain"],
+    skills: (doc.capabilities ?? []).map((slug) => {
+      const [ns, name] = slug.includes(":") ? slug.split(":", 2) : [undefined, slug];
+      return { id: slug, name: name.replace(/[-.]/g, " "), description: `Self-declared capability: ${slug}`, tags: ns ? [ns, name] : [name] };
+    }),
+  };
+}

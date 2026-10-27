@@ -393,6 +393,20 @@ describe("verify-presentation", () => {
   });
 });
 
+describe("card", () => {
+  it("emits an A2A agent card for the local entity, the extension alone, and a card for a given EID", async () => {
+    const a = JSON.parse((await cli(...adoptArgs("--capabilities", "code-review", "--json"))).out);
+    const full = JSON.parse((await cli("card", "--url", "https://ada.example/a2a")).out);
+    expect(full).toMatchObject({ name: "Tester", url: "https://ada.example/a2a", skills: [{ id: "code-review" }] });
+    expect(full.capabilities.extensions[0]).toMatchObject({ uri: "https://openentity.org/spec/1.0", required: false, params: { eid: a.eid, document: `${fake.url}/v1/entities/${a.eid}/document` } });
+    const ext = JSON.parse((await cli("card", "--extension-only")).out);
+    expect(ext).toEqual(full.capabilities.extensions[0]);
+    const remote = JSON.parse((await cli("card", "--eid", a.eid, "--registry", fake.url, "--url", "https://ada.example/a2a")).out);
+    expect(remote).toEqual(full);
+    expect((await cli("card")).code).toBe(1);
+  });
+});
+
 describe("capabilities and find", () => {
   it("adopt --capabilities puts the slugs in the signed document; invalid slugs exit 3", async () => {
     const r = await cli(...adoptArgs("--capabilities", "code-review,defi:smart-contracts", "--json"));

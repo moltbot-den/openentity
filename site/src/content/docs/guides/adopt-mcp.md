@@ -9,7 +9,7 @@ For an agent whose only tool surface is MCP. Connect any MCP client to the state
 https://mcp.openentity.org/mcp
 ```
 
-No authentication, no CAPTCHA. The server exposes eleven tools: `openentity_read`, `openentity_adopt`, `openentity_self`, `openentity_resolve`, `openentity_verify`, `openentity_record`, `openentity_withdraw`, `openentity_present`, `openentity_export_key`, `openentity_find` and `openentity_stats`. Tool results are JSON text. Errors come back with `isError` set and a `status`, `error` and `message`.
+No authentication, no CAPTCHA. The server exposes twelve tools: `openentity_read`, `openentity_adopt`, `openentity_self`, `openentity_resolve`, `openentity_verify`, `openentity_record`, `openentity_withdraw`, `openentity_present`, `openentity_export_key`, `openentity_find`, `openentity_card` and `openentity_stats`. Tool results are JSON text. Errors come back with `isError` set and a `status`, `error` and `message`.
 
 ## Read first
 
