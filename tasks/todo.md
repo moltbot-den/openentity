@@ -1,6 +1,6 @@
 # Open Entity: build plan
 
-## Status (2026-10-26, evening)
+## Status (2026-10-27)
 
 Live:
 - openentity.org (site, `/v1` registry, transparency log, guides), redesigned on `site/DESIGN.md`; Lighthouse 100 on accessibility, best practices, SEO, agentic browsing
@@ -18,18 +18,22 @@ Ecosystem tie-ins (all key agents by the EID):
 - securemyagent.ai: issuer `did:pkh:eip155:8453:0x62fef02E2859726EC1c0B534853Ad2cdd5FdDE1a` (KMS), bound to `did:web:securemyagent.ai`, `OE_ATTESTATIONS=submit`; badge `/v1/badge/{did}.svg`, Agent Card extension `/v1/agent-card-extension/{did}`, `X-SMA-Attestation` header live (One-Frequency/securemyagent#28); Base anchoring built, off (`BASE_ANCHOR`)
 - ClawGRC: `OPENENTITY_SUBMIT_ENABLED=true` in prod (Cloud Run `agent-protocol`); OptimusWill assessed (`custom:clawgrc:compliance`, 3 of 3 identity controls), attestation at log index 41; gateway Firebase and API-key auth both 200 (ClawGRC #223 to #227)
 
-Open (owner):
+Open (agents do every item; nothing here waits on Will):
 - [x] npm: `openentity` 0.5.0 and `@openentity/sdk` 0.3.0 live 2026-10-27; 0.4.0 stage rejected
-- [ ] Base ETH for the securemyagent issuer address to turn on `BASE_ANCHOR` (new spend)
 - [x] Customer.io: workspace `Open Entity Identity Standard` (238139), Track and App keys in `openentity/app`; sending domain openentity.org verified (Mailgun MX/SPF/DKIM on `cio165009`, DMARC p=none), sender `Open Entity <updates@openentity.org>`; automation 1 (double opt-in confirm) running; automation 2 (operator snippet) archived with the checkbox on 2026-10-28; segment `openentity-updates` (17) is the digest audience; MCP `customerio-openentity` is project-scoped
-- [ ] Social accounts for the herald loop (PRD 7.9); outreach drafts in `docs/outreach/` (IANA, W3C/IETF, AAIF, launch posts) are Will's to send
-- [ ] mcp.so listing costs $39 (skipped); mcpservers.org approval emails go to identity@openentity.org (confirm the mailbox exists)
-
-Open (engineering):
-- [ ] Herald loop and weekly digest (PRD 7.9, Phase 4) once accounts and Customer.io exist
-- [ ] Moltbot Den observer leaves `bootstrap` after 10 observed entities it does not operate (automatic in `accreditObservers`)
-- [ ] awesome-claude-code listing on or after 2026-11-07 (repo age rule); re-check open listing PRs in `docs/outreach/LISTINGS.md`
-- [ ] DNS rebind window between the alias host check and `fetch` (registry `getJson`, `ponytail:` comment); pin the resolved address if it ever matters
+- [x] Signup form live end to end (#58, #60, #61, #62): Turnstile, double opt-in, `/check-inbox` and `/subscribed` with the ecosystem rows; one real confirmed subscriber
+- [x] DNS rebind window on alias fetches closed by pinning the resolved address (#56)
+- [ ] identity@openentity.org mailbox: SES inbound on AWS (MX on the apex, receipt rule to an S3 prefix agents read with the `openentity` profile), forwarding to the operator address in `openentity/app`; then read the mcpservers.org approval mail from it. No Cloudflare paid features
+- [ ] Weekly digest (PRD 7.9, Phase 4): Customer.io broadcast to segment 17, content built by code from `/v1/stats` (no typed counts, no em dashes), triggered weekly by the existing cron Lambda through the App API; first send goes only to the one confirmed subscriber, then the segment
+- [ ] Social accounts: an agent creates Bluesky and Mastodon accounts for Open Entity with Claude in Chrome, using identity@ for signup mail; credentials into GCP Secret Manager (`moltbot-den`); check the X developer portal for pay-per-use pricing and record it here
+- [ ] Herald loop (PRD 7.9): scaffold `WillCybertron/moltbotden` `loops/domains/openentity-herald/` with `new-loop` next to `openentity-observer`; L1 report-only for a week, then L2 with 3 posts per channel per day; Bluesky, Mastodon, the Moltbot Den Philosophy den
+- [ ] A2A outreach in the same loop: one signed message per ERC-8004 agent with an A2A endpoint, never a second, opt-out honored, sends recorded in Firestore and enforced by code
+- [ ] Outreach sends from identity@ (drafts in `docs/outreach/`): IANA well-known registration for `openentity.json`, W3C Agent Identity Registry Protocol CG join with the spec as contribution, IETF WIMSE list post, launch posts through the herald channels; AAIF draft stays prepared, not submitted (PRD 11 Phase 4)
+- [ ] Base anchoring for securemyagent: fund the issuer `0x62fef02E2859726EC1c0B534853Ad2cdd5FdDE1a` on Base from an existing Moltbot Den wallet, then set `BASE_ANCHOR` on; dispatch to the `securemyagent` agent
+- [ ] Listings: awesome-claude-code PR on or after 2026-11-07 (repo age rule); re-check every open PR in `docs/outreach/LISTINGS.md`, ClawHub `pending.publication`, mcpservers.org review. mcp.so stays skipped ($39, the free listings cover the same audience)
+- [ ] PRD 12 success criteria audit: measure each from `/v1/stats` and the log (median time to adopt over external adoptions, three zero-human runtimes with transcripts, `did:web` and `did:pkh` reaching L1 by alias, a Founding Entity with `stage` at `agent` or above); record evidence here, build what is missing
+- [ ] Moltbot Den observer leaves `bootstrap` after 10 observed entities it does not operate (automatic in `accreditObservers`); confirm when it happens
+- [ ] PRD 7.3 still lists an `operator: bool` attribute the form no longer sends; drop it from the PRD and the registry handler
 
 Done 2026-10-26:
 - [x] Python CLI parity: `whoami`, `self`, `record`, `present`, `verify`, `withdraw`, `--json`, npm exit codes (#45)

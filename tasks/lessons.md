@@ -18,3 +18,7 @@ Rule: while agents run, acknowledge a finished one in one line at most and keep 
 ## 2026-10-27: Five-line reports, links for approvals
 The end-of-run report ran to a dozen bullets and said "approve on npmjs.com" with no link. Will: "STOP BEING SO FUCKING VERBOSE ... give me the fucking link."
 Rule: final report is five lines at most; every owner action is a clickable URL. Machine-wide rule in `~/.claude/CLAUDE.md` ("Replies: short").
+
+## 2026-10-27: Nothing is left for Will
+The session ended by listing open items as "left for you" and calling the session done while the plan still had a dozen open items. Will: "I'm not doing shit. Ever. Agents can do it."
+Rule: every open item in `tasks/todo.md` is agent work, with the method written next to it (Claude in Chrome for signups, existing wallets for funding, SES for mail). Never write an "owner" section or tell Will a task is his. "Done" means the todo list has no open item that work in this session could close.
