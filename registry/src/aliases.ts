@@ -1,5 +1,6 @@
 // DID resolution and alias proofs (spec 3.2, 3.4, 3.5).
 import dns from "node:dns/promises";
+import https from "node:https";
 import { BlockList, isIP } from "node:net";
 import { keccak_256 } from "@noble/hashes/sha3.js";
 import { secp256k1 } from "@noble/curves/secp256k1.js";
@@ -17,29 +18,33 @@ const PRIVATE = new BlockList();
 for (const [net, bits] of [["0.0.0.0", 8], ["10.0.0.0", 8], ["100.64.0.0", 10], ["127.0.0.0", 8], ["169.254.0.0", 16], ["172.16.0.0", 12], ["192.0.0.0", 24], ["192.168.0.0", 16], ["198.18.0.0", 15], ["224.0.0.0", 3]] as const) PRIVATE.addSubnet(net, bits, "ipv4");
 for (const [net, bits] of [["::", 128], ["::1", 128], ["64:ff9b::", 96], ["fc00::", 7], ["fe80::", 10], ["ff00::", 8], ["2001:db8::", 32]] as const) PRIVATE.addSubnet(net, bits, "ipv6");
 
-/** https only, no credentials, a DNS name (never an IP literal in any notation), and every address it resolves to is public. */
-async function publicHttps(url: string): Promise<boolean> {
-  let u: URL;
-  try { u = new URL(url); } catch { return false; }
-  if (u.protocol !== "https:" || u.username || u.password || isIP(u.hostname.replace(/^\[|\]$/g, "")) || !DOMAIN.test(u.hostname)) return false;
-  // ponytail: resolved here, then fetch resolves again; a rebind between the two is the ceiling. Pin the address with a custom https agent if that matters.
+/** https only, no credentials, a DNS name (never an IP literal in any notation). Resolves once; returns the address to connect to, or null when any resolved address is non-public. */
+async function publicAddress(u: URL): Promise<{ address: string; family: number } | null> {
+  if (u.protocol !== "https:" || u.username || u.password || isIP(u.hostname.replace(/^\[|\]$/g, "")) || !DOMAIN.test(u.hostname)) return null;
   const addrs = await dns.lookup(u.hostname, { all: true }).catch(() => []);
-  return addrs.length > 0 && addrs.every((a) => !PRIVATE.check(a.address, a.family === 6 ? "ipv6" : "ipv4"));
+  return addrs.length > 0 && addrs.every((a) => !PRIVATE.check(a.address, a.family === 6 ? "ipv6" : "ipv4")) ? addrs[0] : null;
 }
 
-/** GET JSON from a host the caller does not control: public https hosts only, no redirects, 5 s overall, 256 KB at most. Null on any failure. */
+/** GET JSON from a host the caller does not control: public https hosts only, connected to the one address validated (no second resolution), no redirects, 5 s overall, 256 KB at most. Null on any failure. */
 export async function getJson(url: string): Promise<any> {
-  if (!(await publicHttps(url))) return null;
-  const res = await fetch(url, { headers: { accept: "application/json" }, redirect: "manual", signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
-  if (!res.ok || !res.body) return null;
-  const reader = res.body.getReader(), parts: Uint8Array[] = [];
-  for (let n = 0; ; ) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    if ((n += value.length) > FETCH_MAX_BYTES) { await reader.cancel(); return null; }
-    parts.push(value);
-  }
-  try { return JSON.parse(await new Blob(parts as BlobPart[]).text()); } catch { return null; }
+  let u: URL;
+  try { u = new URL(url); } catch { return null; }
+  const pin = await publicAddress(u);
+  if (!pin) return null;
+  // The pinned lookup answers the connect with the validated address; Host and SNI stay the original name.
+  const lookup = ((_h: string, o: any, cb: any) => (o?.all ? cb(null, [pin]) : cb(null, pin.address, pin.family))) as any;
+  return new Promise((resolve) => {
+    const req = https.request(u, { method: "GET", lookup, headers: { accept: "application/json" }, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) }, (res) => {
+      if (!res.statusCode || res.statusCode < 200 || res.statusCode > 299) { res.destroy(); return resolve(null); }
+      const parts: Buffer[] = [];
+      let n = 0;
+      res.on("data", (c: Buffer) => { if ((n += c.length) > FETCH_MAX_BYTES) { res.destroy(); resolve(null); } else parts.push(c); });
+      res.on("end", () => { try { resolve(JSON.parse(Buffer.concat(parts).toString("utf8"))); } catch { resolve(null); } });
+      res.on("error", () => resolve(null));
+    });
+    req.on("error", () => resolve(null));
+    req.end();
+  });
 }
 
 /** DID document for did:key, did:pkh, did:web and did:plc; null when the method is unsupported or unreachable. */

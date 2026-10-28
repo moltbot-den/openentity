@@ -1,4 +1,7 @@
 import dns from "node:dns/promises";
+import { EventEmitter } from "node:events";
+import https from "node:https";
+import { Readable } from "node:stream";
 import { generateKeyPairSync, randomBytes } from "node:crypto";
 import { vi } from "vitest";
 import { app } from "../src/index.ts";
@@ -66,13 +69,29 @@ export const didWebDoc = (domain: string, kp: KeyPair) => ({
   id: `did:web:${domain}`, verificationMethod: [{ id: `did:web:${domain}#k`, type: "Multikey", controller: `did:web:${domain}`, publicKeyMultibase: kp.did.slice(8) }],
 });
 
-/** Routes outbound fetches by URL substring; unmatched URLs get a 404. */
+/** Routes outbound https GETs by URL substring; unmatched URLs get a 404. The fake connects the way node does: through the request's `lookup` option, else a fresh dns lookup. */
 export function mockFetch(routes: Record<string, (req: Request) => unknown>, dnsAnswers: Record<string, string> = {}) {
   // Every host resolves to a public address unless the test says otherwise (see the SSRF guard in aliases.ts).
   vi.spyOn(dns, "lookup").mockImplementation((async (host: string) => { const address = dnsAnswers[host] ?? "93.184.216.34"; return [{ address, family: address.includes(":") ? 6 : 4 }]; }) as any);
-  return vi.spyOn(globalThis, "fetch").mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+  const connected: string[] = [];
+  const spy = vi.spyOn(https, "request").mockImplementation(((url: URL, opts: any, cb: (res: any) => void) => {
+    const req: any = new EventEmitter();
+    req.end = () => void (async () => {
+      const [{ address }] = opts.lookup ? await new Promise<any[]>((ok) => opts.lookup(url.hostname, { all: true }, (_e: unknown, a: any[]) => ok(a))) : await dns.lookup(url.hostname, { all: true });
+      connected.push(address);
+      let status = 404, body = "not found";
+      for (const [k, f] of Object.entries(routes)) if (url.href.includes(k)) { const r = await f(new Request(url.href, { headers: opts.headers })); const res = r instanceof Response ? r : Response.json(r); status = res.status; body = await res.text(); break; }
+      const res: any = Readable.from([Buffer.from(body)]);
+      res.statusCode = status;
+      cb(res);
+    })();
+    return req;
+  }) as any);
+  // The operator-configured Base RPC (not a writer-chosen host) still goes through global fetch.
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
     const req = new Request(input as RequestInfo, init);
     for (const [k, f] of Object.entries(routes)) if (req.url.includes(k)) { const r = await f(req); return r instanceof Response ? r : Response.json(r); }
     return new Response("not found", { status: 404 });
   });
+  return Object.assign(spy, { connected });
 }

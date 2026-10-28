@@ -1,3 +1,4 @@
+import dns from "node:dns/promises";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { generateKeyPair } from "../src/sdk.ts";
 import { clientIp, scheduled } from "../src/index.ts";
@@ -97,6 +98,17 @@ describe("SSRF guard on fetches to writer-chosen hosts", () => {
     const { r, hits } = await bindVia("https://rebind.example/r.json", { "rebind.example": address });
     expect(hits).toEqual([]);
     expect(r.body.error).toBe("alias_proof_invalid");
+  });
+  it("connects to the address it validated and never resolves the name a second time (DNS rebind window)", async () => {
+    const { kp } = await adopted();
+    const spy = mockFetch({ "rebind2.example/.well-known/openentity.json": () => ({ eid: kp.did }) });
+    // Public on the first answer, private on every later one.
+    const seen = vi.mocked(dns.lookup).getMockImplementation()!;
+    let n = 0;
+    vi.mocked(dns.lookup).mockImplementation((async (...a: any[]) => (n++ === 0 ? (seen as any)(...a) : [{ address: "169.254.169.254", family: 4 }])) as any);
+    await write("POST", `/entities/${kp.did}/aliases`, kp.did, { type: "domain", value: "did:web:rebind2.example" });
+    expect(spy.connected).toEqual(["93.184.216.34"]);
+    expect(n).toBe(1);
   });
   it("still fetches a host name that resolves to a public address", async () => {
     const { r, hits } = await bindVia("https://agents.example/r.json");
