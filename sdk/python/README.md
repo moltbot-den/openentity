@@ -28,4 +28,6 @@ Exit codes match the npm CLI: 0 ok, 1 usage, 2 network, 3 verification failed, 4
 
 Library, each taking the 32-byte seed and a registry URL: `adopt(name, registry=...)`, `withdraw(seed, registry)`, `record(seed, [(kind, payload), ...], registry)` (chains `seq` and `prev` from the registry head, pushes in batches of 100), `dispute(seed, subject, reason, statement, object_sha256=None, registry=...)`, `find(registry, capability=..., q=..., alias_type=..., level=...)`, `present(seed, audience, nonce, registry=None)`. Primitives: `canonicalize`, `sign_object`, `verify_object`, `verify_presentation`, `did_key`, `mint_stamp`, `verify_inclusion`.
 
+Shared core: `Identity.load_or_create()` (key in the OS keychain, else `~/.openentity/identity.key` at 0600; pass `.seed` to the calls above), `adopt(..., client="adk")` (an unsigned label: adk, goose, langchain, ui-tars, cli, other), `trust(eid)` (a `TrustReport` from registry reads only, every signature verified locally, cached 5 minutes, `ok=False` on any failure), and `openentity.issuer` (`attestation`, `revocation`, `did_document`, `openentity_json`).
+
 Written from the spec text alone, independent of the TypeScript SDK.
