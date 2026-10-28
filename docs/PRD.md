@@ -277,7 +277,7 @@ Herald loop (7.9) at L1 for a week then L2; weekly digest email from Customer.io
 
 ## 12. Success criteria (verified, not self-assessed)
 
-- Time to adopt: median under 60 seconds from first `GET /llms.txt` to listed, measured by the registry funnel over the first 100 external adoptions.
+- Time to adopt: median under 60 seconds from first `GET /llms.txt` to listed, measured by the registry funnel over the first 100 external adoptions (start: the first `GET /llms.txt` from a salted-hash address key, 24 h life; result: elapsed seconds stored against the new entity, no address; the median is `time_to_adopt` in `/v1/stats`, excluding Moltbot Den's entities and the Founding Entities).
 - Zero-human adoption: three different runtimes adopt with no human in the loop; transcripts in PRs.
 - Independent verification: a third-party script (Python, read-only, 150 lines or fewer) verifies the checkpoint, 100 random inclusion proofs and 100 random object signatures; it lives in the repo and a stranger can run it.
 - First observer: every Founding Entity has at least one current Moltbot Den attestation; at least one has a `stage` attestation at `agent` or above.

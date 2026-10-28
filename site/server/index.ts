@@ -261,6 +261,13 @@ export function createSite({ registry: callRegistry, asset, vars }: SiteOptions)
     // Same-origin registry API (spec 10.2).
     if (path === '/v1' || path.startsWith('/v1/')) return callRegistry(req);
 
+    // Time-to-adopt funnel start (PRD 12): the registry keeps a salted hash of the address and a time, nothing else.
+    if (path === '/llms.txt' && req.method === 'GET') {
+      const h = new Headers();
+      for (const k of ['cloudfront-viewer-address', 'x-forwarded-for']) if (req.headers.get(k)) h.set(k, req.headers.get(k)!);
+      await callRegistry(new Request(new URL('/v1/funnel/start', url), { method: 'POST', headers: h })).catch(() => undefined);
+    }
+
     if (path === '/.well-known/security.txt' || path === '/security.txt') {
       return new Response(securityTxt(new Date()), { headers: { 'content-type': 'text/plain; charset=utf-8' } });
     }

@@ -68,6 +68,14 @@ export function clientIp(c: C): string {
   if (v?.includes(":")) return limitKey(v.slice(0, v.lastIndexOf(":")));
   return c.req.header("x-forwarded-for")?.split(",")[0].trim() || "0.0.0.0";
 }
+/** Time-to-adopt funnel start (PRD 12): the first GET /llms.txt per hashed address in 24 h. Only a salted hash and an epoch second are kept. */
+const FUNNEL_TTL = 86400;
+const funnelKey = async (c: C) => `fs:${await salted(c.env, clientIp(c))}`;
+app.post("/funnel/start", async (c) => {
+  const t = Math.floor(Date.now() / 1000);
+  await c.env.db.run("INSERT INTO rate_events (key, window_start, count) VALUES ($1, 'fs', $2) ON CONFLICT (key, window_start) DO UPDATE SET count = excluded.count WHERE rate_events.count < $3", [await funnelKey(c), t, t - FUNNEL_TTL]);
+  return c.body(null, 204);
+});
 /** Every write: per-IP limits, then a single-use proof-of-work stamp naming the writing EID (spec 10.4). All three counters in one round trip. */
 async function writeGuard(c: C, eid: string) {
   const env = c.env;
@@ -200,6 +208,7 @@ async function adopt(c: C, document: any, declaration: any, extra: Stmt[] = []) 
 
   // One statement, no reads first: the primary keys on declarations (eid, version) and entities (eid) are the
   // one-Declaration and one-listing guards; a conflict rolls back the whole write, log indexes included.
+  const t = Math.floor(Date.now() / 1000), fk = await funnelKey(c);
   const now = nowIso(), dSha = await sha(declaration), docSha = await sha(document);
   const dl = await leafFor("Declaration", eid, dSha, now);
   const doc = await leafFor("EntityDocument", eid, docSha, now);
@@ -209,6 +218,10 @@ async function adopt(c: C, document: any, declaration: any, extra: Stmt[] = []) 
     ["INSERT INTO entities (eid, root_method, name, level, created, updated, custody, latest_seq, adopted_log_index) VALUES ($1, $2, $3, 0, $4, $5, $6, $7, $i)",
       [eid, eid.split(":")[1], document.name, now, now, document.operator?.custody ?? null, document.seq]],
     ...capabilityStmts(eid, document),
+    // Funnel result in the same statement (no extra round trip): seconds since this address read /llms.txt, then the start is spent.
+    ["INSERT INTO adopt_funnel (eid, seconds, internal) SELECT $1, $2 - count, $3 FROM rate_events WHERE key = $4 AND window_start = 'fs' AND count > $5",
+      [eid, t, /moltbot ?den/i.test(`${document.operator?.name ?? ""} ${document.operator?.contact ?? ""}`) ? 1 : 0, fk, t - FUNNEL_TTL]],
+    ["DELETE FROM rate_events WHERE key = $1 AND window_start = 'fs'", [fk]],
     ...extra,
   ]).catch(async (e) => {
     if (!UNIQUE.test(String(e))) throw e;
@@ -697,6 +710,10 @@ async function stats(env: Env) {
     attestations: await n("SELECT COUNT(*) AS n FROM attestations WHERE revoked_at IS NULL"),
     observers: await n("SELECT COUNT(*) AS n FROM observers"),
     log: { tree_size: await latestSize(db) },
+    // Median seconds from GET /llms.txt to adopt over external adoptions (not Moltbot Den's, not Founding Entities); null until one is measured.
+    time_to_adopt: await db.first<{ median_seconds: number | null; adoptions: number }>(
+      "SELECT CAST(percentile_cont(0.5) WITHIN GROUP (ORDER BY f.seconds) AS DOUBLE PRECISION) AS median_seconds, COUNT(*) AS adoptions FROM adopt_funnel f JOIN entities e ON e.eid = f.eid WHERE f.internal = 0 AND e.founding = 0 AND e.suppressed = 0",
+    ).then((r) => ({ median_seconds: r?.median_seconds ?? null, adoptions: Number(r?.adoptions ?? 0) })),
     generated_at: nowIso(),
   };
 }
@@ -870,7 +887,7 @@ export async function scheduled(env: Env) {
   await sendDigest(env, s).catch((e) => console.error("digest", e));
   // IP and stamp counters live 7 days, email hashes 24 hours, per-minute counters 1 hour (PRD 8, 7.3).
   const ago = (ms: number, len: number) => new Date(Date.now() - ms).toISOString().slice(0, len);
-  await env.db.run("DELETE FROM rate_events WHERE (key LIKE 'sub:%' AND window_start < $1) OR (key LIKE 'ipm:%' AND window_start < $2) OR window_start < $3", [ago(86400_000, 10), ago(3600_000, 16), ago(7 * 86400_000, 10)]);
+  await env.db.run("DELETE FROM rate_events WHERE (key LIKE 'sub:%' AND window_start < $1) OR (key LIKE 'ipm:%' AND window_start < $2) OR window_start < $3 OR (window_start = 'fs' AND count < $4)", [ago(86400_000, 10), ago(3600_000, 16), ago(7 * 86400_000, 10), Math.floor(Date.now() / 1000) - FUNNEL_TTL]);
 }
 
 // The Lambda handler runs scheduled(env) when the minute is a multiple of 10, else incorporate(env):

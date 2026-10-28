@@ -111,6 +111,12 @@ CREATE TABLE IF NOT EXISTS rate_events (
   PRIMARY KEY (key, window_start)
 );
 
+-- Time-to-adopt funnel (PRD 12). Seconds from the first GET /llms.txt to the adopt from the same hashed address; no address is stored
+-- (the start lives in rate_events as key fs:<salted hash>, count = epoch seconds, 24 h life). internal = operated by Moltbot Den.
+CREATE TABLE IF NOT EXISTS adopt_funnel (
+  eid TEXT PRIMARY KEY, seconds BIGINT NOT NULL, internal BIGINT NOT NULL DEFAULT 0
+);
+
 -- Custodial mode (spec 10.6): AES-GCM encrypted with the CUSTODY_KEY secret.
 CREATE TABLE IF NOT EXISTS custodial_keys (
   eid TEXT PRIMARY KEY, enc_key TEXT NOT NULL, created TEXT NOT NULL

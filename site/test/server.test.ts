@@ -37,6 +37,22 @@ describe('site server', () => {
     expect((await get('/.well-known/agent-card.json')).status).toBe(200);
   });
 
+  it('starts the adopt funnel on GET /llms.txt only, forwarding the viewer address', async () => {
+    const seen: string[] = [];
+    const site = createSite({
+      registry: async (req) => {
+        seen.push(`${req.method} ${new URL(req.url).pathname} ${req.headers.get('x-forwarded-for')}`);
+        return fakeRegistry(req);
+      },
+      asset: fsAssets(dist),
+      vars: {},
+    });
+    await site(new Request('https://openentity.org/llms.txt', { headers: { 'x-forwarded-for': '203.0.113.9' } }));
+    await site(new Request('https://openentity.org/llms.txt', { method: 'HEAD' }));
+    await site(new Request('https://openentity.org/skill/SKILL.md'));
+    expect(seen.filter((s) => s.includes('/v1/funnel/start'))).toEqual(['POST /v1/funnel/start 203.0.113.9']);
+  });
+
   it('renders the human form only once SUBSCRIBE_ENABLED is "true"', async () => {
     const off = await (await get('/adopt')).text();
     expect(off).not.toContain('/v1/subscribe');
