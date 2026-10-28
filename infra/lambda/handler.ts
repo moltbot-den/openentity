@@ -4,7 +4,7 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import { Hono } from "hono";
 import { handle } from "hono/aws-lambda";
 import { s3Blobs } from "../../registry/src/blob.ts";
-import { dataApiDb } from "../../registry/src/db.ts";
+import { type Db, dataApiDb } from "../../registry/src/db.ts";
 import type { Env } from "../../registry/src/env.ts";
 import { incorporate, app as registry, scheduled } from "../../registry/src/index.ts";
 import { backfillObjects } from "../../registry/src/log.ts";
@@ -16,11 +16,20 @@ type Handle = (req: Request) => Promise<Response>;
 type Ready = { env: Env; site: Handle; mcp: Handle; hub: Handle; verify: string };
 let ready: Promise<Ready> | undefined;
 
+/** Load stack only (LOAD_TIMING): one log line per database call, for CloudWatch Logs Insights. */
+function timed(db: Db): Db {
+  if (!e.LOAD_TIMING) return db;
+  const t = <T>(m: "all" | "first" | "run") => async (sql: string, p?: unknown[]) => {
+    const s = performance.now();
+    try { return await (db[m] as any)(sql, p) as T; } finally { console.log(JSON.stringify({ db_ms: Math.round(performance.now() - s), q: sql.slice(0, 40).replace(/\s+/g, " ") })); }
+  };
+  return { ...db, all: t("all"), first: t("first"), run: t("run") };
+}
 async function init(): Promise<Ready> {
   const res = await new SecretsManagerClient({}).send(new GetSecretValueCommand({ SecretId: e.APP_SECRET_ARN }));
   const s = JSON.parse(res.SecretString!);
   const env: Env = {
-    db: dataApiDb({ resourceArn: e.DB_CLUSTER_ARN!, secretArn: e.DB_SECRET_ARN!, database: e.DB_NAME! }),
+    db: timed(dataApiDb({ resourceArn: e.DB_CLUSTER_ARN!, secretArn: e.DB_SECRET_ARN!, database: e.DB_NAME! })),
     log: s3Blobs(e.LOG_BUCKET!),
     snapshots: e.SNAPSHOT_BUCKET ? s3Blobs(e.SNAPSHOT_BUCKET) : undefined,
     IP_DAILY_LIMIT: e.IP_DAILY_LIMIT,
