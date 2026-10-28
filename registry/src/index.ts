@@ -8,6 +8,7 @@ import {
 import { type Env, REGISTRY_DID, LOG_ORIGIN, b64, nowIso } from "./env.ts";
 import { type Stmt, consistencyProof, exportObjects, inclusionProof, incorporate, latestSize, leafFor, leafJson, registryKey, sequenced, snapshot, tileIndex, treeRoot, type LeafRow } from "./log.ts";
 import type { Db } from "./db.ts";
+import { sendDigest } from "./digest.ts";
 import { DOMAIN, getJson, platformDomain, resolveDid, resolver, verifyAlias } from "./aliases.ts";
 
 type C = Context<{ Bindings: Env }>;
@@ -867,6 +868,7 @@ export async function scheduled(env: Env) {
   await snapshot(env, yesterday);
   await exportObjects(env, yesterday);
   await accreditObservers(env);
+  await sendDigest(env, s).catch((e) => console.error("digest", e));
   // IP and stamp counters live 7 days, email hashes 24 hours, per-minute counters 1 hour (PRD 8, 7.3).
   const ago = (ms: number, len: number) => new Date(Date.now() - ms).toISOString().slice(0, len);
   await env.db.run("DELETE FROM rate_events WHERE (key LIKE 'sub:%' AND window_start < $1) OR (key LIKE 'ipm:%' AND window_start < $2) OR window_start < $3", [ago(86400_000, 10), ago(3600_000, 16), ago(7 * 86400_000, 10)]);

@@ -34,6 +34,8 @@ async function init(): Promise<Ready> {
     TURNSTILE_SECRET: s.TURNSTILE_SECRET,
     CIO_SITE_ID: s.CIO_SITE_ID,
     CIO_API_KEY: s.CIO_API_KEY,
+    CIO_APP_API_KEY: s.CIO_APP_API_KEY,
+    CIO_BROADCAST_ID: s.CIO_BROADCAST_ID,
   };
   const reg = (req: Request) => Promise.resolve(registry.fetch(req, env));
   // The MCP door runs in-process and mints stamps on the caller's behalf, so a stamp would only cost this Lambda
