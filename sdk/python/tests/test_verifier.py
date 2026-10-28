@@ -15,6 +15,9 @@ ROOT = Path(__file__).resolve().parents[3]
 spec = importlib.util.spec_from_file_location("iv", ROOT / "scripts/independent_verifier.py")
 iv = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(iv)
+spec = importlib.util.spec_from_file_location("rc", ROOT / "scripts/rebuild_check.py")
+rc = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(rc)
 ORIGIN = "openentity.org/log"
 
 
@@ -129,18 +132,18 @@ def _bucket(tmp_path, n=5, tamper=False):
 
 def test_rebuild_matches_checkpoint(tmp_path):
     n, root = _bucket(tmp_path)
-    ok, lines = iv.rebuild(tmp_path, (n, root))
+    ok, lines = rc.rebuild(tmp_path, (n, root))
     assert ok, lines
-    assert iv.tile_path(1234067) == "x001/x234/067"
+    assert rc.tile_path(1234067) == "x001/x234/067"
 
 
 def test_rebuild_catches_wrong_root_missing_leaf_and_bad_tile(tmp_path):
     n, root = _bucket(tmp_path)
-    assert not iv.rebuild(tmp_path, (n, b"\0" * 32))[0]
-    assert not iv.rebuild(tmp_path, (n + 1, root))[0]
+    assert not rc.rebuild(tmp_path, (n, b"\0" * 32))[0]
+    assert not rc.rebuild(tmp_path, (n + 1, root))[0]
     t = tmp_path / "t"; t.mkdir()
     n, root = _bucket(t, tamper=True)
-    assert not iv.rebuild(t, (n, root))[0]
+    assert not rc.rebuild(t, (n, root))[0]
 
 
 def test_rebuild_checks_objects_against_leaves(tmp_path):
@@ -159,10 +162,10 @@ def test_rebuild_checks_objects_against_leaves(tmp_path):
     (tmp_path / "objects").mkdir()
     line = {"idx": 0, "type": "Declaration", "eid": "did:key:z1", "object_sha256": sha, "object": obj}
     (tmp_path / "objects/2026-10-25.jsonl").write_text(json.dumps(line) + "\n")
-    ok, lines = iv.rebuild(tmp_path, (n, root))
+    ok, lines = rc.rebuild(tmp_path, (n, root))
     assert ok and any("objects: 1 of" in x for x in lines), lines
     (tmp_path / "objects/2026-10-25.jsonl").write_text(json.dumps({**line, "object": {**obj, "n": 2}}) + "\n")
-    assert not iv.rebuild(tmp_path, (n, root))[0]
+    assert not rc.rebuild(tmp_path, (n, root))[0]
     red = {"seq": 2, "redacted": True, "hash": sha, "redaction": {}}
     (tmp_path / "objects/2026-10-25.jsonl").write_text(json.dumps({**line, "object": red}) + "\n")
-    assert iv.rebuild(tmp_path, (n, root))[0]
+    assert rc.rebuild(tmp_path, (n, root))[0]
