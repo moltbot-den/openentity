@@ -1,4 +1,5 @@
 """Open Entity primitives, written from spec/OEIS-1.md (sections 3.3, 4, 6, 10.3, 10.4)."""
+import base64
 import hashlib
 import json
 import math
@@ -401,6 +402,26 @@ def verify_inclusion(index: int, size: int, leaf: bytes, proof: list[bytes], roo
             r = node_hash(r, p)
         fn, sn = fn >> 1, sn >> 1
     return sn == 0 and r == root
+
+
+def verify_note(note: str, origin: str, public: bytes) -> bool:
+    """C2SP signed note (the log checkpoint): a signature line by `origin` over the body, keyed by the registry key."""
+    body, sep, sigs = note.rpartition("\n\n")
+    if not sep or not note.endswith("\n"):
+        return False
+    keyid = sha256(origin.encode() + b"\n\x01" + public)[:4]
+    for line in sigs.splitlines():
+        parts = line.split(" ")
+        if len(parts) != 3 or parts[0] != "\u2014" or parts[1] != origin:
+            continue
+        try:
+            raw = base64.b64decode(parts[2], validate=True)
+            if len(raw) == 68 and raw[:4] == keyid:
+                Ed25519PublicKey.from_public_bytes(public).verify(raw[4:], (body + "\n").encode())
+                return True
+        except (ValueError, InvalidSignature):
+            continue
+    return False
 
 
 def log_leaf(type_: str, eid: str, object_sha256: str, received_at: str) -> dict:

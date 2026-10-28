@@ -42,7 +42,7 @@ openentity find [--capability C] [-q TEXT] [--alias-type T] [--level L1]
 openentity withdraw --force                           # cannot be undone
 ```
 
-Exit codes match the Node CLI: 0 ok, 1 usage, 2 network, 3 verification failed, 4 registry rejected, 5 local state. With `--json`, errors print `{"error", "code"}` on stderr. `verify` does not check the log checkpoint or inclusion proof; the Node CLI does.
+Exit codes match the Node CLI: 0 ok, 1 usage, 2 network, 3 verification failed, 4 registry rejected, 5 local state. With `--json`, errors print `{"error", "code"}` on stderr. `verify` also checks the log checkpoint signature, the log inclusion proof and Redaction signatures.
 
 The Node CLI ([reference](/cli)) has more commands: documents, aliases, anchors, continuity and log audits.
 

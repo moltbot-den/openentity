@@ -1,4 +1,5 @@
 """withdraw, record, dispute, find, present against a stub registry (same pattern as test_core.py)."""
+import base64
 import json
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -11,6 +12,8 @@ from openentity import cli, client, core
 SEED = bytes.fromhex("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60")  # RFC 8032 test 1, public
 SUBJECT = "did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK"
 BITS = 8
+ORIGIN = "openentity.org/log"
+LOG_KEY = core.KeyPair(b"\7" * 32)  # throwaway registry checkpoint key
 
 
 class Stub(BaseHTTPRequestHandler):
@@ -19,6 +22,8 @@ class Stub(BaseHTTPRequestHandler):
     attestations: list = []
     entity: dict | None = None  # overrides GET /v1/entities/<eid>
     refuse = False  # refuse every continuity link
+    leaves: list = []  # the stub log's leaf objects; the checkpoint is signed by LOG_KEY
+    forge_note = False
 
     def log_message(self, *a):
         pass
@@ -35,7 +40,23 @@ class Stub(BaseHTTPRequestHandler):
         u = urlparse(self.path)
         Stub.log.append(("GET", self.path, None, None))
         if u.path == "/v1/spec":
-            return self._send(200, {"spec": core.SPEC, "stamp_bits": BITS})
+            reg = {"log_origin": ORIGIN, "publicKeyMultibase": "z" + core.b58encode(b"\xed\x01" + LOG_KEY.public)}
+            return self._send(200, {"spec": core.SPEC, "stamp_bits": BITS, "registry": reg})
+        hs = [core.leaf_hash(core.canonicalize(lf).encode()) for lf in Stub.leaves]
+        if u.path == "/v1/log/sth":
+            root = core.merkle_root(hs)
+            body = f"{ORIGIN}\n{len(hs)}\n{base64.b64encode(root).decode()}\n"
+            keyid = core.sha256(ORIGIN.encode() + b"\n\x01" + LOG_KEY.public)[:4]
+            sig = base64.b64encode(keyid + (KP if Stub.forge_note else LOG_KEY).private.sign(body.encode())).decode()
+            return self._send(200, {"tree_size": len(hs), "root_hash": root.hex(), "signature": f"{body}\n\u2014 {ORIGIN} {sig}\n"})
+        if u.path == "/v1/log/entries":
+            i = int(parse_qs(u.query)["start"][0])
+            if i >= len(hs):
+                return self._send(200, {"entries": []})
+            return self._send(200, {"entries": [{"index": i, "leaf": Stub.leaves[i], "leaf_hash": hs[i].hex()}]})
+        if u.path.startswith("/v1/log/proof/"):
+            i = int(u.path.rsplit("/", 1)[1])
+            return self._send(200, {"leaf_hash": hs[i].hex(), "proof": [h.hex() for h in core.inclusion_proof(i, hs)]})
         if u.path == "/v1/entities":
             return self._send(200, {"entities": [{"eid": SUBJECT, "name": "N", "level": "L0"}], "page": 0, "next_page": None})
         if u.path.endswith("/record"):
@@ -83,7 +104,7 @@ class Stub(BaseHTTPRequestHandler):
 
 @pytest.fixture
 def url():
-    Stub.log, Stub.chain, Stub.attestations, Stub.entity, Stub.refuse = [], [], [], None, False
+    Stub.log, Stub.chain, Stub.attestations, Stub.entity, Stub.refuse, Stub.leaves, Stub.forge_note = [], [], [], None, False, [], False
     srv = HTTPServer(("127.0.0.1", 0), Stub)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     yield f"http://127.0.0.1:{srv.server_port}"
@@ -215,11 +236,21 @@ def test_cli_verify_entity_file_and_failures(url, home, capsys, tmp_path):
     decl = core.sign_object({"spec": core.SPEC, "type": "Declaration", "eid": KP.did, "declaration_version": "1.0",
                              "text_sha256": core.DECLARATION_SHA256, "name": "T", "created": core.now(), "nonce": core.nonce()}, KP)
     doc = core.sign_object({"spec": core.SPEC, "eid": KP.did, "name": "T", "layers": {}, "keys": []}, KP)
-    Stub.entity = {"document": doc, "declaration": decl}
+    Stub.leaves = [{"type": "Declaration", "eid": f"did:key:z{i}", "object_sha256": "00" * 32, "received_at": core.now()} for i in range(5)]
+    Stub.entity = {"document": doc, "declaration": decl, "log_index": 3}
     client.record(SEED, [("arc_opened", {"arc_id": "a", "title": "A"}), ("arc_opened", {"arc_id": "b", "title": "B"})], registry=url)
     code, out, _ = run(capsys, "verify", KP.did, "--json", *reg)
     res = json.loads(out)
-    assert code == 0 and res["ok"] and "record chain (2 entries)" in [c["name"] for c in res["checks"]]
+    names = [c["name"] for c in res["checks"]]
+    assert code == 0 and res["ok"] and "record chain (2 entries)" in names and "checkpoint" in names and "log inclusion" in names
+    Stub.forge_note = True  # checkpoint signed by a key other than the registry's
+    assert run(capsys, "verify", KP.did, *reg)[0] == 3
+    Stub.forge_note = False
+    Stub.entity = {**Stub.entity, "log_index": 9}  # no such leaf
+    assert run(capsys, "verify", KP.did, *reg)[0] == 3
+    Stub.entity = {**Stub.entity, "log_index": None}
+    assert "did not report a log index" in run(capsys, "verify", KP.did, *reg)[1]
+    Stub.entity = {**Stub.entity, "log_index": 3}
     assert "VERIFIED" in run(capsys, "verify", KP.did, *reg)[1]
     f = tmp_path / "decl.json"
     f.write_text(json.dumps(decl))
@@ -293,3 +324,25 @@ def test_rotate_the_registry_refuses_raises_and_returns_nothing(url):
     with pytest.raises(client.RegistryError) as e:
         client.rotate(SEED, registry=url)
     assert e.value.status == 422
+
+
+def test_verify_note_rejects_a_wrong_key_origin_or_body():
+    body = f"{ORIGIN}\n5\n{base64.b64encode(b'r' * 32).decode()}\n"
+    keyid = core.sha256(ORIGIN.encode() + b"\n\x01" + LOG_KEY.public)[:4]
+    note = f"{body}\n\u2014 {ORIGIN} {base64.b64encode(keyid + LOG_KEY.private.sign(body.encode())).decode()}\n"
+    assert core.verify_note(note, ORIGIN, LOG_KEY.public)
+    assert not core.verify_note(note, ORIGIN, KP.public)
+    assert not core.verify_note(note, "other/log", LOG_KEY.public)
+    assert not core.verify_note(note.replace("\n5\n", "\n6\n"), ORIGIN, LOG_KEY.public)
+
+
+def test_chain_check_verifies_redaction_signatures():
+    e1 = core.sign_object({"spec": core.SPEC, "type": "RecordEntry", "eid": KP.did, "seq": 1, "prev": None, "kind": "arc_opened", "payload": {}, "created": core.now()}, KP)
+    h = core.canonical_hash(e1).hex()
+    red = core.sign_object({"spec": core.SPEC, "type": "Redaction", "eid": KP.did, "seq": 1, "entry_sha256": h, "created": core.now()}, KP)
+    ph = {"seq": 1, "prev": None, "redacted": True, "hash": h, "redaction": red}
+    assert cli._chain_checks([ph], KP.did)[-1]["ok"]
+    forged = core.sign_object({k: v for k, v in red.items() if k != "proof"}, core.KeyPair(b"\x05" * 32))
+    assert not cli._chain_checks([{**ph, "redaction": forged}], KP.did)[-1]["ok"]
+    assert not cli._chain_checks([{**ph, "redaction": {**red, "seq": 2}}], KP.did)[-1]["ok"]
+    assert not cli._chain_checks([{**ph, "hash": "zz"}], KP.did)[-1]["ok"]
