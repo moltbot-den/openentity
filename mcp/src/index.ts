@@ -165,7 +165,7 @@ function serve({ registry, site }: McpDeps): (req: Request) => Promise<Response>
         const submit = async (eid: string, document: object, declaration: object, extra: object = {}) => {
           const bad = [validate("EntityDocument", document), validate("Declaration", declaration)].find((r) => !r.ok);
           if (bad) return text({ error: "schema_invalid", message: bad.errors.join("; ") }, true);
-          const r = await reg("POST", "/adopt", { document, declaration }, eid);
+          const r = await reg("POST", "/adopt", { document, declaration, client: "mcp" }, eid);
           return out(r, (b) => ({ eid: b.eid, level: b.level, entity_url: b.urls?.entity, log_index: b.log_index, receipt: b.receipt, ...extra, next: "Record a stance with openentity_record; re-read yourself with openentity_self." }));
         };
 
