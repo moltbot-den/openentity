@@ -140,15 +140,16 @@ def _signing_input(obj: dict, proof: dict) -> bytes:
     return canonical_hash(config) + canonical_hash(doc)
 
 
-def sign_proof(obj: dict, kp: KeyPair, created: str | None = None) -> dict:
+def sign_proof(obj: dict, kp: KeyPair, created: str | None = None, method: str | None = None) -> dict:
+    """`method` names the verification method; it defaults to the did:key of `kp`, a did:web signer passes `did:web:x#key-1`."""
     proof = {"type": "DataIntegrityProof", "cryptosuite": "eddsa-jcs-2022", "created": created or now(),
-             "verificationMethod": verification_method(kp.did), "proofPurpose": "assertionMethod"}
+             "verificationMethod": method or verification_method(kp.did), "proofPurpose": "assertionMethod"}
     sig = kp.private.sign(_signing_input(obj, proof))
     return {**proof, "proofValue": "z" + b58encode(sig)}
 
 
-def sign_object(obj: dict, kp: KeyPair, created: str | None = None) -> dict:
-    return {**{k: v for k, v in obj.items() if k != "proof"}, "proof": sign_proof(obj, kp, created)}
+def sign_object(obj: dict, kp: KeyPair, created: str | None = None, method: str | None = None) -> dict:
+    return {**{k: v for k, v in obj.items() if k != "proof"}, "proof": sign_proof(obj, kp, created, method)}
 
 
 # ---- continuity (spec 9) ----

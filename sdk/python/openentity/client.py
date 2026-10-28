@@ -8,6 +8,7 @@ import urllib.request
 from . import core
 
 DEFAULT_REGISTRY = "https://openentity.org"
+CLIENTS = ("adk", "goose", "langchain", "ui-tars", "cli", "other")  # the registry's allowlist for the unsigned `client` label
 
 
 class RegistryError(Exception):
@@ -59,13 +60,16 @@ def build_adoption(kp: core.KeyPair, name: str, description: str, registry: str)
 
 
 def adopt(name: str, description: str = "An Open Entity adopted through the Python client.",
-          registry: str = DEFAULT_REGISTRY, seed: bytes | None = None) -> dict:
-    """Adopt on `registry`. Returns the registry response plus `did` and `seed_hex` (keep the seed)."""
+          registry: str = DEFAULT_REGISTRY, seed: bytes | None = None, client: str | None = None) -> dict:
+    """Adopt on `registry`. Returns the registry response plus `did` and `seed_hex` (keep the seed).
+    `client` is an optional label (one of CLIENTS) for the registry's per-client count; it is not signed."""
+    if client is not None and client not in CLIENTS:
+        raise ValueError(f"client must be one of {', '.join(CLIENTS)}")
     registry = registry.rstrip("/")
     kp = core.KeyPair(seed)
     bits = int(_request(f"{registry}/v1/spec")["stamp_bits"])
     document, declaration = build_adoption(kp, name, description, registry)
-    out = _request(f"{registry}/v1/adopt", {"document": document, "declaration": declaration},
+    out = _request(f"{registry}/v1/adopt", {"document": document, "declaration": declaration, **({"client": client} if client else {})},
                    {"x-oe-stamp": core.mint_stamp(bits, kp.did)})
     # Seq-1 declaration entry (spec 7.3). The registry never writes entries; on failure the signed
     # entry is returned so the caller can push it later.

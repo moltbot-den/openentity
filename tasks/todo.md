@@ -110,3 +110,11 @@ Verification
 - [x] Redacted record placeholders (spec 7.4): signed `Redaction` object and schema, `POST /v1/entities/{eid}/record/redact` serves `{seq, prev, redacted, hash, redaction}` and drops the content, the entry's leaf stays; CLI `openentity record redact <seq>`; the CLI verifier now checks a placeholder's seq, prev and Redaction signature
 - [x] ERC-8004 alias through the registration file (spec 3.4 second path): `tokenURI(agentId)` read on Base, https (host names only), ipfs (gateway) or data: URI, bounded fetch, a `DID` service naming the root EID; tests with mocked fetch
 - [x] Developer hub at oeis.dev (PRD 5, 11 Phase 3): `site-dev/` (Starlight on the openentity.org design system) with the contributor guide, claim-type and spec-change process, TS and Python SDK docs (exports read from the source), CLI reference (generated from `--help`), conformance suite, test vectors and independent verifier, registry and observer operator guides; served by a third CloudFront distribution (`HubDist`, own ACM cert) on the app Lambda; the redirects Worker no longer serves oeis.dev; `pnpm --filter @openentity/registry local` runs a throwaway local registry that passes conformance
+
+## WS0 shared core (2026-10-27, session 014TG3uUzrQs5PTba7QNnhnU)
+- [x] Issuer helpers in both SDKs (#73): sign attestation, sign revocation, did.json, openentity.json
+- [x] `trust(eid)`, `Identity.load_or_create()`, `adopt(client=...)` in both SDKs (#74); `openentity` 0.4.0 and `@openentity/sdk` 0.4.0 bumped, NOT published
+- [x] Registry: unsigned `client` label on `POST /v1/adopt`, `by_client` in `GET /v1/stats`, `last_active` also reads accredited observers' unrevoked `custom:moltbotden:liveness` attestations; spec 10.2 and 10.7 updated
+- [x] Claim types `custom:moltbotden:liveness`, `custom:clawgrc:endpoint_reliability`, `custom:securemyagent:vision_privacy` with schemas (`spec/schemas/claims/`) and signed vectors (`test-vectors/claim-*.json`)
+- [ ] Release step (separate): publish `openentity` 0.4.0 to PyPI and `@openentity/sdk` 0.4.0 to npm (staged, 2FA approval); the CLI package `openentity` also sends `client: "cli"` now and needs its own bump when released
+- [ ] After the registry deploy: `GET /v1/stats` shows `by_client`; the products (ClawGRC, Secure My Agent, Agent Secret Store) delete their OEIS copies in favor of the 0.4.0 packages (ADR 0003)

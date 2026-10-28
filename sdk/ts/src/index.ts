@@ -128,7 +128,7 @@ export async function generateKeyPair(): Promise<KeyPair> {
   const kp = (await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"])) as CryptoKeyPair;
   return keyPairFromJwk((await crypto.subtle.exportKey("jwk", kp.privateKey)) as JsonWebKey); // cast: Workers types widen the return
 }
-/** Deterministic key pair from a 32-byte seed. For test vectors only. */
+/** Deterministic key pair from a 32-byte seed: test vectors, and `Identity` (sdk/ts/src/node.ts), which keeps the seed. */
 export async function keyPairFromSeed(seed32: Uint8Array): Promise<KeyPair> {
   if (seed32.length !== 32) throw new Error("seed must be 32 bytes");
   return keyPairFromJwk({ kty: "OKP", crv: "Ed25519", d: b64url(seed32), x: b64url(ed25519.getPublicKey(seed32)) });
@@ -677,4 +677,193 @@ export function agentCard(doc: { eid: string; name: string; description: string;
       return { id: slug, name: name.replace(/[-.]/g, " "), description: `Self-declared capability: ${slug}`, tags: ns ? [ns, name] : [name] };
     }),
   };
+}
+
+// ---------------------------------------------------------------- issuer helpers (ADR 0003)
+
+const MAX_TTL_S = 365 * 86400; // spec 8.4
+const ts = (ms: number) => new Date(ms).toISOString().replace(/\.\d{3}Z$/, "Z");
+type IssuerOpts = { issuer?: string; keyId?: string; now?: Date };
+/** A did:web issuer names `<issuer>#<keyId>`, the key `buildDidDocument` publishes; a did:key signer needs neither. */
+const issuerMethod = (kp: KeyPair, o: IssuerOpts) => (o.issuer && o.issuer !== kp.did ? `${o.issuer}#${o.keyId ?? "key-1"}` : undefined);
+
+/** A signed Attestation (spec 8.2). `ttlSeconds` defaults to 90 days and is capped at one year. */
+export async function signAttestation(
+  kp: KeyPair,
+  o: IssuerOpts & { subject: string; claimType: string; claim: object; evidence?: object; confidence?: number; ttlSeconds?: number },
+) {
+  const ttl = o.ttlSeconds ?? 90 * 86400;
+  if (!(ttl > 0 && ttl <= MAX_TTL_S)) throw new Error("ttlSeconds must be positive and at most 1 year");
+  const t = (o.now ?? new Date()).getTime();
+  const created = ts(t);
+  return signObject(
+    { spec: SPEC, type: "Attestation", issuer: o.issuer ?? kp.did, subject: o.subject, claim_type: o.claimType, claim: o.claim,
+      ...(o.evidence ? { evidence: o.evidence } : {}), ...(o.confidence !== undefined ? { confidence: o.confidence } : {}),
+      created, expires: ts(t + ttl * 1000) },
+    kp, created, issuerMethod(kp, o),
+  );
+}
+
+/** A signed Revocation naming the attestation (the object, or its SHA-256 hex) (spec 8.4). */
+export async function signRevocation(kp: KeyPair, attested: object | string, o: IssuerOpts & { reason?: string } = {}) {
+  const created = ts((o.now ?? new Date()).getTime());
+  return signObject(
+    { spec: SPEC, type: "Revocation", issuer: o.issuer ?? kp.did, attestation_sha256: typeof attested === "string" ? attested : await sha256Hex(canonicalize(attested)),
+      ...(o.reason ? { reason: o.reason } : {}), created },
+    kp, created, issuerMethod(kp, o),
+  );
+}
+
+const multikey = (publicKey: Uint8Array) => didKeyFromPublicKey(publicKey).slice("did:key:".length);
+
+/** The body of `https://<domain>/.well-known/did.json` for a did:web issuer. */
+export function buildDidDocument(did: string, publicKey: Uint8Array, keyId = "key-1") {
+  const vm = `${did}#${keyId}`;
+  return {
+    "@context": ["https://www.w3.org/ns/did/v1", "https://w3id.org/security/multikey/v1"],
+    id: did,
+    verificationMethod: [{ id: vm, type: "Multikey", controller: did, publicKeyMultibase: multikey(publicKey) }],
+    assertionMethod: [vm],
+    authentication: [vm],
+  };
+}
+
+/** The unsigned body of `https://<domain>/.well-known/openentity.json`: the domain alias proof (spec 3.4) and, under
+ * `extensions["openentity:observer"]`, an observer's methodology (spec 8.4). */
+export function buildOpenEntityJson(did: string, publicKey: Uint8Array, o: { name: string; description: string; keyId?: string; operator?: object; extensions?: object }) {
+  return {
+    spec: SPEC, eid: did, name: o.name, description: o.description,
+    keys: [{ id: `${did}#${o.keyId ?? "key-1"}`, type: "Multikey", publicKeyMultibase: multikey(publicKey) }],
+    operator: o.operator ?? { kind: "organization", name: o.name, custody: "operator", can_change: [] },
+    ...(o.extensions ? { extensions: o.extensions } : {}),
+  };
+}
+
+// ---------------------------------------------------------------- adopt with a client label
+
+/** The registry's allowlist for the unsigned `client` label on POST /v1/adopt. */
+export const CLIENTS = ["adk", "goose", "langchain", "ui-tars", "cli", "other"] as const;
+export type Client = (typeof CLIENTS)[number];
+
+async function registryJson(url: string, init?: RequestInit): Promise<any> {
+  const r = await fetch(url, init);
+  const text = await r.text();
+  if (!r.ok) throw new Error(`registry ${r.status} for ${url}: ${text.slice(0, 200)}`);
+  return JSON.parse(text);
+}
+
+/** Adopt `kp` on a registry: document, Declaration and the seq-1 declaration entry (spec 5.2, 6.2, 7.3). `client` is not signed. */
+export async function adopt(kp: KeyPair, o: { name: string; description?: string; registry?: string; client?: Client }) {
+  if (o.client && !CLIENTS.includes(o.client)) throw new Error(`client must be one of ${CLIENTS.join(", ")}`);
+  const registry = (o.registry ?? "https://openentity.org").replace(/\/+$/, "");
+  const created = nowSeconds();
+  const document = await signObject(
+    buildDocument({ kp, name: o.name, description: o.description ?? "An Open Entity adopted through the TypeScript SDK.", created,
+      extra: { declaration: { version: DECLARATION_VERSION, sha256: DECLARATION_SHA256, url: `${registry}/v1/entities/${kp.did}/declaration` } } }),
+    kp, created);
+  const declaration = await signObject(buildDeclaration({ eid: kp.did, name: o.name, created }), kp, created);
+  const { stamp_bits } = await registryJson(`${registry}/v1/spec`);
+  const post = async (path: string, body: object) =>
+    registryJson(registry + path, { method: "POST", headers: { "content-type": "application/json", "x-oe-stamp": await mintStamp(stamp_bits, kp.did) }, body: JSON.stringify(body) });
+  const response = await post("/v1/adopt", { document, declaration, ...(o.client ? { client: o.client } : {}) });
+  const at = nowSeconds();
+  const entry = await signObject({ spec: SPEC, type: "RecordEntry", eid: kp.did, seq: 1, prev: null, kind: "declaration", at,
+    payload: { declaration_version: DECLARATION_VERSION, sha256: await sha256Hex(canonicalize(declaration)) } }, kp, at);
+  // The registry never writes entries; on failure the signed entry is returned so the caller can push it later.
+  const recordPushed = await post(`/v1/entities/${kp.did}/record`, { entries: [entry] }).then(() => true, () => false);
+  return { response, did: kp.did, document, declaration, recordEntry: entry, recordPushed };
+}
+
+// ---------------------------------------------------------------- trust(eid): one TrustReport from registry reads (ADR 0002)
+
+const MOLTBOTDEN = "did:web:moltbotden.com", CLAWGRC = "did:web:api.clawgrc.com";
+const SMA = ["did:web:securemyagent.ai", "did:pkh:eip155:8453:0x62fef02E2859726EC1c0B534853Ad2cdd5FdDE1a"];
+const TIER = "trust_tier", POSTURE = "custom:securemyagent:security_posture", VIOLATION = "custom:clawgrc:violation";
+/** claim_type to the issuers whose attestations are read; everything else is ignored. */
+const ACCEPT: Record<string, string[]> = { [TIER]: [MOLTBOTDEN, CLAWGRC], [POSTURE]: SMA, [VIOLATION]: [CLAWGRC] };
+const TRUST_CACHE_MS = 300_000;
+
+export interface TrustReport {
+  eid: string;
+  /** false: a read failed or a signature did not verify. Treat the entity as untrusted. */
+  ok: boolean;
+  error?: string;
+  level?: string;
+  withdrawn: boolean;
+  /** issuer DID to its newest live tier (0 to 4) */
+  trustTier: Record<string, number>;
+  /** claim of the newest live custom:securemyagent:security_posture */
+  securityPosture: Record<string, any> | null;
+  /** live custom:clawgrc:violation */
+  violations: { issuer: string; severity: string; policy: string; observed_at: string; sha256: string }[];
+  /** verified revocations of the accepted attestations */
+  revocations: { sha256: string; claim_type: string; issuer: string; reason?: string; at: string }[];
+}
+type FetchJson = (url: string) => Promise<any>;
+const trustCache = new Map<string, { at: number; report: TrustReport }>();
+export const clearTrustCache = () => trustCache.clear();
+
+/** did:web through /.well-known/did.json (or <path>/did.json); everything else offline. */
+export function didWebResolver(fetchJson: FetchJson = registryJson): Resolver {
+  return async (did) => {
+    if (!did.startsWith("did:web:")) return defaultResolver(did);
+    const [host, ...path] = did.slice(8).split(":").map(decodeURIComponent);
+    const doc = await fetchJson(`https://${host}/${path.length ? path.join("/") : ".well-known"}/did.json`);
+    if (doc.id !== did) throw new Error(`${did} document names ${doc.id}`);
+    const ed25519: Uint8Array[] = [];
+    for (const vm of doc.verificationMethod ?? []) {
+      try {
+        ed25519.push(publicKeyFromDidKey("did:key:" + vm.publicKeyMultibase));
+      } catch {
+        /* not an Ed25519 Multikey */
+      }
+    }
+    return { ed25519 };
+  };
+}
+
+/**
+ * One TrustReport from `GET /v1/entities/{eid}` and `/attestations` only. Every attestation and revocation from the accepted
+ * issuers is verified locally against the issuer's key; any failure returns an untrusted report. Cached for 5 minutes.
+ */
+export async function trust(eid: string, o: { registry?: string; now?: Date; fetchJson?: FetchJson; resolver?: Resolver } = {}): Promise<TrustReport> {
+  const registry = (o.registry ?? "https://openentity.org").replace(/\/+$/, "");
+  const key = `${registry} ${eid}`, hit = trustCache.get(key);
+  if (hit && Date.now() - hit.at < TRUST_CACHE_MS) return hit.report;
+  try {
+    const report = await readTrust(eid, registry, (o.now ?? new Date()).getTime(), o.fetchJson ?? registryJson, o.resolver ?? didWebResolver(o.fetchJson));
+    trustCache.set(key, { at: Date.now(), report });
+    return report;
+  } catch (e) { // fail closed on anything: network, registry, schema, signature
+    return { eid, ok: false, error: (e as Error).message, withdrawn: false, trustTier: {}, securityPosture: null, violations: [], revocations: [] };
+  }
+}
+
+async function readTrust(eid: string, base: string, now: number, get: FetchJson, resolver: Resolver): Promise<TrustReport> {
+  if (!eid.startsWith("did:")) throw new Error("eid must be a DID");
+  const ent = await get(`${base}/v1/entities/${eid}`);
+  if (ent.eid !== eid) throw new Error(`registry answered for ${ent.eid}`);
+  const rows: any[] = (await get(`${base}/v1/entities/${eid}/attestations`)).attestations;
+  const report: TrustReport = { eid, ok: true, level: ent.level, withdrawn: !!ent.withdrawn, trustTier: {}, securityPosture: null, violations: [], revocations: [] };
+  for (const r of [...rows].sort((x, y) => (y.attestation.created > x.attestation.created ? 1 : -1))) {
+    const a = r.attestation, ct: string = a.claim_type;
+    if (!(ACCEPT[ct] ?? []).some((i) => i.toLowerCase() === String(a.issuer).toLowerCase())) continue;
+    if (r.inherited_from && ct !== VIOLATION) continue; // a rotation does not carry positive claims; a strike follows the entity
+    const sha: string = r.sha256;
+    if (a.subject !== (r.inherited_from ?? eid) || (await sha256Hex(canonicalize(a))) !== sha) throw new Error(`attestation ${sha} does not match what the registry served`);
+    const v = await verifyObject(a, resolver);
+    if (!v.ok || v.signer !== a.issuer) throw new Error(`attestation ${sha}: ${v.error ?? `signed by ${v.signer}`}`);
+    const rv = r.revocation;
+    if (rv) {
+      const rvv = await verifyObject(rv, resolver);
+      if (!rvv.ok || rvv.signer !== a.issuer || rv.attestation_sha256 !== sha) throw new Error(`revocation of ${sha}: ${rvv.error ?? `signed by ${rvv.signer}`}`);
+      report.revocations.push({ sha256: sha, claim_type: ct, issuer: a.issuer, reason: rv.reason, at: rv.created });
+    } else if (r.revoked_at) throw new Error(`registry reports a revocation of ${sha} it does not carry`);
+    if (rv || Date.parse(a.expires) <= now) continue;
+    const c = a.claim;
+    if (ct === TIER) report.trustTier[a.issuer] ??= c.tier;
+    else if (ct === POSTURE) report.securityPosture ??= c;
+    else report.violations.push({ issuer: a.issuer, severity: c.severity, policy: c.policy, observed_at: c.observed_at, sha256: sha });
+  }
+  return report;
 }

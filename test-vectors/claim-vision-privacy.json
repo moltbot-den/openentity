@@ -1,0 +1,31 @@
+{
+  "description": "custom:securemyagent:vision_privacy attestation by the second throwaway key about the entity (spec/claim-types.md)",
+  "object": {
+    "spec": "openentity/1.0",
+    "type": "Attestation",
+    "issuer": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+    "subject": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+    "claim_type": "custom:securemyagent:vision_privacy",
+    "claim": {
+      "mode": "local",
+      "model_endpoint_class": "localhost",
+      "redaction": [
+        "faces",
+        "text"
+      ]
+    },
+    "created": "2026-10-24T19:05:00Z",
+    "expires": "2026-11-23T19:05:00Z",
+    "proof": {
+      "type": "DataIntegrityProof",
+      "cryptosuite": "eddsa-jcs-2022",
+      "created": "2026-10-24T19:05:00Z",
+      "verificationMethod": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw#z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+      "proofPurpose": "assertionMethod",
+      "proofValue": "z55kjBgiHFzHTCiBMjBensWhQG7dpY8XjgFAhH9hgU8L6r5PBxhAUr9VWiBWMbGt5svwsk5au6sJ5YeopXnHqjmv2"
+    }
+  },
+  "canonical": "{\"claim\":{\"mode\":\"local\",\"model_endpoint_class\":\"localhost\",\"redaction\":[\"faces\",\"text\"]},\"claim_type\":\"custom:securemyagent:vision_privacy\",\"created\":\"2026-10-24T19:05:00Z\",\"expires\":\"2026-11-23T19:05:00Z\",\"issuer\":\"did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw\",\"proof\":{\"created\":\"2026-10-24T19:05:00Z\",\"cryptosuite\":\"eddsa-jcs-2022\",\"proofPurpose\":\"assertionMethod\",\"proofValue\":\"z55kjBgiHFzHTCiBMjBensWhQG7dpY8XjgFAhH9hgU8L6r5PBxhAUr9VWiBWMbGt5svwsk5au6sJ5YeopXnHqjmv2\",\"type\":\"DataIntegrityProof\",\"verificationMethod\":\"did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw#z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw\"},\"spec\":\"openentity/1.0\",\"subject\":\"did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7\",\"type\":\"Attestation\"}",
+  "sha256": "69b912118c43caeeedf639dfc49a08813404529ca3d1b47052139b5d75f26b51",
+  "unsigned_canonical": "{\"claim\":{\"mode\":\"local\",\"model_endpoint_class\":\"localhost\",\"redaction\":[\"faces\",\"text\"]},\"claim_type\":\"custom:securemyagent:vision_privacy\",\"created\":\"2026-10-24T19:05:00Z\",\"expires\":\"2026-11-23T19:05:00Z\",\"issuer\":\"did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw\",\"spec\":\"openentity/1.0\",\"subject\":\"did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7\",\"type\":\"Attestation\"}"
+}

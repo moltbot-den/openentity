@@ -155,7 +155,7 @@ class _Stub(BaseHTTPRequestHandler):
             return self._send(200, {"accepted": 1})
         doc, decl = body["document"], body["declaration"]
         stamp = self.headers["x-oe-stamp"]
-        _Stub.seen = {"stamp": stamp, "doc": doc, "decl": decl}
+        _Stub.seen = {"stamp": stamp, "doc": doc, "decl": decl, "client": body.get("client")}
         assert core.check_stamp(stamp, 8, doc["eid"]) is None
         assert core.verify_object(doc)[0] and core.verify_object(decl)[0]
         assert decl["text_sha256"] == core.DECLARATION_SHA256 and doc["eid"] == decl["eid"]
@@ -168,13 +168,16 @@ def test_adopt_and_cli(tmp_path, monkeypatch, capsys):
     url = f"http://127.0.0.1:{srv.server_port}"
     try:
         from openentity import adopt
-        res = adopt("Tester", registry=url, seed=SEED)
+        res = adopt("Tester", registry=url, seed=SEED, client="adk")
+        assert _Stub.seen["client"] == "adk"  # the unsigned label travels beside the signed objects
+        with pytest.raises(ValueError):
+            adopt("Tester", registry=url, seed=SEED, client="nope")
         assert res["eid"] == res["did"] == core.KeyPair(SEED).did
         assert res["record_pushed"] and _Stub.seen["entry"]["eid"] == res["eid"]
         monkeypatch.setenv("OPENENTITY_HOME", str(tmp_path))
         assert cli.main(["adopt", "--name", "T2", "--agree", "--registry", url, "--json"]) == 0
         out = json.loads(capsys.readouterr().out)
-        assert "seed_hex" not in out and Path(out["key_file"]).exists()
+        assert "seed_hex" not in out and Path(out["key_file"]).exists() and _Stub.seen["client"] == "cli"
         assert cli.main(["adopt", "--name", "T3", "--registry", url]) == 1  # no --agree, nothing signed
     finally:
         srv.shutdown()
@@ -183,7 +186,7 @@ def test_adopt_and_cli(tmp_path, monkeypatch, capsys):
 def test_cli_version(capsys):
     with pytest.raises(SystemExit) as e:
         cli.main(["--version"])
-    assert e.value.code == 0 and "0.3.1" in capsys.readouterr().out
+    assert e.value.code == 0 and "0.4.0" in capsys.readouterr().out
 
 
 # ---- shared vectors, checked with the independent verifier's own logic ----
