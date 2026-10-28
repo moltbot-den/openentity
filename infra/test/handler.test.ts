@@ -2,8 +2,7 @@ import { expect, test } from "vitest";
 import { hubRoute, sameSecret, withDeadline } from "../lambda/handler.ts";
 
 test("a slow request answers as JSON 503 before the Lambda limit, never as CloudFront's HTML", async () => {
-  const slow = new Promise<Response>((r) => setTimeout(() => r(new Response("late")), 200));
-  const res = await withDeadline(slow, 10);
+  const res = await withDeadline(new Promise<Response>(() => {}), 10); // never answers: no clock race with the deadline
   expect(res.status).toBe(503);
   expect(res.headers.get("content-type")).toMatch(/application\/json/);
   expect((await res.json()).error).toBe("timeout");

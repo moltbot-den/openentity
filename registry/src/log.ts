@@ -20,8 +20,8 @@ export type Stmt = [sql: string, params: unknown[]];
  * Only one sequencer runs at a time; a write that finds it busy polls until its leaves have an index (the busy
  * sequencer, or the next one, takes them). Returns the index of this write's first leaf.
  */
-export async function sequenced(db: Db, leaves: Leaf[], stmts: Stmt[], sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))): Promise<number> {
-  const wid = await park(db, leaves, stmts);
+export async function sequenced(db: Db, leaves: Leaf[], stmts: Stmt[], sleep = (ms: number) => new Promise((r) => setTimeout(r, ms)), final?: string): Promise<number> {
+  const wid = await park(db, leaves, stmts, final);
   for (const end = Date.now() + 15_000; Date.now() < end;) { // a sequencer holds the lock for tens of milliseconds
     const i = await sequence(db, wid);
     if (i !== undefined) return i;
@@ -31,19 +31,24 @@ export async function sequenced(db: Db, leaves: Leaf[], stmts: Stmt[], sleep = (
 }
 type Leaf = { leaf: object; leaf_hash: string };
 
-/** Step 1 alone; returns the write id. */
-export async function park(db: Db, leaves: Leaf[], stmts: Stmt[]): Promise<number> {
+/** Statements as CTEs s0, s1, ... (a later one may read an earlier one by name); their params are appended to `params`, `$i` becomes `wid`'s placeholder. */
+export function chain(stmts: Stmt[], params: unknown[], wid = 0): string[] {
+  return stmts.map(([sql, ps], k) => {
+    const off = params.length;
+    params.push(...ps);
+    return `s${k} AS (${sql.replace(/\$(\d+)/g, (_, d) => `$${Number(d) + off}`).replaceAll("$i", `(${-wid * 1024})`)})`;
+  });
+}
+
+/** Step 1 alone; returns the write id. `final` replaces the closing `SELECT 1` (e.g. `SELECT 1 FROM s1` so a guard CTE runs and can abort the whole statement). */
+export async function park(db: Db, leaves: Leaf[], stmts: Stmt[], final = "SELECT 1"): Promise<number> {
   const wid = Math.floor(Math.random() * 2 ** 40) + 1; // 1024 leaves per write max (batch limit is 100); 2^40 random ids make a collision between writes in flight negligible
   const params: unknown[] = [JSON.stringify(leaves.map((l, o) => ({ ...l.leaf, leaf_hash: l.leaf_hash, o, wid })))];
   const ctes = [
     "p AS (INSERT INTO log_pending (wid, o, leaf_hash, type, eid, object_sha256, received_at) SELECT x.wid, x.o, x.leaf_hash, x.type, x.eid, x.object_sha256, x.received_at FROM json_to_recordset(CAST($1 AS json)) AS x(wid bigint, o int, leaf_hash text, type text, eid text, object_sha256 text, received_at text) ORDER BY x.o)",
-    ...stmts.map(([sql, ps], k) => {
-      const off = params.length;
-      params.push(...ps);
-      return `s${k} AS (${sql.replace(/\$(\d+)/g, (_, d) => `$${Number(d) + off}`).replaceAll("$i", `(${-wid * 1024})`)})`;
-    }),
+    ...chain(stmts, params, wid),
   ];
-  await db.run(`WITH ${ctes.join(",\n")}\nSELECT 1`, params);
+  await db.run(`WITH ${ctes.join(",\n")}\n${final}`, params);
   return wid;
 }
 

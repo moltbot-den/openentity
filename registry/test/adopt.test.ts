@@ -113,12 +113,16 @@ describe("stamp (spec 10.4)", () => {
     // 8 allowed, the 9th refused: an IP's counter is split over 8 rows, so this passes only if the shards are summed.
     const e = { ...E, IP_DAILY_LIMIT: "8" }, ip = { "cloudfront-viewer-address": `203.0.113.${Math.floor(Math.random() * 250)}:443` };
     const statuses: unknown[] = [];
+    let last = "";
     for (let i = 0; i < 9; i++) {
       const kp = await generateKeyPair();
+      last = kp.did;
       const r = await call("POST", "/adopt", await signed(kp), { ...(await stamp(kp.did)), ...ip }, e);
       statuses.push(r.body.error ?? r.status);
     }
     expect(statuses).toEqual([...Array(8).fill(201), "rate_limited"]);
+    // The limit runs inside the adopt statement: a refused adopt lists nothing.
+    expect(await E.db.first("SELECT 1 FROM entities WHERE eid = $1", [last])).toBeNull();
   });
 
   it("caps writes per IP per minute, keyed by the CloudFront viewer address", async () => {

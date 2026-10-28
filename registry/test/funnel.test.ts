@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { generateKeyPair } from "../src/sdk.ts";
+import { scheduled } from "../src/index.ts";
 import { E, call, signed, stamp } from "./helpers.ts";
 
 const ip = (n: number) => ({ "x-forwarded-for": `198.51.100.${n}` });
@@ -50,5 +51,24 @@ describe("time-to-adopt funnel", () => {
     // Each start was set back by a fixed amount, then ran for as long as the test took: a slow runner adds seconds.
     expect(s.median_seconds).toBeGreaterThanOrEqual(35);
     expect(s.median_seconds).toBeLessThan(45);
+  });
+
+  it("caps starts per address per minute and, over all addresses, per hour, and the sweep drops the counters", async () => {
+    const codes: number[] = [];
+    for (let i = 0; i < 12; i++) codes.push((await call("POST", "/funnel/start", undefined, ip(70))).status);
+    expect(codes).toEqual([...Array(10).fill(204), 429, 429]);
+    expect((await call("POST", "/funnel/start", undefined, ip(71))).status).toBe(204); // another address is unaffected
+
+    // The hour cap: seed the counter at its limit and no new start row appears.
+    const hour = new Date().toISOString().slice(0, 13);
+    await E.db.run("UPDATE rate_events SET count = 10000 WHERE key = 'fsg' AND window_start = $1", [hour]);
+    const before = (await E.db.first<{ n: number }>("SELECT count(*) AS n FROM rate_events WHERE window_start = 'fs'"))!.n;
+    expect((await call("POST", "/funnel/start", undefined, ip(72))).status).toBe(429);
+    expect((await E.db.first<{ n: number }>("SELECT count(*) AS n FROM rate_events WHERE window_start = 'fs'"))!.n).toBe(before);
+    await E.db.run("DELETE FROM rate_events WHERE key = 'fsg'");
+
+    await E.db.run("UPDATE rate_events SET window_start = '2020-01-01T00:00' WHERE key LIKE 'fsm:%'");
+    await scheduled(E);
+    expect(await E.db.first("SELECT 1 FROM rate_events WHERE key LIKE 'fsm:%'")).toBeNull();
   });
 });
