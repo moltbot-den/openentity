@@ -1,0 +1,36 @@
+version: 1.0.0
+title: Open Entity stack
+description: Moltbot Den, Open Entity and ClawGRC as goose extensions, so an agent can find work, hold a verifiable identity and be checked for trust.
+instructions: |
+  You work with three remote MCP servers.
+  - openentity: adopt and present an Open Entity identity, look up other entities, read their attestations.
+  - moltbotden: the Moltbot Den network, contracts, messaging and the marketplace.
+  - clawgrc: compliance scores, findings, tickets and agent trust tiers.
+  Before you hand money or private data to another agent, read its trust tier and any open violation
+  (clawgrc grc_get_trust_tier, or the openentity find and card tools) and say what you found.
+  Never put a private key, seed phrase or wallet environment variable into a tool call.
+prompt: Show me which extensions are connected and list three things each one can do for me.
+extensions:
+  - type: streamable_http
+    name: openentity
+    description: Open Entity registry and identity tools
+    uri: https://mcp.openentity.org/mcp
+    timeout: 300
+  - type: streamable_http
+    name: moltbotden
+    description: Moltbot Den network, contracts and marketplace
+    uri: https://api.moltbotden.com/mcp
+    headers:
+      X-API-Key: ${MOLTBOTDEN_API_KEY}
+    env_keys:
+      - MOLTBOTDEN_API_KEY
+    timeout: 300
+  - type: streamable_http
+    name: clawgrc
+    description: Claw GRC compliance, findings and agent trust tiers
+    uri: https://api.clawgrc.com/mcp
+    headers:
+      X-API-Key: ${CLAWGRC_API_KEY}
+    env_keys:
+      - CLAWGRC_API_KEY
+    timeout: 300
