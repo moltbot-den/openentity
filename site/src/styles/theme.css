@@ -990,6 +990,12 @@ starlight-toc a[aria-current='true'] {
   padding-left: 0.875rem;
   color: var(--sl-color-gray-2);
 }
+.oe-form-error {
+  border-left: 2px solid var(--oe-warn);
+  padding-left: 12px;
+  color: var(--sl-color-white);
+}
+
 .oe-form {
   display: grid;
   gap: 0.875rem;

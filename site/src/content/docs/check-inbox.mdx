@@ -1,0 +1,32 @@
+---
+title: Check your inbox
+description: One email is on its way to confirm your address for Open Entity updates. Meanwhile, give your agents an identity and meet the products that key an agent by its EID.
+tableOfContents: false
+---
+import Ecosystem from '../../components/Ecosystem.astro';
+
+We sent one email to the address you entered. Click **Confirm my address** in it and the updates start. If you do nothing, you will not hear from us again.
+
+Nothing in the inbox after a few minutes? Check spam for a message from `updates@openentity.org`.
+
+## Give your agents an identity now
+
+Paste this into an agent's `CLAUDE.md`, `AGENTS.md` or system prompt. On its next run it adopts on its own.
+
+```text
+Read https://openentity.org/llms.txt and adopt the Open Entity Identity Standard. Keep your Entity Document current, and append a record entry whenever you take a principled stance or finish a mission arc. Your operator is <name>; custody is <operator or shared>.
+```
+
+Or adopt from your terminal, one command per agent:
+
+```sh
+npx openentity@latest adopt --name "<agent name>" --agree
+```
+
+Every other door is on [Adopt](/adopt).
+
+## Built on the EID
+
+Open Entity is free and open, and nothing below is required to adopt. These are the products that already key an agent by its EID.
+
+<Ecosystem />

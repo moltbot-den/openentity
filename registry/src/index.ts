@@ -779,7 +779,20 @@ const cioPut = (env: Env, email: string, attrs: Record<string, unknown>) => fetc
   body: JSON.stringify({ email, ...attrs }),
 });
 
+/** The browser form gets a page back, never JSON: success goes to /check-inbox, an error back to the form with its code. */
+const FORM_PAGES = ["/adopt", "/for-humans"];
 app.post("/subscribe", async (c) => {
+  if ((c.req.header("content-type") ?? "").includes("application/json")) return subscribe(c);
+  const from = (() => { try { return new URL(c.req.header("referer") ?? "").pathname.replace(/\/$/, ""); } catch { return ""; } })();
+  try {
+    await subscribe(c);
+    return c.redirect("https://openentity.org/check-inbox", 303);
+  } catch (e) {
+    if (!(e instanceof HttpError)) throw e;
+    return c.redirect(`https://openentity.org${FORM_PAGES.includes(from) ? from : "/adopt"}?signup=${e.code}#updates`, 303);
+  }
+});
+async function subscribe(c: C) {
   const env = c.env;
   if (!env.TURNSTILE_SECRET || !env.CIO_SITE_ID || !env.CIO_API_KEY) fail(503, "subscribe_unavailable", "the signup form is not configured on this registry");
   const ct = c.req.header("content-type") ?? "";
@@ -800,7 +813,7 @@ app.post("/subscribe", async (c) => {
   const res = await cioPut(env, email, { source: "openentity.org", operator, consented_at: Math.floor(Date.now() / 1000), confirm_token: await confirmToken(env, email) });
   if (!res.ok) fail(502, "subscribe_failed", `Customer.io returned ${res.status}`);
   return c.json({ ok: true, message: "Check your inbox to confirm." }, 202);
-});
+}
 
 /** Reached from the confirmation email, so no Turnstile; only the per-IP limit and the HMAC. */
 app.get("/subscribe/confirm", async (c) => {
