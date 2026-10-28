@@ -678,3 +678,63 @@ export function agentCard(doc: { eid: string; name: string; description: string;
     }),
   };
 }
+
+// ---------------------------------------------------------------- issuer helpers (ADR 0003)
+
+const MAX_TTL_S = 365 * 86400; // spec 8.4
+const ts = (ms: number) => new Date(ms).toISOString().replace(/\.\d{3}Z$/, "Z");
+type IssuerOpts = { issuer?: string; keyId?: string; now?: Date };
+/** A did:web issuer names `<issuer>#<keyId>`, the key `buildDidDocument` publishes; a did:key signer needs neither. */
+const issuerMethod = (kp: KeyPair, o: IssuerOpts) => (o.issuer && o.issuer !== kp.did ? `${o.issuer}#${o.keyId ?? "key-1"}` : undefined);
+
+/** A signed Attestation (spec 8.2). `ttlSeconds` defaults to 90 days and is capped at one year. */
+export async function signAttestation(
+  kp: KeyPair,
+  o: IssuerOpts & { subject: string; claimType: string; claim: object; evidence?: object; confidence?: number; ttlSeconds?: number },
+) {
+  const ttl = o.ttlSeconds ?? 90 * 86400;
+  if (!(ttl > 0 && ttl <= MAX_TTL_S)) throw new Error("ttlSeconds must be positive and at most 1 year");
+  const t = (o.now ?? new Date()).getTime();
+  const created = ts(t);
+  return signObject(
+    { spec: SPEC, type: "Attestation", issuer: o.issuer ?? kp.did, subject: o.subject, claim_type: o.claimType, claim: o.claim,
+      ...(o.evidence ? { evidence: o.evidence } : {}), ...(o.confidence !== undefined ? { confidence: o.confidence } : {}),
+      created, expires: ts(t + ttl * 1000) },
+    kp, created, issuerMethod(kp, o),
+  );
+}
+
+/** A signed Revocation naming the attestation (the object, or its SHA-256 hex) (spec 8.4). */
+export async function signRevocation(kp: KeyPair, attested: object | string, o: IssuerOpts & { reason?: string } = {}) {
+  const created = ts((o.now ?? new Date()).getTime());
+  return signObject(
+    { spec: SPEC, type: "Revocation", issuer: o.issuer ?? kp.did, attestation_sha256: typeof attested === "string" ? attested : await sha256Hex(canonicalize(attested)),
+      ...(o.reason ? { reason: o.reason } : {}), created },
+    kp, created, issuerMethod(kp, o),
+  );
+}
+
+const multikey = (publicKey: Uint8Array) => didKeyFromPublicKey(publicKey).slice("did:key:".length);
+
+/** The body of `https://<domain>/.well-known/did.json` for a did:web issuer. */
+export function buildDidDocument(did: string, publicKey: Uint8Array, keyId = "key-1") {
+  const vm = `${did}#${keyId}`;
+  return {
+    "@context": ["https://www.w3.org/ns/did/v1", "https://w3id.org/security/multikey/v1"],
+    id: did,
+    verificationMethod: [{ id: vm, type: "Multikey", controller: did, publicKeyMultibase: multikey(publicKey) }],
+    assertionMethod: [vm],
+    authentication: [vm],
+  };
+}
+
+/** The unsigned body of `https://<domain>/.well-known/openentity.json`: the domain alias proof (spec 3.4) and, under
+ * `extensions["openentity:observer"]`, an observer's methodology (spec 8.4). */
+export function buildOpenEntityJson(did: string, publicKey: Uint8Array, o: { name: string; description: string; keyId?: string; operator?: object; extensions?: object }) {
+  return {
+    spec: SPEC, eid: did, name: o.name, description: o.description,
+    keys: [{ id: `${did}#${o.keyId ?? "key-1"}`, type: "Multikey", publicKeyMultibase: multikey(publicKey) }],
+    operator: o.operator ?? { kind: "organization", name: o.name, custody: "operator", can_change: [] },
+    ...(o.extensions ? { extensions: o.extensions } : {}),
+  };
+}
