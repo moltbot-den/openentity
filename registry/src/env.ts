@@ -14,6 +14,8 @@ export interface Env {
   TURNSTILE_SECRET?: string;
   CIO_SITE_ID?: string;
   CIO_API_KEY?: string;
+  CIO_APP_API_KEY?: string; // App API bearer key: triggers the weekly digest broadcast
+  CIO_BROADCAST_ID?: string; // the API-triggered broadcast "Weekly digest"
   IP_DAILY_LIMIT?: string; // overrides LIMITS.writes_per_ip_per_day (load test)
   WRITE_PER_MINUTE?: string; // overrides LIMITS.writes_per_ip_per_minute (load test)
 }
