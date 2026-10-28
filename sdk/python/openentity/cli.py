@@ -2,6 +2,7 @@ import argparse
 import json
 import os
 import pathlib
+import re
 import sys
 import urllib.error
 
@@ -121,7 +122,7 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("--audience", required=True)
     p.add_argument("--nonce", required=True)
     p.add_argument("--no-attestations", action="store_true")
-    v = add("verify", "verify an EID, URL or file: signatures, signer, Declaration hash, record chain", key=False)
+    v = add("verify", "verify an EID, URL or file: signatures, signer, Declaration hash, record chain, log checkpoint and inclusion", key=False)
     v.add_argument("target")
     w = add("withdraw", "withdraw the Declaration (cannot be undone)")
     w.add_argument("--force", action="store_true")
@@ -220,7 +221,14 @@ def _chain_checks(entries: list[dict], eid: str) -> list[dict]:
             why.append("seq breaks the sequence")
         if e.get("prev") != ((prev.get("hash") if prev.get("redacted") else core.canonical_hash(prev).hex()) if prev else None):
             why.append("prev hash breaks the chain")
-        if not e.get("redacted"):
+        if e.get("redacted"):
+            if not re.fullmatch(r"[0-9a-f]{64}", e.get("hash") or ""):
+                why.append("placeholder hash is not SHA-256 hex")
+            if r := e.get("redaction"):  # the entity's signed request for this entry
+                ok, who = core.verify_object(r)
+                if not (ok and who == eid and r.get("eid") == eid and r.get("seq") == e["seq"] and r.get("entry_sha256") == e.get("hash")):
+                    why.append("redaction is not the entity's signed request for this entry")
+        else:
             if e.get("eid") != eid:
                 why.append("eid mismatch")
             ok, err = core.verify_object(e)
@@ -232,7 +240,27 @@ def _chain_checks(entries: list[dict], eid: str) -> list[dict]:
     return bad + [{"name": f"record chain ({len(entries)} entries)", "ok": not bad}]
 
 
-# ponytail: no checkpoint or log-inclusion check here; `npx openentity verify <eid>` does those.
+def _log_checks(reg: str, index: int | None) -> list[dict]:
+    """Checkpoint note signature against the registry key from /v1/spec, then the RFC 9162 inclusion proof of `index`."""
+    if index is None:
+        return [{"name": "log inclusion", "ok": False, "detail": "registry did not report a log index"}]
+    try:
+        r = _get(reg, "/v1/spec").get("registry") or {}
+        sth = _get(reg, "/v1/log/sth")
+        if not r.get("publicKeyMultibase"):
+            return [{"name": "checkpoint", "ok": False, "detail": "registry publishes no checkpoint key in /v1/spec"}]
+        ok = core.verify_note(sth["signature"], r.get("log_origin", "openentity.org/log"), core.b58decode(r["publicKeyMultibase"][1:])[-32:])
+        out = [{"name": "checkpoint", "ok": ok, "detail": f"checkpoint signature valid, tree size {sth['tree_size']}" if ok else "checkpoint signature INVALID"}]
+        size = sth["tree_size"]
+        leaf = _get(reg, f"/v1/log/entries?start={index}&end={index + 1}")["entries"][0]["leaf"]
+        p = _get(reg, f"/v1/log/proof/{index}?tree_size={size}")
+        lh = core.leaf_hash(core.canonicalize(leaf).encode())
+        good = ok and lh.hex() == p["leaf_hash"] and core.verify_inclusion(index, size, lh, [bytes.fromhex(h) for h in p["proof"]], bytes.fromhex(sth["root_hash"]))
+        return out + [{"name": "log inclusion", "ok": good, "detail": f"leaf {index} included in tree of {size}" if good else f"inclusion proof for leaf {index} FAILED"}]
+    except (client.RegistryError, urllib.error.URLError, KeyError, IndexError, ValueError, TypeError) as e:
+        return [{"name": "log inclusion", "ok": False, "detail": f"{type(e).__name__}: {e}"}]
+
+
 def _verify(args):
     t, reg = args.target, _registry(args)
     if t.startswith(("did:", "eid:")):
@@ -244,6 +272,7 @@ def _verify(args):
         while page := _get(reg, f"/v1/entities/{eid}/record?after={entries[-1]['seq'] if entries else 0}")["entries"]:
             entries += page
         checks += _chain_checks(entries, eid)
+        checks += _log_checks(reg, ent.get("log_index", ent.get("declaration_log_index")))
     elif t.startswith(("http://", "https://")):
         checks = _checks_of(client._request(t))
     else:
