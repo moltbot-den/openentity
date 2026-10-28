@@ -82,7 +82,8 @@ export class OpenEntityStack extends Stack {
       // The load copy records per-statement waits (Performance Insights, free 7-day tier) for throughput work.
       writer: rds.ClusterInstance.serverlessV2("writer", load ? { enablePerformanceInsights: true } : {}),
       serverlessV2MinCapacity: 0.5,
-      serverlessV2MaxCapacity: 4,
+      // 4 ACU (2 vCPU) pegged at 100% CPU under 100 adopts/s (p95 4 s, 66 rejected); 8 ACU peaks near 6 and holds p95 under 500 ms. Idle cost is unchanged (min 0.5).
+      serverlessV2MaxCapacity: 8,
       enableDataApi: true,
       defaultDatabaseName: "openentity",
       vpc,
@@ -147,7 +148,7 @@ export class OpenEntityStack extends Stack {
         DB_NAME: "openentity",
         LOG_BUCKET: logBucket.bucketName,
         ...(snapshotBucket ? { SNAPSHOT_BUCKET: snapshotBucket.bucketName } : {}),
-        ...(load ? { IP_DAILY_LIMIT: "10000000", WRITE_PER_MINUTE: "10000000" } : {}),
+        ...(load ? { IP_DAILY_LIMIT: "10000000", WRITE_PER_MINUTE: "10000000", LOAD_TIMING: "1" } : {}),
         REGISTRY_HOST: DOMAIN,
         // The load copy measures registry throughput; minting 6,000 stamps at 20 bits outlives their 10-minute window.
         STAMP_BITS: load ? "12" : "20",
