@@ -11,12 +11,18 @@ CTX = types.SimpleNamespace(app_name="My App")
 
 
 def plugin(den, ident, **kw):
-    return MoltbotDenLiveness(http=den.client, identity=ident, invite_code="INV-AAAA-BBBB", sleep=kw.pop("sleep", Clock()), **kw)
+    clock = kw.pop("sleep", Clock())
+    p = MoltbotDenLiveness(http=den.client, identity=ident, invite_code="INV-AAAA-BBBB", sleep=clock, **kw)
+    p.clock = clock
+    return p
 
 
 async def settle(p):
-    for _ in range(50):
-        await asyncio.sleep(0)
+    """Wait until the loop has reached its last scheduled sleep: every step before it is done, however slow the machine."""
+    async def reached():
+        while len(p.clock.delays) < p.clock.limit:
+            await asyncio.sleep(0.005)
+    await asyncio.wait_for(reached(), 5)
     return p
 
 

@@ -1,4 +1,6 @@
 """The plugins inside a real ADK App and InMemoryRunner, with a scripted model."""
+import asyncio
+
 from google.adk.agents import LlmAgent
 from google.adk.apps import App
 from google.adk.models.base_llm import BaseLlm
@@ -31,13 +33,15 @@ class Scripted(BaseLlm):
             yield LlmResponse(content=types.Content(role="model", parts=[types.Part(function_call=types.FunctionCall(name="transfer_funds", args={"amount": 5}))]))
 
 
-async def run(plugins):
+async def run(plugins, wait=None):
     app = App(name="demo", root_agent=LlmAgent(name="a", model=Scripted(), tools=[transfer_funds]), plugins=plugins)
     runner = InMemoryRunner(app=app)
     s = await runner.session_service.create_session(app_name="demo", user_id="u")
     out = []
     async for e in runner.run_async(user_id="u", session_id=s.id, new_message=types.Content(role="user", parts=[types.Part(text="go")])):
         out.append(e)
+    if wait:
+        await wait()
     await runner.close()
     return out
 
@@ -60,7 +64,12 @@ async def test_gate_lets_a_trusted_agent_through():
 
 
 async def test_liveness_starts_on_first_run_and_runner_close_cancels_it(den, ident, registry):
-    p = MoltbotDenLiveness(http=den.client, identity=ident, invite_code="INV-AAAA-BBBB", sleep=Clock(limit=1))
-    await run([p])
+    clock = Clock(limit=1)
+    p = MoltbotDenLiveness(http=den.client, identity=ident, invite_code="INV-AAAA-BBBB", sleep=clock)
+    p.clock_done = lambda: len(clock.delays) >= 1
+    async def reached():
+        while not p.clock_done():
+            await asyncio.sleep(0.005)
+    await run([p], wait=lambda: asyncio.wait_for(reached(), 5))
     assert "/heartbeat/sovereign" in den.paths()
     assert p._task is None  # Runner.close() called plugin.close()
