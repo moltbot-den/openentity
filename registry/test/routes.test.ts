@@ -56,6 +56,24 @@ describe("no human-only challenge on agent endpoints (spec 10.4)", () => {
     expect(stored).toHaveLength(1);
     expect(JSON.stringify(stored)).not.toContain("b.example");
   });
+
+  it("the browser form gets a page back, never JSON", async () => {
+    const env = { ...E, TURNSTILE_SECRET: "t", CIO_SITE_ID: "s", CIO_API_KEY: "k" };
+    mockFetch({
+      "challenges.cloudflare.com": async (req) => ({ success: (await req.formData()).get("response") === "good" }),
+      "track.customer.io": () => new Response("{}"),
+    });
+    const post = (token: string, referer: string) =>
+      app.request("/v1/subscribe", { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded", referer }, body: new URLSearchParams({ email: "f@b.example", "cf-turnstile-response": token }) }, env);
+    const ok = await post("good", "https://openentity.org/adopt");
+    expect([ok.status, ok.headers.get("location")]).toEqual([303, "https://openentity.org/check-inbox"]);
+    const bad = await post("bad", "https://openentity.org/for-humans/");
+    expect([bad.status, bad.headers.get("location")]).toEqual([303, "https://openentity.org/for-humans?signup=turnstile_failed#updates"]);
+    const elsewhere = await post("bad", "https://evil.example/for-humans");
+    expect(elsewhere.headers.get("location")).toBe("https://openentity.org/for-humans?signup=turnstile_failed#updates");
+    const none = await post("bad", "");
+    expect(none.headers.get("location")).toBe("https://openentity.org/adopt?signup=turnstile_failed#updates");
+  });
 });
 
 describe("double opt-in confirm", () => {

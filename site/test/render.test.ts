@@ -44,6 +44,11 @@ describe('human form gate (PRD 7.3)', () => {
     expect(f).toContain('class="cf-turnstile" data-sitekey="0xKEY"');
     expect(f).toContain('action="/v1/subscribe"');
   });
+  it('shows the error the registry redirected back with, and nothing without one', () => {
+    expect(subscribeForm('k')).not.toContain('role="alert"');
+    expect(subscribeForm('k', 'turnstile_failed')).toContain('The human check did not finish');
+    expect(subscribeForm('k', '<script>')).toContain('Something went wrong on our side');
+  });
 });
 
 describe('entity page', () => {

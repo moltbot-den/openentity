@@ -182,7 +182,7 @@ export function createSite({ registry: callRegistry, asset, vars }: SiteOptions)
       const frag = await registryFragment(value, url);
       return frag === null ? null : `${open}${frag}</${tag}>`;
     });
-    html = await mapElements(html, 'data-subscribe', () => (formOn ? subscribeForm(vars.TURNSTILE_SITE_KEY!) : ''));
+    html = await mapElements(html, 'data-subscribe', () => (formOn ? subscribeForm(vars.TURNSTILE_SITE_KEY!, url.searchParams.get('signup')) : ''));
     if (path === '/entities') html = keepFilters(html, url.searchParams);
     if (formOn && FORM_PAGES.has(path)) html = insertBefore(html, '</head>', TURNSTILE_SCRIPT);
     if (vars.CF_ANALYTICS_TOKEN) html = insertBefore(html, '</body>', analyticsBeacon(vars.CF_ANALYTICS_TOKEN));
