@@ -120,7 +120,7 @@ export async function adopt({ v }: Ctx): Promise<Result> {
   }
   let res: Obj;
   try {
-    res = await reg.send("POST", "/v1/adopt", { document, declaration }, eid);
+    res = await reg.send("POST", "/v1/adopt", { document, declaration, client: "cli" }, eid);
   } catch (e) {
     await rm(dir, { recursive: true, force: true });
     throw e;

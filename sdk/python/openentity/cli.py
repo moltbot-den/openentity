@@ -143,7 +143,7 @@ def _adopt(args):
     if not args.agree:
         raise CliError(EXIT_USAGE, "adopt signs the Open Entity Declaration. Read it, then re-run with --agree:\n\n" + core.DECLARATION_TEXT)
     reg = _registry(args)
-    res = client.adopt(args.name, args.description, reg)
+    res = client.adopt(args.name, args.description, reg, client="cli")
     key_path = _save_key({**res, "name": args.name, "registry": reg})
     if not res["record_pushed"]:
         print("warning: the declaration record entry was not accepted; push it later", file=sys.stderr)
