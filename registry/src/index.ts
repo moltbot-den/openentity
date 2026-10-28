@@ -867,6 +867,11 @@ app.get("/subscribe/confirm", async (c) => {
 async function accreditObservers(env: Env) {
   const rows = await env.db.all<{ issuer: string }>("SELECT issuer FROM attestations GROUP BY issuer HAVING COUNT(DISTINCT subject) >= 10");
   for (const { issuer } of rows) {
+    // Spec 8.4: the 10 must be entities the issuer does not operate; first-party attestations are not independent evidence.
+    const subjects = await env.db.all<{ subject: string }>("SELECT DISTINCT subject FROM attestations WHERE issuer = $1", [issuer]);
+    let independent = 0;
+    for (const { subject } of subjects) if (!(await firstPartyIssuers(env.db, subject))(issuer)) independent++;
+    if (independent < 10) continue;
     const existing = await env.db.first<{ bootstrap: number }>("SELECT bootstrap FROM observers WHERE did = $1", [issuer]);
     if (existing?.bootstrap === 0) continue;
     const alias = (await env.db.first<{ value: string }>("SELECT value FROM aliases WHERE eid = $1 AND type = 'domain' AND status = 'verified' LIMIT 1", [issuer]))?.value;
