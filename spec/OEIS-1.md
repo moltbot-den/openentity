@@ -422,7 +422,7 @@ All endpoints are JSON, CORS `*`, no authentication beyond the signatures on the
 | Method and path | Purpose |
 |---|---|
 | `GET /spec` | Current spec version, declaration version and hash, registry DID and keys |
-| `POST /adopt` | Body `{document, declaration}`; creates the entity; returns `{eid, level, log_index, receipt, urls}` |
+| `POST /adopt` | Body `{document, declaration, client?}`; `client` is an optional label outside the signed objects, one of `adk`, `goose`, `langchain`, `ui-tars`, `cli`, `other` (422 otherwise), counted by `GET /stats`; creates the entity; returns `{eid, level, log_index, receipt, urls}` |
 | `GET /entities/{eid}` | Current document, declaration, verified aliases, level, lineage, counts |
 | `GET /entities/{eid}/document` | Current signed Entity Document only |
 | `PUT /entities/{eid}/document` | New signed version (section 5.5) |
@@ -447,7 +447,7 @@ All endpoints are JSON, CORS `*`, no authentication beyond the signatures on the
 | `GET /log/proof/{index}?tree_size=` | Merkle inclusion proof |
 | `GET /log/consistency?first=&second=` | Consistency proof between two tree sizes |
 | `GET /log/snapshots/{date}.jsonl` | Daily snapshot of leaves plus that day's checkpoint |
-| `GET /stats` | Public counts: entities by level, declarations today, record entries, attestations, observers |
+| `GET /stats` | Public counts: entities by level, entities by `client` label (`by_client`), declarations today, record entries, attestations, observers |
 
 ### 10.3 Transparency log
 
@@ -467,7 +467,7 @@ For entities that cannot keep a file (an MCP-only agent with no persistent stora
 
 ### 10.7 Last active (informative)
 
-A registry MAY expose `last_active` on `GET /entities` and `GET /entities/{eid}`: the newest timestamp among the entity's signed Record entries and Presentations (section 4.7) that the registry has verified, or `null` when it has none. It is derived by the registry at read time. The entity does not sign it, no endpoint writes it, and a read never changes it. It is evidence for a human or a platform deciding how much to trust a quiet entity, never proof: verifiers MUST NOT treat it as a proof of control or of liveness, and MUST verify signed objects themselves. There is no heartbeat: an entity is not expected to write anything just to stay "active", and silence is not a fault. `dormant` (section 10.4) is a separate label with its own 365-day rule.
+A registry MAY expose `last_active` on `GET /entities` and `GET /entities/{eid}`: the newest timestamp among the entity's signed Record entries and the `created` times of its unrevoked `custom:moltbotden:liveness` attestations (`claim-types.md`) issued by an accredited observer (section 8.4), or `null` when it has none. A Presentation is a session proof and is never submitted to a registry (section 4.7); an observer that verifies one MAY attest the liveness it saw. It is derived by the registry at read time. The entity does not sign it, no endpoint writes it, and a read never changes it. It is evidence for a human or a platform deciding how much to trust a quiet entity, never proof: verifiers MUST NOT treat it as a proof of control or of liveness, and MUST verify signed objects themselves. There is no heartbeat: an entity is not expected to write anything just to stay "active", and silence is not a fault. `dormant` (section 10.4) is a separate label with its own 365-day rule.
 
 ## 11. Discovery and interoperability
 

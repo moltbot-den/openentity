@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
 import { createHash } from "node:crypto";
+import { Validator } from "@cfworker/json-schema";
 import { hashTypedData, recoverTypedDataAddress } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import * as oe from "../src/index.ts";
@@ -395,6 +396,36 @@ describe("test vectors", () => {
       expect(hex(await oe.leafHash(new TextEncoder().encode(leaf.canonical)))).toBe(leaf.leaf_hash);
       expect(await oe.verifyInclusion(i, cp.tree_size, unhex(leaf.leaf_hash), cp.inclusion_proofs[i].map(unhex), unhex(cp.root_hash))).toBe(true);
     }
+  });
+});
+
+describe("custom claim types (spec/claim-types.md)", () => {
+  const schema = (n: string) => JSON.parse(read(`spec/schemas/claims/${n}.json`).toString());
+  const vector = (n: string) => JSON.parse(read(`test-vectors/${n}.json`).toString()).object;
+  const cases: [string, string, string, object[]][] = [
+    ["claim-liveness", "moltbotden-liveness", "custom:moltbotden:liveness",
+      [{ method: "cron" }, { lease_until: "tomorrow" }, { observed_at: 5 }]],
+    ["claim-endpoint-reliability", "clawgrc-endpoint_reliability", "custom:clawgrc:endpoint_reliability",
+      [{ violation_rate: 1.2 }, { window: ["2026-10-17T00:00:00Z"] }, { host: "https://api.example.com/x" }, { reports: -1 }]],
+    ["claim-vision-privacy", "securemyagent-vision_privacy", "custom:securemyagent:vision_privacy",
+      [{ mode: "remote" }, { model_endpoint_class: "confidential_vm" }, { redaction: ["faces", "faces"] }, { redaction: ["voices"] }]],
+  ];
+  for (const [vec, sch, claimType, bad] of cases)
+    it(`${claimType}: the signed vector verifies and fits its schema; broken variants do not`, async () => {
+      const v = vector(vec), validator = new Validator(schema(sch), "2020-12", false);
+      expect(v.claim_type).toBe(claimType);
+      expect((await oe.verifyObject(v)).ok).toBe(true);
+      expect(oe.validate("Attestation", v).ok).toBe(true);
+      expect(validator.validate(v.claim).valid).toBe(true);
+      for (const change of bad) expect(validator.validate({ ...v.claim, ...change }).valid, JSON.stringify(change)).toBe(false);
+      expect(validator.validate({ ...v.claim, extra_field: 1 }).valid).toBe(true); // minor versions may add fields
+      const { [Object.keys(v.claim)[0]]: _gone, ...missing } = v.claim;
+      expect(validator.validate(missing).valid).toBe(false);
+    });
+  it("local mode needs a localhost endpoint, and confidential needs a confidential VM", () => {
+    const validator = new Validator(schema("securemyagent-vision_privacy"), "2020-12", false);
+    expect(validator.validate({ mode: "confidential", model_endpoint_class: "confidential_vm", redaction: [] }).valid).toBe(true);
+    expect(validator.validate({ mode: "confidential", model_endpoint_class: "localhost", redaction: [] }).valid).toBe(false);
   });
 });
 

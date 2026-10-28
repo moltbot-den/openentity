@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openentity.org/spec/1.0/schemas/claims/moltbotden-liveness.json",
+  "title": "custom:moltbotden:liveness",
+  "description": "The `claim` of an Attestation with claim_type custom:moltbotden:liveness (spec/claim-types.md).",
+  "type": "object",
+  "required": [
+    "method",
+    "lease_until",
+    "observed_at"
+  ],
+  "properties": {
+    "method": {
+      "enum": [
+        "presentation",
+        "heartbeat"
+      ]
+    },
+    "lease_until": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    },
+    "observed_at": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    }
+  }
+}

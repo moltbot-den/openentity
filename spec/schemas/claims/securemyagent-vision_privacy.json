@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openentity.org/spec/1.0/schemas/claims/securemyagent-vision_privacy.json",
+  "title": "custom:securemyagent:vision_privacy",
+  "description": "The `claim` of an Attestation with claim_type custom:securemyagent:vision_privacy (spec/claim-types.md).",
+  "type": "object",
+  "required": [
+    "mode",
+    "model_endpoint_class",
+    "redaction"
+  ],
+  "properties": {
+    "mode": {
+      "enum": [
+        "local",
+        "confidential"
+      ]
+    },
+    "model_endpoint_class": {
+      "enum": [
+        "localhost",
+        "confidential_vm"
+      ]
+    },
+    "redaction": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "faces",
+          "text"
+        ]
+      },
+      "uniqueItems": true
+    }
+  },
+  "if": {
+    "properties": {
+      "mode": {
+        "const": "local"
+      }
+    },
+    "required": [
+      "mode"
+    ]
+  },
+  "then": {
+    "properties": {
+      "model_endpoint_class": {
+        "const": "localhost"
+      }
+    }
+  },
+  "else": {
+    "properties": {
+      "model_endpoint_class": {
+        "const": "confidential_vm"
+      }
+    }
+  }
+}

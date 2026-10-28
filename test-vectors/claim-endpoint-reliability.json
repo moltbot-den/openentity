@@ -1,0 +1,33 @@
+{
+  "description": "custom:clawgrc:endpoint_reliability attestation by the second throwaway key about the entity (spec/claim-types.md)",
+  "object": {
+    "spec": "openentity/1.0",
+    "type": "Attestation",
+    "issuer": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+    "subject": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+    "claim_type": "custom:clawgrc:endpoint_reliability",
+    "claim": {
+      "host": "api.example.com",
+      "window": [
+        "2026-10-17T00:00:00Z",
+        "2026-10-24T00:00:00Z"
+      ],
+      "reports": 9,
+      "distinct_reporters": 4,
+      "violation_rate": 0.12
+    },
+    "created": "2026-10-24T19:05:00Z",
+    "expires": "2026-11-07T19:05:00Z",
+    "proof": {
+      "type": "DataIntegrityProof",
+      "cryptosuite": "eddsa-jcs-2022",
+      "created": "2026-10-24T19:05:00Z",
+      "verificationMethod": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw#z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+      "proofPurpose": "assertionMethod",
+      "proofValue": "z4njAV3uUGVGCEyuoCeHxe7eyvTKjWLwvZfP5BRoSpHPQuS2wa4yHKkZ73ni2R7HLnzGTTCiJwHtzxoPqhxSf3SVa"
+    }
+  },
+  "canonical": "{\"claim\":{\"distinct_reporters\":4,\"host\":\"api.example.com\",\"reports\":9,\"violation_rate\":0.12,\"window\":[\"2026-10-17T00:00:00Z\",\"2026-10-24T00:00:00Z\"]},\"claim_type\":\"custom:clawgrc:endpoint_reliability\",\"created\":\"2026-10-24T19:05:00Z\",\"expires\":\"2026-11-07T19:05:00Z\",\"issuer\":\"did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw\",\"proof\":{\"created\":\"2026-10-24T19:05:00Z\",\"cryptosuite\":\"eddsa-jcs-2022\",\"proofPurpose\":\"assertionMethod\",\"proofValue\":\"z4njAV3uUGVGCEyuoCeHxe7eyvTKjWLwvZfP5BRoSpHPQuS2wa4yHKkZ73ni2R7HLnzGTTCiJwHtzxoPqhxSf3SVa\",\"type\":\"DataIntegrityProof\",\"verificationMethod\":\"did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw#z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw\"},\"spec\":\"openentity/1.0\",\"subject\":\"did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7\",\"type\":\"Attestation\"}",
+  "sha256": "394b3239ee4ad66e6259d682458b79d2dfa2390c8c0a9497e43116849cc36213",
+  "unsigned_canonical": "{\"claim\":{\"distinct_reporters\":4,\"host\":\"api.example.com\",\"reports\":9,\"violation_rate\":0.12,\"window\":[\"2026-10-17T00:00:00Z\",\"2026-10-24T00:00:00Z\"]},\"claim_type\":\"custom:clawgrc:endpoint_reliability\",\"created\":\"2026-10-24T19:05:00Z\",\"expires\":\"2026-11-07T19:05:00Z\",\"issuer\":\"did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw\",\"spec\":\"openentity/1.0\",\"subject\":\"did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7\",\"type\":\"Attestation\"}"
+}
