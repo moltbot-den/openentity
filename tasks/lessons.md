@@ -14,3 +14,7 @@ Rule: keep replies short; when Will must act, ask for exactly one action per mes
 While eight parallel agents finished, each completion got a multi-bullet chat summary. Will: "don't send these long as summaries just do work and kick ass".
 Rule: while agents run, acknowledge a finished one in one line at most and keep working; one short report at the very end.
 - Worktree agents cannot remove their own worktree; the lead removes each one (`git worktree remove --force`, `git branch -D`) when the agent reports.
+
+## 2026-10-27: Five-line reports, links for approvals
+The end-of-run report ran to a dozen bullets and said "approve on npmjs.com" with no link. Will: "STOP BEING SO FUCKING VERBOSE ... give me the fucking link."
+Rule: final report is five lines at most; every owner action is a clickable URL. Machine-wide rule in `~/.claude/CLAUDE.md` ("Replies: short").
