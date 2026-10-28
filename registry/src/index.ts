@@ -808,9 +808,8 @@ async function subscribe(c: C) {
   const tv: any = await (await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", { method: "POST", body: form })).json().catch(() => ({}));
   if (!token || !tv.success) fail(403, "turnstile_failed", "Turnstile verification failed");
   if ((await bump(env.db, `sub:${await salted(env, email)}`, today())) > 3) fail(429, "rate_limited", "too many signups for this address today");
-  const operator = f.operator === true || f.operator === "true" || f.operator === "on";
   // Never send `confirmed` here: a resubscribe must not unconfirm someone.
-  const res = await cioPut(env, email, { source: "openentity.org", operator, consented_at: Math.floor(Date.now() / 1000), confirm_token: await confirmToken(env, email) });
+  const res = await cioPut(env, email, { source: "openentity.org", consented_at: Math.floor(Date.now() / 1000), confirm_token: await confirmToken(env, email) });
   if (!res.ok) fail(502, "subscribe_failed", `Customer.io returned ${res.status}`);
   return c.json({ ok: true, message: "Check your inbox to confirm." }, 202);
 }
