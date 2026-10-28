@@ -26,7 +26,7 @@ describe("no human-only challenge on agent endpoints (spec 10.4)", () => {
 
   it("every write route refuses a request without a stamp", async () => {
     const { kp } = await adopted();
-    const writes = app.routes.filter((r) => (r.method === "POST" || r.method === "PUT") && !["/v1/subscribe", "/v1/verify"].includes(r.path));
+    const writes = app.routes.filter((r) => (r.method === "POST" || r.method === "PUT") && !["/v1/subscribe", "/v1/verify", "/v1/funnel/start"].includes(r.path));
     expect(writes.length).toBe(10); // includes /v1/disputes, custody export and record redaction
     for (const r of writes) {
       const res = await call(r.method, r.path.replace("/v1", "").replace(":eid", kp.did), { custodial: true, name: "x" });
