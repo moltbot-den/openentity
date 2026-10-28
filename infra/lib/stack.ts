@@ -83,7 +83,7 @@ export class OpenEntityStack extends Stack {
       writer: rds.ClusterInstance.serverlessV2("writer", load ? { enablePerformanceInsights: true } : {}),
       serverlessV2MinCapacity: 0.5,
       // 4 ACU (2 vCPU) pegged at 100% CPU under 100 adopts/s (p95 4 s, 66 rejected); 8 ACU peaks near 6 and holds p95 under 500 ms. Idle cost is unchanged (min 0.5).
-      serverlessV2MaxCapacity: 8,
+      serverlessV2MaxCapacity: Number(this.node.tryGetContext("maxAcu") ?? 8), // -c maxAcu=N lets the load stack try a lower ceiling before production follows
       enableDataApi: true,
       defaultDatabaseName: "openentity",
       vpc,

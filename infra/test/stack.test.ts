@@ -1,11 +1,15 @@
 import { App } from "aws-cdk-lib";
 import { Match, Template } from "aws-cdk-lib/assertions";
 import { expect, test } from "vitest";
+import { buildForward } from "../lambda/forward.ts";
 import { CSP, OpenEntityStack } from "../lib/stack.ts";
 
 // Skip asset bundling: these tests read the template, not the Lambda zip.
-const app = new App({ context: { "aws:cdk:bundling-stacks": [] } });
-const t = Template.fromStack(new OpenEntityStack(app, "T", { env: { account: "099705791378", region: "us-east-1" } }));
+const synth = (id: string, load = false) => Template.fromStack(new OpenEntityStack(new App({ context: { "aws:cdk:bundling-stacks": [] } }), id, { env: { account: "099705791378", region: "us-east-1" }, load }));
+// Every synthesis and import happens at load, where no test timeout runs: on a busy machine (pnpm -r test runs the
+// site builds and the registry's PGlite suite beside this one) a synth or a cold SDK import inside a test body
+// can pass vitest's 5 s limit.
+const t = synth("T"), l = synth("L", true);
 
 test("Lambda runs outside any VPC and talks to Postgres through the Data API", () => {
   const fns = t.findResources("AWS::Lambda::Function", { Properties: { Runtime: "nodejs22.x" } });
@@ -86,7 +90,6 @@ test("CI can deploy only from main of the public repo", () => {
 });
 
 test("the load copy never signs with the production key, has no Object Lock, no domain and no CI role, and is destroyable", () => {
-  const l = Template.fromStack(new OpenEntityStack(new App({ context: { "aws:cdk:bundling-stacks": [] } }), "L", { env: { account: "099705791378", region: "us-east-1" }, load: true }));
   const json = JSON.stringify(l.toJSON());
   expect(json).toContain("openentity/load");
   expect(json).not.toMatch(/"openentity\/app"|secret:openentity\/app/);
@@ -99,7 +102,6 @@ test("the load copy never signs with the production key, has no Object Lock, no 
 
 test("production keeps 200 reserved concurrent executions and the load copy is capped at 300", () => {
   const appFn = (tpl: Template) => Object.values(tpl.findResources("AWS::Lambda::Function", { Properties: { Runtime: "nodejs22.x" } })).find((f: any) => f.Properties.Environment?.Variables?.DB_CLUSTER_ARN) as any;
-  const l = Template.fromStack(new OpenEntityStack(new App({ context: { "aws:cdk:bundling-stacks": [] } }), "L", { env: { account: "099705791378", region: "us-east-1" }, load: true }));
   expect(appFn(t).Properties.ReservedConcurrentExecutions).toBe(200);
   expect(appFn(l).Properties.ReservedConcurrentExecutions).toBe(300);
 });
@@ -122,8 +124,7 @@ test("all openentity.org mail is stored raw in a private bucket, then forwarded"
   });
 });
 
-test("the forward sets Reply-To to the sender and attaches the original", async () => {
-  const { buildForward } = await import("../lambda/forward.ts");
+test("the forward sets Reply-To to the sender and attaches the original", () => {
   const m = buildForward({ to: "op@example.com", from: "identity@openentity.org", replyTo: "A <a@x.org>\r\nBcc: z@z", subject: "hi", raw: new TextEncoder().encode("orig"), id: "1" });
   expect(m).toContain("Reply-To: A <a@x.org> Bcc: z@z\r\n");
   expect(m).toContain("b3JpZw==");

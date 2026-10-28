@@ -6,7 +6,7 @@ import {
   generateKeyPair, normalizeEid, noteVkey, recordEntryHash, sha256Hex, signObject, validate, verifyObject, verifyPresentation, verifyProof, type Proof, type Resolver,
 } from "./sdk.ts";
 import { type Env, REGISTRY_DID, LOG_ORIGIN, b64, nowIso } from "./env.ts";
-import { type Stmt, consistencyProof, exportObjects, inclusionProof, incorporate, latestSize, leafFor, leafJson, registryKey, sequenced, snapshot, tileIndex, treeRoot, type LeafRow } from "./log.ts";
+import { type Stmt, chain, consistencyProof, exportObjects, inclusionProof, incorporate, latestSize, leafFor, leafJson, registryKey, sequenced, snapshot, tileIndex, treeRoot, type LeafRow } from "./log.ts";
 import type { Db } from "./db.ts";
 import { sendDigest } from "./digest.ts";
 import { DOMAIN, getJson, platformDomain, resolveDid, resolver, verifyAlias } from "./aliases.ts";
@@ -71,13 +71,22 @@ export function clientIp(c: C): string {
 /** Time-to-adopt funnel start (PRD 12): the first GET /llms.txt per hashed address in 24 h. Only a salted hash and an epoch second are kept. */
 const FUNNEL_TTL = 86400;
 const funnelKey = async (c: C) => `fs:${await salted(c.env, clientIp(c))}`;
+/** The one unstamped write. One start row per address already, so growth comes from many addresses: cap requests per address per minute and, hard, per hour over all of them (each request adds at most two rows; the sweep drops them within 24 h). */
+const FUNNEL_PER_IP_PER_MINUTE = 10, FUNNEL_PER_HOUR = 10_000;
 app.post("/funnel/start", async (c) => {
-  const t = Math.floor(Date.now() / 1000);
+  const t = Math.floor(Date.now() / 1000), now = nowIso();
+  if ((await bump(c.env.db, "fsg", now.slice(0, 13))) > FUNNEL_PER_HOUR) fail(429, "rate_limited", "funnel starts are paused for this hour");
+  if ((await bump(c.env.db, `fsm:${await salted(c.env, clientIp(c))}`, now.slice(0, 16))) > FUNNEL_PER_IP_PER_MINUTE) fail(429, "rate_limited", `at most ${FUNNEL_PER_IP_PER_MINUTE} funnel starts per minute per IP`);
   await c.env.db.run("INSERT INTO rate_events (key, window_start, count) VALUES ($1, 'fs', $2) ON CONFLICT (key, window_start) DO UPDATE SET count = excluded.count WHERE rate_events.count < $3", [await funnelKey(c), t, t - FUNNEL_TTL]);
   return c.body(null, 204);
 });
-/** Every write: per-IP limits, then a single-use proof-of-work stamp naming the writing EID (spec 10.4). All three counters in one round trip. */
-async function writeGuard(c: C, eid: string) {
+/**
+ * Every write: a single-use proof-of-work stamp naming the writing EID (spec 10.4) and per-IP limits (spec 10.5).
+ * Returns two CTE statements (s0 counts, s1 checks) that the write runs inside its own statement, or alone in `writeGuard`.
+ * The check casts the name of a broken limit to an integer: Postgres aborts the whole statement, counters and write
+ * included, and `guardError` turns the message back into the 429 or 409. Nothing is constant: a folded CAST would fail at plan time.
+ */
+async function guardStmts(c: C, eid: string): Promise<Stmt[]> {
   const env = c.env;
   const stamp = c.req.header("x-oe-stamp");
   if (!stamp) fail(400, "stamp_required", STAMP_REQUIRED);
@@ -87,20 +96,31 @@ async function writeGuard(c: C, eid: string) {
   // One IP's counters are split over IP_SHARDS rows and summed: a single row per IP made every write from that IP
   // queue on one row lock (about 220 ms each at 100 writes/s on Aurora). A shard's write locks its own row; the
   // others are read as last committed, so concurrent writes can pass a limit by the number in flight.
-  // The output columns are computed, which also spares the Data API a catalog lookup per call.
   const s = Math.floor(Math.random() * IP_SHARDS), others = (p: string) => Array.from({ length: IP_SHARDS }, (_, t) => `${p}:${ip}:${t}`).filter((_, t) => t !== s);
-  const day = others("ip"), minute = others("ipm"), list = (from: number) => day.map((_, k) => `$${from + k}`).join(", ");
-  // Fixed row order (day, minute, stamp) so concurrent writes on one shard lock the counters in the same order.
-  const counts = new Map((await env.db.all<{ k: string; n: number }>(
-    `WITH up AS (INSERT INTO rate_events (key, window_start, count) VALUES ($1, $2, 1), ($3, $4, 1), ($5, $6, 1) ${UPSERT})
-SELECT split_part(key, ':', 1) AS k, CAST(sum(count) AS BIGINT) AS n FROM (SELECT key, count FROM up UNION ALL
-SELECT key, count FROM rate_events WHERE (window_start = $2 AND key IN (${list(7)})) OR (window_start = $4 AND key IN (${list(7 + day.length)}))) x GROUP BY 1`,
-    [`ip:${ip}:${s}`, now.slice(0, 10), `ipm:${ip}:${s}`, now.slice(0, 16), `stamp:${await sha256Hex(stamp!)}`, stamp!.split(":")[2].slice(0, 10), ...day, ...minute],
-  )).map((r) => [r.k, Number(r.n)]));
+  const day = others("ip"), minute = others("ipm"), list = (from: number, n: number) => Array.from({ length: n }, (_, k) => `$${from + k}`).join(", ");
   const daily = Number(env.IP_DAILY_LIMIT ?? LIMITS.writes_per_ip_per_day), perMinute = Number(env.WRITE_PER_MINUTE ?? LIMITS.writes_per_ip_per_minute);
-  if (counts.get("ipm")! > perMinute) fail(429, "rate_limited", `at most ${perMinute} writes per minute per IP`);
-  if (counts.get("ip")! > daily) fail(429, "rate_limited", `at most ${daily} writes per day per IP`);
-  if (counts.get("stamp")! > 1) fail(409, "stamp_reused", "each stamp is accepted once");
+  return [
+    // Fixed row order (day, minute, stamp) so concurrent writes on one shard lock the counters in the same order.
+    [`INSERT INTO rate_events (key, window_start, count) VALUES ($1, $2, 1), ($3, $4, 1), ($5, $6, 1) ${UPSERT}`,
+      [`ip:${ip}:${s}`, now.slice(0, 10), `ipm:${ip}:${s}`, now.slice(0, 16), `stamp:${await sha256Hex(stamp!)}`, stamp!.split(":")[2].slice(0, 10)]],
+    [`SELECT CAST(min(CASE k WHEN 'ipm' THEN '1ipm' WHEN 'ip' THEN '2ip' ELSE '3stamp' END) AS int) AS m FROM (
+SELECT split_part(key, ':', 1) AS k, sum(count) AS n FROM (SELECT key, count FROM s0 UNION ALL
+SELECT key, count FROM rate_events WHERE (window_start = $1 AND key IN (${list(3, day.length)})) OR (window_start = $2 AND key IN (${list(3 + day.length, minute.length)}))) x GROUP BY 1) y
+WHERE (k = 'ipm' AND n > $${3 + day.length + minute.length}) OR (k = 'ip' AND n > $${4 + day.length + minute.length}) OR (k = 'stamp' AND n > 1)`,
+      [now.slice(0, 10), now.slice(0, 16), ...day, ...minute, perMinute, daily]],
+  ];
+}
+const GUARD_FINAL = "SELECT coalesce(m, 0) FROM s1"; // reads m: the planner drops an unused aggregate, cast included
+/** Turns the abort of a guard statement into its HTTP error; any other error passes through. */
+function guardError(e: unknown): void {
+  const m = /invalid input syntax for type integer: "\d(ipm|ip|stamp)"/.exec(String(e))?.[1];
+  if (m === "ipm") fail(429, "rate_limited", `at most ${LIMITS.writes_per_ip_per_minute} writes per minute per IP`);
+  if (m === "ip") fail(429, "rate_limited", `at most ${LIMITS.writes_per_ip_per_day} writes per day per IP`);
+  if (m === "stamp") fail(409, "stamp_reused", "each stamp is accepted once");
+}
+async function writeGuard(c: C, eid: string) {
+  const params: unknown[] = [];
+  await c.env.db.run(`WITH ${chain(await guardStmts(c, eid), params).join(",\n")}\n${GUARD_FINAL}`, params).catch((e) => { guardError(e); throw e; });
 }
 const MAX_BYTES: Record<string, number> = { EntityDocument: LIMITS.document_max_bytes, RecordEntry: LIMITS.record_entry_max_bytes }; // spec 4.1, 7.3
 function schema(type: string, obj: unknown) {
@@ -202,7 +222,7 @@ const clientLabel = (body: any): string | null => {
   return body.client;
 };
 
-async function adopt(c: C, document: any, declaration: any, extra: Stmt[] = [], client: string | null = null) {
+async function adopt(c: C, document: any, declaration: any, extra: Stmt[] = [], client: string | null = null, guard: Stmt[] = []) {
   const db = c.env.db;
   const eid = normalizeEid(String(document.eid));
   if (normalizeEid(String(declaration.eid)) !== eid) fail(422, "eid_mismatch", "document and declaration name different EIDs");
@@ -221,6 +241,7 @@ async function adopt(c: C, document: any, declaration: any, extra: Stmt[] = [], 
   const dl = await leafFor("Declaration", eid, dSha, now);
   const doc = await leafFor("EntityDocument", eid, docSha, now);
   const idx = await sequenced(db, [dl, doc], [
+    ...guard, // first: s0 and s1
     ["INSERT INTO declarations (eid, version, json, sha256, received_at, log_index) VALUES ($1, $2, $3, $4, $5, $i)", [eid, declaration.declaration_version, JSON.stringify(declaration), dSha, now]],
     ["INSERT INTO documents (eid, seq, json, sha256, received_at, log_index) VALUES ($1, $2, $3, $4, $5, $i + 1)", [eid, document.seq, JSON.stringify(document), docSha, now]],
     ["INSERT INTO entities (eid, root_method, name, level, created, updated, custody, latest_seq, client, adopted_log_index) VALUES ($1, $2, $3, 0, $4, $5, $6, $7, $8, $i)",
@@ -231,7 +252,8 @@ async function adopt(c: C, document: any, declaration: any, extra: Stmt[] = [], 
       [eid, t, /moltbot ?den/i.test(`${document.operator?.name ?? ""} ${document.operator?.contact ?? ""}`) ? 1 : 0, fk, t - FUNNEL_TTL]],
     ["DELETE FROM rate_events WHERE key = $1 AND window_start = 'fs'", [fk]],
     ...extra,
-  ]).catch(async (e) => {
+  ], undefined, guard.length ? GUARD_FINAL : undefined).catch(async (e) => {
+    guardError(e);
     if (!UNIQUE.test(String(e))) throw e;
     const has = await db.first("SELECT 1 FROM declarations WHERE eid = $1 AND version = $2", [eid, declaration.declaration_version]);
     return has ? fail(409, "declaration_exists", "this EID already has a Declaration of this version") : fail(409, "entity_exists", "this EID is already listed");
@@ -278,10 +300,10 @@ app.post("/adopt", async (c) => {
     return c.json({ ...out, custodial: { private_key_jwk: kp.privateJwk, kept_copy: !!body.keep_copy, warning: "This private key is shown once. Store it; move to self-custody with a rotation Continuity Link." } }, 201);
   }
   const { document, declaration } = body ?? {};
-  await writeGuard(c, normalizeEid(String(document?.eid ?? "")));
+  const guard = await guardStmts(c, normalizeEid(String(document?.eid ?? ""))); // the stamp is checked here; the counters run inside the adopt statement
   schema("EntityDocument", document);
   schema("Declaration", declaration);
-  return c.json(await adopt(c, document, declaration, [], client), 201);
+  return c.json(await adopt(c, document, declaration, [], client, guard), 201);
 });
 
 // Custody exit (spec 10.6): a Presentation to this registry proves control; the kept copy is returned once and deleted.
@@ -906,7 +928,7 @@ export async function scheduled(env: Env) {
   await sendDigest(env, s).catch((e) => console.error("digest", e));
   // IP and stamp counters live 7 days, email hashes 24 hours, per-minute counters 1 hour (PRD 8, 7.3).
   const ago = (ms: number, len: number) => new Date(Date.now() - ms).toISOString().slice(0, len);
-  await env.db.run("DELETE FROM rate_events WHERE (key LIKE 'sub:%' AND window_start < $1) OR (key LIKE 'ipm:%' AND window_start < $2) OR window_start < $3 OR (window_start = 'fs' AND count < $4)", [ago(86400_000, 10), ago(3600_000, 16), ago(7 * 86400_000, 10), Math.floor(Date.now() / 1000) - FUNNEL_TTL]);
+  await env.db.run("DELETE FROM rate_events WHERE (key LIKE 'sub:%' AND window_start < $1) OR (key LIKE 'ipm:%' AND window_start < $2) OR (key LIKE 'fsm:%' AND window_start < $2) OR window_start < $3 OR (window_start = 'fs' AND count < $4)", [ago(86400_000, 10), ago(3600_000, 16), ago(7 * 86400_000, 10), Math.floor(Date.now() / 1000) - FUNNEL_TTL]);
 }
 
 // The Lambda handler runs scheduled(env) when the minute is a multiple of 10, else incorporate(env):
