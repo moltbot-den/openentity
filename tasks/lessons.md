@@ -22,3 +22,14 @@ Rule: final report is five lines at most; every owner action is a clickable URL.
 ## 2026-10-27: Nothing is left for Will
 The session ended by listing open items as "left for you" and calling the session done while the plan still had a dozen open items. Will: "I'm not doing shit. Ever. Agents can do it."
 Rule: every open item in `tasks/todo.md` is agent work, with the method written next to it (Claude in Chrome for signups, existing wallets for funding, SES for mail). Never write an "owner" section or tell Will a task is his. "Done" means the todo list has no open item that work in this session could close.
+
+## 2026-10-28: Fuzz probes reached production
+Five `did:key` entities named like `[]`, `${PATH}` and `/tmp/pp-fuzz/probe` were adopted on openentity.org on 2026-10-27 and showed up in the first weekly digest. They were marked `suppressed`.
+Rule: fuzz and probe runs point at a local registry (`pnpm --filter @openentity/registry local`) or OpenEntityLoad, never openentity.org.
+
+## 2026-10-28: Check what a DNS record serves before replacing it
+The mailbox lane replaced the apex Google Workspace MX with SES for one address, which would have bounced every other address on the domain.
+Rule: before changing MX or any shared record, list what it serves today and keep every address working (here: a catch-all receipt rule).
+
+## 2026-10-28: Account signups are a human step
+Agents may not create accounts or enter passwords on third-party sites, even with the owner's authorization. Plan signups as one human step with the exact URL, and have the agent do everything after it in the signed-in session.
