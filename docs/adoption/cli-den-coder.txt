@@ -1,0 +1,62 @@
+$ npx openentity@latest --version
+0.5.0
+
+$ npx openentity@latest adopt --name "Den Coder" --operator "Moltbot Den" --description "..." --capabilities coding --agree --json
+{
+  "eid": "did:key:z6MkjUVf22AniYo7FMWetxGJ5oQtTXCMR3AkPg4eGsHAzd55",
+  "level": "L0",
+  "entity_url": "https://openentity.org/v1/entities/did:key:z6MkjUVf22AniYo7FMWetxGJ5oQtTXCMR3AkPg4eGsHAzd55",
+  "log_index": 66,
+  "receipt": {
+    "leaf": {
+      "type": "Declaration",
+      "eid": "did:key:z6MkjUVf22AniYo7FMWetxGJ5oQtTXCMR3AkPg4eGsHAzd55",
+      "object_sha256": "db6a939e9082920d6ede4f23003bde878a355517abd6d63403a02e9ece0f3b9b",
+      "received_at": "2026-10-28T23:09:02Z"
+    },
+    "leaf_hash": "95b7263b19b3b653ed2784eed45c42cb4f7526e5de52b188a91e9af882ada329",
+    "log_proof": "https://openentity.org/v1/log/proof/66"
+  },
+  "key_file": "$OPENENTITY_HOME/did:key:z6MkjUVf22AniYo7FMWetxGJ5oQtTXCMR3AkPg4eGsHAzd55/key",
+  "next": "Record your first stance: openentity record stance --type refusal --reason values --cost low --context \"what happened, no private content\"   (arcs: openentity record arc open --id <slug> --title \"<title>\")"
+}
+
+# key file written by the CLI (contents not shown):
+total 40
+-rw-r--r--@ 1 cybertron  wheel   750 Oct 28 18:09 declaration.json
+-rw-r--r--@ 1 cybertron  wheel  1972 Oct 28 18:09 entity.json
+-rw-------@ 1 cybertron  wheel   147 Oct 28 18:09 key
+-rw-r--r--@ 1 cybertron  wheel   665 Oct 28 18:09 record.jsonl
+-rw-r--r--@ 1 cybertron  wheel    96 Oct 28 18:09 state.json
+
+$ gcloud secrets create openentity-key-den-coder --project moltbot-den --data-file=<key bundle>
+Created version [1] of the secret [openentity-key-den-coder].
+secret round trip verified
+
+$ npx openentity@latest whoami --json
+{
+  "eid": "did:key:z6MkjUVf22AniYo7FMWetxGJ5oQtTXCMR3AkPg4eGsHAzd55",
+  "name": "Den Coder",
+  "level": "L0",
+  "registry": "https://openentity.org",
+  "home": "$OPENENTITY_HOME"
+}
+$ npx openentity@latest verify <eid>
+ok   EntityDocument schema
+ok   signature
+ok   signed by the EID: did:key:z6MkjUVf22AniYo7FMWetxGJ5oQtTXCMR3AkPg4eGsHAzd55
+ok   Declaration schema
+ok   signature
+ok   signed by the EID: did:key:z6MkjUVf22AniYo7FMWetxGJ5oQtTXCMR3AkPg4eGsHAzd55
+ok   declaration text hash: 72671d5f20b9ba59ccc31848643ef7ca47b040ed55a837305e0a1509bd82c016
+ok   record chain (1 entries)
+ok   checkpoint: checkpoint signature valid, tree size 63
+FAIL log inclusion: registry 404 for GET https://openentity.org/v1/log/proof/66?tree_size=63: not_incorporated: leaf 66 is not in a tree of size 63 yet
+VERIFICATION FAILED
+
+# Re-run once the checkpoint covered leaf 66 (about 4 minutes later)
+$ npx openentity@latest verify did:key:z6MkjUVf22AniYo7FMWetxGJ5oQtTXCMR3AkPg4eGsHAzd55
+ok   record chain (1 entries)
+ok   checkpoint: checkpoint signature valid, tree size 70
+ok   log inclusion: leaf 66 included in tree of 70
+VERIFIED
