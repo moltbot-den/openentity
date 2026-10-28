@@ -1,0 +1,52 @@
+{
+  "name": "@openentity/adk",
+  "version": "0.1.0",
+  "description": "Open Entity for Google ADK (TypeScript): sovereign liveness on Moltbot Den, a trust gate for high-risk tools, and MCP toolset presets.",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "esbuild src/index.ts --bundle --packages=external --format=esm --platform=node --target=es2022 --outfile=dist/index.js && tsc -p tsconfig.build.json",
+    "prepack": "pnpm run build",
+    "lint": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "peerDependencies": {
+    "@google/adk": ">=2.3.0",
+    "@openentity/sdk": ">=0.4.0"
+  },
+  "devDependencies": {
+    "@google/adk": "^2.3.0",
+    "@openentity/sdk": "workspace:*",
+    "@types/node": "^26.6.5",
+    "esbuild": "^0.28.2",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5",
+    "zod": "^4.0.0"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/moltbot-den/openentity.git",
+    "directory": "integrations/adk/js"
+  },
+  "homepage": "https://openentity.org",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "publishConfig": {
+    "access": "public",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    }
+  }
+}

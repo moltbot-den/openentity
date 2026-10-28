@@ -30,4 +30,9 @@ if [ -d integrations/langchain/python ]; then
   (cd integrations/langchain/python && uv run --quiet pytest -q) || fail=1
 fi
 
+# Google ADK integration (Python half; the JS half runs with the pnpm workspace above). Mocked HTTP only.
+if [ -d integrations/adk/python ]; then
+  (cd integrations/adk/python && uv run --quiet pytest -q) || fail=1
+fi
+
 exit $fail

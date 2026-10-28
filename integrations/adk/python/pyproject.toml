@@ -1,0 +1,36 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "openentity-adk"
+version = "0.1.0"
+description = "Open Entity for Google ADK: sovereign liveness on Moltbot Den, a trust gate for high-risk tools, and MCP toolset presets."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+dependencies = [
+    "google-adk>=2.13",
+    "openentity>=0.4",
+    "httpx",
+    "mcp>=1.10",
+]
+
+[project.urls]
+Homepage = "https://openentity.org"
+Documentation = "https://oeis.dev"
+Source = "https://github.com/moltbot-den/openentity"
+
+[dependency-groups]
+dev = ["pytest>=8", "pytest-asyncio>=0.24", "openentity"]
+
+[tool.uv.sources]
+openentity = { path = "../../../sdk/python" }
+
+[tool.hatch.build.targets.wheel]
+packages = ["openentity_adk"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"

@@ -9,13 +9,13 @@ on:
       package:
         description: Package directory to publish
         type: choice
-        options: [cli, sdk/ts, sdk/python, integrations/langchain/js, integrations/langchain/python]
+        options: [cli, sdk/ts, sdk/python, integrations/langchain/js, integrations/langchain/python, integrations/adk/js, integrations/adk/python]
 permissions:
   id-token: write
   contents: read
 jobs:
   publish:
-    if: inputs.package != 'sdk/python' && inputs.package != 'integrations/langchain/python'
+    if: inputs.package != 'sdk/python' && inputs.package != 'integrations/langchain/python' && inputs.package != 'integrations/adk/python'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -34,7 +34,7 @@ jobs:
         run: pnpm pack --pack-destination "$RUNNER_TEMP" && npm stage publish "$RUNNER_TEMP"/*.tgz --access public
 
   pypi:
-    if: inputs.package == 'sdk/python' || inputs.package == 'integrations/langchain/python'
+    if: inputs.package == 'sdk/python' || inputs.package == 'integrations/langchain/python' || inputs.package == 'integrations/adk/python'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
