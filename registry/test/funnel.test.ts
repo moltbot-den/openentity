@@ -47,6 +47,8 @@ describe("time-to-adopt funnel", () => {
     expect((await secondsOf(op))!.internal).toBe(1);
     const s = (await call("GET", "/stats")).body.time_to_adopt;
     expect(s.adoptions).toBe(4); // the two from the first test count too: 40 s and the three above
-    expect(Math.round(s.median_seconds)).toBe(35);
+    // Each start was set back by a fixed amount, then ran for as long as the test took: a slow runner adds seconds.
+    expect(s.median_seconds).toBeGreaterThanOrEqual(35);
+    expect(s.median_seconds).toBeLessThan(45);
   });
 });
