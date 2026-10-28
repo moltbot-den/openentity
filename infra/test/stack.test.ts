@@ -110,10 +110,10 @@ test("the app role can read and append to the log bucket but never delete from i
   expect(json).not.toMatch(/s3:DeleteObject/);
 });
 
-test("identity@ mail is stored raw in a private bucket, then forwarded", () => {
+test("all openentity.org mail is stored raw in a private bucket, then forwarded", () => {
   t.hasResourceProperties("AWS::SES::ReceiptRule", {
     Rule: Match.objectLike({
-      Recipients: ["identity@openentity.org"],
+      Recipients: ["openentity.org"],
       Actions: [
         Match.objectLike({ S3Action: Match.objectLike({ ObjectKeyPrefix: "inbound/identity/" }) }),
         Match.objectLike({ LambdaAction: Match.objectLike({ InvocationType: "Event" }) }),

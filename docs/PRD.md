@@ -245,7 +245,7 @@ The registry API is section 10.2 of the spec. The site's own endpoints: `POST /v
 | Human form protection | Cloudflare Turnstile | Only on the human form |
 | Rate limiting | PostgreSQL counter rows per IP per minute and per day, pruned by the cron | Published limits; nothing human-only on agent paths |
 | Off-site archive | S3 with Object Lock (compliance mode, 1 year) for daily log snapshots | Makes the log tamper-evident even against the registry operator |
-| Email | Customer.io Track API; `security.txt` and `identity@openentity.org` through the zone's Google Workspace mail | |
+| Email | Customer.io Track API; `security.txt` and `identity@openentity.org` through SES inbound to S3 (every address on the domain, see `docs/MAILBOX.md`) | |
 | Analytics | Cloudflare Web Analytics (no cookies) plus registry events | Privacy-preserving; funnel timing (first `GET /llms.txt` to `POST /v1/adopt` per IP hash, 24-hour window) |
 | Secrets | One AWS Secrets Manager secret `openentity/app` (registry key, custody key, hash salt, Turnstile secret, origin header, Customer.io credentials), with GCP Secret Manager copies of the keys | Never in the repo |
 | CI | GitHub Actions: lint, typecheck, unit tests, spec test vectors, link check, llms.txt format check, no-em-dash check, truth check on counts, deploy with `cdk deploy` (GitHub OIDC role, no stored AWS keys) on merge to `main` | Mirrors `scripts/verify.sh` discipline |

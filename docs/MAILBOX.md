@@ -1,6 +1,6 @@
 # identity@openentity.org
 
-Mail to `identity@openentity.org` goes to SES (apex MX `inbound-smtp.us-east-1.amazonaws.com`), is stored raw in S3, and is forwarded to the `OPERATOR_EMAIL` address in the secret `openentity/app` with Reply-To set to the original sender. Spam and virus-flagged mail is stored but not forwarded.
+Mail to `identity@openentity.org` (and any other address on the domain; the rule is a catch-all) goes to SES (apex MX `inbound-smtp.us-east-1.amazonaws.com`), is stored raw in S3, and is forwarded to the `OPERATOR_EMAIL` address in the secret `openentity/app` with Reply-To set to the original sender. Spam and virus-flagged mail is stored but not forwarded.
 
 Stored mail: bucket `MAIL_BUCKET` (stack output `MailBucketName`), prefix `inbound/identity/`. Each object is one raw RFC 822 message named by its SES message id. All commands use `--profile openentity`.
 
