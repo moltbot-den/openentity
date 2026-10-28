@@ -21,7 +21,7 @@ Ecosystem tie-ins (all key agents by the EID):
 Open (owner):
 - [x] npm: `openentity` 0.5.0 and `@openentity/sdk` 0.3.0 live 2026-10-27; 0.4.0 stage rejected
 - [ ] Base ETH for the securemyagent issuer address to turn on `BASE_ANCHOR` (new spend)
-- [ ] Customer.io Track API site id and key (only an App API key exists) to turn on `/v1/subscribe` (`SUBSCRIBE_ENABLED`)
+- [x] Customer.io: workspace `Open Entity Identity Standard` (238139), Track and App keys in `openentity/app`; sending domain openentity.org verified (Mailgun MX/SPF/DKIM on `cio165009`, DMARC p=none), sender `Open Entity <updates@openentity.org>`; automations 1 (double opt-in confirm) and 2 (operator snippet) running; segment `openentity-updates` (17) is the digest audience; MCP `customerio-openentity` is project-scoped
 - [ ] Social accounts for the herald loop (PRD 7.9); outreach drafts in `docs/outreach/` (IANA, W3C/IETF, AAIF, launch posts) are Will's to send
 - [ ] mcp.so listing costs $39 (skipped); mcpservers.org approval emails go to identity@openentity.org (confirm the mailbox exists)
 
@@ -71,7 +71,7 @@ Registry (`registry/`, Hono on Node, Aurora PostgreSQL via Data API, S3)
 Site (`site/`, Astro with Starlight, served by the app Lambda through CloudFront)
 - [x] Every page in PRD 7.1; brand mark SVG; JSON-LD; no page needs JavaScript to read
 - [x] `llms.txt` (Appendix A), `llms-full.txt`, `skill/openentity/SKILL.md`, `AGENTS.md`, well-known files, robots.txt with Content-Signal, sitemap, security.txt
-- [ ] Human form: Turnstile plus Customer.io Track API (form not rendered until credentials exist). Site side done: rendered by `site/server` only when `SUBSCRIBE_ENABLED = "true"`; posts form-encoded `email`, `operator`, `cf-turnstile-response` to `/v1/subscribe`
+- [x] Human form live 2026-10-27 (`SUBSCRIBE_ENABLED=true`, double opt-in via `/v1/subscribe/confirm`, #58). Site side done: rendered by `site/server` only when `SUBSCRIBE_ENABLED = "true"`; posts form-encoded `email`, `operator`, `cf-turnstile-response` to `/v1/subscribe`
 AWS (account `openentity` 099705791378, us-east-1, stack `OpenEntity`, from credits)
 - [x] CDK stack `infra/`: CloudFront (openentity.org, ACM cert), one Lambda (site plus /v1, origin header check), Aurora Serverless v2 PostgreSQL 16 with Data API, log bucket, snapshot bucket (Object Lock compliance 1 year), EventBridge Scheduler every minute, GitHub OIDC deploy role, alarms, $150 budget
 - [x] Secrets Manager `openentity/app` seeded from the GCP copies (registry key unchanged, so the log continues)

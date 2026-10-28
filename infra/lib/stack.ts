@@ -151,7 +151,7 @@ export class OpenEntityStack extends Stack {
         BASE_RPC_URL: "https://mainnet.base.org",
         TURNSTILE_SITE_KEY: "0x4AAAAAAFkggsScyaPIMp2v",
         CF_ANALYTICS_TOKEN: "1c8d90533d834474833d04a8b62d5117",
-        SUBSCRIBE_ENABLED: "false",
+        SUBSCRIBE_ENABLED: "true",
         NODE_OPTIONS: "--enable-source-maps",
       },
     });

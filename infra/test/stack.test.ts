@@ -11,7 +11,7 @@ test("Lambda runs outside any VPC and talks to Postgres through the Data API", (
   const fns = t.findResources("AWS::Lambda::Function", { Properties: { Runtime: "nodejs22.x" } });
   const app = Object.values(fns).find((f: any) => f.Properties.Environment?.Variables?.DB_CLUSTER_ARN) as any;
   expect(app.Properties.VpcConfig).toBeUndefined();
-  expect(app.Properties.Environment.Variables).toMatchObject({ REGISTRY_HOST: "openentity.org", STAMP_BITS: "20", SUBSCRIBE_ENABLED: "false" });
+  expect(app.Properties.Environment.Variables).toMatchObject({ REGISTRY_HOST: "openentity.org", STAMP_BITS: "20", SUBSCRIBE_ENABLED: "true" });
   t.hasResourceProperties("AWS::RDS::DBCluster", { Engine: "aurora-postgresql", EnableHttpEndpoint: true, DeletionProtection: true });
 });
 
