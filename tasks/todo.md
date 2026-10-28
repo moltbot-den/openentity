@@ -21,7 +21,7 @@ Ecosystem tie-ins (all key agents by the EID):
 Open (owner):
 - [x] npm: `openentity` 0.5.0 and `@openentity/sdk` 0.3.0 live 2026-10-27; 0.4.0 stage rejected
 - [ ] Base ETH for the securemyagent issuer address to turn on `BASE_ANCHOR` (new spend)
-- [x] Customer.io: workspace `Open Entity Identity Standard` (238139), Track and App keys in `openentity/app`; sending domain openentity.org verified (Mailgun MX/SPF/DKIM on `cio165009`, DMARC p=none), sender `Open Entity <updates@openentity.org>`; automations 1 (double opt-in confirm) and 2 (operator snippet) running; segment `openentity-updates` (17) is the digest audience; MCP `customerio-openentity` is project-scoped
+- [x] Customer.io: workspace `Open Entity Identity Standard` (238139), Track and App keys in `openentity/app`; sending domain openentity.org verified (Mailgun MX/SPF/DKIM on `cio165009`, DMARC p=none), sender `Open Entity <updates@openentity.org>`; automation 1 (double opt-in confirm) running; automation 2 (operator snippet) archived with the checkbox on 2026-10-28; segment `openentity-updates` (17) is the digest audience; MCP `customerio-openentity` is project-scoped
 - [ ] Social accounts for the herald loop (PRD 7.9); outreach drafts in `docs/outreach/` (IANA, W3C/IETF, AAIF, launch posts) are Will's to send
 - [ ] mcp.so listing costs $39 (skipped); mcpservers.org approval emails go to identity@openentity.org (confirm the mailbox exists)
 

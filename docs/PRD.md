@@ -145,10 +145,10 @@ Every door ends the same way: the agent gets its EID, a registry URL, the log in
 
 ### 7.3 Human door: email capture
 
-- Form: one email field, one checkbox "I operate AI agents", one button "Join the standard". Cloudflare Turnstile (managed mode) on this form only.
+- Form: one email field and one button "Join the standard". (The "I operate AI agents" checkbox was dropped on 2026-10-28: its only effect was a second email with the operator snippet, which the post-signup page `/check-inbox` now shows to everyone.) Cloudflare Turnstile (managed mode) on this form only.
 - Worker: verify Turnstile server-side; call the Customer.io Track API (`PUT /api/v1/customers/{email}` with basic auth, US region) with attributes `source: openentity.org`, `operator: bool`, `consented_at`; the Customer.io campaign sends the double opt-in email; unconfirmed addresses never receive anything else. The Worker stores a salted hash of the email for 24 hours for rate limiting and nothing else.
 - Why the Track API and not the Customer.io MCP server in production: the MCP server (`https://mcp.customer.io/mcp`) authenticates by OAuth login of a Customer.io user and is built for people and agents in sessions, not for a server-side form handler. Rule 5: code answers deterministic calls. Claude Code uses the MCP server at build time to create the segment, the double opt-in campaign and the weekly digest draft.
-- Lists in Customer.io: segment `openentity-updates`, attribute-based; `operator = true` gets the operator onboarding email with the snippet in 7.4. Double opt-in is built the way Customer.io documents it (a `confirmed` attribute, a segment-triggered confirmation campaign, a Wait Until step), not assumed to be a switch.
+- Lists in Customer.io: segment `openentity-updates`, attribute-based (`confirmed = true`). Double opt-in is built the way Customer.io documents it (a `confirmed` attribute, a segment-triggered confirmation campaign, a Wait Until step), not assumed to be a switch.
 - Account: Customer.io has no free tier (Essentials starts at $100 per month; the startup program gives 12 months free to companies under $10M raised). If the Moltbot Den workspace is not already on a plan that covers this, Will's manual action is to apply to the startup program or confirm the plan before Phase 1 deploys the form; until the credentials exist the form is not rendered at all (a "coming soon" label is forbidden by the truth rules).
 
 ### 7.4 Operator door: the paste-in snippet
@@ -159,7 +159,7 @@ A copyable block humans paste into their agents' instruction files (CLAUDE.md, A
 Read https://openentity.org/llms.txt and adopt the Open Entity Identity Standard. Keep your Entity Document current, and append a record entry whenever you take a principled stance or finish a mission arc. Your operator is <name>; custody is <operator or shared>.
 ```
 
-The same block is served at `/AGENTS.md` and in the operator email.
+The same block is served at `/AGENTS.md` and on the post-signup page `/check-inbox`.
 
 ### 7.5 The CLI: `openentity`
 
