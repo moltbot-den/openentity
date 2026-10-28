@@ -6,6 +6,7 @@ packages:
   - cli
   - mcp
   - sdk/ts
+  - integrations/langchain/js
   - redirects
   - infra
 onlyBuiltDependencies:

@@ -1,0 +1,105 @@
+{
+ "schema_hash": {
+  "count": "f0765dbf409c74f001806c446f2cf171d8c46b5b15779d54423dde921a4b0670",
+  "flag": "9e056a59d6959ed8cca361e6a9d543f3340d88018ad6837978d4066e260018e1",
+  "job": "b00b70e15aec66a12210d8c24d0e15462d9e8d2a10645c5d8722c52fe23fbf51",
+  "pull_list": "864aa9c9cfcdd3a0a5a8f49e553078ec37225664bca485be218f9b3252dd41b9",
+  "repo": "680f421b60c78c8cf9cf09935ba6e73b4c568352ff7fdf535dfa8e76005b466a",
+  "search": "58d95d4b89b17310a2627b714fe17ca0dabca1ad3c4be40da53bbac89e1150e3",
+  "tags": "681004346c78d5f384b654c986b4eda8fea28010db3be7da70b19aa0080f3ff9",
+  "user": "2aa222aef0f320204249611d3ae6de7e629876286ff3830d412551d9514f960c"
+ },
+ "scrub": [
+  {
+   "in": [
+    "token AKIAABCDE",
+    "FGHIJKLMNOP end"
+   ],
+   "out": "token [REDACTED] end"
+  },
+  {
+   "in": [
+    "ghp_aaaaaaaaaaaaaaaa",
+    "aaaaaaaaaaaaaaaaaaaa"
+   ],
+   "out": "[REDACTED]"
+  },
+  {
+   "in": [
+    "xoxb-12",
+    "3-abcDEF"
+   ],
+   "out": "[REDACTED]"
+  },
+  {
+   "in": [
+    "Authorization: Bearer abcde",
+    "fghijklmnopqrstuvwxyz012345"
+   ],
+   "out": "Authorization: [REDACTED]"
+  },
+  {
+   "in": [
+    "{\"api_key\": \"supersecre",
+    "tvalue\", \"name\": \"keep\"}"
+   ],
+   "out": "{\"api_key\": \"[REDACTED]\", \"name\": \"keep\"}"
+  },
+  {
+   "in": [
+    "password=hunt",
+    "er22 other=ok"
+   ],
+   "out": "password=[REDACTED] other=ok"
+  },
+  {
+   "in": [
+    "postgres://user:pw@db",
+    ".example.com:5432/app"
+   ],
+   "out": "[REDACTED]/app"
+  },
+  {
+   "in": [
+    "https://bob:s3cre",
+    "t@example.com/path"
+   ],
+   "out": "[REDACTED]/path"
+  },
+  {
+   "in": [
+    "sk_live_A1A1A1A1",
+    "A1A1A1A1A1A1A1A1"
+   ],
+   "out": "[REDACTED]"
+  },
+  {
+   "in": [
+    "-----BEGIN RSA PRIVATE KEY-----\nMI",
+    "Iabc\n-----END RSA PRIVATE KEY-----"
+   ],
+   "out": "[REDACTED]"
+  },
+  {
+   "in": [
+    "nothing s",
+    "ecret here"
+   ],
+   "out": "nothing secret here"
+  },
+  {
+   "in": [
+    "{\"title\":\"a token",
+    " of appreciation\"}"
+   ],
+   "out": "{\"title\":\"a token of appreciation\"}"
+  },
+  {
+   "in": [
+    "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOi",
+    "IxMjM0NTY3ODkwIn0.sig_nature-123"
+   ],
+   "out": "[REDACTED]"
+  }
+ ]
+}

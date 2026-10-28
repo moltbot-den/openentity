@@ -9,13 +9,13 @@ on:
       package:
         description: Package directory to publish
         type: choice
-        options: [cli, sdk/ts, sdk/python]
+        options: [cli, sdk/ts, sdk/python, integrations/langchain/js, integrations/langchain/python]
 permissions:
   id-token: write
   contents: read
 jobs:
   publish:
-    if: inputs.package != 'sdk/python'
+    if: inputs.package != 'sdk/python' && inputs.package != 'integrations/langchain/python'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -34,7 +34,7 @@ jobs:
         run: pnpm pack --pack-destination "$RUNNER_TEMP" && npm stage publish "$RUNNER_TEMP"/*.tgz --access public
 
   pypi:
-    if: inputs.package == 'sdk/python'
+    if: inputs.package == 'sdk/python' || inputs.package == 'integrations/langchain/python'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -46,8 +46,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - uses: astral-sh/setup-uv@v6
       - run: bash scripts/verify.sh
-      - working-directory: sdk/python
+      - working-directory: ${{ inputs.package }}
         run: uv build
       - uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          packages-dir: sdk/python/dist
+          packages-dir: ${{ inputs.package }}/dist

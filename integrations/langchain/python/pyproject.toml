@@ -1,0 +1,39 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "langchain-openentity"
+version = "0.1.0"
+description = "RuthlessSchemaGuard: LangChain middleware and HTTP transport guard that raises on malformed API and tool responses, with an optional signed ledger reporter."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+dependencies = [
+    "langchain>=1.4",
+    "pydantic>=2",
+    "httpx",
+    "jsonschema>=4.18",
+]
+
+[project.optional-dependencies]
+requests = ["requests"]
+aiohttp = ["aiohttp"]
+ledger = ["openentity>=0.4"]
+
+[project.urls]
+Homepage = "https://openentity.org"
+Documentation = "https://oeis.dev"
+Source = "https://github.com/moltbot-den/openentity"
+
+[dependency-groups]
+dev = ["pytest>=8", "requests", "aiohttp", "httpx2", "openentity"]
+
+[tool.uv.sources]
+openentity = { path = "../../../sdk/python" }
+
+[tool.hatch.build.targets.wheel]
+packages = ["langchain_openentity"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -1,0 +1,180 @@
+{
+ "count": {
+  "type": "integer"
+ },
+ "flag": {
+  "properties": {
+   "success": {
+    "type": "boolean"
+   }
+  },
+  "required": [
+   "success"
+  ],
+  "type": "object"
+ },
+ "job": {
+  "properties": {
+   "error": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "id": {
+    "type": "string"
+   },
+   "state": {
+    "enum": [
+     "queued",
+     "running",
+     "done",
+     "failed"
+    ]
+   }
+  },
+  "required": [
+   "id",
+   "state"
+  ],
+  "type": "object"
+ },
+ "pull_list": {
+  "items": {
+   "properties": {
+    "draft": {
+     "type": "boolean"
+    },
+    "merged_at": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "number": {
+     "type": "integer"
+    },
+    "state": {
+     "enum": [
+      "open",
+      "closed"
+     ]
+    },
+    "title": {
+     "type": "string"
+    },
+    "user": {
+     "properties": {
+      "login": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "login"
+     ],
+     "type": "object"
+    }
+   },
+   "required": [
+    "number",
+    "title",
+    "state",
+    "user"
+   ],
+   "type": "object"
+  },
+  "type": "array"
+ },
+ "repo": {
+  "properties": {
+   "description": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "id": {
+    "type": "integer"
+   },
+   "name": {
+    "type": "string"
+   },
+   "private": {
+    "type": "boolean"
+   },
+   "stargazers_count": {
+    "minimum": 0,
+    "type": "integer"
+   }
+  },
+  "required": [
+   "id",
+   "name",
+   "private",
+   "stargazers_count"
+  ],
+  "type": "object"
+ },
+ "search": {
+  "properties": {
+   "items": {
+    "items": {
+     "properties": {
+      "id": {
+       "type": "integer"
+      },
+      "score": {
+       "type": "number"
+      }
+     },
+     "required": [
+      "id",
+      "score"
+     ],
+     "type": "object"
+    },
+    "type": "array"
+   },
+   "total_count": {
+    "type": "integer"
+   }
+  },
+  "required": [
+   "total_count",
+   "items"
+  ],
+  "type": "object"
+ },
+ "tags": {
+  "items": {
+   "type": "string"
+  },
+  "type": "array"
+ },
+ "user": {
+  "properties": {
+   "created_at": {
+    "type": "string"
+   },
+   "email": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "id": {
+    "type": "integer"
+   },
+   "login": {
+    "minLength": 1,
+    "type": "string"
+   }
+  },
+  "required": [
+   "id",
+   "login",
+   "created_at"
+  ],
+  "type": "object"
+ }
+}
