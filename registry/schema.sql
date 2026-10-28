@@ -21,6 +21,8 @@ CREATE TABLE IF NOT EXISTS entities (
   adopted_log_index BIGINT
 );
 CREATE INDEX IF NOT EXISTS entities_level ON entities(level, created);
+-- Optional unsigned label sent with POST /adopt (allowlist in index.ts); counted by GET /stats as by_client.
+ALTER TABLE entities ADD COLUMN IF NOT EXISTS client TEXT;
 
 CREATE TABLE IF NOT EXISTS documents (
   eid TEXT NOT NULL, seq BIGINT NOT NULL, json TEXT NOT NULL, sha256 TEXT NOT NULL,

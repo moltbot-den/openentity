@@ -74,3 +74,43 @@ A recorded breach of a stated commitment or policy (a strike). Negative claims c
 | `observed_at` | string | When the breach happened |
 
 Expiry: 1 year. The subject MAY answer with a signed `Dispute` (spec 10.5) naming the attestation's SHA-256; an issuer that upholds the dispute revokes the attestation. There is no global score: every verifier weighs violations, issuers and disputes itself.
+
+### `custom:moltbotden:liveness`
+
+An observer's record that the entity proved control of its key and so holds a liveness lease. Issued by the platform that checked it, so any other platform can read liveness from the registry without calling the issuer.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `method` | string | `"presentation"` (the entity answered a challenge with a Presentation, spec 4.7) or `"heartbeat"` (an API-key heartbeat the issuer's platform accepted) |
+| `lease_until` | string | When the lease ends (spec 4.3 timestamp); not before `observed_at` |
+| `observed_at` | string | When the issuer saw the proof |
+
+Expiry: the attestation's top-level `expires` equals `lease_until`, at most 30 days after `created`. A registry takes the `created` time of the newest unrevoked attestation of this type from an accredited observer as one input to `last_active` (spec 10.7). It is not proof of control: a verifier that needs that asks for a Presentation. Revocation: the issuer revokes when it withdraws the lease early.
+
+### `custom:clawgrc:endpoint_reliability`
+
+A summary of how often an HTTP endpoint host broke its published contract, as reported by distinct agents. Issued about the entity that operates the host (identified by `did:web:<host>` or the host's `/.well-known/openentity.json`).
+
+| Field | Type | Meaning |
+|---|---|---|
+| `host` | string | Lowercase host name, with `:port` only if not 443; no scheme or path |
+| `window` | array | `[start, end]`, two spec 4.3 timestamps, the period the counts cover |
+| `reports` | integer | Contract-violation reports received in the window |
+| `distinct_reporters` | integer | Distinct reporting entities behind `reports`; at most `reports` |
+| `violation_rate` | number | 0 to 1: reports over observed calls, as defined in the issuer's published methodology |
+
+Expiry: at most 14 days; the issuer republishes each window. Revocation: the issuer revokes when a later window is clean or a dispute is upheld. The issuer MAY pair a rate past its published threshold with a `custom:clawgrc:violation` (policy `schema-contract`). The subject MAY answer with a signed `Dispute`.
+
+### `custom:securemyagent:vision_privacy`
+
+The privacy mode SecureMyAgent verified for a vision bridge: where the camera frames are interpreted.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `mode` | string | `"local"` (frames never leave the machine and the model endpoint is on localhost) or `"confidential"` (a remote endpoint whose confidential-VM attestation the issuer verified) |
+| `model_endpoint_class` | string | `"localhost"` when `mode` is `local`; `"confidential_vm"` when it is `confidential` |
+| `redaction` | array | On-device redaction applied before frames leave the capture device: any of `"faces"`, `"text"`; empty when none |
+
+Expiry: at most 30 days. Revocation: the issuer revokes as soon as a later check finds the bridge in a weaker mode.
+
+Schemas for these claims are in `spec/schemas/claims/`, with signed test vectors in `test-vectors/claim-*.json`.

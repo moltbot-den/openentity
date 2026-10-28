@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openentity.org/spec/1.0/schemas/claims/clawgrc-endpoint_reliability.json",
+  "title": "custom:clawgrc:endpoint_reliability",
+  "description": "The `claim` of an Attestation with claim_type custom:clawgrc:endpoint_reliability (spec/claim-types.md).",
+  "type": "object",
+  "required": [
+    "host",
+    "window",
+    "reports",
+    "distinct_reporters",
+    "violation_rate"
+  ],
+  "properties": {
+    "host": {
+      "type": "string",
+      "pattern": "^[a-z0-9]([a-z0-9.-]*[a-z0-9])?(:[0-9]{1,5})?$",
+      "maxLength": 253
+    },
+    "window": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+      },
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "reports": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "distinct_reporters": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "violation_rate": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    }
+  }
+}

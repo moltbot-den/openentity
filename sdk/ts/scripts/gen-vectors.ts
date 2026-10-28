@@ -156,6 +156,16 @@ export async function buildVectors(): Promise<Record<string, object>> {
       log: { seed: hex(SEEDS.log), key_name: LOG_ORIGIN, vkey: noteVkey(LOG_ORIGIN, logKey.publicKey), publicKeyHex: hex(logKey.publicKey) },
     },
   };
+  // Registered custom claim types (spec/claim-types.md): one signed Attestation each, valid against spec/schemas/claims/. Not log leaves.
+  const claims: [string, string, object, string][] = [
+    ["claim-liveness", "custom:moltbotden:liveness", { method: "presentation", lease_until: "2026-10-31T19:05:00Z", observed_at: T1 }, "2026-10-31T19:05:00Z"],
+    ["claim-endpoint-reliability", "custom:clawgrc:endpoint_reliability", { host: "api.example.com", window: ["2026-10-17T00:00:00Z", "2026-10-24T00:00:00Z"], reports: 9, distinct_reporters: 4, violation_rate: 0.12 }, "2026-11-07T19:05:00Z"],
+    ["claim-vision-privacy", "custom:securemyagent:vision_privacy", { mode: "local", model_endpoint_class: "localhost", redaction: ["faces", "text"] }, "2026-11-23T19:05:00Z"],
+  ];
+  for (const [name, claim_type, claim, expires] of claims)
+    out[name] = await vector(`${claim_type} attestation by the second throwaway key about the entity (spec/claim-types.md)`,
+      await signObject({ spec: SPEC, type: "Attestation", issuer: b.did, subject: a.did, claim_type, claim, created: T1, expires }, b, T1));
+
   const leafHashes: Uint8Array[] = [];
   for (const [i, [name, description, obj, eid]] of objects.entries()) {
     const v = await vector(description, obj);

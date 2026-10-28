@@ -194,7 +194,15 @@ app.get("/spec", async (c) => {
 
 // ---------- adopt (spec 10.2, 6.3, 10.6) ----------
 
-async function adopt(c: C, document: any, declaration: any, extra: Stmt[] = []) {
+/** The unsigned `client` label on POST /adopt: which kind of client adopted, for GET /stats `by_client`. Not part of any signed object. */
+const CLIENTS = ["adk", "goose", "langchain", "ui-tars", "cli", "other"];
+const clientLabel = (body: any): string | null => {
+  if (body?.client == null) return null;
+  if (!CLIENTS.includes(body.client)) fail(422, "invalid_client", `client must be one of ${CLIENTS.join(", ")}`);
+  return body.client;
+};
+
+async function adopt(c: C, document: any, declaration: any, extra: Stmt[] = [], client: string | null = null) {
   const db = c.env.db;
   const eid = normalizeEid(String(document.eid));
   if (normalizeEid(String(declaration.eid)) !== eid) fail(422, "eid_mismatch", "document and declaration name different EIDs");
@@ -215,8 +223,8 @@ async function adopt(c: C, document: any, declaration: any, extra: Stmt[] = []) 
   const idx = await sequenced(db, [dl, doc], [
     ["INSERT INTO declarations (eid, version, json, sha256, received_at, log_index) VALUES ($1, $2, $3, $4, $5, $i)", [eid, declaration.declaration_version, JSON.stringify(declaration), dSha, now]],
     ["INSERT INTO documents (eid, seq, json, sha256, received_at, log_index) VALUES ($1, $2, $3, $4, $5, $i + 1)", [eid, document.seq, JSON.stringify(document), docSha, now]],
-    ["INSERT INTO entities (eid, root_method, name, level, created, updated, custody, latest_seq, adopted_log_index) VALUES ($1, $2, $3, 0, $4, $5, $6, $7, $i)",
-      [eid, eid.split(":")[1], document.name, now, now, document.operator?.custody ?? null, document.seq]],
+    ["INSERT INTO entities (eid, root_method, name, level, created, updated, custody, latest_seq, client, adopted_log_index) VALUES ($1, $2, $3, 0, $4, $5, $6, $7, $8, $i)",
+      [eid, eid.split(":")[1], document.name, now, now, document.operator?.custody ?? null, document.seq, client]],
     ...capabilityStmts(eid, document),
     // Funnel result in the same statement (no extra round trip): seconds since this address read /llms.txt, then the start is spent.
     ["INSERT INTO adopt_funnel (eid, seconds, internal) SELECT $1, $2 - count, $3 FROM rate_events WHERE key = $4 AND window_start = 'fs' AND count > $5",
@@ -256,6 +264,7 @@ const capabilityStmts = (eid: string, doc: any): Stmt[] => [
 
 app.post("/adopt", async (c) => {
   const body = await readJson(c);
+  const client = clientLabel(body);
   if (body?.custodial === true) {
     // Custodial mode (spec 10.6): the registry generates the key, returns it once, keeps a copy only on request.
     await writeGuard(c, REGISTRY_DID);
@@ -265,14 +274,14 @@ app.post("/adopt", async (c) => {
     schema("EntityDocument", document);
     const declaration = await signObject(buildDeclaration({ eid: kp.did, name: String(body.name) }), kp);
     const keep: Stmt[] = body.keep_copy ? [["INSERT INTO custodial_keys (eid, enc_key, created) VALUES ($1, $2, $3)", [kp.did, await encryptKey(c.env, kp.privateJwk), nowIso()]]] : [];
-    const out = await adopt(c, document, declaration, keep);
+    const out = await adopt(c, document, declaration, keep, client);
     return c.json({ ...out, custodial: { private_key_jwk: kp.privateJwk, kept_copy: !!body.keep_copy, warning: "This private key is shown once. Store it; move to self-custody with a rotation Continuity Link." } }, 201);
   }
   const { document, declaration } = body ?? {};
   await writeGuard(c, normalizeEid(String(document?.eid ?? "")));
   schema("EntityDocument", document);
   schema("Declaration", declaration);
-  return c.json(await adopt(c, document, declaration), 201);
+  return c.json(await adopt(c, document, declaration, [], client), 201);
 });
 
 // Custody exit (spec 10.6): a Presentation to this registry proves control; the kept copy is returned once and deleted.
@@ -297,6 +306,9 @@ app.post("/entities/:eid/custody/export", async (c) => {
 
 // ---------- entity reads ----------
 
+/** Spec 10.7: the newest of the entity's last Record entry and its newest unrevoked `custom:moltbotden:liveness` attestation from an accredited observer. */
+const lastActive = (eid: string) => `GREATEST((SELECT received_at FROM record_entries r WHERE r.eid = ${eid} ORDER BY seq DESC LIMIT 1), (SELECT MAX(a.created) FROM attestations a JOIN observers o ON o.did = a.issuer WHERE a.subject = ${eid} AND a.claim_type = 'custom:moltbotden:liveness' AND a.revoked_at IS NULL))`;
+
 app.get("/entities", async (c) => {
   const q = c.req.query();
   const minLevel = Number(/\d/.exec(q.level ?? "1")?.[0] ?? 1);
@@ -311,7 +323,7 @@ app.get("/entities", async (c) => {
   if (q.capability) where.push(`EXISTS (SELECT 1 FROM entity_capabilities k WHERE k.eid = entities.eid AND k.capability = ${$(q.capability)})`);
   if (q.alias_type) where.push(`EXISTS (SELECT 1 FROM aliases a WHERE a.eid = entities.eid AND a.type = ${$(q.alias_type)} AND a.status = 'verified')`);
   const page = Math.max(0, Number(q.page ?? 0) | 0);
-  const rows = await c.env.db.all(`SELECT eid, name, level, level_label, created, adopted_log_index, withdrawn_at, (SELECT received_at FROM record_entries r WHERE r.eid = entities.eid ORDER BY seq DESC LIMIT 1) AS last_active FROM entities WHERE ${where.join(" AND ")} ORDER BY created DESC, eid LIMIT 51 OFFSET ${$(page * 50)}`, args);
+  const rows = await c.env.db.all(`SELECT eid, name, level, level_label, created, adopted_log_index, withdrawn_at, ${lastActive("entities.eid")} AS last_active FROM entities WHERE ${where.join(" AND ")} ORDER BY created DESC, eid LIMIT 51 OFFSET ${$(page * 50)}`, args);
   return c.json({
     entities: rows.slice(0, 50).map((r) => ({ eid: r.eid, name: r.name, level: LEVEL(r.level), level_label: r.level_label, created: r.created, log_index: r.adopted_log_index, withdrawn: !!r.withdrawn_at, last_active: r.last_active })),
     page, next_page: rows.length > 50 ? page + 1 : null,
@@ -326,8 +338,8 @@ app.get("/entities/:eid", async (c) => {
   const decl = await db.first(`SELECT eid, json, log_index, withdrawn_at FROM declarations WHERE eid IN (${IN(chain)}) ORDER BY received_at DESC LIMIT 1`, chain);
   const aliases = await db.all("SELECT type, value, status, verified_at, log_index FROM aliases WHERE eid = $1", [eid]);
   const attestations = (await db.first(`SELECT COUNT(*) AS n FROM attestations WHERE subject IN (${IN(chain)}) AND revoked_at IS NULL`, chain))?.n;
-  // Spec 10.7: derived at read time from the newest verified record entry; the registry never stores or accepts it.
-  const last_active = (await db.first("SELECT received_at FROM record_entries WHERE eid = $1 ORDER BY seq DESC LIMIT 1", [eid]))?.received_at ?? null;
+  // Spec 10.7: derived at read time from the newest verified record entry or liveness attestation; the registry never stores or accepts it.
+  const last_active = (await db.first<{ t: string | null }>(`SELECT ${lastActive("$1")} AS t`, [eid]))?.t ?? null;
   return c.json({
     eid, name: e.name, last_active, document: doc ? JSON.parse(doc) : null,
     declaration: decl ? JSON.parse(decl.json) : null, declaration_note: DECLARATION_NOTE,
@@ -703,8 +715,10 @@ async function stats(env: Env) {
   const byLevel = await db.all<{ level: number; n: number }>("SELECT level, COUNT(*) AS n FROM entities WHERE suppressed = 0 AND level IS NOT NULL GROUP BY level");
   const n = (sql: string, ...a: unknown[]) => db.first<{ n: number }>(sql, a).then((x) => x?.n ?? 0);
   const L = (k: number) => byLevel.find((r) => r.level === k)?.n ?? 0;
+  const labelled = await db.all<{ client: string; n: number }>("SELECT client, COUNT(*) AS n FROM entities WHERE suppressed = 0 AND level IS NOT NULL AND client IS NOT NULL GROUP BY client");
   return {
     entities: { l0: L(0), l1: L(1), l2: L(2), l3: L(3), total: L(0) + L(1) + L(2) + L(3) },
+    by_client: Object.fromEntries(CLIENTS.map((k) => [k, Number(labelled.find((r) => r.client === k)?.n ?? 0)])),
     declarations_today: await n("SELECT COUNT(*) AS n FROM declarations WHERE received_at >= $1", `${today()}T00:00:00Z`),
     record_entries: await n("SELECT COUNT(*) AS n FROM record_entries"),
     attestations: await n("SELECT COUNT(*) AS n FROM attestations WHERE revoked_at IS NULL"),

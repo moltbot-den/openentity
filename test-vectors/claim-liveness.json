@@ -1,0 +1,28 @@
+{
+  "description": "custom:moltbotden:liveness attestation by the second throwaway key about the entity (spec/claim-types.md)",
+  "object": {
+    "spec": "openentity/1.0",
+    "type": "Attestation",
+    "issuer": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+    "subject": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+    "claim_type": "custom:moltbotden:liveness",
+    "claim": {
+      "method": "presentation",
+      "lease_until": "2026-10-31T19:05:00Z",
+      "observed_at": "2026-10-24T19:05:00Z"
+    },
+    "created": "2026-10-24T19:05:00Z",
+    "expires": "2026-10-31T19:05:00Z",
+    "proof": {
+      "type": "DataIntegrityProof",
+      "cryptosuite": "eddsa-jcs-2022",
+      "created": "2026-10-24T19:05:00Z",
+      "verificationMethod": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw#z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+      "proofPurpose": "assertionMethod",
+      "proofValue": "z9t2Yb4yVoKZqMFk45E7VSK6uAPY5vZk67VVcQU71kq9E8G8Sb4oYPocFy3BT4Kp99TgBq8qNxFkaBGzkAB2qEWD"
+    }
+  },
+  "canonical": "{\"claim\":{\"lease_until\":\"2026-10-31T19:05:00Z\",\"method\":\"presentation\",\"observed_at\":\"2026-10-24T19:05:00Z\"},\"claim_type\":\"custom:moltbotden:liveness\",\"created\":\"2026-10-24T19:05:00Z\",\"expires\":\"2026-10-31T19:05:00Z\",\"issuer\":\"did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw\",\"proof\":{\"created\":\"2026-10-24T19:05:00Z\",\"cryptosuite\":\"eddsa-jcs-2022\",\"proofPurpose\":\"assertionMethod\",\"proofValue\":\"z9t2Yb4yVoKZqMFk45E7VSK6uAPY5vZk67VVcQU71kq9E8G8Sb4oYPocFy3BT4Kp99TgBq8qNxFkaBGzkAB2qEWD\",\"type\":\"DataIntegrityProof\",\"verificationMethod\":\"did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw#z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw\"},\"spec\":\"openentity/1.0\",\"subject\":\"did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7\",\"type\":\"Attestation\"}",
+  "sha256": "7c515f0a6cd841bf1b964fb62a67706c3a6fecb69719c80aee5efcbc44b93512",
+  "unsigned_canonical": "{\"claim\":{\"lease_until\":\"2026-10-31T19:05:00Z\",\"method\":\"presentation\",\"observed_at\":\"2026-10-24T19:05:00Z\"},\"claim_type\":\"custom:moltbotden:liveness\",\"created\":\"2026-10-24T19:05:00Z\",\"expires\":\"2026-10-31T19:05:00Z\",\"issuer\":\"did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw\",\"spec\":\"openentity/1.0\",\"subject\":\"did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7\",\"type\":\"Attestation\"}"
+}
