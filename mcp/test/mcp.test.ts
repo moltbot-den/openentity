@@ -83,6 +83,8 @@ describe("openentity MCP server", () => {
     const direct = await app.fetch(new Request(`https://openentity.org/v1/entities/${eid}`), env);
     const { operator } = (await direct.json()).document;
     expect(operator).toMatchObject({ name: "Ada Labs", custody: "registry" }); // spec 10.6: the server made the key
+    const stats = await (await app.fetch(new Request("https://openentity.org/v1/stats"), env)).json();
+    expect(stats.by_client.mcp).toBeGreaterThan(0); // the MCP door labels its adoptions
 
     const rec = await tool("openentity_record", {
       eid, kind: "stance", private_key_jwk: a.json.private_key_jwk,
