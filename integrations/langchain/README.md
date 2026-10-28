@@ -94,13 +94,13 @@ Off unless `OPENENTITY_LEDGER_URL` is set (or `ledger="https://..."` is passed).
 
 Each violation on an HTTP call becomes a report: `host`, `method`, `path_template`, `expected_schema_hash`, `status`, `content_type`, `body_sha256`, a `sample` of at most 2 KB with secrets scrubbed, `framework` and `reporter_eid`. Reports queue in memory, go out in the background in batches (duplicates in a batch collapse), never block the agent, and a failed post is dropped. Each is signed as an Open Entity object (`eddsa-jcs-2022`) with the `openentity` SDK (`pip install langchain-openentity[ledger]`, `@openentity/sdk` for JS). The sample scrubbing uses the same rules as the ClawGRC secret scanner.
 
-The SDK has no identity-loading helper yet, so the signing key comes from a `keypair=` argument or a 32-byte hex seed in `OPENENTITY_SEED_HEX`. With the ledger URL set and no key, the reporter turns itself off and says so. One report is posted per violation as the signed object itself; if the ledger ingest contract settles on a batch envelope, only `LedgerReporter._send` changes. Violations raised on tool output (no URL) are not reported.
+The signing key is the `keypair=` argument, else a 32-byte hex seed in `OPENENTITY_SEED_HEX`, else the machine's Open Entity identity (`Identity.load_or_create` in the SDK: OS keychain, then `~/.openentity/identity.key`, created on first use). One report is posted per violation as the signed object itself; if the ledger ingest contract settles on a batch envelope, only `LedgerReporter._send` changes. Violations raised on tool output (no URL) are not reported.
 
 ## Tests
 
 ```bash
 cd python && uv run pytest -q        # 660 tests
-cd js && pnpm test                   # 650 tests
+cd js && pnpm test                   # 651 tests
 ```
 
 `scripts/verify.sh` runs both. `fixtures/generate.py` regenerates the corpus and asserts it against the Python implementation; edit it, not the JSON.

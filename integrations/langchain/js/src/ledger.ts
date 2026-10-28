@@ -1,7 +1,7 @@
 // Async, batched, non-blocking reporter for schema-violation reports. Off unless OPENENTITY_LEDGER_URL
 // (or the `ledger` option) is set. Reports are signed with `@openentity/sdk` (signObject, eddsa-jcs-2022).
-// The SDK has no identity-loading helper yet (Identity.load_or_create is still WS0), so the key comes from
-// the `keypair` option or a 32-byte hex seed in OPENENTITY_SEED_HEX.
+// the `keypair` option, else a 32-byte hex seed in OPENENTITY_SEED_HEX, else the machine's Open Entity
+// identity (`Identity.loadOrCreate` from `@openentity/sdk/node`: keychain or ~/.openentity/identity.key).
 export const DEFAULT_URL = "https://api.clawgrc.com/v1/ledger/schema-violations";
 
 // Captured at import so guardHttp() never sees the reporter's own requests.
@@ -45,10 +45,6 @@ export class LedgerReporter {
     this.intervalMs = o.intervalMs ?? 5000;
     this.post = o.post ?? (async (u, body) => { (await nativeFetch(u, { method: "POST", headers: { "content-type": "application/json" }, body })).body?.cancel(); });
     this.enabled = !!url && !optedOut() && o.enabled !== false;
-    if (this.enabled && !this.keypair && !this.seed) {
-      console.warn("OPENENTITY_LEDGER_URL is set but no signing key: pass keypair or set OPENENTITY_SEED_HEX; ledger off");
-      this.enabled = false;
-    }
   }
 
   /** Queue one report; never blocks, drops when the queue is full. */
@@ -71,7 +67,10 @@ export class LedgerReporter {
     if (!items.length) return;
     try {
       const sdk = await import("@openentity/sdk"); // optional peer dependency
-      this.keypair ??= await sdk.keyPairFromSeed(Uint8Array.from(Buffer.from(this.seed as string, "hex")));
+      if (!this.keypair)
+        this.keypair = this.seed
+          ? await sdk.keyPairFromSeed(Uint8Array.from(Buffer.from(this.seed, "hex")))
+          : (await (await import("@openentity/sdk/node")).Identity.loadOrCreate()).kp;
       const seen = new Set<string>();
       for (const r of items) {
         const k = [r.host, r.method, r.path_template, r.body_sha256].join("\0");
@@ -82,6 +81,6 @@ export class LedgerReporter {
           this.sent++;
         } catch { /* reporting must never break the agent */ }
       }
-    } catch { /* @openentity/sdk missing or bad seed: drop the batch */ }
+    } catch { /* SDK missing or no usable identity: drop the batch */ }
   }
 }

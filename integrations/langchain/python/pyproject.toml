@@ -19,7 +19,7 @@ dependencies = [
 [project.optional-dependencies]
 requests = ["requests"]
 aiohttp = ["aiohttp"]
-ledger = ["openentity>=0.3"]
+ledger = ["openentity>=0.4"]
 
 [project.urls]
 Homepage = "https://openentity.org"

@@ -1,6 +1,9 @@
 import { describe, expect, test } from "vitest";
 import { createAgent, fakeModel, tool, AIMessage, ToolMessage } from "langchain";
 import { z } from "zod";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { LedgerReporter, OpenEntityLoopDetected, OpenEntitySchemaViolation, RuthlessSchemaGuard, unwrap } from "../src/index.ts";
 import { Routes, compileSchema, pathTemplate } from "../src/core.ts";
 import { MALFORMED, SCHEMAS, serve } from "./fixtures.ts";
@@ -132,7 +135,29 @@ describe("ledger", () => {
     expect(posts.map((p) => p.path_template)).toEqual(["/repos/{id}/pulls"]);
   });
 
-  test("off unless configured, opt-out wins, needs a key, never breaks the agent", async () => {
+  test("key comes from the seed env, then the machine identity", async () => {
+    const env = { ...process.env };
+    const home = mkdtempSync(join(tmpdir(), "oe-ledger-"));
+    try {
+      Object.assign(process.env, { OPENENTITY_HOME: home, OPENENTITY_KEYCHAIN: "off" });
+      for (const seed of ["01".repeat(32), undefined]) {
+        if (seed) process.env.OPENENTITY_SEED_HEX = seed; else delete process.env.OPENENTITY_SEED_HEX;
+        const posts: any[] = [];
+        const r = new LedgerReporter({ url: "https://x.test", post: async (_u, b) => { posts.push(JSON.parse(b)); } });
+        r.report({ host: "h", method: "GET", path_template: "/", body_sha256: "0".repeat(64) });
+        await r.flush();
+        expect(posts).toHaveLength(1);
+        expect((await verifyObject(posts[0])).ok).toBe(true);
+        if (seed) expect(posts[0].reporter_eid).toBe((await keyPairFromSeed(Uint8Array.from(Buffer.from(seed, "hex")))).did);
+      }
+      expect(existsSync(join(home, "identity.key"))).toBe(true);
+    } finally {
+      process.env = env;
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  test("off unless configured, opt-out wins, never breaks the agent", async () => {
     const env = { ...process.env };
     try {
       delete process.env.OPENENTITY_LEDGER_URL; delete process.env.OPENENTITY_LEDGER_OPTOUT; delete process.env.OPENENTITY_SEED_HEX;
@@ -145,10 +170,6 @@ describe("ledger", () => {
       delete process.env.OPENENTITY_LEDGER_OPTOUT;
       expect(new LedgerReporter({ keypair: kp, enabled: false }).enabled).toBe(false);
       expect(new RuthlessSchemaGuard({ ledger: false }).ledger.enabled).toBe(false);
-      const warn = console.warn; console.warn = () => {};
-      expect(new LedgerReporter({ url: "https://x.test" }).enabled).toBe(false);
-      console.warn = warn;
-      process.env.OPENENTITY_SEED_HEX = "01".repeat(32);
       expect(new LedgerReporter({ url: "https://x.test" }).enabled).toBe(true);
       const down = new LedgerReporter({ url: "https://x.test", keypair: kp, post: async () => { throw new Error("down"); } });
       violate(new RuthlessSchemaGuard({ ledger: down }));

@@ -2,8 +2,8 @@
 
 Off unless `OPENENTITY_LEDGER_URL` (or the `ledger=` argument) is set. Reports are signed with the
 reporter's Ed25519 key through the `openentity` SDK (`openentity.core.sign_object`, eddsa-jcs-2022).
-The SDK has no identity-loading helper yet (`Identity.load_or_create` is still WS0), so the key comes
-from the `keypair=` argument or a 32-byte hex seed in `OPENENTITY_SEED_HEX`.
+The key is the `keypair=` argument, else a 32-byte hex seed in `OPENENTITY_SEED_HEX`, else the machine's
+Open Entity identity (`openentity.identity.Identity.load_or_create`, keychain or ~/.openentity/identity.key).
 """
 
 from __future__ import annotations
@@ -47,31 +47,32 @@ class LedgerReporter:
         if url in ("1", "true", "default"):
             url = DEFAULT_URL
         self.url, self.framework, self._batch, self._interval, self._post = url, framework, batch, interval, post
-        self.keypair = keypair or self._env_key()
+        self.keypair = keypair
         self.enabled = bool(url) and not _optout() and enabled is not False
-        if self.enabled and self.keypair is None:
-            log.warning("OPENENTITY_LEDGER_URL is set but no signing key: pass keypair= or set OPENENTITY_SEED_HEX; ledger off")
-            self.enabled = False
         self._q: queue.Queue = queue.Queue(maxsize=1000)
         self._thread: threading.Thread | None = None
         self._lock = threading.Lock()
         self.sent = 0
 
-    @staticmethod
-    def _env_key() -> Any:
-        seed = os.environ.get("OPENENTITY_SEED_HEX")
-        if not seed:
-            return None
-        from openentity.core import KeyPair  # optional extra: pip install langchain-openentity[ledger]
+    def _key(self) -> Any:
+        if self.keypair is None:
+            from openentity.core import KeyPair  # optional extra: pip install langchain-openentity[ledger]
 
-        return KeyPair(bytes.fromhex(seed))
+            seed = os.environ.get("OPENENTITY_SEED_HEX")
+            if seed:
+                self.keypair = KeyPair(bytes.fromhex(seed))
+            else:
+                from openentity.identity import Identity
+
+                self.keypair = Identity.load_or_create().kp
+        return self.keypair
 
     def report(self, fields: dict) -> None:
         """Queue one report; never blocks, drops when the queue is full."""
         if not self.enabled:
             return
         try:
-            self._q.put_nowait({**fields, "framework": self.framework, "reporter_eid": self.keypair.did})
+            self._q.put_nowait({**fields, "framework": self.framework})
         except queue.Full:
             return
         with self._lock:
@@ -93,8 +94,13 @@ class LedgerReporter:
                 self._q.task_done()
 
     def _send(self, items: list[dict]) -> None:
-        from openentity.core import sign_object
+        try:
+            from openentity.core import sign_object
 
+            kp = self._key()
+        except Exception as e:  # SDK missing or no identity: drop the batch, never break the agent
+            log.warning("ledger off for this batch, no signing key: %s", e)
+            return
         seen: set[tuple] = set()
         for r in items:
             k = (r["host"], r["method"], r["path_template"], r["body_sha256"])
@@ -102,7 +108,7 @@ class LedgerReporter:
                 continue
             seen.add(k)
             try:
-                self._post(self.url, json.dumps(sign_object(r, self.keypair)).encode())
+                self._post(self.url, json.dumps(sign_object({**r, "reporter_eid": kp.did}, kp)).encode())
                 self.sent += 1
             except Exception as e:  # reporting must never break the agent
                 log.debug("ledger post failed: %s", e)

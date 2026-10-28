@@ -58,11 +58,23 @@ def test_ledger_is_off_unless_configured_and_honors_opt_out(monkeypatch):
     assert RuthlessSchemaGuard(ledger=False).ledger.enabled is False
 
 
-def test_ledger_needs_a_key(monkeypatch):
-    monkeypatch.delenv("OPENENTITY_SEED_HEX", raising=False)
-    assert LedgerReporter(url="https://x.test").enabled is False
-    monkeypatch.setenv("OPENENTITY_SEED_HEX", "01" * 32)
-    assert LedgerReporter(url="https://x.test").enabled is True
+def test_key_comes_from_seed_env_then_the_machine_identity(monkeypatch, tmp_path):
+    monkeypatch.setenv("OPENENTITY_HOME", str(tmp_path))
+    monkeypatch.setenv("OPENENTITY_KEYCHAIN", "off")
+    for seed in ("01" * 32, None):
+        monkeypatch.delenv("OPENENTITY_SEED_HEX", raising=False)
+        if seed:
+            monkeypatch.setenv("OPENENTITY_SEED_HEX", seed)
+        posts = []
+        r = LedgerReporter(url="https://x.test", interval=0.01, post=lambda u, b: posts.append(json.loads(b)))
+        assert r.enabled
+        r.report({"host": "h", "method": "GET", "path_template": "/", "body_sha256": "0" * 64})
+        r.flush()
+        (rep,) = posts
+        assert verify_object(rep)[0] and rep["reporter_eid"] == r.keypair.did
+        if seed:
+            assert rep["reporter_eid"] == KeyPair(bytes.fromhex(seed)).did
+    assert (tmp_path / "identity.key").exists()  # the second pass created the machine identity
 
 
 def test_a_failing_ledger_never_breaks_the_agent():
