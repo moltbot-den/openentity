@@ -35,4 +35,9 @@ if [ -d integrations/adk/python ]; then
   (cd integrations/adk/python && uv run --quiet pytest -q) || fail=1
 fi
 
+# goose recipe and deeplinks stay in step.
+if [ -d integrations/goose ]; then
+  uv run --quiet --with pyyaml --with pytest pytest -q integrations/goose || fail=1
+fi
+
 exit $fail
