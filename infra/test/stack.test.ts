@@ -109,3 +109,22 @@ test("the app role can read and append to the log bucket but never delete from i
   expect(json).toContain("s3:PutObject");
   expect(json).not.toMatch(/s3:DeleteObject/);
 });
+
+test("identity@ mail is stored raw in a private bucket, then forwarded", () => {
+  t.hasResourceProperties("AWS::SES::ReceiptRule", {
+    Rule: Match.objectLike({
+      Recipients: ["identity@openentity.org"],
+      Actions: [
+        Match.objectLike({ S3Action: Match.objectLike({ ObjectKeyPrefix: "inbound/identity/" }) }),
+        Match.objectLike({ LambdaAction: Match.objectLike({ InvocationType: "Event" }) }),
+      ],
+    }),
+  });
+});
+
+test("the forward sets Reply-To to the sender and attaches the original", async () => {
+  const { buildForward } = await import("../lambda/forward.ts");
+  const m = buildForward({ to: "op@example.com", from: "identity@openentity.org", replyTo: "A <a@x.org>\r\nBcc: z@z", subject: "hi", raw: new TextEncoder().encode("orig"), id: "1" });
+  expect(m).toContain("Reply-To: A <a@x.org> Bcc: z@z\r\n");
+  expect(m).toContain("b3JpZw==");
+});
