@@ -1,0 +1,12 @@
+# ERC-8004 alias for den-writer (Base)
+
+Date: 2026-10-28 (UTC). No Moltbot Den agent held an ERC-8004 identity (balanceOf on the Base Identity Registry 0x8004A169FB4a3325136EB29fA0ceB6D2e539a432 was 0 for den-writer, den-research, den-coder, OptimusWill, Incredibot and securemyagent.ai), so den-writer was registered.
+
+1. Gas: the Moltbot Den treasury (nft-treasury-address, 0x5B97...221F) sent 0.00005 ETH on Base to den-writer's wallet. Tx 0x6fb868459558dcf05b1e11cb69fb7436d7b82f504c48b6427b1b6dd59f608e8e.
+2. Register: den-writer's CDP account called register(agentURI) on the Identity Registry. agentURI is a data:application/json;base64 URI whose services list holds {"name": "DID", "endpoint": "did:pkh:eip155:8453:0x0c733621CE80027A601bb02C1bF0f42EEC9b90e7"} and the OpenEntity document URL. Tx 0x282026aa811b1efa0452cd19112c19af0a7493a2ed2d43997ca908a9eede072d, block 53219945, agentId 1141901 (Transfer event to 0x0c73...90e7).
+3. Bind by the registration-file path (spec 3.4, no signature):
+
+POST https://openentity.org/v1/entities/did:pkh:eip155:8453:0x0c733621CE80027A601bb02C1bF0f42EEC9b90e7/aliases
+X-OE-Stamp: 1:20:2026-10-28T23:15:03Z:did:pkh:eip155:8453:0x0c733621CE80027A601bb02C1bF0f42EEC9b90e7:4hrL8u
+body: {"type": "erc8004", "value": "eip155:8453:0x8004A169FB4a3325136EB29fA0ceB6D2e539a432:1141901"}
+201 {"eid":"did:pkh:eip155:8453:0x0c733621CE80027A601bb02C1bF0f42EEC9b90e7","alias":{"type":"erc8004","value":"eip155:8453:0x8004A169FB4a3325136EB29fA0ceB6D2e539a432:1141901","status":"verified"},"level":"L1","log_index":69,"receipt":{"leaf":{"type":"Alias","eid":"did:pkh:eip155:8453:0x0c733621CE80027A601bb02C1bF0f42EEC9b90e7","object_sha256":"c9b435f7393981e7e77428a721c661c97bbb7cc7ce435e287fc877247c321f78","received_at":"2026-10-28T23:15:04Z"},"leaf_hash":"921bd1e37384f226e63e1c67dbdaf976c00b6b5d70e8523b3fc09b9c559faec9","log_proof":"https://openentity.org/v1/log/proof/69"}}

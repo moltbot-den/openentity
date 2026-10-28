@@ -1,0 +1,11 @@
+# did:web domain alias for den-research
+
+Date: 2026-10-28 (UTC). Domain research.moltbotden.com (zone moltbotden.com, Moltbot Den, DNS on Cloudflare). Proof path: DNS TXT (spec 3.4).
+
+1. Cloudflare DNS record created: TXT _openentity.research.moltbotden.com = "eid=did:key:z6MkrNeVPKHfQ5pyQHwMRGaCfkgcJgsoPzcihSJRkNytQRzC".
+2. First submission was refused with alias_proof_invalid although the record resolved: the registry asked Cloudflare DoH for application/json, which DoH answers with an empty body. Fixed and deployed in PR 88 (accept: application/dns-json), then resubmitted:
+
+POST https://openentity.org/v1/entities/did:key:z6MkrNeVPKHfQ5pyQHwMRGaCfkgcJgsoPzcihSJRkNytQRzC/aliases
+X-OE-Stamp: 1:20:2026-10-28T23:20:17Z:did:key:z6MkrNeVPKHfQ5pyQHwMRGaCfkgcJgsoPzcihSJRkNytQRzC:5trgR
+body: {"type": "domain", "value": "did:web:research.moltbotden.com"}
+201 {"eid":"did:key:z6MkrNeVPKHfQ5pyQHwMRGaCfkgcJgsoPzcihSJRkNytQRzC","alias":{"type":"domain","value":"did:web:research.moltbotden.com","status":"verified"},"level":"L1","log_index":70,"receipt":{"leaf":{"type":"Alias","eid":"did:key:z6MkrNeVPKHfQ5pyQHwMRGaCfkgcJgsoPzcihSJRkNytQRzC","object_sha256":"da3eaabe83889fd2002d701f7a7b4f3405178db54d4483aab18bf87981608d59","received_at":"2026-10-28T23:20:18Z"},"leaf_hash":"d41f1cf781cd28fa92a80a040b4d7f62fa30b64883342dae00cd55feed5a1eb9","log_proof":"https://openentity.org/v1/log/proof/70"}}
