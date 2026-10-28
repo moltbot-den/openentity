@@ -277,7 +277,7 @@ export class OpenEntityStack extends Stack {
       additionalBehaviors: { "/_astro/*": { ...immutable, origin: hubOrigin }, "/pagefind/*": { ...immutable, origin: hubOrigin } },
     });
 
-    // ---- Mail: identity@openentity.org lands in S3 and is forwarded to OPERATOR_EMAIL in the app secret ----
+    // ---- Mail: every openentity.org address (identity@ is the published one) lands in S3 and is forwarded to OPERATOR_EMAIL in the app secret ----
     // SES allows one active rule set per region; activate it once after deploy (docs/MAILBOX.md). The DKIM CNAMEs
     // and the apex MX live in Cloudflare DNS.
     const mailIdentity = new ses.EmailIdentity(this, "MailIdentity", { identity: ses.Identity.domain(DOMAIN) });
@@ -307,7 +307,7 @@ export class OpenEntityStack extends Stack {
     new ses.ReceiptRuleSet(this, "MailRules", {
       receiptRuleSetName: "openentity-inbound",
       rules: [{
-        recipients: [`identity@${DOMAIN}`],
+        recipients: [DOMAIN], // catch-all: the apex MX moved off Google Workspace, so no address may bounce
         scanEnabled: true,
         actions: [
           new sesActions.S3({ bucket: mailBucket, objectKeyPrefix: MAIL_PREFIX }),
