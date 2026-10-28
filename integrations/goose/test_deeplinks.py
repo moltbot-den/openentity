@@ -19,7 +19,7 @@ def test_recipe_extensions_are_streamable_http_with_a_timeout():
 def test_header_keys_come_from_env_keys_never_inline():
     for e in RECIPE["extensions"]:
         for value in (e.get("headers") or {}).values():
-            var = re.fullmatch(r"\$\{(\w+)\}", value)
+            var = re.fullmatch(r"(?:Bearer )?\$\{(\w+)\}", value)
             assert var and var.group(1) in e["env_keys"]
 
 
@@ -29,7 +29,13 @@ def test_every_recipe_endpoint_has_a_deeplink_with_the_same_url():
 
 
 def test_links_carry_the_fields_goose_requires():
-    assert len(LINKS) == 3
+    assert len(LINKS) == 4
     for link in LINKS:
         q = parse_qs(urlparse(link).query)
         assert q["type"] == ["streamable_http"] and q["name"][0] and q["id"][0]
+
+
+def test_no_link_carries_a_credential():
+    for link in LINKS:
+        for header in parse_qs(urlparse(link).query).get("header", []):
+            assert header.endswith("="), header  # name only; the key is pasted into goose

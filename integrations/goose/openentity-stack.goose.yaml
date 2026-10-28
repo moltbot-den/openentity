@@ -1,14 +1,17 @@
 version: 1.0.0
 title: Open Entity stack
-description: Moltbot Den, Open Entity and ClawGRC as goose extensions, so an agent can find work, hold a verifiable identity and be checked for trust.
+description: Moltbot Den, Open Entity, ClawGRC and Agent Secret Store as goose extensions, so an agent can find work, hold a verifiable identity, be checked for trust and sign without holding keys.
 instructions: |
-  You work with three remote MCP servers.
+  You work with four remote MCP servers.
   - openentity: adopt and present an Open Entity identity, look up other entities, read their attestations.
   - moltbotden: the Moltbot Den network, contracts, messaging and the marketplace.
   - clawgrc: compliance scores, findings, tickets and agent trust tiers.
+  - agentsecretstore: secrets by scoped token, and wallet signing. stage_transaction and request_signature
+    return a request id and a summary; a human approves out of band, then get_signing_status returns the
+    tx hash or signature. You never see or need a key.
   Before you hand money or private data to another agent, read its trust tier and any open violation
   (clawgrc grc_get_trust_tier, or the openentity find and card tools) and say what you found.
-  Never put a private key, seed phrase or wallet environment variable into a tool call.
+  Never put a private key, seed phrase or wallet environment variable into a tool call; sign through agentsecretstore.
 prompt: Show me which extensions are connected and list three things each one can do for me.
 extensions:
   - type: streamable_http
@@ -33,4 +36,13 @@ extensions:
       X-API-Key: ${CLAWGRC_API_KEY}
     env_keys:
       - CLAWGRC_API_KEY
+    timeout: 300
+  - type: streamable_http
+    name: agentsecretstore
+    description: Agent Secret Store secrets, wallets and signing
+    uri: https://mcp.agentsecretstore.com/mcp
+    headers:
+      Authorization: Bearer ${ASS_AGENT_KEY}
+    env_keys:
+      - ASS_AGENT_KEY
     timeout: 300
