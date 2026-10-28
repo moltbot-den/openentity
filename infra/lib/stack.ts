@@ -22,6 +22,8 @@ import {
   aws_scheduler as scheduler,
   aws_scheduler_targets as targets,
   aws_secretsmanager as sm,
+  aws_ses as ses,
+  aws_ses_actions as sesActions,
   aws_sns as sns,
   aws_sns_subscriptions as subs,
 } from "aws-cdk-lib";
@@ -34,6 +36,7 @@ export const ALERT_EMAIL = "will+aws-openentity@onefrequency.ai";
 export const GITHUB_SUB = "repo:moltbot-den@263048018/openentity@1432633160:ref:refs/heads/main";
 // Created out of band from the GCP Secret Manager copies (moltbot-den project): REGISTRY_KEY_JWK, CUSTODY_KEY, HASH_SALT, TURNSTILE_SECRET, ORIGIN_VERIFY, optional CIO_*.
 export const APP_SECRET = "openentity/app";
+export const MAIL_PREFIX = "inbound/identity/";
 
 // What the site's pages load: their own files, the Cloudflare Web Analytics beacon, and Turnstile on the
 // subscribe form. Pagefind search needs WebAssembly. No page may be framed.
@@ -272,6 +275,51 @@ export class OpenEntityStack extends Stack {
       httpVersion: cf.HttpVersion.HTTP2_AND_3,
       defaultBehavior: { ...dynamic, origin: hubOrigin, allowedMethods: cf.AllowedMethods.ALLOW_GET_HEAD },
       additionalBehaviors: { "/_astro/*": { ...immutable, origin: hubOrigin }, "/pagefind/*": { ...immutable, origin: hubOrigin } },
+    });
+
+    // ---- Mail: identity@openentity.org lands in S3 and is forwarded to OPERATOR_EMAIL in the app secret ----
+    // SES allows one active rule set per region; activate it once after deploy (docs/MAILBOX.md). The DKIM CNAMEs
+    // and the apex MX live in Cloudflare DNS.
+    const mailIdentity = new ses.EmailIdentity(this, "MailIdentity", { identity: ses.Identity.domain(DOMAIN) });
+    const mailBucket = new s3.Bucket(this, "MailBucket", {
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      encryption: s3.BucketEncryption.S3_MANAGED,
+      enforceSSL: true,
+      removalPolicy: RemovalPolicy.RETAIN,
+    });
+    const forwardFn = new nodejs.NodejsFunction(this, "ForwardFn", {
+      entry: root("infra/lambda/forward.ts"),
+      handler: "handler",
+      depsLockFilePath: root("pnpm-lock.yaml"),
+      runtime: lambda.Runtime.NODEJS_22_X,
+      architecture: lambda.Architecture.ARM_64,
+      timeout: Duration.seconds(30),
+      logGroup: new logs.LogGroup(this, "ForwardFnLogs", { retention: logs.RetentionDays.THREE_MONTHS }),
+      bundling: { format: nodejs.OutputFormat.ESM, minify: true, target: "node22" },
+      environment: { APP_SECRET_ARN: appSecret.secretArn, MAIL_BUCKET: mailBucket.bucketName, MAIL_PREFIX: MAIL_PREFIX },
+    });
+    appSecret.grantRead(forwardFn);
+    mailBucket.grantRead(forwardFn, `${MAIL_PREFIX}*`);
+    forwardFn.addToRolePolicy(new iam.PolicyStatement({
+      actions: ["ses:SendEmail", "ses:SendRawEmail"],
+      resources: [mailIdentity.emailIdentityArn, `arn:aws:ses:${this.region}:${this.account}:identity/*`],
+    }));
+    new ses.ReceiptRuleSet(this, "MailRules", {
+      receiptRuleSetName: "openentity-inbound",
+      rules: [{
+        recipients: [`identity@${DOMAIN}`],
+        scanEnabled: true,
+        actions: [
+          new sesActions.S3({ bucket: mailBucket, objectKeyPrefix: MAIL_PREFIX }),
+          new sesActions.Lambda({ function: forwardFn, invocationType: sesActions.LambdaInvocationType.EVENT }),
+        ],
+      }],
+    });
+    out("MailBucketName", mailBucket.bucketName);
+    [1, 2, 3].forEach((i) => {
+      const n = mailIdentity[`dkimDnsTokenName${i}` as "dkimDnsTokenName1"];
+      const v = mailIdentity[`dkimDnsTokenValue${i}` as "dkimDnsTokenValue1"];
+      out(`MailDkim${i}`, `${n} ${v}`);
     });
 
     // ---- CI: GitHub Actions deploys from main through OIDC ----
