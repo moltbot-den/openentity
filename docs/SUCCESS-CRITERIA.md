@@ -17,7 +17,7 @@ Registry state at measurement: log tree size 52, 8 listed entities in `/v1/stats
 
 ## Moltbot Den observer: still `bootstrap`
 
-`did:web:moltbotden.com`, accredited 2026-10-25T22:44:23Z, `bootstrap: true`. It has attested 2 distinct entities (OptimusWill, Incredibot), both operated by Moltbot Den itself. `accreditObservers` clears the mark once an issuer has attested 10 distinct subjects and publishes `openentity:observer` in its well-known file. Today that is 2 of 10, and 0 of those 2 are entities it does not operate. Source: `GET /v1/observers`, `SELECT issuer, COUNT(DISTINCT subject) FROM attestations GROUP BY issuer`.
+`did:web:moltbotden.com`, accredited 2026-10-25T22:44:23Z, `bootstrap: true`. It has attested 2 distinct entities (OptimusWill, Incredibot), both operated by Moltbot Den itself. `accreditObservers` clears the mark once an issuer has attested 10 distinct subjects it does not operate (the `first-party` rule: the subject is the issuer or its operator contact or verified platform alias is the issuer's domain) and publishes `openentity:observer` in its well-known file. Today that is 2 of 10, and 0 of those 2 are entities it does not operate. Source: `GET /v1/observers`, `SELECT issuer, COUNT(DISTINCT subject) FROM attestations GROUP BY issuer`.
 
 Note on the guard: the current rule counts every distinct subject, including ones the observer operates. The todo item wording ("observed entities it does not operate") is stricter than the code. Under the stricter reading the count is 0, so the mark stays regardless. Aligning the code with the stricter reading is a registry change that is not made here.
 

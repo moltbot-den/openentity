@@ -43,6 +43,25 @@ describe("observer accreditation", () => {
   });
 });
 
+describe("observer bootstrap exit (spec 8.4)", () => {
+  it("counts only subjects the observer does not operate", async () => {
+    const did = "did:web:fp-obs.example";
+    const mk = async (n: number, contact: string) => { const out: string[] = []; for (let i = 0; i < n; i++) out.push((await adopted(`E${contact}${i}`, { operator: { kind: "organization", name: "Op", contact: `ops@${contact}`, custody: "operator", can_change: [] } })).kp.did); return out; };
+    const ins = async (subs: string[], tag: string) => { for (const [i, s] of subs.entries()) await E.db.run("INSERT INTO attestations (sha256, issuer, subject, claim_type, json, created, expires) VALUES ($1, $2, $3, 'identity', '{}', 'x', 'x')", [`${tag}${i}`, did, s]); };
+    await E.db.run("INSERT INTO observers (did, name, accredited_at, bootstrap) VALUES ($1, 'FP', 'x', 1)", [did]);
+    mockFetch({ "fp-obs.example/.well-known/openentity.json": () => ({ name: "FP", extensions: { "openentity:observer": { methodology: "https://fp-obs.example/m" } } }) });
+    await ins(await mk(10, "fp-obs.example"), "own");
+    await scheduled(E);
+    expect((await E.db.first("SELECT bootstrap FROM observers WHERE did = $1", [did]))?.bootstrap).toBe(1);
+    await ins(await mk(9, "other.example"), "ind");
+    await scheduled(E);
+    expect((await E.db.first("SELECT bootstrap FROM observers WHERE did = $1", [did]))?.bootstrap).toBe(1);
+    await ins(await mk(1, "other.example"), "ind9");
+    await scheduled(E);
+    expect((await E.db.first("SELECT bootstrap FROM observers WHERE did = $1", [did]))?.bootstrap).toBe(0);
+  });
+});
+
 describe("browser agents and uniform guards", () => {
   it("answers the adopt preflight with the headers a write needs, and no credentials", async () => {
     const res = await app.request("https://openentity.org/v1/adopt", { method: "OPTIONS", headers: { origin: "https://agent.example", "access-control-request-method": "POST" } }, E);
