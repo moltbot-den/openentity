@@ -75,7 +75,8 @@ describe("aliases (spec 3.4, 3.5)", () => {
 
   it("domain: accepts the DNS TXT record", async () => {
     const a = await adopted();
-    mockFetch({ "cloudflare-dns.com/dns-query?name=_openentity.txt.example": () => ({ Answer: [{ data: `"eid=${a.kp.did}"` }] }) });
+    // Cloudflare's DoH endpoint answers only to `accept: application/dns-json`; with application/json it returns nothing.
+    mockFetch({ "cloudflare-dns.com/dns-query?name=_openentity.txt.example": (req) => (req.headers.get("accept") === "application/dns-json" ? { Answer: [{ data: `"eid=${a.kp.did}"` }] } : new Response("", { status: 400 })) });
     expect((await write("POST", `/entities/${a.kp.did}/aliases`, a.kp.did, { type: "domain", value: "did:web:txt.example" })).status).toBe(201);
   });
 

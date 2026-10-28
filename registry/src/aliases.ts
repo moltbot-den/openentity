@@ -26,7 +26,7 @@ async function publicAddress(u: URL): Promise<{ address: string; family: number 
 }
 
 /** GET JSON from a host the caller does not control: public https hosts only, connected to the one address validated (no second resolution), no redirects, 5 s overall, 256 KB at most. Null on any failure. */
-export async function getJson(url: string): Promise<any> {
+export async function getJson(url: string, accept = "application/json"): Promise<any> {
   let u: URL;
   try { u = new URL(url); } catch { return null; }
   const pin = await publicAddress(u);
@@ -34,7 +34,7 @@ export async function getJson(url: string): Promise<any> {
   // The pinned lookup answers the connect with the validated address; Host and SNI stay the original name.
   const lookup = ((_h: string, o: any, cb: any) => (o?.all ? cb(null, [pin]) : cb(null, pin.address, pin.family))) as any;
   return new Promise((resolve) => {
-    const req = https.request(u, { method: "GET", lookup, headers: { accept: "application/json" }, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) }, (res) => {
+    const req = https.request(u, { method: "GET", lookup, headers: { accept }, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) }, (res) => {
       if (!res.statusCode || res.statusCode < 200 || res.statusCode > 299) { res.destroy(); return resolve(null); }
       const parts: Buffer[] = [];
       let n = 0;
@@ -175,7 +175,7 @@ export async function verifyAlias(env: Env, eid: string, a: AliasInput): Promise
     if (!m || !DOMAIN.test(m[1])) return "domain alias value must be did:web:<domain>";
     const wk = await getJson(`https://${m[1]}/.well-known/openentity.json`).catch(() => null);
     if (wk?.eid === eid) return null;
-    const dns = await getJson(`https://cloudflare-dns.com/dns-query?name=_openentity.${m[1]}&type=TXT`).catch(() => null);
+    const dns = await getJson(`https://cloudflare-dns.com/dns-query?name=_openentity.${m[1]}&type=TXT`, "application/dns-json").catch(() => null);
     const txt = (dns?.Answer ?? []).map((r: any) => String(r.data).replace(/^"|"$/g, "").replace(/" "/g, ""));
     return txt.includes(`eid=${eid}`) ? null : "neither /.well-known/openentity.json nor _openentity TXT names this EID";
   }
