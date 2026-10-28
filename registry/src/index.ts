@@ -767,6 +767,18 @@ app.get("/log/snapshots/:file", async (c) => {
 
 // ---------- human form (PRD 7.3): the only route with Turnstile ----------
 
+/** Double opt-in token for an address: base64url HMAC-SHA256 under HASH_SALT, sent to Customer.io so the campaign email can link back. */
+export async function confirmToken(env: Env, email: string): Promise<string> {
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(env.HASH_SALT ?? "openentity-dev-salt"), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const mac = new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(`confirm:${email}`)));
+  return b64(mac).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+const cioPut = (env: Env, email: string, attrs: Record<string, unknown>) => fetch(`https://track.customer.io/api/v1/customers/${encodeURIComponent(email)}`, {
+  method: "PUT",
+  headers: { authorization: `Basic ${btoa(`${env.CIO_SITE_ID}:${env.CIO_API_KEY}`)}`, "content-type": "application/json" },
+  body: JSON.stringify({ email, ...attrs }),
+});
+
 app.post("/subscribe", async (c) => {
   const env = c.env;
   if (!env.TURNSTILE_SECRET || !env.CIO_SITE_ID || !env.CIO_API_KEY) fail(503, "subscribe_unavailable", "the signup form is not configured on this registry");
@@ -784,13 +796,25 @@ app.post("/subscribe", async (c) => {
   if (!token || !tv.success) fail(403, "turnstile_failed", "Turnstile verification failed");
   if ((await bump(env.db, `sub:${await salted(env, email)}`, today())) > 3) fail(429, "rate_limited", "too many signups for this address today");
   const operator = f.operator === true || f.operator === "true" || f.operator === "on";
-  const res = await fetch(`https://track.customer.io/api/v1/customers/${encodeURIComponent(email)}`, {
-    method: "PUT",
-    headers: { authorization: `Basic ${btoa(`${env.CIO_SITE_ID}:${env.CIO_API_KEY}`)}`, "content-type": "application/json" },
-    body: JSON.stringify({ email, source: "openentity.org", operator, consented_at: Math.floor(Date.now() / 1000) }),
-  });
+  // Never send `confirmed` here: a resubscribe must not unconfirm someone.
+  const res = await cioPut(env, email, { source: "openentity.org", operator, consented_at: Math.floor(Date.now() / 1000), confirm_token: await confirmToken(env, email) });
   if (!res.ok) fail(502, "subscribe_failed", `Customer.io returned ${res.status}`);
   return c.json({ ok: true, message: "Check your inbox to confirm." }, 202);
+});
+
+/** Reached from the confirmation email, so no Turnstile; only the per-IP limit and the HMAC. */
+app.get("/subscribe/confirm", async (c) => {
+  const env = c.env;
+  if (!env.CIO_SITE_ID || !env.CIO_API_KEY) fail(503, "subscribe_unavailable", "the signup form is not configured on this registry");
+  if ((await bump(env.db, `subc:${await salted(env, clientIp(c))}`, nowIso().slice(0, 16))) > 20) fail(429, "rate_limited", "too many confirmations from this address, try again in a minute");
+  const email = (c.req.query("email") ?? "").trim().toLowerCase(), t = c.req.query("t") ?? "";
+  const want = new TextEncoder().encode(await confirmToken(env, email)), got = new TextEncoder().encode(t);
+  let diff = want.length ^ got.length;
+  for (let i = 0; i < want.length; i++) diff |= want[i] ^ (got[i] ?? 0);
+  if (!email || diff !== 0) fail(400, "bad_token", "the confirmation link is invalid");
+  const res = await cioPut(env, email, { confirmed: true, confirmed_at: Math.floor(Date.now() / 1000) });
+  if (!res.ok) fail(502, "subscribe_failed", `Customer.io returned ${res.status}`);
+  return c.redirect("https://openentity.org/subscribed", 303);
 });
 
 // ---------- scheduled work ----------

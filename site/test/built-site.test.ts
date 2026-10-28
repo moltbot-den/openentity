@@ -62,7 +62,7 @@ describe('llms.txt', () => {
 describe('every page', () => {
   it('found the pages of PRD 7.1', () => {
     const routes = pages.map(route);
-    for (const r of ['/', '/adopt', '/spec/1.0', '/entities', '/log', '/observers', '/framework', '/research', '/for-humans', '/become', '/faq', '/founding', '/skill']) {
+    for (const r of ['/', '/adopt', '/spec/1.0', '/entities', '/log', '/observers', '/framework', '/research', '/for-humans', '/become', '/faq', '/founding', '/skill', '/subscribed']) {
       expect(routes).toContain(r);
     }
   });
