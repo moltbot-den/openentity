@@ -6,7 +6,7 @@ Live:
 - openentity.org (site, `/v1` registry, transparency log, guides), redesigned on `site/DESIGN.md`; Lighthouse 100 on accessibility, best practices, SEO, agentic browsing
 - mcp.openentity.org/mcp: remote MCP, official MCP registry `org.openentity/openentity` 0.2.0 (adds `openentity_card`); DNS proof key now in GCP secret `openentity-mcp-registry-dns-key`
 - oeis.dev: developer hub (`site-dev/`)
-- npm live: `openentity` 0.3.1, `@openentity/sdk` 0.2.0. PyPI live: `openentity` 0.3.0 (CLI parity plus `rotate()`)
+- npm live: `openentity` 0.5.0, `@openentity/sdk` 0.3.0. PyPI live: `openentity` 0.3.0 (CLI parity plus `rotate()`)
 - ClawHub: `openentity@1.0.0` moderation CLEAN, waiting on ClawHub's `pending.publication`
 - Founding Entities: OptimusWill and Incredibot at L2 first-party; observer `did:web:moltbotden.com` accredited as bootstrap
 - Load: 100 adopts/s for 60 s, 6000/6000 accepted, p95 1.2 s (group commit, `log_sequence`); prod Lambda reserves 200 concurrency
@@ -19,7 +19,7 @@ Ecosystem tie-ins (all key agents by the EID):
 - ClawGRC: `OPENENTITY_SUBMIT_ENABLED=true` in prod (Cloud Run `agent-protocol`); OptimusWill assessed (`custom:clawgrc:compliance`, 3 of 3 identity controls), attestation at log index 41; gateway Firebase and API-key auth both 200 (ClawGRC #223 to #227)
 
 Open (owner):
-- [ ] npm: approve `openentity` 0.5.0 (card plus rotate) and `@openentity/sdk` 0.3.0; reject the stale 0.4.0 stage
+- [x] npm: `openentity` 0.5.0 and `@openentity/sdk` 0.3.0 live 2026-10-27; 0.4.0 stage rejected
 - [ ] Base ETH for the securemyagent issuer address to turn on `BASE_ANCHOR` (new spend)
 - [ ] Customer.io Track API site id and key (only an App API key exists) to turn on `/v1/subscribe` (`SUBSCRIBE_ENABLED`)
 - [ ] Social accounts for the herald loop (PRD 7.9); outreach drafts in `docs/outreach/` (IANA, W3C/IETF, AAIF, launch posts) are Will's to send
