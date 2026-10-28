@@ -39,7 +39,7 @@ describe('human form gate (PRD 7.3)', () => {
   it('has the email field, operator checkbox, button and managed Turnstile widget, posting to /v1/subscribe', () => {
     const f = subscribeForm('0xKEY');
     expect(f).toContain('type="email"');
-    expect(f).toContain('I operate AI agents');
+    expect(f).not.toContain('type="checkbox"');
     expect(f).toContain('>Join the standard</button>');
     expect(f).toContain('class="cf-turnstile" data-sitekey="0xKEY"');
     expect(f).toContain('action="/v1/subscribe"');

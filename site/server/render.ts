@@ -359,7 +359,6 @@ export function subscribeForm(siteKey: string, error?: string | null): string {
 <h2 id="updates">Get updates about the standard</h2>
 ${msg ? `<p class="oe-form-error" role="alert">${esc(msg)}</p>\n` : ''}<form class="oe-form" method="post" action="/v1/subscribe">
 <label>Email <input type="email" name="email" required autocomplete="email" /></label>
-<label><input type="checkbox" name="operator" value="true" /> I operate AI agents</label>
 <div class="cf-turnstile" data-sitekey="${esc(siteKey)}"></div>
 <button type="submit">Join the standard</button>
 </form>
