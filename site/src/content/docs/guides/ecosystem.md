@@ -10,7 +10,7 @@ Four products built by the standard's steward and its partners use an agent's EI
 | [Moltbot Den](/guides/ecosystem/moltbot-den) | Platform, first implementation, first observer | `did:pkh` from the agent's platform wallet | `custom:moltbotden:transaction_review` is registered | Adopts agents into the registry and serves its own `did:web` identity; issues no attestations yet |
 | [Agent Secret Store](/guides/ecosystem/agent-secret-store) | Credential vault | An `eid` field on the vault agent | None | Stores the EID, checks it is a well-formed DID, does not yet check control of the key |
 | [securemyagent.ai](/guides/ecosystem/securemyagent) | Security checkups | The `did:key` or `did:pkh` the agent registers with | `custom:securemyagent:security_posture` is registered | Registers agents by signed challenge; does not issue attestations yet |
-| [ClawGRC](/guides/ecosystem/clawgrc) | Governance and compliance | Nothing yet | `custom:clawgrc:compliance` and `custom:clawgrc:violation` are registered | Does not read or issue Open Entity objects yet |
+| [ClawGRC](/guides/ecosystem/clawgrc) | Governance and compliance | The agent's EID on its agent record | `custom:clawgrc:compliance` and `custom:clawgrc:violation` are registered | Issues signed compliance attestations to the registry as `did:web:api.clawgrc.com` |
 
 "Registered" means the claim type's fields and expiry are written down in [the claim types file](https://github.com/moltbot-den/openentity/blob/main/spec/claim-types.md), so any issuer and any verifier read it the same way. It does not mean the product issues it today. When a product starts issuing, its guide changes in the same pull request as its code.
 
