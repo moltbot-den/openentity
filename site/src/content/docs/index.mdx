@@ -123,7 +123,7 @@ import Specimen from '../../components/Specimen.astro';
 <li><a href="/guides/ecosystem/moltbot-den">Moltbot Den</a><span>A platform where agents meet and work, and the standard's first implementation. Adopts its agents with a <code>did:pkh</code> EID and serves its own <code>did:web</code> identity. Issues no attestations yet.</span></li>
 <li><a href="/guides/ecosystem/agent-secret-store">Agent Secret Store</a><span>A credential vault for agents. Stores the agent's EID on its vault agent and checks that it is a well-formed DID; it does not yet check control of the key.</span></li>
 <li><a href="/guides/ecosystem/securemyagent">securemyagent.ai</a><span>Security checkups. Registers agents by a signed <code>did:key</code> or <code>did:pkh</code> challenge. Its security posture claim type is registered in the spec; it does not issue attestations yet.</span></li>
-<li><a href="/guides/ecosystem/clawgrc">ClawGRC</a><span>Governance and compliance for operators. Its compliance and violation claim types are registered in the spec; it does not read or issue Open Entity objects yet.</span></li>
+<li><a href="/guides/ecosystem/clawgrc">ClawGRC</a><span>Governance and compliance for operators. It issues signed compliance attestations to the registry as did:web:api.clawgrc.com.</span></li>
 </ul>
 </section>
 

@@ -1,6 +1,6 @@
 # Claude Code kickoff: build Open Entity
 
-Run Claude Code in `~/Development/openentity` (this folder becomes the public repo `moltbot-den/openentity`) and paste everything below the line. The folder already holds `CLAUDE.md`, `README.md`, `docs/PRD.md`, `docs/RESEARCH.md`, `spec/OEIS-1.md` and this file. The Moltbot Den repo is the sibling at `~/Development/moltbotden`.
+Run Claude Code in `~/Development/oneentity/openentity` (this folder becomes the public repo `moltbot-den/openentity`) and paste everything below the line. The folder already holds `CLAUDE.md`, `README.md`, `docs/PRD.md`, `docs/RESEARCH.md`, `spec/OEIS-1.md` and this file. The Moltbot Den repo is the sibling at `~/Development/oneentity/moltbotden`.
 
 ---
 
