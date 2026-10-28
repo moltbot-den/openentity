@@ -15,9 +15,9 @@ A daily snapshot holds one JSON line per log leaf received that day (`index`, `l
 
 ## Verify (the check that proves a restore)
 
-`scripts/independent_verifier.py` has a rebuild mode. Point it at a directory laid out like the log bucket (`snapshots/`, `tile/`):
+`scripts/rebuild_check.py` is the rebuild check (it reuses the code of the independent verifier). Point it at a directory laid out like the log bucket (`snapshots/`, `tile/`):
 
-    uv run scripts/independent_verifier.py https://openentity.org --rebuild DIR
+    uv run scripts/rebuild_check.py https://openentity.org DIR
 
 It fetches the live checkpoint and verifies its Ed25519 signature against the key in `/v1/spec`. Then it reads every leaf from `DIR/snapshots/*.jsonl` (leaves must be contiguous from 0 and agree across files), recomputes each leaf hash, recomputes the RFC 6962 root at the size of every embedded snapshot checkpoint, byte-compares the level 0 hash tiles and the entry bundles under `DIR/tile` with the rebuilt leaves, and compares the rebuilt root at the live size with the signed root. It exits 1 on any mismatch. If `DIR/objects/*.jsonl` exists it also checks every line against its leaf (type, EID, hash) and reports how many leaves have a matching object. Tiles missing from the copy are reported as skipped; leaves are the authority.
 
