@@ -34,6 +34,7 @@ export interface LivenessOptions {
 
 const realSleep = (ms: number, signal: AbortSignal) =>
   new Promise<void>((resolve, reject) => {
+    if (signal.aborted) return reject(signal.reason);
     const t = setTimeout(resolve, ms);
     t.unref(); // a pending renewal never keeps the process alive
     signal.addEventListener("abort", () => (clearTimeout(t), reject(signal.reason)), { once: true });
@@ -97,6 +98,7 @@ export class MoltbotDenLiveness extends BasePlugin {
         this.warn(`${e?.name}: ${e?.message}; retrying in ${delay / 1000}s`);
       }
       try {
+        if (signal.aborted) return; // closed while a step was in flight
         await sleep(delay, signal);
       } catch {
         return;

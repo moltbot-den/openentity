@@ -36,10 +36,11 @@ export function clock(limit = 3) {
   const delays: number[] = [];
   const sleep = (ms: number, signal: AbortSignal) => {
     delays.push(ms);
+    if (signal.aborted) return Promise.reject(signal.reason);
     if (delays.length < limit) return Promise.resolve();
     return new Promise<void>((_, reject) => signal.addEventListener("abort", () => reject(signal.reason), { once: true }));
   };
-  return { delays, sleep };
+  return { delays, sleep, limit };
 }
 
 export const settle = async () => { for (let i = 0; i < 100; i++) await new Promise((r) => setImmediate(r)); };

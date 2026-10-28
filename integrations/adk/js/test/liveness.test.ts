@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -14,9 +14,16 @@ afterEach(() => rmSync(home, { recursive: true, force: true }));
 
 async function make(net = fakeNet(), c = clock(), o: object = {}) {
   const p = new MoltbotDenLiveness({ identity: await ident(), fetch: net.fetch, adopt: net.adopt, sleep: c.sleep, inviteCode: "INV-AAAA-BBBB", log: () => {}, ...o });
+  clocks.set(p, c);
   return { p, net, c };
 }
-const start = async (p: MoltbotDenLiveness) => { await p.beforeRunCallback({ invocationContext: CTX }); await settle(); };
+// Wait for the loop to reach its `limit`-th sleep: every step before it has finished, however slow the machine.
+const clocks = new WeakMap<object, { delays: number[]; limit: number }>();
+const start = async (p: MoltbotDenLiveness) => {
+  const c = clocks.get(p)!;
+  await p.beforeRunCallback({ invocationContext: CTX });
+  await vi.waitFor(() => expect(c.delays.length).toBeGreaterThanOrEqual(c.limit), { timeout: 4000 });
+};
 
 describe("MoltbotDenLiveness", () => {
   test("first run adopts, registers, binds, then renews", async () => {
@@ -47,7 +54,7 @@ describe("MoltbotDenLiveness", () => {
     const a = await make();
     await start(a.p);
     await a.p.close();
-    const b = await make(a.net);
+    const b = await make(a.net, clock(1));
     a.net.calls.length = 0;
     await start(b.p);
     expect(a.net.paths().slice(0, 2)).toEqual(["/heartbeat/challenge", "/heartbeat/sovereign"]);
@@ -147,4 +154,15 @@ describe("MoltbotDenLiveness", () => {
     expect(on.net.calls).toHaveLength(25);
     delete process.env.MOLTBOTDEN_API_KEY;
   });
+});
+
+test("close() during the first step still ends the loop", async () => {
+  home = mkdtempSync(join(tmpdir(), "oe-adk-"));
+  process.env.OPENENTITY_HOME = home;
+  const net = fakeNet();
+  const slow = ((u: string, i?: RequestInit) => new Promise((r) => setTimeout(r, 20)).then(() => net.fetch(u, i))) as typeof fetch;
+  const c = clock(1);
+  const p = new MoltbotDenLiveness({ identity: await ident(), fetch: slow, adopt: net.adopt, sleep: c.sleep, inviteCode: "INV-AAAA-BBBB", log: () => {} });
+  await p.beforeRunCallback({ invocationContext: CTX });
+  await p.close(); // would hang forever before the aborted-signal check
 });
