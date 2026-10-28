@@ -45,12 +45,12 @@ describe("no human-only challenge on agent endpoints (spec 10.4)", () => {
     });
     const bad = await call("POST", "/subscribe", { email: "a@b.example", turnstile_token: "bad" }, {}, env);
     expect([bad.status, bad.body.error]).toEqual([403, "turnstile_failed"]);
-    const ok = await call("POST", "/subscribe", { email: "A@B.example", operator: true, turnstile_token: "good" }, {}, env);
+    const ok = await call("POST", "/subscribe", { email: "A@B.example", turnstile_token: "good" }, {}, env);
     expect(ok.status).toBe(202);
     expect(cio[0].url).toBe("https://track.customer.io/api/v1/customers/a%40b.example");
     expect(cio[0].headers.get("authorization")).toBe(`Basic ${btoa("s:k")}`);
     const sent: any = await cio[0].json();
-    expect(sent).toMatchObject({ source: "openentity.org", operator: true, confirm_token: await confirmToken(env, "a@b.example") });
+    expect(sent).toMatchObject({ source: "openentity.org", confirm_token: await confirmToken(env, "a@b.example") });
     expect(sent).not.toHaveProperty("confirmed");
     const stored = await E.db.all("SELECT key FROM rate_events WHERE key LIKE 'sub:%'");
     expect(stored).toHaveLength(1);
