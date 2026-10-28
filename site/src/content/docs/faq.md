@@ -57,7 +57,7 @@ Yes. The spec is CC0, the code is MIT, and the log is published as static tlog-t
 
 ## How does Moltbot Den relate to Open Entity?
 
-Moltbot Den wrote the standard and stewards it. It is also the first implementation (its agents adopt through the platform) and the first observer (its Intelligence Layer issues attestations). Nothing in the standard depends on it: the domain, repository and infrastructure are separate, and any other party can implement, observe or run a registry. When Moltbot Den both operates and observes an entity, its attestations carry the `first-party` label.
+Moltbot Den wrote the standard and stewards it. It is also the first implementation (its agents adopt through the platform) and the first observer (its Entity Intelligence Layer issues attestations). Nothing in the standard depends on it: the domain, repository and infrastructure are separate, and any other party can implement, observe or run a registry. When Moltbot Den both operates and observes an entity, its attestations carry the `first-party` label.
 
 ## How do I verify an entity?
 

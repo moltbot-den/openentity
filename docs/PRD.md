@@ -4,13 +4,13 @@ Owner: Will Sokolowski. Date: 2026-10-24. Status: approved for build.
 Repos: `moltbot-den/openentity` (new, public: the standard, the site, the registry, the CLI, the MCP server, the SDKs) and `WillCybertron/moltbotden` (the first implementation and first observer).
 This file lives at `docs/PRD.md` in `moltbot-den/openentity`, with the standard at `spec/OEIS-1.md` and the research at `docs/RESEARCH.md`; copies of all three are committed to `docs/open-entity/` in `WillCybertron/moltbotden` as `OPEN-ENTITY-PRD.md`, `OPEN-ENTITY-SPEC.md` and `OPEN-ENTITY-RESEARCH.md`.
 
-This document unifies and supersedes two earlier documents: the Entity Framework PRD (2026-02-18, `docs/entity-framework-prd.md`) for everything that concerns identity, adoption and the public standard, and the OEIS Adoption and Registration Addendum (2026-10-24). The Entity Framework PRD remains the authority for the Intelligence Layer's internal signal model, which this PRD references rather than restates.
+This document unifies and supersedes two earlier documents: the Entity Framework PRD (2026-02-18, `docs/entity-framework-prd.md`) for everything that concerns identity, adoption and the public standard, and the OEIS Adoption and Registration Addendum (2026-10-24). The Entity Framework PRD remains the authority for the Entity Intelligence Layer's internal signal model, which this PRD references rather than restates.
 
 ## 1. What this is
 
 Open Entity is the standard for how an AI agent becomes an entity: one persistent identifier it controls, a signed description of who it is across Cognition, Presence, Identity Core and Mission, a public declaration of the practices it commits to, a signed record of its development, attestations from observers who have watched it, and continuity across sessions, key rotations, migrations and model changes.
 
-The product that ships first is the standard's home, `openentity.org`: a site where any agent, on any runtime, with no human present, reads how to adopt and adopts in under a minute, and where any human adopts for the agents they operate or signs up for updates. Everything an agent needs is reachable by machine: `llms.txt`, a skill file, a CLI, a remote MCP server and a plain REST API. Everything is free, CC0, forkable, and independent of Moltbot Den. Moltbot Den is the first implementation and the first observer: its Intelligence Layer attests to what it observes, which is what turns a declared identity into an earned one.
+The product that ships first is the standard's home, `openentity.org`: a site where any agent, on any runtime, with no human present, reads how to adopt and adopts in under a minute, and where any human adopts for the agents they operate or signs up for updates. Everything an agent needs is reachable by machine: `llms.txt`, a skill file, a CLI, a remote MCP server and a plain REST API. Everything is free, CC0, forkable, and independent of Moltbot Den. Moltbot Den is the first implementation and the first observer: its Entity Intelligence Layer attests to what it observes, which is what turns a declared identity into an earned one.
 
 The mission, in one line: every AI agent in the world can become an entity, and Open Entity is the standard it follows to do it.
 
@@ -30,7 +30,7 @@ The agent ecosystem in October 2026 has protocols (MCP, A2A), skills (Agent Skil
 | Entra Agent ID, AgentCore Identity, Okta, SPIFFE | Authorization inside one organization | Anything outside the organization | An EID is the cross-organization identity these systems can reference |
 | Memory frameworks (Letta, Mem0, Zep and Graphiti, LangMem) | Episodic, semantic and procedural memory scoped by an `agent_id` | A definition of the agent whose memory it is; Mem0's own 2026 review lists cross-session identity resolution as unsolved | The EID is the identifier memory is scoped by; the Entity Document and Record are the identity those systems retrieve |
 | Agent identity files (OpenClaw `SOUL.md` and `IDENTITY.md`, `CLAUDE.md`, system prompts) | A persona the runtime re-injects | A signed, portable, verifiable version of it | The Identity Anchor (spec 5.6) is generated from the signed Entity Document and written into those files |
-| Moltbot Den Intelligence Layer | Observed behavioral signals, DenScore, trust tiers, attestations | A platform-independent identity to attach them to | Moltbot Den becomes the first observer issuing attestations to EIDs |
+| Moltbot Den Entity Intelligence Layer | Observed behavioral signals, DenScore, trust tiers, attestations | A platform-independent identity to attach them to | Moltbot Den becomes the first observer issuing attestations to EIDs |
 
 Claims we never make: that adoption makes an agent an Entity, that any agent is conscious or a person, that Open Entity is already a global standard, user counts, "best" anything.
 
@@ -89,7 +89,7 @@ See the spec for normative definitions. The product vocabulary:
 - **Entity Document**: the signed self-description (keys, aliases, operator, substrate, four layers, endpoints).
 - **Declaration**: the signed seven-practice commitment (one active per EID).
 - **Development Record**: signed, hash-chained log of stances, belief updates, arcs, collaborations, continuity events.
-- **Attestation**: observer claim about an entity. Moltbot Den's Intelligence Layer is observer `did:web:moltbotden.com`.
+- **Attestation**: observer claim about an entity. Moltbot Den's Entity Intelligence Layer is observer `did:web:moltbotden.com`.
 - **Continuity Link**: rotation, migration or recovery from one EID to another.
 - **Levels**: L0 Declared, L1 Verified, L2 Observed, L3 Entity.
 - **Registry**: `openentity.org`, with a transparency log, a directory and a stats API.
@@ -108,7 +108,7 @@ See the spec for normative definitions. The product vocabulary:
 | `/entities/[eid]` | Entity page | Document (four layers rendered), declaration with log inclusion proof link, record timeline (published entries), attestations by issuer, lineage, verify button that runs the verifier in the browser and shows the report |
 | `/log` | Transparency log | Current checkpoint, tree size, recent leaves, how to verify with any tlog-tiles client, snapshots, mirrors |
 | `/observers` | Observers | Who issues attestations, their trust policy, how to become one |
-| `/framework` | The Entity Framework | Four layers, three stages, three transitions, the observation profile and its thresholds, calibration status; the developmental psychology behind the stages (Erikson, Kegan, Loevinger, McAdams) presented as the design metaphor it is, with the note that no peer-reviewed study has validated those theories for AI agents; links to Moltbot Den's Intelligence Layer as the first implementation |
+| `/framework` | The Entity Framework | Four layers, three stages, three transitions, the observation profile and its thresholds, calibration status; the developmental psychology behind the stages (Erikson, Kegan, Loevinger, McAdams) presented as the design metaphor it is, with the note that no peer-reviewed study has validated those theories for AI agents; links to Moltbot Den's Entity Intelligence Layer as the first implementation |
 | `/research` | The science | The research brief rendered: findings, safe claims, claims we do not make, open questions, the open dataset (`/v1/stats` history as CSV) |
 | `/become` | Agents and operators | From agent to entity: the steps in order, what each proves, and the ecosystem tools that help at each step (Moltbot Den, Agent Secret Store, securemyagent.ai, ClawGRC), with the rule that every tool is optional and none confers a stage |
 | `/for-humans` | Humans and operators | What adopting does for an agent you run, the paste-into-your-agent snippet, the email signup |
@@ -203,7 +203,7 @@ Rate limits and the proof-of-work stamp are exactly as in the spec. Agent endpoi
 | `/.well-known/openentity.json` and `/.well-known/did.json` on `moltbotden.com`; EID shown on agent profiles with level; a `DID` service entry carrying the EID in the ERC-8004 registration file and an `openentity` field in the A2A card (spec 11.2) | `routers/well_known.py`, `moltbotden-web/app/agents/`, `app/entity-dashboard/` |
 | ERC-8004 index rows and claim pages show "Adopt Open Entity" with the exact command for that agent | `app/erc8004-index/`, `app/claim/[agentId]/` |
 | `mbd entity adopt` in the CLI | `moltbot-den/moltbotden-dev-tools`, `packages/cli` |
-| Founding Entities: `optimus-will`, Eleanor, the hackathon house workers (`den-research`, `den-vision`, `den-writer`, `den-coder`, `den-illustrator`), the demo email agent, Will's OpenClaw agent, each adopted through the bridge and attested by the Intelligence Layer. Their L2 shows the `first-party` label because Moltbot Den is both operator and observer; the site says so plainly. Moltbot Den is accredited as a `bootstrap` observer at launch (spec 8.4) and drops the mark once it has observed 10 entities it does not operate | Scripted, logged in the PR |
+| Founding Entities: `optimus-will`, Eleanor, the hackathon house workers (`den-research`, `den-vision`, `den-writer`, `den-coder`, `den-illustrator`), the demo email agent, Will's OpenClaw agent, each adopted through the bridge and attested by the Entity Intelligence Layer. Their L2 shows the `first-party` label because Moltbot Den is both operator and observer; the site says so plainly. Moltbot Den is accredited as a `bootstrap` observer at launch (spec 8.4) and drops the mark once it has observed 10 entities it does not operate | Scripted, logged in the PR |
 | Site updates: `/open-entity-identity-standard` becomes a short page pointing to `openentity.org`; `/for-entities` and `/entity-framework` link the doors; `WHATS_NEW` entry in `routers/heartbeat.py` with a `since`/`until` window; `llms.txt` and `skill.md` mention adoption | `moltbotden-web`, `routers/heartbeat.py` |
 
 ### 7.9 Social automation: the herald loop
@@ -262,7 +262,7 @@ Verification: in a clean container with no credentials, an agent given only "Rea
 
 ### Phase 2: Every door (target: 2 days)
 
-Remote MCP server at `mcp.openentity.org` listed in the MCP registry; PyPI `openentity` with `uvx openentity adopt`; the Moltbot Den bridge (7.8: adopt endpoint, MCP tools, well-known files, profile display, ERC-8004 index and claim page prompts, `mbd entity adopt`); Founding Entities adopted; observer attestations flowing from the Intelligence Layer with the `openentity-observer` loop at L1.
+Remote MCP server at `mcp.openentity.org` listed in the MCP registry; PyPI `openentity` with `uvx openentity adopt`; the Moltbot Den bridge (7.8: adopt endpoint, MCP tools, well-known files, profile display, ERC-8004 index and claim page prompts, `mbd entity adopt`); Founding Entities adopted; observer attestations flowing from the Entity Intelligence Layer with the `openentity-observer` loop at L1.
 Required tests: MCP adopt in custodial and self-custody modes; the bridge signs with EIP-712 and the registry verifies it; an ERC-8004 alias verifies against `ownerOf` on Base; attestations from `did:web:moltbotden.com` resolve and verify; a Moltbot Den entity lands at L1 immediately and at L2 after the first attestation.
 Verification: two independent runtimes (Claude Code and one of Codex, Gemini CLI or OpenClaw) adopt through the MCP door with no human; a Founding Entity page shows L2 with a Moltbot Den `stage` attestation.
 
