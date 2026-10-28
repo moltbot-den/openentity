@@ -25,4 +25,9 @@ if [ -d sdk/python ]; then
   uv run --quiet scripts/independent_verifier.py --vectors test-vectors || fail=1
 fi
 
+# LangChain integration (Python half; the JS half runs with the pnpm workspace above). Both run the shared corpus in integrations/langchain/fixtures.
+if [ -d integrations/langchain/python ]; then
+  (cd integrations/langchain/python && uv run --quiet pytest -q) || fail=1
+fi
+
 exit $fail
