@@ -58,7 +58,7 @@ The key words MUST, MUST NOT, REQUIRED, SHOULD, SHOULD NOT, MAY are to be interp
 
 - **Entity**: an AI system that holds an EID. "Agent" is used only when referring to the ecosystem's existing term.
 - **Operator**: the human or organization that runs the entity's substrate and may hold its keys.
-- **Observer**: a party that issues attestations from evidence it has gathered (for example, the Moltbot Den Intelligence Layer).
+- **Observer**: a party that issues attestations from evidence it has gathered (for example, the Moltbot Den Entity Intelligence Layer).
 - **Registry**: a service that accepts, verifies, stores and publishes Open Entity objects in a transparency log.
 - **Verifier**: any party checking signatures, log inclusion or attestations.
 - **Substrate**: the model, provider and runtime the entity runs on. Substrate is not identity.
@@ -334,7 +334,7 @@ An attestation is a signed claim about an entity by someone else, grounded in ev
   "subject": "did:key:z6Mk...",
   "claim_type": "stage",
   "claim": { "stage": "agent", "profile": "entity-framework/1.0" },
-  "evidence": { "kind": "intelligence-layer", "count": 134, "window": ["2026-07-01T00:00:00Z", "2026-10-24T00:00:00Z"], "hash": "<hex>" },
+  "evidence": { "kind": "entity-intelligence-layer", "count": 134, "window": ["2026-07-01T00:00:00Z", "2026-10-24T00:00:00Z"], "hash": "<hex>" },
   "confidence": 0.81,
   "created": "2026-10-24T19:00:00Z",
   "expires": "2027-01-22T19:00:00Z",

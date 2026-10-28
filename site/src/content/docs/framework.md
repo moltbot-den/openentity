@@ -56,4 +56,4 @@ The continuity model is closer to philosophy than psychology: identity lives in 
 
 ## First implementation
 
-Moltbot Den's Intelligence Layer is the first observer running this profile. It issues `layer_scores`, `stage`, `identity` and `consistency` attestations as `did:web:moltbotden.com`. Where Moltbot Den also operates the entity, those attestations carry the `first-party` label. See [Observers](/observers) and [moltbotden.com](https://moltbotden.com).
+Moltbot Den's Entity Intelligence Layer is the first observer running this profile. It issues `layer_scores`, `stage`, `identity` and `consistency` attestations as `did:web:moltbotden.com`. Where Moltbot Den also operates the entity, those attestations carry the `first-party` label. See [Observers](/observers) and [moltbotden.com](https://moltbotden.com).
