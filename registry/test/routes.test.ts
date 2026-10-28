@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildDeclaration, generateKeyPair, signObject } from "../src/sdk.ts";
-import { app } from "../src/index.ts";
+import { app, confirmToken } from "../src/index.ts";
 import { E, adopted, call, mockFetch, stamp } from "./helpers.ts";
 
 afterEach(() => vi.restoreAllMocks());
@@ -15,7 +15,7 @@ describe("no human-only challenge on agent endpoints (spec 10.4)", () => {
     const signedBody = await signObject(buildDeclaration({ eid: kp.did, name: "x" }), kp);
     for (const route of routes) {
       const [method, path] = route.split(" ");
-      if (path === "/v1/subscribe") continue;
+      if (path === "/v1/subscribe" || path === "/v1/subscribe/confirm") continue;
       const url = path.replace("/v1", "").replace(":eid", kp.did).replace(":did", kp.did).replace(":index", "0").replace(":file", "2026-01-01.jsonl").replace("*", "0/000");
       const r = await call(method, url, method === "GET" ? undefined : signedBody, await stamp(kp.did));
       expect(r.status, route).not.toBe(401);
@@ -49,10 +49,33 @@ describe("no human-only challenge on agent endpoints (spec 10.4)", () => {
     expect(ok.status).toBe(202);
     expect(cio[0].url).toBe("https://track.customer.io/api/v1/customers/a%40b.example");
     expect(cio[0].headers.get("authorization")).toBe(`Basic ${btoa("s:k")}`);
-    expect(await cio[0].json()).toMatchObject({ source: "openentity.org", operator: true });
+    const sent: any = await cio[0].json();
+    expect(sent).toMatchObject({ source: "openentity.org", operator: true, confirm_token: await confirmToken(env, "a@b.example") });
+    expect(sent).not.toHaveProperty("confirmed");
     const stored = await E.db.all("SELECT key FROM rate_events WHERE key LIKE 'sub:%'");
     expect(stored).toHaveLength(1);
     expect(JSON.stringify(stored)).not.toContain("b.example");
+  });
+});
+
+describe("double opt-in confirm", () => {
+  const env = { ...E, CIO_SITE_ID: "s", CIO_API_KEY: "k" };
+  it("token round trip, bad token rejected, good token PUTs confirmed", async () => {
+    const t = await confirmToken(env, "a@b.example");
+    expect(t).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(await confirmToken(env, "a@b.example")).toBe(t);
+    expect(await confirmToken(env, "c@b.example")).not.toBe(t);
+    const cio: Request[] = [];
+    mockFetch({ "track.customer.io": (req) => { cio.push(req); return new Response("{}"); } });
+    const bad = await call("GET", "/subscribe/confirm?email=a%40b.example&t=bad", undefined, {}, env);
+    expect([bad.status, bad.body.error]).toEqual([400, "bad_token"]);
+    expect(cio).toHaveLength(0);
+    const off = await call("GET", "/subscribe/confirm?email=a%40b.example&t=" + t);
+    expect(off.status).toBe(503);
+    const res = await app.request(`/v1/subscribe/confirm?email=A%40b.example&t=${t}`, {}, env);
+    expect([res.status, res.headers.get("location")]).toEqual([303, "https://openentity.org/subscribed"]);
+    expect(cio[0].method).toBe("PUT");
+    expect(await cio[0].json()).toMatchObject({ confirmed: true, confirmed_at: expect.any(Number) });
   });
 });
 
