@@ -7,7 +7,7 @@
   uv run scripts/rebuild_check.py https://openentity.org DIR
 DIR is a copy of the log bucket (snapshots/*.jsonl, tile/..., objects/*.jsonl); rebuilds the leaves from the snapshots,
 cross-checks the tiles and any objects against the leaves, and compares the Merkle root with the live signed checkpoint. Exit 1 on any mismatch."""
-import base64, sys
+import base64, json, sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 from independent_verifier import H, jcs, get, check_checkpoint
