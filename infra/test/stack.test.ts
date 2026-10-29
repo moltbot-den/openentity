@@ -59,6 +59,7 @@ test("every response forbids framing and carries a CSP limited to what the pages
   });
   expect(CSP).toContain("frame-ancestors 'none'");
   expect(CSP).toContain("object-src 'none'");
+  expect(CSP.split('; ').find((d) => d.startsWith('connect-src'))).toContain('https://moltbotden.com'); // verify button reads the observer's did:web key
   expect(CSP).not.toMatch(/\*|'unsafe-eval'/);
   expect(CSP.split('; ').find((d) => d.startsWith('script-src'))).not.toContain("'unsafe-inline'");
 });

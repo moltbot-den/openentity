@@ -1,6 +1,6 @@
 // In-browser verifier for /entities/<eid>, bundled to /verify.js by prebuild. Progressive enhancement only:
 // the button stays hidden without JavaScript, and the page text never depends on it.
-import { base58btcDecode, canonicalize, leafHash, recordEntryHash, sha256Hex, verifyInclusion, verifyNote, verifyObject } from '@openentity/sdk';
+import { base58btcDecode, canonicalize, didWebResolver, leafHash, recordEntryHash, sha256Hex, verifyInclusion, verifyNote, verifyObject } from '@openentity/sdk';
 
 const button = document.querySelector<HTMLButtonElement>('.oe-verify');
 const report = document.querySelector<HTMLPreElement>('.oe-verify-report');
@@ -31,6 +31,7 @@ async function run(): Promise<string[]> {
   return lines;
 }
 
+const resolve = didWebResolver();
 const get = async (path: string) => {
   const r = await fetch(path);
   if (!r.ok) throw new Error(`${path}: HTTP ${r.status}`);
@@ -46,7 +47,7 @@ async function logChecks(lines: string[]) {
   if (data.log?.declaration != null) leaves.push(['Declaration', data.log.declaration, data.declaration]);
   for (const a of data.log?.attestations ?? []) {
     const name = `Attestation ${String(a.attestation.claim_type)}`;
-    const r = await verifyObject(a.attestation);
+    const r = await verifyObject(a.attestation, resolve);
     lines.push(`${name}: ${r.ok && r.signer?.split('#')[0] === a.attestation.issuer ? 'signature valid, signed by its issuer' : `FAILED (${r.error ?? `signer ${r.signer}`})`}`);
     leaves.push([name, a.log_index, a.attestation]);
   }
