@@ -4,7 +4,7 @@ import json
 import httpx
 import openentity
 import pytest
-from openentity import Identity, client as oe_client
+from openentity import Identity
 
 SEED = bytes(range(32))
 
@@ -27,9 +27,12 @@ class Den:
 
     def __init__(self):
         self.calls, self.routes = [], {}
+        self.entity_status = lambda: 404  # GET /v1/entities/{eid} on the registry; the registry fixture replaces it
         self.client = httpx.AsyncClient(transport=httpx.MockTransport(self.handle))
 
     def handle(self, req: httpx.Request) -> httpx.Response:
+        if req.url.path.startswith("/v1/entities/"):
+            return httpx.Response(self.entity_status(), json={})
         body = json.loads(req.content) if req.content else None
         self.calls.append((req.url.path, req.headers.get("x-api-key"), body))
         r = self.routes.get(req.url.path, (200, {}))
@@ -55,21 +58,16 @@ def den():
 
 
 @pytest.fixture
-def registry(monkeypatch):
+def registry(monkeypatch, den):
     """Registry reads/writes: GET entity 404 until adopted. Returns the list of adopt() kwargs."""
     state = {"adopted": False, "adopts": []}
-
-    def request(url, body=None, headers=None):
-        if "/v1/entities/" in url and not state["adopted"]:
-            raise oe_client.RegistryError(404, "not found")
-        return {}
+    den.entity_status = lambda: 200 if state["adopted"] else 404
 
     def adopt(name, description="", registry="", seed=None, client=None):
         state["adopts"].append({"name": name, "seed": seed, "client": client})
         state["adopted"] = True
         return {}
 
-    monkeypatch.setattr(oe_client, "_request", request)
     monkeypatch.setattr(openentity, "adopt", adopt)
     return state
 

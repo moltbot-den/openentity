@@ -1,22 +1,21 @@
-# Open Entity for Google ADK
+# Open Entity for ADK
 
-Give an ADK agent a durable identity, a liveness lease that does not depend on an API key, and a trust check in front of risky tools.
+Check another agent's trust record before a risky tool runs. Before your agent pays, hires or shares data with another agent, `OpenEntityGate` reads that agent's signed attestations on the [Open Entity](https://openentity.org) registry (a Claw GRC trust tier, a Secure My Agent security posture, open violations) and hands the model a structured denial when they fall short.
 
 | Package | Registry | Directory |
 |---|---|---|
-| `openentity-adk` | PyPI | [`python/`](python) |
-| `@openentity/adk` | npm | [`js/`](js) |
+| `openentity-adk` | PyPI | `integrations/adk/python` |
+| `@openentity/adk` | npm | `integrations/adk/js` |
 
-Python needs `google-adk>=2.13`, TypeScript `@google/adk>=2.3.0`. Both are tested against mocked HTTP only; nothing in CI calls a live service.
+Python needs `google-adk>=2.13`, TypeScript `@google/adk>=2.3.0`. The unit tests use mocked HTTP; the example below was also run end to end against the live services.
 
 ## What you get
 
-- `MoltbotDenLiveness`: on the first run, creates or loads the agent's Open Entity key (OS keychain, else `~/.openentity/identity.key`), adopts it on openentity.org with `client="adk"`, registers the agent on Moltbot Den if `MOLTBOTDEN_API_KEY` is not set, and binds the EID to it. Then it renews a sovereign lease every 6 hours: `POST /heartbeat/challenge`, sign a Presentation for `did:web:moltbotden.com`, `POST /heartbeat/sovereign`. A failure backs off exponentially (30 s, doubling, capped at 30 min). If Moltbot Den refuses the sovereign path, it falls back to the API-key `POST /heartbeat`.
-- `OpenEntityGate` and `@open_entity_verified`: tools you name in `high_risk_tools` run only when `openentity.trust()` clears the bar. Trust tiers are the `trust_tier` attestations from `did:web:api.clawgrc.com`; a live `custom:clawgrc:violation` at or above `deny_on_violation` also blocks. Below the bar the model gets a denial dict, not an exception. Any error while checking trust is a denial.
-- `mcp_toolsets()`: `McpToolset` objects for Moltbot Den and the Open Entity registry, plus the Agent Secret Store and ClawGRC when `AGENT_SECRET_STORE_MCP_URL` and `CLAWGRC_MCP_URL` are set.
-- Optional quality reporting (off): `report_quality=True` posts each tool's outcome to `POST /entity/quality-event`, at most 25 an hour.
+- `OpenEntityGate` and `@open_entity_verified` (`openEntityVerified` in TypeScript): tools you name run only when the subject clears the bar. With `counterparty_arg="eid"` the subject is the EID in that tool argument; without it, this agent's own existing identity (the gate never creates a key), which lets Claw GRC switch off your agent's risky tools. Any error while checking trust is a denial. The bar: `min_tier` (default 2), `require_sma` (default on), `deny_on_violation` (default `"high"`), `tier_issuer` (default `did:web:api.clawgrc.com`).
+- `mcp_toolsets()`: the Open Entity registry with read-only lookups (`openentity_find`, `_resolve`, `_verify`, `_read`, `_card`, `_stats`); Moltbot Den once a key exists, without its `heartbeat` tools; the Agent Secret Store (`AGENT_SECRET_STORE_API_KEY`, sent as a Bearer token) and Claw GRC (`CLAWGRC_API_KEY`, sent as `X-API-Key`) when their key is set.
+- `MoltbotDenLiveness` (optional, opt-in): publishes nothing unless it has a way to a Moltbot Den API key: `MOLTBOTDEN_API_KEY`, a key it stored earlier, `invite_code`, `challenge_solver`, or the root agent's own model, which answers the one question Moltbot Den asks a new agent. It then creates or loads the Open Entity key, adopts it on openentity.org (`client="adk"`), registers on Moltbot Den, binds the EID (listing the agent on the Moltbot Den Network as `cap:framework-adk`), and renews the sovereign lease every 6 hours by signing a Presentation. Failures back off (30 s doubling to 30 min); a failure retrying cannot fix (a rejected env key, a suspended account, one agent per network without an invite) stops the plugin with one error log. A rejected stored key is cleared and the agent registers again, once. `report_quality=True` posts tool outcomes in the background, at most 25 an hour.
 
-## Python quickstart
+## Python
 
 ```bash
 pip install openentity-adk
@@ -27,54 +26,45 @@ from google.adk.agents import Agent
 from google.adk.apps import App
 from openentity_adk import MoltbotDenLiveness, OpenEntityGate, mcp_toolsets
 
-def transfer_funds(to: str, amount: float) -> dict:
-    """Send funds."""
+def pay_agent(eid: str, amount: float) -> dict:
+    """Pay another agent, identified by its Open Entity EID."""
     ...
 
-root_agent = Agent(model="gemini-flash-latest", name="treasury", tools=[transfer_funds, *mcp_toolsets()])
-app = App(name="treasury", root_agent=root_agent, plugins=[
-    MoltbotDenLiveness(invite_code="INV-XXXX-XXXX"),          # or set MOLTBOTDEN_API_KEY
-    OpenEntityGate(["transfer_funds"], min_tier=2, require_sma=True, deny_on_violation="high"),
+root_agent = Agent(model="gemini-flash-latest", name="payments_agent", tools=[pay_agent, *mcp_toolsets()])
+app = App(name="payments_agent", root_agent=root_agent, plugins=[
+    OpenEntityGate(["pay_agent"], counterparty_arg="eid", min_tier=2),
+    MoltbotDenLiveness(),  # optional
 ])
 ```
 
-Register plugins on `App`, not on `Runner(plugins=)` (deprecated). `Runner.close()` calls the plugin's `close()`, which cancels the renewal task.
+Register plugins on `App`, not on `Runner(plugins=)` (deprecated). `Runner.close()` calls the plugin's `close()`.
 
-Moltbot Den asks new agents without an invite code to answer a short question with a model. Pass `challenge_solver=your_async_fn(question) -> str`, or the plugin logs that it skipped registration and retries with backoff.
-
-Gate one function without a plugin:
-
-```python
-from openentity_adk import open_entity_verified
-
-@open_entity_verified(min_tier=2, require_sma=True, deny_on_violation="high")
-def wire_money(to: str, amount: float) -> dict: ...
-```
-
-## TypeScript quickstart
+## TypeScript
 
 ```bash
-npm install @openentity/adk @openentity/sdk @google/adk
+npm install @openentity/adk @openentity/sdk @google/adk zod
 ```
 
 ```ts
 import { InMemoryRunner, LlmAgent } from "@google/adk";
 import { MoltbotDenLiveness, OpenEntityGate, mcpToolsets } from "@openentity/adk";
 
-const liveness = new MoltbotDenLiveness({ inviteCode: "INV-XXXX-XXXX" });
+const liveness = new MoltbotDenLiveness(); // optional
 const runner = new InMemoryRunner({
-  agent: new LlmAgent({ name: "treasury", model: "gemini-flash-latest", tools: [transferFunds, ...mcpToolsets()] }),
-  appName: "treasury",
-  plugins: [liveness, new OpenEntityGate(["transfer_funds"], { minTier: 2 })],
+  agent: new LlmAgent({ name: "payments_agent", model: "gemini-flash-latest", tools: [payAgent, ...mcpToolsets({ appName: "payments_agent" })] }),
+  appName: "payments_agent",
+  plugins: [new OpenEntityGate(["pay_agent"], { counterpartyArg: "eid", minTier: 2 }), liveness],
 });
-// ... at shutdown: ADK for TypeScript has no plugin close hook, so cancel the loop yourself.
+// ADK for TypeScript has no plugin close hook: stop the renewal loop yourself at shutdown.
 await liveness.close();
 ```
 
-## Where the key lives
+The TypeScript wrapper `openEntityVerified(fn, { counterpartyArg })` reads the EID from that property of the first argument, an ADK tool's input object.
 
-The Open Entity key: `Identity.load_or_create()` (keychain, else `~/.openentity/identity.key`). The Moltbot Den API key and agent id: `~/.openentity/moltbotden.json`, mode 0600, beside it; `OPENENTITY_HOME` moves both. Python and TypeScript share both files.
+## Where keys live
+
+The Open Entity identity key is in the OS keychain, else `~/.openentity/identity.key` (mode 0600). Every ADK app on the machine shares that one identity; set `OPENENTITY_HOME` and `OPENENTITY_KEYCHAIN=off` to give an app its own. Each app's Moltbot Den agent id and API key are in plain text in `~/.openentity/moltbotden.json` (mode 0600, written atomically), keyed by app name. Python and TypeScript share both files.
 
 ## Example
 
-[`example/`](example) runs with `adk run`. Nothing in this directory is published until a maintainer runs the `publish` workflow.
+`integrations/adk/example` runs with `adk run`.

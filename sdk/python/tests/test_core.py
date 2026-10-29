@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from openentity import cli, core
+from openentity import __version__, cli, core
 
 ROOT = Path(__file__).resolve().parents[3]
 VECTORS = ROOT / "test-vectors"
@@ -198,7 +198,7 @@ def test_adopt_and_cli(tmp_path, monkeypatch, capsys):
 def test_cli_version(capsys):
     with pytest.raises(SystemExit) as e:
         cli.main(["--version"])
-    assert e.value.code == 0 and "0.5.2" in capsys.readouterr().out
+    assert e.value.code == 0 and __version__ in capsys.readouterr().out
 
 
 # ---- shared vectors, checked with the independent verifier's own logic ----

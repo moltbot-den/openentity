@@ -1,5 +1,5 @@
 import { describe, it, expect, afterAll } from "vitest";
-import { mkdtempSync, rmSync, statSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as oe from "../src/index.ts";
@@ -19,6 +19,22 @@ describe("Identity.loadOrCreate", () => {
     const b = await Identity.loadOrCreate();
     expect([b.did, b.source]).toEqual([a.did, "file"]);
     expect(b.seed).toEqual(a.seed);
+  });
+});
+
+describe("Identity.load", () => {
+  it("never creates a key, so a read-only caller cannot mint an identity", async () => {
+    const empty = mkdtempSync(join(tmpdir(), "oe-id-empty-"));
+    process.env.OPENENTITY_HOME = empty;
+    try {
+      expect(await Identity.load()).toBeNull();
+      expect(existsSync(identityFile())).toBe(false);
+    } finally {
+      process.env.OPENENTITY_HOME = home;
+      rmSync(empty, { recursive: true, force: true });
+    }
+    const a = await Identity.loadOrCreate();
+    expect((await Identity.load())!.did).toBe(a.did);
   });
 });
 

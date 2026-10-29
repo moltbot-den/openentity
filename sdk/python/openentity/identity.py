@@ -37,8 +37,13 @@ def _keychain_set(seed_hex: str) -> bool:
     return False
 
 
+def home() -> pathlib.Path:
+    """OPENENTITY_HOME, else ~/.openentity: where the key file and integrations' state live."""
+    return pathlib.Path(os.environ.get("OPENENTITY_HOME", "~/.openentity")).expanduser()
+
+
 def _file() -> pathlib.Path:
-    return pathlib.Path(os.environ.get("OPENENTITY_HOME", "~/.openentity")).expanduser() / "identity.key"
+    return home() / "identity.key"
 
 
 class Identity:
@@ -54,10 +59,17 @@ class Identity:
         return self.kp.seed
 
     @classmethod
-    def load_or_create(cls) -> "Identity":
+    def load(cls) -> "Identity | None":
+        """The existing identity, or None. Never creates one."""
         for source, read in (("keychain", _keychain_get), ("file", lambda: _file().read_text().strip() if _file().exists() else None)):
             if h := read():
                 return cls(bytes.fromhex(h), source)
+        return None
+
+    @classmethod
+    def load_or_create(cls) -> "Identity":
+        if found := cls.load():
+            return found
         seed = os.urandom(32)
         if _keychain_set(seed.hex()):
             return cls(seed, "keychain")

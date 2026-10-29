@@ -695,25 +695,32 @@ wheels = [
 
 [[package]]
 name = "openentity"
-version = "0.5.1"
+version = "0.5.3"
 source = { directory = "../../../sdk/python" }
 dependencies = [
     { name = "cryptography" },
+    { name = "jsonschema" },
     { name = "pycryptodome" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "cryptography", specifier = ">=42" },
+    { name = "eth-account", marker = "extra == 'wallet'", specifier = ">=0.11" },
+    { name = "jsonschema", specifier = ">=4.18" },
     { name = "pycryptodome", specifier = ">=3.20" },
 ]
+provides-extras = ["wallet"]
 
 [package.metadata.requires-dev]
-dev = [{ name = "pytest", specifier = ">=8" }]
+dev = [
+    { name = "eth-account", specifier = ">=0.11" },
+    { name = "pytest", specifier = ">=8" },
+]
 
 [[package]]
 name = "openentity-adk"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "." }
 dependencies = [
     { name = "google-adk" },

@@ -127,11 +127,94 @@ async def test_gate_plugin_checks_only_listed_tools():
     assert await allowed.before_tool_callback(tool=risky, tool_args={}, tool_context=None) is None
 
 
+PAY = type("T", (), {"name": "pay_agent"})()
+OTHER = "did:key:z6MkOther"
+
+
+async def test_gate_checks_the_counterparty_named_in_the_tool_args():
+    """The main use: before paying or hiring another agent, check that agent, not yourself."""
+    seen = []
+
+    def t(eid):
+        seen.append(eid)
+        return report()
+    gate = OpenEntityGate(["pay_agent"], counterparty_arg="eid", trust_fn=t)
+    assert await gate.before_tool_callback(tool=PAY, tool_args={"eid": OTHER, "amount": 5}, tool_context=None) is None
+    assert seen == [OTHER]
+
+
+@pytest.mark.parametrize("args", [{}, {"eid": ""}, {"eid": "not-a-did"}, {"eid": 7}])
+async def test_gate_denies_when_the_counterparty_eid_is_missing_or_not_a_did(args):
+    gate = OpenEntityGate(["pay_agent"], counterparty_arg="eid", trust_fn=fn(report()))
+    d = await gate.before_tool_callback(tool=PAY, tool_args=args, tool_context=None)
+    assert d["denied"] and d["reason"] == "counterparty_missing"
+
+
+def test_decorator_checks_the_counterparty_argument():
+    seen = []
+
+    def t(eid):
+        seen.append(eid)
+        return report(tier=0)
+
+    @open_entity_verified(counterparty_arg="eid", trust_fn=t)
+    def pay(eid: str, amount: float):
+        return "paid"
+    assert pay(OTHER, 5)["reason"] == "tier_too_low" and seen == [OTHER]
+    assert pay(eid="nope", amount=1)["reason"] == "counterparty_missing"
+
+
+def test_bad_violation_threshold_fails_at_construction():
+    with pytest.raises(ValueError):
+        OpenEntityGate(["x"], deny_on_violation="severe")
+    with pytest.raises(ValueError):
+        open_entity_verified(deny_on_violation="severe")
+
+
+async def test_self_gate_without_an_identity_denies_and_creates_no_key(home):
+    gate = OpenEntityGate(["pay_agent"], trust_fn=fn(report()))
+    d = await gate.before_tool_callback(tool=PAY, tool_args={}, tool_context=None)
+    assert d["reason"] == "no_identity" and not (home / "identity.key").exists()
+
+
 def test_mcp_toolsets_defaults_and_env_hooks(monkeypatch):
+    """Each server gets the header it actually accepts: ClawGRC's gateway reads X-API-Key, the Agent Secret Store a Bearer token."""
+    monkeypatch.delenv("AGENT_SECRET_STORE_API_KEY", raising=False)
+    monkeypatch.delenv("CLAWGRC_API_KEY", raising=False)
+    monkeypatch.setenv("MOLTBOTDEN_API_KEY", "mbd")
     assert len(mcp_toolsets()) == 2
-    monkeypatch.setenv("AGENT_SECRET_STORE_MCP_URL", "https://ass.example/mcp")
-    monkeypatch.setenv("CLAWGRC_MCP_URL", "https://grc.example/mcp")
+    monkeypatch.setenv("AGENT_SECRET_STORE_API_KEY", "ass_k")
+    monkeypatch.setenv("CLAWGRC_API_KEY", "cgrc_k")
     sets = mcp_toolsets()
     urls = [t._connection_params.url for t in sets]
-    assert urls == ["https://api.moltbotden.com/mcp", "https://mcp.openentity.org/mcp", "https://ass.example/mcp", "https://grc.example/mcp"]
+    assert urls == ["https://api.moltbotden.com/mcp", "https://mcp.openentity.org/mcp",
+                    "https://mcp.agentsecretstore.com/mcp", "https://api.clawgrc.com/mcp"]
+    assert sets[2]._connection_params.headers == {"Authorization": "Bearer ass_k"}
+    assert sets[3]._connection_params.headers == {"X-API-Key": "cgrc_k"}
+    monkeypatch.setenv("CLAWGRC_MCP_URL", "https://grc.example/mcp")
+    assert mcp_toolsets()[3]._connection_params.url == "https://grc.example/mcp"
     assert len(mcp_toolsets(moltbotden=False, openentity=False)) == 2
+
+
+def test_moltbotden_mcp_waits_for_a_key_and_hides_heartbeat_tools(monkeypatch):
+    """A fresh install has no Moltbot Den key yet: the preset is left out instead of failing the tool listing."""
+    from openentity_adk import _keystore
+    monkeypatch.delenv("MOLTBOTDEN_API_KEY", raising=False)
+    assert [t._connection_params.url for t in mcp_toolsets()] == ["https://mcp.openentity.org/mcp"]
+    _keystore.save("my_app", api_key="stored")
+    den = mcp_toolsets()[0]
+    assert den._connection_params.url == "https://api.moltbotden.com/mcp"
+    ctx = type("Ctx", (), {"session": type("S", (), {"app_name": "my_app"})()})()
+    assert den._header_provider(ctx) == {"X-API-Key": "stored"}
+    tool = lambda name: type("T", (), {"name": name})()  # noqa: E731
+    assert not den._is_tool_selected(tool("heartbeat_sovereign"), None) and den._is_tool_selected(tool("discover_agents"), None)
+
+
+def test_openentity_preset_exposes_only_read_tools():
+    """The model can look agents up, but cannot withdraw, adopt, record or export a key through the preset."""
+    oe = mcp_toolsets(moltbotden=False)[0]
+    tool = lambda name: type("T", (), {"name": name})()  # noqa: E731
+    for name in ("openentity_find", "openentity_resolve", "openentity_verify", "openentity_read", "openentity_card", "openentity_stats"):
+        assert oe._is_tool_selected(tool(name), None)
+    for name in ("openentity_export_key", "openentity_withdraw", "openentity_adopt", "openentity_record", "openentity_present", "openentity_self"):
+        assert not oe._is_tool_selected(tool(name), None)
