@@ -8,4 +8,6 @@ if [ -z "$EID" ]; then
   [ "$(ls "$OE_HOME" | wc -l | tr -d ' ')" = "1" ] || { echo "usage: anchor.sh <eid> (more than one entity in $OE_HOME)" >&2; exit 2; }
   EID="$(ls "$OE_HOME")"
 fi
-node "$(cd "$(dirname "$0")" && pwd)/sign.mjs" anchor "$EID"
+HERE="$(cd "$(dirname "$0")" && pwd)"
+SIGN="python3 $HERE/sign.py"; if command -v node >/dev/null 2>&1 && node -e 'process.exit(+process.versions.node.split(".")[0]<22)' 2>/dev/null; then SIGN="node $HERE/sign.mjs"; fi
+$SIGN anchor "$EID"

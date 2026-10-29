@@ -66,7 +66,7 @@ export function stampBits(specJson) {
 // Proof-of-work stamp (spec 10.4): sha256 of the header has >= bits leading zero bits.
 export async function mintStamp(bits, eid) {
   const created = now();
-  for (let i = 0; ; i++) {
+  for (let i = Math.floor(Math.random() * 2 ** 32); ; i++) { // random start: two stamps in one second must differ
     let n = '';
     for (let x = i; n === '' || x > 0; x = Math.floor(x / 58)) n = ALPHABET[x % 58] + n;
     const header = `1:${bits}:${created}:${eid}:${n}`;

@@ -48,4 +48,9 @@ if [ -d integrations/goose ]; then
   uv run --quiet --with pyyaml --with pytest pytest -q integrations/goose || fail=1
 fi
 
+# The skill passes the official Agent Skills validator (PRD Appendix B).
+if [ -d skill/openentity ]; then
+  uvx --quiet --from skills-ref==0.1.1 agentskills validate skill/openentity || fail=1
+fi
+
 exit $fail
