@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "openentity"
-version = "0.5.1"
+version = "0.5.2"
 description = "Open Entity (OEIS-1) client: JCS, did:key, eddsa-jcs-2022, Merkle proofs, adopt()."
 readme = "README.md"
 license = "MIT"
@@ -12,7 +12,11 @@ requires-python = ">=3.11"
 dependencies = [
     "cryptography>=42",
     "pycryptodome>=3.20",
+    "jsonschema>=4.18",
 ]
+
+[project.optional-dependencies]
+wallet = ["eth-account>=0.11"]
 
 [project.urls]
 Homepage = "https://openentity.org"
@@ -23,7 +27,7 @@ Source = "https://github.com/moltbot-den/openentity"
 openentity = "openentity.cli:main"
 
 [dependency-groups]
-dev = ["pytest>=8"]
+dev = ["pytest>=8", "eth-account>=0.11"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["openentity"]

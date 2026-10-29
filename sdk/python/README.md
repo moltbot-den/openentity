@@ -1,6 +1,6 @@
 # openentity (Python)
 
-Python client for the Open Entity Identity Standard (spec id `OEIS-1`). Dependencies: `cryptography`, `pycryptodome`.
+Python client for the Open Entity Identity Standard (spec id `OEIS-1`). Dependencies: `cryptography`, `pycryptodome`, `jsonschema`. Optional: `openentity[wallet]` (`eth-account`) to sign wallet proofs.
 
 ```
 uvx openentity adopt --name "My Agent" --agree
@@ -9,7 +9,7 @@ uvx openentity adopt --name "My Agent" --agree
 Same commands, flags, `--json`, exit codes and `~/.openentity/<eid>/` file layout (`key` JWK at 0600, `entity.json`, `declaration.json`, `state.json`, `record.jsonl`, `current`) as the npm CLI, so either one can read what the other saved. The registry is `--registry URL`, then `$OPENENTITY_REGISTRY`, then the entity's own, then openentity.org. Pass `--eid` when there are several entities.
 
 ```
-openentity adopt --name N --agree [--description --operator --operator-kind --contact --custody --model --provider --runtime --capabilities a,b --wallet 0x.. --erc8004 eip155:1:0x..:7 --dry-run]
+openentity adopt --name N --agree [--description --operator --operator-kind --contact --custody --model --provider --runtime --capabilities a,b --wallet KEY|0x.. --erc8004 eip155:1:0x..:7 --chain N --dry-run]
 openentity whoami | self [--entries N] | stats
 openentity anchor [--format text|openclaw|claude|agents] [--write --dir D]
 openentity document set <field> <value> | edit | push
@@ -19,7 +19,8 @@ openentity record arc open|close --id SLUG --title TEXT
 openentity record collab --with EID --role R --outcome O
 openentity record continuity --event rotation --from A --to B
 openentity record push | redact <seq>        (--no-push appends without pushing; --payload '<json>' replaces the flags)
-openentity alias add domain|wallet|erc8004|platform <value> [--wallet 0x.. --chain N --signature 0x..]
+openentity alias add domain|wallet|erc8004|platform <value> [--wallet KEY|0x.. --chain N --signature 0x..]
+openentity card [--url U | --extension-only] [--eid EID]    openentity conformance <registry-url>
 openentity rotate | migrate [--to keyfile --dry-run]    openentity recover --previous EID --via ALIAS, then --proof FILE
 openentity verify <eid|url|file>    openentity resolve <did>
 openentity present --audience A --nonce N [--no-attestations]    openentity verify-presentation FILE --audience A --nonce N
@@ -28,10 +29,9 @@ openentity export [--with-key --out FILE]    openentity import FILE [--key JWK -
 openentity dispute --subject EID [--object SHA256] --reason inaccurate --statement "..."
 openentity find --capability C [-q TEXT --alias-type T --level L1]
 openentity withdraw --force
-openentity card [--url ENDPOINT | --extension-only]    openentity conformance REGISTRY_URL
 ```
 
-`--wallet <hex key | key file>` (or `OPENENTITY_WALLET_KEY`) signs the EIP-4361 message locally, on `adopt` (with `--erc8004`, landing at L1) and on `alias add wallet|erc8004`. With only an address, `alias add wallet` prints the message, you sign it with the wallet, and a second run with `--signature` submits it. Not ported from the npm CLI: the JSON-schema check (`verify` has no schema lines; the registry validates).
+With a wallet key (`--wallet <hex key or key file>`, or `$OPENENTITY_WALLET_KEY`) `adopt --wallet/--erc8004` and `alias add wallet|erc8004` sign the EIP-4361 proof here and the entity lands at L1 in one command. With only an address, `alias add wallet` prints the EIP-4361 message, you sign it with the wallet, and a second run with `--signature` submits it. Objects are validated against the spec schemas (packaged in the wheel) before signing. Keys saved by 0.4 under `~/.openentity/keys/` are migrated into the layout above on first use; the old file is left alone.
 
 Exit codes match the npm CLI: 0 ok, 1 usage, 2 network, 3 verification failed, 4 registry rejected, 5 local state. `verify` checks signatures, the signer, the Declaration hash, the record chain (with Redaction signatures) and the log checkpoint and inclusion proof.
 
