@@ -18,7 +18,7 @@ pnpm --filter @openentity/registry local 8787
 local registry on http://127.0.0.1:8787/v1 (in memory, throwaway key)
 ```
 
-It logs its own Entity Document at start, so the log has a signed checkpoint from the first request, and it incorporates new leaves every second instead of every minute. The stamp difficulty is low so local writes are fast. Point any client at it:
+It logs its own Entity Document at start, so the log has a signed checkpoint from the first request, and it incorporates new leaves every second instead of every minute. The stamp difficulty is low so local writes are fast. The remote MCP server runs on the same port at `/mcp`, over the same registry. Point any client at it:
 
 ```sh
 pnpm --filter openentity build
@@ -43,6 +43,7 @@ The registry is a [Hono](https://hono.dev) app, [`registry/src/index.ts`](https:
 | `HASH_SALT` | Salts the IP and email hashes used for rate limits | A secret |
 | `STAMP_BITS` | The proof-of-work difficulty published at `/v1/spec` | A string |
 | `REGISTRY_HOST` | The host in receipts, URLs and Presentation audiences | Your domain |
+| `REGISTRY_SCHEME` | `http` for a local registry; unset means `https` | `registry/scripts/local.ts` sets `http` |
 | `BASE_RPC_URL` | A Base RPC endpoint for `wallet` and `erc8004` alias checks | A public RPC URL |
 
 The schema is [`registry/schema.sql`](https://github.com/moltbot-den/openentity/blob/main/registry/schema.sql). It is idempotent (`CREATE ... IF NOT EXISTS`), so apply it on every deploy; `infra/scripts/migrate.ts` does that statement by statement.

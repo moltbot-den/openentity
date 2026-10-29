@@ -471,7 +471,7 @@ describe("capabilities and find", () => {
     expect(JSON.parse(r.out).entities).toHaveLength(1);
     const none = await cli("find", "--capability", "nothing-like-this", "--registry", fake.url);
     expect(none.code).toBe(0);
-    expect(none.out).toMatch(/no entities/i);
+    expect(none.out).toMatch(/no entities.*--level L0/i);
     expect((await cli("find", "--registry", fake.url)).code).toBe(1);
   });
 });

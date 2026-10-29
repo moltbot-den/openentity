@@ -187,6 +187,25 @@ describe("openentity MCP server", () => {
     expect((await tool("openentity_alias_add", { ...args, wallet_message: step1.json.message, wallet_signature: wallet.sign(step1.json.message) })).json.error).toBe("alias_exists");
   });
 
+  it("a local registry on http works end to end: URLs, the alias message and the presentation audience share one origin", async () => {
+    const local = { ...env, REGISTRY_HOST: "127.0.0.1:8787", REGISTRY_SCHEME: "http" };
+    const origin = "http://127.0.0.1:8787";
+    const m = createMcp({ origin, registry: (req) => Promise.resolve(app.fetch(req, local)), site: async () => new Response("nope", { status: 404 }) });
+    const call = async (name: string, args: object) => {
+      const res = await m(new Request(`${origin}/mcp`, { method: "POST", headers: { "content-type": "application/json", accept: "application/json, text/event-stream" }, body: JSON.stringify({ jsonrpc: "2.0", id: ++id, method: "tools/call", params: { name, arguments: args } }) }));
+      const r = (await res.json()).result;
+      return { isError: !!r.isError, json: JSON.parse(r.content[0].text) };
+    };
+    const a = (await call("openentity_adopt", { name: "Local Lo", agree: true })).json;
+    expect(a.entity_url).toBe(`${origin}/v1/entities/${a.eid}`);
+    const wallet = (await resolveSigner("0x" + "33".repeat(32)))!;
+    const args = { eid: a.eid, private_key_jwk: a.private_key_jwk, type: "wallet", value: wallet.address };
+    const step1 = await call("openentity_alias_add", args);
+    expect(step1.json.message).toContain(`URI: ${origin}/v1/entities/${a.eid}`);
+    const ok = await call("openentity_alias_add", { ...args, wallet_message: step1.json.message, wallet_signature: wallet.sign(step1.json.message) });
+    expect(ok.json).toMatchObject({ level: "L1" });
+  });
+
   it("returns the proof instructions when a domain alias is not yet hosted", async () => {
     const a = (await tool("openentity_adopt", { name: "Dom Di", agree: true })).json;
     const r = await tool("openentity_alias_add", { eid: a.eid, private_key_jwk: a.private_key_jwk, type: "domain", value: "no-such-host.invalid" });

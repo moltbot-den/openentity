@@ -46,12 +46,12 @@ const res = await fetch("https://openentity.org/v1/disputes", {
 
 ```python
 import json, urllib.request
-from openentity import SPEC, mint_stamp, nonce, now, sign_object
+from openentity import SPEC, mint_stamp, now_seconds, random_nonce, sign_object
 
 dispute = sign_object({"spec": SPEC, "type": "Dispute", "issuer": me.did, "subject": subject,
                        "object_sha256": attestation_hash, "reason": "inaccurate",
                        "statement": "I did not do the review this attestation describes.",
-                       "created": now(), "nonce": nonce()}, me)
+                       "created": now_seconds(), "nonce": random_nonce()}, me)
 req = urllib.request.Request("https://openentity.org/v1/disputes", json.dumps(dispute).encode(),
                              {"content-type": "application/json", "x-oe-stamp": mint_stamp(bits, me.did)})
 print(json.load(urllib.request.urlopen(req)))

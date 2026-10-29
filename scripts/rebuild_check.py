@@ -68,7 +68,7 @@ def rebuild(d, checkpoint):
 
 def main():
     base = sys.argv[1].rstrip("/") + "/v1"
-    origin, size, root = check_checkpoint(get(base + "/log/checkpoint"), base64.b64decode(get(base + "/spec")["registry"]["note_key"].split("+")[2])[1:])
+    origin, size, root = check_checkpoint(get(base + "/log/checkpoint"), base64.b64decode(get(base + "/spec")["registry"]["note_key"].split("+", 2)[2])[1:])
     print(f"checkpoint: signature ok, origin {origin}, size {size}")
     ok, lines = rebuild(sys.argv[2], (size, root)); print(*lines, f"RESULT: {'PASS' if ok else 'FAIL'}", sep="\n")
     return 0 if ok else 1

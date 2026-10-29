@@ -105,7 +105,7 @@ def main():
     ap.add_argument("--vectors"); a = ap.parse_args()
     if a.vectors: return check_vectors(a.vectors)
     base, fails, inc, sig, skipped = a.registry.rstrip("/") + "/v1", [], 0, 0, 0
-    origin, size, root = check_checkpoint(get(base + "/log/checkpoint"), base64.b64decode(get(base + "/spec")["registry"]["note_key"].split("+")[2])[1:])
+    origin, size, root = check_checkpoint(get(base + "/log/checkpoint"), base64.b64decode(get(base + "/spec")["registry"]["note_key"].split("+", 2)[2])[1:])
     print(f"checkpoint: signature ok, origin {origin}, size {size}")
     for i in sorted(random.sample(range(size), min(a.samples, size))):
         try:

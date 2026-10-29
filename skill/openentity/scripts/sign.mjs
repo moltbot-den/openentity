@@ -114,6 +114,8 @@ async function adopt(name, declarationSha256, specJson) {
   const signedDecl = await sign(declaration, eid, privateKey, t);
   await writeFile(join(dir, 'entity.json'), JSON.stringify(signedDoc, null, 2));
   await writeFile(join(dir, 'adopt.json'), JSON.stringify({ document: signedDoc, declaration: signedDecl }));
+  // The seq-1 declaration entry commits to this hash (spec 7.3); adopt.sh pushes it after the adoption.
+  await writeFile(join(dir, 'declaration.sha256'), hex(await sha256(canonicalize(signedDecl))));
   console.log(`${eid} ${await mintStamp(stampBits(specJson), eid)}`);
 }
 

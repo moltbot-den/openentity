@@ -7,6 +7,7 @@ export interface Env {
   snapshots?: Blobs; // off-site Object Lock copy of the daily snapshots
   STAMP_BITS: string;
   REGISTRY_HOST: string;
+  REGISTRY_SCHEME?: string; // "http" for a local registry; default "https"
   BASE_RPC_URL: string;
   EVM_RPC_URLS?: string; // JSON {"<chainId>": rpcUrl}; overrides the built-in public RPCs
   REGISTRY_KEY_JWK?: string;
@@ -28,3 +29,6 @@ export const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padSta
 export const unhex = (s: string) => Uint8Array.from(s.match(/../g) ?? [], (x) => parseInt(x, 16));
 export const b64 = (b: Uint8Array) => btoa(String.fromCharCode(...b));
 export const nowIso = () => new Date().toISOString().replace(/\.\d+Z$/, "Z");
+
+/** The public origin the registry puts in every URL it emits and checks in every audience. */
+export const originOf = (env: Pick<Env, "REGISTRY_HOST" | "REGISTRY_SCHEME">) => `${env.REGISTRY_SCHEME ?? "https"}://${env.REGISTRY_HOST}`;

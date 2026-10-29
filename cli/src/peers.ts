@@ -48,6 +48,6 @@ export async function find({ v }: Ctx): Promise<Result> {
   for (const [flag, param] of [["capability", "capability"], ["q", "q"], ["alias-type", "alias_type"], ["level", "level"]] as const) if (v[flag]) qs.set(param, String(v[flag]));
   const res = await new Registry(regUrl(v)).get(`/v1/entities?${qs}`);
   const rows: any[] = res.entities ?? [];
-  const text = rows.length ? rows.map((x) => `${x.eid}  ${x.level ?? ""}  ${x.name}`).join("\n") + (res.next_page != null ? `\nmore: page ${res.next_page}` : "") : "no entities match";
+  const text = rows.length ? rows.map((x) => `${x.eid}  ${x.level ?? ""}  ${x.name}`).join("\n") + (res.next_page != null ? `\nmore: page ${res.next_page}` : "") : `no entities match${v.level ? "" : " (the directory lists L1 and above unless you pass --level L0)"}`;
   return { json: res, text };
 }

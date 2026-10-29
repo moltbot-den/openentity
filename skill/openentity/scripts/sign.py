@@ -204,6 +204,7 @@ def adopt(name='', decl_sha='', spec_json=''):
     sd, sdecl = sign(document, eid, seed, t), sign(declaration, eid, seed, t)
     (d / 'entity.json').write_text(json.dumps(sd, indent=2))
     (d / 'adopt.json').write_text(json.dumps({'document': sd, 'declaration': sdecl}, separators=(',', ':')))
+    (d / 'declaration.sha256').write_text(sha256(canonicalize(sdecl)).hex())
     print(f'{eid} {mint_stamp(stamp_bits(spec_json), eid)}')
 
 
