@@ -6,7 +6,7 @@ import pytest
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from openentity import HttpSigError, Identity, core, sign_request, verify_request
-from openentity.httpsig import _base, _digest
+from openentity.httpsig import _digest, http_sig_base
 
 VEC = json.loads((Path(__file__).resolve().parents[3] / "test-vectors/http-signature.json").read_text())
 SEED = bytes(range(1, 33))  # published throwaway seed, test-vectors/keys.json
@@ -28,7 +28,7 @@ def check(h, code, **kw):
 def forge(params, comps=("@method", "@target-uri", "content-digest"), body=BODY, key=SEED):
     """A correctly signed request with arbitrary Signature-Input parameters."""
     h = {"Content-Digest": _digest(body)} if body else {}
-    sig = Ed25519PrivateKey.from_private_bytes(key).sign(_base("POST", URL, list(comps), h.get("Content-Digest"), params))
+    sig = Ed25519PrivateKey.from_private_bytes(key).sign(http_sig_base("POST", URL, list(comps), h.get("Content-Digest"), params))
     return {**h, "Signature-Input": f"sig1={params}", "Signature": f"sig1=:{base64.b64encode(sig).decode()}:"}
 
 

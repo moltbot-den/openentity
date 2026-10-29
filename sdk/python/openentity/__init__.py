@@ -9,19 +9,19 @@ from .core import __all__ as _core
 from .core import b58decode, b58encode, did_key, nonce, now, public_from_did_key, verification_method  # noqa: F401  (deprecated)
 from .errors import (REGISTRY_ERROR_CODES, HttpSigError, InvalidInputError, OpenEntityError, RegistryError,  # noqa: F401
                      VerificationError)
-from .httpsig import sign_request, verify_request
+from .httpsig import http_sig_base, sign_request, verify_request
 from .identity import Identity
 from .issuer import (A2A_EXTENSION_URI, a2a_extension, agent_card, build_did_document, build_openentity_json, sign_attestation,
                      sign_revocation)
 from .report import TrustReport, clear_trust_cache, did_web_resolver, trust
 from .schema import validate
 
-__version__ = "0.6.0"
+__version__ = "0.6.1"
 
 __all__ = sorted([
     *_core, "CLIENTS", "DEFAULT_REGISTRY", "DISPUTE_REASONS", "adopt", "dispute", "find", "present", "record", "rotate", "withdraw",
     "REGISTRY_ERROR_CODES", "HttpSigError", "InvalidInputError", "OpenEntityError", "RegistryError", "VerificationError",
-    "sign_request", "verify_request", "Identity", "A2A_EXTENSION_URI", "a2a_extension", "agent_card", "build_did_document",
+    "http_sig_base", "sign_request", "verify_request", "Identity", "A2A_EXTENSION_URI", "a2a_extension", "agent_card", "build_did_document",
     "build_openentity_json", "sign_attestation", "sign_revocation", "TrustReport", "clear_trust_cache", "did_web_resolver", "trust",
     "validate",
 ])

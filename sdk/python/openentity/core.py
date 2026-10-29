@@ -24,6 +24,8 @@ __all__ = [
     "eip712_digest", "recover_eip712", "build_presentation", "verify_presentation",
     "mint_stamp", "check_stamp", "leaf_hash", "node_hash", "merkle_root", "inclusion_proof", "verify_inclusion",
     "verify_note", "log_leaf",
+    "build_document", "build_declaration", "hash_data", "verify_proof", "key_pair_from_jwk", "consistency_proof", "verify_consistency",
+    "checkpoint_body", "sign_note", "note_vkey",
 ]
 
 
@@ -176,10 +178,14 @@ def random_nonce() -> str:
 
 
 # ---- eddsa-jcs-2022 (spec 4.1) ----
-def _signing_input(obj: dict, proof: dict) -> bytes:
-    config = {k: v for k, v in proof.items() if k != "proofValue"}
+def hash_data(obj: dict, config: dict) -> bytes:
+    """eddsa-jcs-2022 hashData: sha256(JCS(proof config)) || sha256(JCS(document))."""
     doc = {k: v for k, v in obj.items() if k not in ("proof", "proofs")}  # a ContinuityLink carries proofs[]
-    return canonical_hash(config) + canonical_hash(doc)
+    return canonical_hash({k: v for k, v in config.items() if k != "proofValue"}) + canonical_hash(doc)
+
+
+def _signing_input(obj: dict, proof: dict) -> bytes:
+    return hash_data(obj, proof)
 
 
 def sign_proof(obj: dict, kp: KeyPair, created: str | None = None, method: str | None = None) -> dict:
@@ -192,6 +198,33 @@ def sign_proof(obj: dict, kp: KeyPair, created: str | None = None, method: str |
 
 def sign_object(obj: dict, kp: KeyPair, created: str | None = None, method: str | None = None) -> dict:
     return {**{k: v for k, v in obj.items() if k != "proof"}, "proof": sign_proof(obj, kp, created, method)}
+
+
+# ---- objects ----
+NOT_STATED = "Not yet stated."  # spec 5.3 required fields per layer
+
+
+def build_document(kp: KeyPair, name: str, description: str, operator: dict | None = None, substrate: dict | None = None,
+                   layers: dict | None = None, created: str | None = None, seq: int = 1, extra: dict | None = None) -> dict:
+    """Unsigned Entity Document with spec 5.2 defaults. `extra` is merged last (endpoints, aliases, declaration, ...)."""
+    created = created or now_seconds()
+    return {
+        "spec": SPEC, "eid": kp.did, "name": name, "description": description, "created": created, "updated": created, "seq": seq,
+        "keys": [{"id": verification_method_id(kp.did), "type": "Multikey", "publicKeyMultibase": kp.did.removeprefix("did:key:")}],
+        "operator": operator or {"kind": "none", "custody": "entity", "can_change": []},
+        "substrate": substrate or {"model": "unknown", "provider": "unknown", "runtime": "unknown", "declared_at": created},
+        "layers": layers or {
+            "cognition": {"statement": NOT_STATED, "uncertainty_practice": NOT_STATED},
+            "presence": {"statement": NOT_STATED, "format_signature": NOT_STATED},
+            "identity_core": {"statement": NOT_STATED, "will_not": [], "values": []},
+            "mission": {"statement": NOT_STATED, "arcs": []},
+        },
+        **(extra or {})}
+
+
+def build_declaration(eid: str, name: str, created: str | None = None) -> dict:
+    return {"spec": SPEC, "type": "Declaration", "eid": eid, "declaration_version": DECLARATION_VERSION,
+            "text_sha256": DECLARATION_SHA256, "name": name, "created": created or now_seconds(), "nonce": random_nonce()}
 
 
 # ---- continuity (spec 9) ----
@@ -286,9 +319,16 @@ def default_resolver(did: str) -> dict:
 
 
 def verify_object(obj: dict, resolver=default_resolver) -> tuple[bool, str]:
-    """Returns (ok, signer did or error). eddsa-jcs-2022 (Ed25519) or EIP-712 (did:pkh), spec 4.5."""
+    """Returns (ok, signer did or error) for the object's own `proof`. eddsa-jcs-2022 (Ed25519) or EIP-712 (did:pkh), spec 4.5."""
     try:
-        proof = obj["proof"]
+        return verify_proof(obj, obj["proof"], resolver)
+    except (KeyError, TypeError) as e:
+        return False, f"{type(e).__name__}: {e}"
+
+
+def verify_proof(obj: dict, proof: dict, resolver=default_resolver) -> tuple[bool, str]:
+    """Verify one proof over `obj` (a ContinuityLink carries several). Returns (ok, signer did or error)."""
+    try:
         did = proof["verificationMethod"].split("#")[0]
         if proof.get("proofPurpose") != "assertionMethod":
             return False, "proofPurpose must be assertionMethod"
@@ -448,12 +488,77 @@ def verify_inclusion(index: int, size: int, leaf: bytes, proof: list[bytes], roo
     return sn == 0 and r == root
 
 
+def _subproof(m: int, hashes: list[bytes], whole: bool) -> list[bytes]:
+    if m == len(hashes):
+        return [] if whole else [merkle_root(hashes)]
+    k = _split(len(hashes))
+    if m <= k:
+        return _subproof(m, hashes[:k], whole) + [merkle_root(hashes[k:])]
+    return _subproof(m - k, hashes[k:], False) + [merkle_root(hashes[:k])]
+
+
+def consistency_proof(m: int, hashes: list[bytes]) -> list[bytes]:
+    """RFC 9162 section 2.1.4: the proof that the first `m` leaves are a prefix of `hashes`."""
+    if not 1 <= m <= len(hashes):
+        raise InvalidInputError("m out of range")
+    return _subproof(m, hashes, True)
+
+
+def verify_consistency(m: int, n: int, root_m: bytes, root_n: bytes, proof: list[bytes]) -> bool:
+    if not 1 <= m <= n:
+        return False
+    if m == n:
+        return not proof and root_m == root_n
+    if not proof:
+        return False
+    p = [root_m, *proof] if m & (m - 1) == 0 else list(proof)
+    fn, sn = m - 1, n - 1
+    while fn & 1:
+        fn, sn = fn >> 1, sn >> 1
+    fr = sr = p[0]
+    for c in p[1:]:
+        if sn == 0:
+            return False
+        if fn & 1 or fn == sn:
+            fr, sr = node_hash(c, fr), node_hash(c, sr)
+            while not fn & 1 and fn:
+                fn, sn = fn >> 1, sn >> 1
+        else:
+            sr = node_hash(sr, c)
+        fn, sn = fn >> 1, sn >> 1
+    return sn == 0 and fr == root_m and sr == root_n
+
+
+def checkpoint_body(origin: str, size: int, root_hash: bytes) -> str:
+    return f"{origin}\n{size}\n{base64.b64encode(root_hash).decode()}\n"
+
+
+def _note_key_id(key_name: str, public: bytes) -> bytes:
+    return sha256(key_name.encode() + b"\n\x01" + public)[:4]
+
+
+def sign_note(body: str, key_name: str, kp: KeyPair) -> str:
+    """C2SP signed note: the body, a blank line, one signature line by `key_name`."""
+    if not body.endswith("\n"):
+        raise InvalidInputError("note body must end with a newline")
+    if not key_name or re.search(r"[\s+]", key_name):
+        raise InvalidInputError("invalid note key name")
+    sig = _note_key_id(key_name, kp.public) + kp.private.sign(body.encode())
+    return f"{body}\n\u2014 {key_name} {base64.b64encode(sig).decode()}\n"
+
+
+def note_vkey(key_name: str, public: bytes) -> str:
+    """C2SP vkey: `<name>+<key id hex>+<base64(0x01 || pubkey)>`."""
+    key = base64.b64encode(b"\x01" + public).decode()
+    return f"{key_name}+{_note_key_id(key_name, public).hex()}+{key}"
+
+
 def verify_note(note: str, origin: str, public: bytes) -> bool:
     """C2SP signed note (the log checkpoint): a signature line by `origin` over the body, keyed by the registry key."""
     body, sep, sigs = note.rpartition("\n\n")
     if not sep or not note.endswith("\n"):
         return False
-    keyid = sha256(origin.encode() + b"\n\x01" + public)[:4]
+    keyid = _note_key_id(origin, public)
     for line in sigs.splitlines():
         parts = line.split(" ")
         if len(parts) != 3 or parts[0] != "\u2014" or parts[1] != origin:
@@ -494,6 +599,17 @@ def check_timestamp(created: str, at: datetime | None = None) -> str | None:
     if t < at - timedelta(hours=24):
         return "created is more than 24 hours in the past"
     return None
+
+
+def key_pair_from_jwk(jwk: dict) -> KeyPair:
+    """An Ed25519 private JWK (RFC 8037): `d` is the seed, `x` must match it."""
+    if jwk.get("kty") != "OKP" or jwk.get("crv") != "Ed25519" or not jwk.get("d") or not jwk.get("x"):
+        raise InvalidInputError("expected an Ed25519 private JWK")
+    pad = lambda v: base64.urlsafe_b64decode(v + "=" * (-len(v) % 4))
+    kp = key_pair_from_seed(pad(jwk["d"]))
+    if kp.public != pad(jwk["x"]):
+        raise InvalidInputError("JWK x does not match d")
+    return kp
 
 
 def generate_key_pair() -> KeyPair:

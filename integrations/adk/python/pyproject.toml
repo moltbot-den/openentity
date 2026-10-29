@@ -11,7 +11,7 @@ license = "MIT"
 requires-python = ">=3.11"
 dependencies = [
     "google-adk>=2.13",
-    "openentity>=0.5.3",
+    "openentity>=0.6.0",
     "httpx",
     "mcp>=1.10",
 ]
