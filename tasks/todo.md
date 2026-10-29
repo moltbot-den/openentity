@@ -6,7 +6,7 @@ Live:
 - openentity.org (site, `/v1` registry, transparency log, guides), redesigned on `site/DESIGN.md`; Lighthouse 100 on accessibility, best practices, SEO, agentic browsing
 - mcp.openentity.org/mcp: remote MCP, official MCP registry `org.openentity/openentity` 0.2.0 (adds `openentity_card`); DNS proof key now in GCP secret `openentity-mcp-registry-dns-key`
 - oeis.dev: developer hub (`site-dev/`)
-- npm live: `openentity` 0.5.0, `@openentity/sdk` 0.3.0; staged for 2FA approval at https://www.npmjs.com/settings/willcybertron/staged-packages: `@openentity/sdk` 0.4.1 (0.4.0 burned by a rejected stage, #87) and `openentity` 0.5.2 (sends `client: "cli"`, #90; reject the stale 0.5.1). PyPI live: `openentity` 0.4.0
+- npm live: `openentity` 0.5.2 (sends `client: "cli"`), `@openentity/sdk` 0.4.1 (0.4.0 burned by a rejected stage). PyPI live: `openentity` 0.4.0
 - ClawHub: `openentity@1.0.0` moderation CLEAN, waiting on ClawHub's `pending.publication`
 - Founding Entities: OptimusWill and Incredibot at L2 first-party; observer `did:web:moltbotden.com` accredited as bootstrap
 - Load: 100 adopts/s for 60 s on OpenEntityLoad (destroyed): warm p50 159 ms, p95 212 ms, p99 276 ms after the rate guard moved into the park statement (#92); Aurora max stays 8 ACU (6 hit 100% writer CPU); prod Lambda reserves 200 concurrency
@@ -121,5 +121,5 @@ Verification
 - [x] `trust(eid)`, `Identity.load_or_create()`, `adopt(client=...)` in both SDKs (#74); `openentity` 0.4.0 and `@openentity/sdk` 0.4.0 bumped, NOT published
 - [x] Registry: unsigned `client` label on `POST /v1/adopt`, `by_client` in `GET /v1/stats`, `last_active` also reads accredited observers' unrevoked `custom:moltbotden:liveness` attestations; spec 10.2 and 10.7 updated
 - [x] Claim types `custom:moltbotden:liveness`, `custom:clawgrc:endpoint_reliability`, `custom:securemyagent:vision_privacy` with schemas (`spec/schemas/claims/`) and signed vectors (`test-vectors/claim-*.json`)
-- [ ] Release step: PyPI `openentity` 0.4.0 live 2026-10-28; npm `@openentity/sdk` 0.4.1 and CLI `openentity` 0.5.2 staged by `publish.yml`, live on the owner's 2FA tap at https://www.npmjs.com/settings/willcybertron/staged-packages
-- [ ] After the registry deploy: `GET /v1/stats` shows `by_client` (done; MCP adoptions labelled `mcp`, #91); ClawGRC (#233, PyPI 0.4.0, 424 tests) and Agent Secret Store (PyPI 0.4.0, 292 tests) done; Secure My Agent branch `chore/use-openentity-sdk` green, merges when npm 0.4.1 is live (KMS did:pkh signer and builders stay, the SDK has none); the products (ClawGRC, Secure My Agent, Agent Secret Store) delete their OEIS copies in favor of the 0.4.0 packages (ADR 0003)
+- [x] Release step: PyPI `openentity` 0.4.0 (2026-10-28), npm `@openentity/sdk` 0.4.1 and CLI `openentity` 0.5.2 (2026-10-29) via `publish.yml` (#87, #90)
+- [x] After the registry deploy: `GET /v1/stats` shows `by_client` (MCP adoptions labelled `mcp`, #91); OEIS copies removed in favor of the packages (ADR 0003): ClawGRC #233 (PyPI 0.4.0), Agent Secret Store (PyPI 0.4.0), Secure My Agent #66 and #69 (`@openentity/sdk` ^0.4.1, verified live; the KMS did:pkh signer and builders stay because the SDK is Ed25519 only)
