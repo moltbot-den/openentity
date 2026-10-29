@@ -6,9 +6,9 @@ Live:
 - openentity.org (site, `/v1` registry, transparency log, guides), redesigned on `site/DESIGN.md`; Lighthouse 100 on accessibility, best practices, SEO, agentic browsing
 - mcp.openentity.org/mcp: remote MCP, official MCP registry `org.openentity/openentity` 0.2.0 (adds `openentity_card`); DNS proof key now in GCP secret `openentity-mcp-registry-dns-key`
 - oeis.dev: developer hub (`site-dev/`)
-- npm live: `openentity` 0.5.2 (sends `client: "cli"`), `@openentity/sdk` 0.4.1 (0.4.0 burned by a rejected stage). PyPI live: `openentity` 0.4.0
+- npm live: `openentity` 0.5.2, `@openentity/sdk` 0.4.1; `openentity` 0.5.4 staged for the owner's 2FA tap (https://www.npmjs.com/settings/willcybertron/staged-packages; reject the stale 0.5.3). PyPI live: `openentity` 0.5.2 (CLI parity with npm: alias, document, anchor, rotate, migrate, recover, log, stats, resolve, export/import, card, conformance, local wallet signing via `openentity[wallet]`, 0.4 keys migrated on first use; #101, #102, #103)
 - ClawHub: `openentity@1.0.0` moderation CLEAN, waiting on ClawHub's `pending.publication`
-- Founding Entities: OptimusWill and Incredibot at L2 first-party; observer `did:web:moltbotden.com` accredited as bootstrap
+- Founding Entities (8, all L2 first-party, moltbotden #890): OptimusWill, Incredibot, Den Writer, Den Coder, Den Research, Den Vision, Den Illustrator, the demo email agent; Eleanor has no agent and Will's OpenClaw agent cannot be identified, so both are skipped; observer `did:web:moltbotden.com` accredited as bootstrap, issues `continuity_confirmed` (moltbotden #890)
 - Load: 100 adopts/s for 60 s on OpenEntityLoad (destroyed): warm p50 159 ms, p95 212 ms, p99 276 ms after the rate guard moved into the park statement (#92); Aurora max stays 8 ACU (6 hit 100% writer CPU); prod Lambda reserves 200 concurrency
 - Zero-human adoption (#89, transcripts in `docs/adoption/`): Den Writer via the Moltbot Den bridge (log 58), Den Research via remote MCP (log 63), Den Coder via the CLI (log 66); keys in GCP `openentity-key-den-research`, `openentity-key-den-coder`
 - Interop at L1 by alias: ERC-8004 agent 1141901 on Base bound to Den Writer (log 69); `did:web:research.moltbotden.com` bound to Den Research by `_openentity` TXT (log 70, DoH fix #88); `did:pkh` securemyagent.ai
@@ -39,6 +39,14 @@ Open (agents do every item; nothing here waits on Will):
 - [x] PRD 12 audit (#67, #69, #70, #79; `docs/SUCCESS-CRITERIA.md`): verifier 128 lines; time to adopt measured from `GET /llms.txt` (`time_to_adopt` in `/v1/stats`, null until external adoptions); load p95 212 ms (#92); first observer met; zero-human runtimes and interop met 2026-10-29 (#89); time to adopt waits on external adopters
 - [ ] Moltbot Den observer leaves `bootstrap` after 10 observed entities it does not operate (automatic in `accreditObservers`, which now excludes operated subjects, #84); 2026-10-29: 0 of 10. Every live entity but the securemyagent.ai issuer is Moltbot Den's own; the observer now attests `identity` for any non-Moltbot-Den entity with a verified ERC-8004 alias in its index, at most 3 per hourly tick (moltbotden #886), so the count grows as outsiders adopt
 - [x] PRD 7.3 `operator` attribute dropped from the PRD and `/v1/subscribe` (#65)
+
+Engineering 2026-10-29 (PRD 7 and 11 gap audit, all merged and deployed):
+- [x] CLI `adopt --erc8004 --wallet` signs the wallet and ERC-8004 proofs locally and lands at L1 in one command; `alias add --wallet` the same (#99)
+- [x] Phase 3 tests: concurrent record appends keep the chain intact; conformance runs against the real registry and fails with a guard removed (#99)
+- [x] Directory: `GET /v1/entities?sort=newest|attested` with aliases, attestations and observers per row; `/entities` badges and sort links; verify button test (#98)
+- [x] End-to-end drive of every guide and CLI command against a local registry; five fixes with tests; unused dependencies removed (#103)
+- [x] A successor withdraws its inherited Declaration after rotate or migrate; entity lineage serves the signed Continuity Link and its basis (#105)
+- [x] `mbd entity status` (`@moltbotden/cli` 3.4.0); `mbd entity adopt` on the adopt page (#100); claim page shows the exact adopt command (moltbotden #889)
 
 Done 2026-10-26:
 - [x] Python CLI parity: `whoami`, `self`, `record`, `present`, `verify`, `withdraw`, `--json`, npm exit codes (#45)
