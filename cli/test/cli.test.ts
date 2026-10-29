@@ -531,7 +531,7 @@ describe("conformance", () => {
       expect(fake.hits.some((h) => h.path === "/v1/adopt" && h.stamp)).toBe(false);
     });
     it("refuses a hosted registry without the explicit flag", async () => {
-      for (const url of ["https://openentity.org", "https://www.openentity.org", "https://oeis.dev"]) {
+      for (const url of ["https://openentity.org", "https://www.openentity.org", "https://oeis.dev", "https://openentity.org.", "https://OpenEntity.org:443", "https://api.openentity.org./x"]) {
         const r = await cli("conformance", url, "--writes");
         expect(r.code).toBe(1);
         expect(r.err).toContain("--i-understand-this-creates-entities");

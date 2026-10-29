@@ -27,4 +27,11 @@ describe("record and attestation reads page past 1000 rows", () => {
     const seen = new Set([...p1.attestations, ...p2.attestations].map((a: any) => a.sha256));
     expect(seen.size).toBe(N);
   });
+
+  it("attestations: an offset past the cap is a 400, not a table scan", async () => {
+    const { kp } = await adopted();
+    expect((await call("GET", `/entities/${kp.did}/attestations?offset=100000000`)).status).toBe(400);
+    expect((await call("GET", `/entities/${kp.did}/attestations?offset=abc`)).status).toBe(400);
+    expect((await call("GET", `/entities/${kp.did}/attestations?offset=-5`)).status).toBe(400);
+  });
 });

@@ -1,7 +1,7 @@
 /** Error codes the registry answers with (`{ error, message }`), as of this release. Any string is possible: a newer registry may add codes. */
 export type RegistryErrorCode =
   | "alias_exists" | "alias_proof_invalid" | "already_redacted" | "already_revoked" | "already_withdrawn" | "attestation_not_found"
-  | "bad_email" | "bad_json" | "bad_sort" | "bad_token" | "bad_tree_size" | "batch_too_large" | "continuity_proof_missing"
+  | "bad_email" | "bad_json" | "bad_sort" | "bad_token" | "bad_offset" | "bad_tree_size" | "batch_too_large" | "continuity_proof_missing"
   | "custody_unavailable" | "declaration_exists" | "declaration_hash_mismatch" | "declaration_not_found" | "dispute_exists"
   | "document_required" | "eid_mismatch" | "entity_exists" | "entity_not_found" | "entry_hash_mismatch" | "entry_not_found"
   | "expires_invalid" | "invalid_client" | "no_checkpoint" | "no_custodial_copy" | "nonce_reused" | "not_incorporated" | "not_issuer"

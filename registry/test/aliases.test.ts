@@ -5,6 +5,7 @@ import { base58btcEncode, buildDeclaration, buildDocument, canonicalize, eip712D
 import { hex } from "../src/env.ts";
 import dns from "node:dns/promises";
 import { ALIAS_RECHECK_BATCH, scheduled } from "../src/index.ts";
+import { resolveDid, verifyAlias } from "../src/aliases.ts";
 import { E, adopted, call, mockFetch, stamp, write } from "./helpers.ts";
 
 afterEach(() => vi.restoreAllMocks());
@@ -238,5 +239,47 @@ describe("alias re-check (spec 3.4)", () => {
     const rows = await E.db.all("SELECT value, status FROM aliases WHERE eid LIKE 'did:key:zBatch%'");
     const lapsed = rows.filter((r) => r.status === "lapsed").map((r) => r.value).sort();
     expect(lapsed).toEqual(Array.from({ length: ALIAS_RECHECK_BATCH }, (_, i) => `did:web:batch${i}.example`).sort());
+  });
+
+  it("keeps a domain alias when the DoH answer is SERVFAIL, demotes on NXDOMAIN", async () => {
+    const { eid, value } = await bindDomain("doh.example");
+    let st = 2;
+    mockFetch({ "cloudflare-dns.com": () => ({ Status: st }) });
+    await scheduled(E);
+    expect((await status(eid, value)).status).toBe("verified");
+    st = 3;
+    await scheduled(E);
+    expect((await status(eid, value)).status).toBe("lapsed");
+  });
+
+  it("every RPC call carries a timeout signal", async () => {
+    const { w, eid } = await pkhAdopted();
+    const spy = mockFetch({ "rpc.test": () => ({ jsonrpc: "2.0", id: 1, result: "0x" }) });
+    const f = globalThis.fetch as any;
+    await verifyAlias(E, eid, { type: "wallet", value: `did:pkh:eip155:8453:${w.address}`, proof: { type: "Eip4361", message: siwe(eid, w.address), signature: "0x" + "00".repeat(65) } });
+    const call = f.mock.calls.find((c: any[]) => String(c[0]).includes("rpc.test"));
+    expect(call?.[1]?.signal).toBeInstanceOf(AbortSignal);
+    void spy;
+  });
+
+  it("a recheck run stops at its time budget so the Lambda is not killed", async () => {
+    for (let i = 0; i < 10; i++) await E.db.run("INSERT INTO aliases (eid, type, value, proof_json, verified_at, last_checked, status) VALUES ($1, 'domain', $2, 'null', 'x', $3, 'verified')", [`did:key:zBudget${i}`, `did:web:budget${i}.example`, `0001-01-01T00:00:${String(i).padStart(2, "0")}Z`]);
+    mockFetch({ "/.well-known/openentity.json": () => ({ eid: "did:key:other" }) });
+    const real = Date.now();
+    let t = 0;
+    vi.spyOn(Date, "now").mockImplementation(() => real + 5_000 * t++);
+    await scheduled(E);
+    vi.restoreAllMocks();
+    const rows = await E.db.all("SELECT status FROM aliases WHERE eid LIKE 'did:key:zBudget%' AND status = 'lapsed'");
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.length).toBeLessThan(10);
+  });
+
+  it("resolveDid: a malformed percent escape or a log with no state is unresolvable, not a throw", async () => {
+    expect(await resolveDid("did:webvh:Qmabc:example.com:a%zz")).toBeNull();
+    expect(await resolveDid("did:web:example.com:a%zz")).toBeNull();
+    const did = "did:webvh:Qmabc:plain.example";
+    mockFetch({ "plain.example/.well-known/did.jsonl": () => new Response(JSON.stringify({ id: did })) });
+    expect(await resolveDid(did)).toBeNull();
   });
 });
