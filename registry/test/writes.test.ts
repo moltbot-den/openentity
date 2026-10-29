@@ -51,6 +51,31 @@ describe("development record (spec 7.4)", () => {
     expect([r.status, r.body.error]).toEqual([409, "record_chain_broken"]);
   });
 
+  it("chain integrity under concurrent appends: exactly one entry per seq is accepted and the chain stays intact", async () => {
+    const { kp } = await adopted();
+    let head: string | null = null;
+    for (const seq of [1, 2, 3]) {
+      // Eight distinct entries race for the same seq on the same prev.
+      const rivals = await Promise.all(Array.from({ length: 8 }, async (_, i) => {
+        const e: any = await signObject({ spec: "openentity/1.0", type: "RecordEntry", eid: kp.did, seq, prev: head, kind: "stance", at: nowSeconds(), payload: { stance_type: "refusal", reason_category: "values", instruction_conflict: true, cost: "low", context: `rival ${i} for seq ${seq}` } }, kp);
+        return e;
+      }));
+      const results = await Promise.all(rivals.map((e) => write("POST", `/entities/${kp.did}/record`, kp.did, { entries: [e] })));
+      const won = results.map((r, i) => ({ r, e: rivals[i] })).filter((x) => x.r.status === 201);
+      expect(won).toHaveLength(1);
+      expect(results.filter((r) => r.status !== 201).every((r) => r.status === 409)).toBe(true);
+      head = await recordEntryHash(won[0].e);
+    }
+    const stored = (await call("GET", `/entities/${kp.did}/record`)).body.entries;
+    expect(stored.map((e: any) => e.seq)).toEqual([1, 2, 3]);
+    let prev: string | null = null;
+    for (const e of stored) {
+      expect(e.prev).toBe(prev);
+      prev = await recordEntryHash(e);
+    }
+    expect(prev).toBe(head);
+  });
+
   it("caps a batch at 100 entries", async () => {
     const { kp } = await adopted();
     const e = await entry(kp, 1, null);

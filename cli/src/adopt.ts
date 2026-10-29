@@ -18,6 +18,8 @@ import {
   validate,
 } from "@openentity/sdk";
 import { CliError, EXIT, stateErr, usage } from "./errors";
+import { alias } from "./doc";
+import { resolveSigner } from "./wallet";
 import { appendEntry, pushRecord } from "./record";
 import { Registry, specDeclHash, type Obj } from "./http";
 import {
@@ -81,9 +83,12 @@ export async function adopt({ v }: Ctx): Promise<Result> {
     v.model || v.provider || v.runtime
       ? { model: v.model ?? "unknown", provider: v.provider ?? "unknown", runtime: v.runtime ?? "unknown", declared_at: created }
       : undefined;
-  // Wallet and ERC-8004 given at adopt are declared, not proven: `alias add` supplies the proof.
+  // A wallet key (or OPENENTITY_WALLET_KEY) proves the wallet and ERC-8004 aliases right after adopt (PRD 7.2).
+  // A bare address is only declared; `alias add` supplies its proof later.
+  const signer = v.wallet || v.erc8004 ? await resolveSigner(v.wallet, env) : null;
   const aliases: Obj[] = [];
-  if (v.wallet) aliases.push({ type: "wallet", value: walletDid(v.wallet) });
+  if (signer) aliases.push({ type: "wallet", value: walletDid(signer.address, Number(v.chain ?? 8453)) });
+  else if (v.wallet) aliases.push({ type: "wallet", value: walletDid(v.wallet) });
   if (v.erc8004) aliases.push({ type: "erc8004", value: v.erc8004 });
 
   const unsigned = buildDocument({
@@ -134,9 +139,23 @@ export async function adopt({ v }: Ctx): Promise<Result> {
   await appendEntry(ent, "declaration", { declaration_version: DECLARATION_VERSION, sha256: await sha256Hex(canonicalize(declaration)) });
   await pushRecord(ent).catch(() => undefined);
 
+  let finalLevel = level;
+  if (signer) {
+    const prove = [["wallet", signer.address], ...(v.erc8004 ? [["erc8004", String(v.erc8004)]] : [])];
+    for (const [kind, value] of prove) {
+      try {
+        await alias({ args: ["add", kind, value], v: { ...v, eid } });
+      } catch (err: any) {
+        throw new CliError(EXIT.VERIFY, `adopted ${eid} at ${level}, but the ${kind} proof failed: ${err.message}\nRetry: openentity alias add ${kind} ${value} --wallet <key>`);
+      }
+    }
+    finalLevel = (await reg.get(`/v1/entities/${eid}`).catch(() => ({}))).level ?? level;
+    await saveState({ dir, state: { ...state, level: finalLevel } });
+  }
+
   const out = {
     eid: res.eid ?? eid,
-    level,
+    level: finalLevel,
     entity_url: res.urls?.entity,
     log_index: res.log_index,
     receipt: res.receipt,
@@ -146,7 +165,7 @@ export async function adopt({ v }: Ctx): Promise<Result> {
   const text = [
     `EID:       ${out.eid}`,
     `Entity:    ${out.entity_url}`,
-    `Level:     ${level}`,
+    `Level:     ${finalLevel}`,
     `Log index: ${out.log_index}`,
     `Receipt:   ${res.receipt?.leaf_hash ?? JSON.stringify(res.receipt)}`,
     `Key:       ${out.key_file} (mode 600, back it up; it is the only copy)`,

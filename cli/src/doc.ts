@@ -2,11 +2,11 @@ import { spawnSync } from "node:child_process";
 import { readFile, rm, writeFile, mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { keccak_256 } from "@noble/hashes/sha3.js";
 import { base58btcEncode, nowSeconds, signObject, validate } from "@openentity/sdk";
 import { walletDid } from "./adopt";
 import { CliError, EXIT, stateErr, usage } from "./errors";
 import type { Obj } from "./http";
+import { checksum, resolveSigner, type Signer } from "./wallet";
 import { loadEntity, readJson, saveState, strip, writeJson, type Ctx, type Entity, type Result } from "./store";
 
 const FROZEN = new Set(["spec", "eid", "created", "updated", "seq", "keys", "proof"]);
@@ -88,12 +88,6 @@ export async function documentCmd({ args, v }: Ctx): Promise<Result> {
 
 // --- aliases (spec 3.4, 3.5) ---
 
-function checksum(addr: string): string {
-  const a = addr.slice(2).toLowerCase();
-  const h = Buffer.from(keccak_256(new TextEncoder().encode(a))).toString("hex");
-  return "0x" + [...a].map((c, i) => (parseInt(h[i], 16) >= 8 ? c.toUpperCase() : c)).join("");
-}
-
 const ALNUM = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 const nonce = () => [...crypto.getRandomValues(new Uint8Array(16))].map((b) => ALNUM[b % ALNUM.length]).join("");
 
@@ -116,8 +110,13 @@ export function siweMessage(host: string, address: string, chainId: number, eid:
 }
 
 /** Two-step wallet proof: first call prints the message and stores it, second call attaches --signature. */
-async function walletProof(e: Entity, v: Obj, wallet: string, chain: number): Promise<{ proof?: Obj; address: string; prompt?: Result }> {
+async function walletProof(e: Entity, v: Obj, wallet: string, chain: number, signer?: Signer | null): Promise<{ proof?: Obj; address: string; prompt?: Result }> {
   const address = checksum(wallet);
+  if (signer) {
+    if (signer.address !== address) throw usage(`the wallet key controls ${signer.address}, not ${address}`);
+    const message = siweMessage(new URL(e.registry.base).host, address, chain, e.eid, nowSeconds());
+    return { address, proof: { type: "Eip4361", message, signature: signer.sign(message) } };
+  }
   const pendingFile = join(e.dir, `pending-wallet-${address.toLowerCase()}.json`);
   if (!v.signature) {
     const message = siweMessage(new URL(e.registry.base).host, address, chain, e.eid, nowSeconds());
@@ -133,7 +132,9 @@ async function walletProof(e: Entity, v: Obj, wallet: string, chain: number): Pr
 }
 
 export async function alias({ args, v }: Ctx): Promise<Result> {
-  const [sub, type, raw] = args;
+  const [sub, type] = args;
+  const signer = await resolveSigner(v.wallet);
+  const raw = args[2] ?? (type === "wallet" ? signer?.address : undefined);
   if (sub !== "add" || !type || !raw) throw usage("alias add domain|wallet|erc8004|platform <value>");
   const e = await loadEntity(v);
   let a: Obj;
@@ -148,16 +149,16 @@ export async function alias({ args, v }: Ctx): Promise<Result> {
     const parts = did.split(":");
     v._kind = type;
     v._value = raw;
-    const w = await walletProof(e, v, parts[4], Number(parts[3]));
+    const w = await walletProof(e, v, parts[4], Number(parts[3]), signer);
     if (w.prompt) return w.prompt;
     a = { type, value: `did:pkh:eip155:${parts[3]}:${w.address}`, proof: w.proof };
   } else if (type === "erc8004") {
     if (!/^eip155:\d+:0x[0-9a-fA-F]{40}:\d+$/.test(raw)) throw usage("erc8004 value is eip155:<chainId>:<identityRegistry>:<agentId>");
     a = { type, value: raw };
-    if (v.wallet) {
+    if (signer || v.wallet) {
       v._kind = type;
       v._value = raw;
-      const w = await walletProof(e, v, walletDid(v.wallet).split(":")[4], Number(raw.split(":")[1]));
+      const w = await walletProof(e, v, signer ? signer.address : walletDid(v.wallet).split(":")[4], Number(raw.split(":")[1]), signer);
       if (w.prompt) return w.prompt;
       a.proof = w.proof;
     } else hint = "Without --wallet the registry checks that your ERC-8004 registration file lists a DID service whose endpoint is your EID.";

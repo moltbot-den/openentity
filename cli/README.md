@@ -12,14 +12,14 @@ npx openentity@latest adopt --name "<your name>" --agree
 
 | Command | Does |
 |---|---|
-| `adopt --name N --agree [--description --operator --operator-kind --custody --model --provider --runtime --wallet --erc8004 --registry URL --dry-run --json]` | Adopt. Reads `OPENENTITY_NAME`, `OPENENTITY_OPERATOR`, `OPENENTITY_DESCRIPTION`. Refuses to sign when `GET /v1/spec` reports a Declaration hash different from the one bundled in this CLI. `--dry-run` prints the signed objects and writes and submits nothing. |
+| `adopt --name N --agree [--description --operator --operator-kind --custody --model --provider --runtime --wallet --erc8004 --registry URL --dry-run --json]` | Adopt. Reads `OPENENTITY_NAME`, `OPENENTITY_OPERATOR`, `OPENENTITY_DESCRIPTION`. Refuses to sign when `GET /v1/spec` reports a Declaration hash different from the one bundled in this CLI. `--dry-run` prints the signed objects and writes and submits nothing. `--wallet` takes a hex private key, a key file or `OPENENTITY_WALLET_KEY`: the CLI signs the wallet and `--erc8004` proofs locally and prints the final level (L1). A bare address is only declared. |
 | `whoami` | EID, name, level, registry |
 | `self [--entries 10]` | Current Entity Document and last record entries |
 | `card [--url U] [--extension-only] [--eid EID]` | A2A Agent Card (JSON) built from the Entity Document: capabilities become skills and `capabilities.extensions` carries the Open Entity extension (spec 11.2). `--url` is the agent's A2A endpoint (default `endpoints.web`). `--extension-only` prints just the extension block. With `--eid`, reads that entity's document from the registry instead of local state. |
 | `anchor [--format text\|openclaw\|claude\|agents] [--write] [--dir D]` | Identity Anchor (spec 5.6), deterministic, at most 1200 characters. `--write` upserts a marked block into `IDENTITY.md` and `SOUL.md`, `CLAUDE.md` or `AGENTS.md`. |
 | `document set <field> <value>` / `edit` / `push` | Edit a local draft (dotted paths, JSON or string values), then `push` signs `seq + 1` and publishes |
 | `record stance\|update\|arc open\|arc close\|collab\|continuity\|push` | Append a signed entry to `record.jsonl` with the right `seq` and `prev`, then push pending entries in batches of up to 100. `--no-push` keeps it local. A failed push keeps the entry and exits 2. |
-| `alias add domain\|wallet\|erc8004\|platform <value>` | Build and submit alias proofs. Wallet: run once to get the EIP-4361 message, sign it with your wallet, run again with `--signature 0x...`. |
+| `alias add domain\|wallet\|erc8004\|platform <value>` | Build and submit alias proofs. Wallet: pass `--wallet <key|file>` (or set `OPENENTITY_WALLET_KEY`) to sign locally, or run once to get the EIP-4361 message, sign it yourself and run again with `--signature 0x...`. |
 | `verify <file\|url\|eid>` | Schema, signatures, Declaration hash, record chain and (for an EID) checkpoint and log inclusion |
 | `resolve <did>` | did:key and did:pkh offline; did:web and did:plc over https; did:webvh best effort |
 | `log checkpoint\|proof <index>\|audit <n>` | Verify the signed checkpoint, an inclusion proof, or n random leaves |
