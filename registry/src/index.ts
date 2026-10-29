@@ -159,6 +159,18 @@ async function lineage(db: Db, eid: string): Promise<string[]> {
   }
   return chain;
 }
+/**
+ * Values of the entity's verified aliases of `types` that its own latest signed Entity Document also lists. An alias proof
+ * (a domain file, a wallet message) names the EID but never needs the EID's key, so anyone can bind their own domain or
+ * wallet to someone else's EID. Only a binding the key holder listed in a signed document shows consent.
+ */
+async function listedAliases(db: Db, eid: string, types: string[]): Promise<string[]> {
+  const json = (await db.first<{ json: string }>("SELECT json FROM documents WHERE eid = $1 ORDER BY seq DESC LIMIT 1", [eid]))?.json;
+  const listed = new Set<string>((json ? JSON.parse(json).aliases ?? [] : []).map((a: any) => `${a?.type}\n${String(a?.value).toLowerCase()}`));
+  const rows = await db.all<{ type: string; value: string }>(`SELECT type, value FROM aliases WHERE eid = $1 AND status = 'verified' AND type IN (${IN(types, 2)})`, [eid, ...types]);
+  return rows.filter((r) => listed.has(`${r.type}\n${r.value.toLowerCase()}`)).map((r) => r.value);
+}
+
 /** Placeholders $from.. for an IN list (the Data API takes no array parameters). */
 const IN = (xs: string[], from = 1) => xs.map((_, i) => `$${from + i}`).join(",");
 
@@ -630,8 +642,8 @@ app.post("/continuity", async (c) => {
   for (const p of proofs) { const r = await verifyProof(unsigned, p, resolver); if (r.ok && r.signer) signers.add(normalizeEid(r.signer)); }
   if (!signers.has(successor)) fail(422, "continuity_proof_missing", "a valid proof by the successor key is required");
   if (link.basis === "recovery") {
-    const aliases = (await db.all<{ value: string }>("SELECT value FROM aliases WHERE eid = $1 AND status = 'verified' AND type IN ('domain', 'wallet')", [previous])).map((r) => r.value.toLowerCase());
-    if (![...signers].some((s) => aliases.includes(s.toLowerCase()))) fail(422, "recovery_alias_required", "recovery needs a proof by a verified domain or wallet alias of the previous EID");
+    const aliases = (await listedAliases(db, previous, ["domain", "wallet"])).map((v) => v.toLowerCase());
+    if (![...signers].some((s) => aliases.includes(s.toLowerCase()))) fail(422, "recovery_alias_required", "recovery needs a proof by a verified domain or wallet alias that the previous EID's signed document lists");
   } else if (!signers.has(previous)) fail(422, "continuity_proof_missing", "rotation and migration need a valid proof by the previous key");
 
   const now = nowIso(), s = await sha(link);
@@ -725,7 +737,14 @@ app.get("/observers", async (c) => {
   return c.json({ observers: rows.map((o) => ({ did: o.did, name: o.name, methodology_url: o.methodology_url, trust_policy_url: o.trust_policy_url, accredited_at: o.accredited_at, bootstrap: !!o.bootstrap, entities_observed: o.entities_observed })) });
 });
 
+/** Reads that fetch from a host the caller names (did:web, did:plc) have no stamp; this per-address minute budget stops them being used to flood a third party. */
+const READS_PER_MINUTE = 60;
+async function fetchBudget(c: C) {
+  if ((await bump(c.env.db, `rdm:${await salted(c.env, clientIp(c))}`, nowIso().slice(0, 16))) > READS_PER_MINUTE) fail(429, "rate_limited", `at most ${READS_PER_MINUTE} resolve or verify calls per minute per IP`);
+}
+
 app.get("/resolve/:did", async (c) => {
+  await fetchBudget(c);
   const did = normalizeEid(c.req.param("did"));
   let doc = null;
   try { doc = await resolveDid(did); } catch { /* fall through */ }
@@ -733,6 +752,7 @@ app.get("/resolve/:did", async (c) => {
 });
 
 app.post("/verify", async (c) => {
+  await fetchBudget(c);
   const o = await readJson(c, false);
   const type: string = o?.type ?? (o?.keys && o?.eid ? "EntityDocument" : "unknown");
   const v = validate(type as "EntityDocument", o);
@@ -915,7 +935,7 @@ async function accreditObservers(env: Env) {
     if (independent < 10) continue;
     const existing = await env.db.first<{ bootstrap: number }>("SELECT bootstrap FROM observers WHERE did = $1", [issuer]);
     if (existing?.bootstrap === 0) continue;
-    const alias = (await env.db.first<{ value: string }>("SELECT value FROM aliases WHERE eid = $1 AND type = 'domain' AND status = 'verified' LIMIT 1", [issuer]))?.value;
+    const alias = (await listedAliases(env.db, issuer, ["domain"]))[0];
     const domain = issuer.startsWith("did:web:") ? issuer.slice(8).split(":")[0] : alias?.slice(8);
     if (!domain || !DOMAIN.test(domain)) continue;
     const wk: any = await getJson(`https://${domain}/.well-known/openentity.json`).catch(() => null);
@@ -947,7 +967,7 @@ export async function scheduled(env: Env) {
   await sendDigest(env, s).catch((e) => console.error("digest", e));
   // IP and stamp counters live 7 days, email hashes 24 hours, per-minute counters 1 hour (PRD 8, 7.3).
   const ago = (ms: number, len: number) => new Date(Date.now() - ms).toISOString().slice(0, len);
-  await env.db.run("DELETE FROM rate_events WHERE (key LIKE 'sub:%' AND window_start < $1) OR (key LIKE 'ipm:%' AND window_start < $2) OR (key LIKE 'fsm:%' AND window_start < $2) OR window_start < $3 OR (window_start = 'fs' AND count < $4)", [ago(86400_000, 10), ago(3600_000, 16), ago(7 * 86400_000, 10), Math.floor(Date.now() / 1000) - FUNNEL_TTL]);
+  await env.db.run("DELETE FROM rate_events WHERE (key LIKE 'sub:%' AND window_start < $1) OR (key LIKE 'ipm:%' AND window_start < $2) OR (key LIKE 'fsm:%' AND window_start < $2) OR (key LIKE 'rdm:%' AND window_start < $2) OR window_start < $3 OR (window_start = 'fs' AND count < $4)", [ago(86400_000, 10), ago(3600_000, 16), ago(7 * 86400_000, 10), Math.floor(Date.now() / 1000) - FUNNEL_TTL]);
 }
 
 // The Lambda handler runs scheduled(env) when the minute is a multiple of 10, else incorporate(env):

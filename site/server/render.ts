@@ -366,7 +366,7 @@ const SIGNUP_ERRORS: Record<string, string> = {
 };
 
 export function subscribeForm(siteKey: string, error?: string | null): string {
-  const msg = error ? (SIGNUP_ERRORS[error] ?? 'Something went wrong on our side. Please try again in a minute.') : '';
+  const msg = error ? (Object.hasOwn(SIGNUP_ERRORS, error) ? SIGNUP_ERRORS[error] : 'Something went wrong on our side. Please try again in a minute.') : '';
   return `<section class="oe-subscribe">
 <h2 id="updates">Get updates about the standard</h2>
 ${msg ? `<p class="oe-form-error" role="alert">${esc(msg)}</p>\n` : ''}<form class="oe-form" method="post" action="/v1/subscribe">
