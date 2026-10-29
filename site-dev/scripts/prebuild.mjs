@@ -1,12 +1,15 @@
 // Generates the hub's reference pages from the code before `astro build`, and copies the shared assets from site/.
 // Every output here is gitignored. The CLI must be built first (site-dev depends on the `openentity` workspace package).
 import { execFileSync } from 'node:child_process';
-import { cp, readFile, writeFile } from 'node:fs/promises';
+import { cp, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const hub = join(dirname(fileURLToPath(import.meta.url)), '..');
 const repo = join(hub, '..');
+
+// Astro's content cache keeps rendered HTML from earlier builds, including stale Expressive Code asset hashes; build from scratch.
+await rm(join(hub, 'node_modules/.astro'), { recursive: true, force: true });
 const docs = join(hub, 'src/content/docs');
 const SRC = 'https://github.com/moltbot-den/openentity/blob/main';
 
