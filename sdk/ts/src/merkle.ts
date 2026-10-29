@@ -1,6 +1,6 @@
 import { OpenEntityError } from "./errors.ts";
 import { ed25519 } from "@noble/curves/ed25519.js";
-import { utf8, toHex, concat, equal, b64, unb64, canonicalize, sha256Sync, type KeyPair } from "./core.ts";
+import { utf8, toHex, concat, equal, b64, unb64, sha256Sync, type KeyPair } from "./core.ts";
 // ---------------------------------------------------------------- Merkle tree (RFC 9162 section 2.1)
 // ponytail: proofs recompute subtrees from the full leaf list, O(n) per proof; serve from stored tiles when the log is large.
 

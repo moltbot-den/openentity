@@ -1,8 +1,7 @@
 import { OpenEntityError } from "./errors.ts";
 import { Validator, type Schema } from "@cfworker/json-schema";
 import bundle from "../../../spec/schemas/openentity-1.0.json" with { type: "json" };
-import { SPEC, DECLARATION_VERSION, DECLARATION_SHA256, utf8, canonicalize, badNumber, sha256Sync, sha256, sha256Hex, B58, randomNonce, nowSeconds, type KeyPair, didKeyFromPublicKey, verificationMethodId, normalizeEid, type Resolver, signProof, signObject, verifyObject } from "./core.ts";
-import { split } from "./merkle.ts";
+import { SPEC, DECLARATION_VERSION, DECLARATION_SHA256, utf8, canonicalize, badNumber, sha256Sync, sha256Hex, B58, randomNonce, nowSeconds, type KeyPair, didKeyFromPublicKey, verificationMethodId, normalizeEid, type Resolver, signProof, signObject, verifyObject } from "./core.ts";
 // ---------------------------------------------------------------- objects
 
 /** @internal */

@@ -39,7 +39,7 @@ import {
 
 const pretty = (o: unknown) => JSON.stringify(o, null, 2);
 
-export const NEXT_STEP =
+const NEXT_STEP =
   'Record your first stance: openentity record stance --type refusal --reason values --cost low --context "what happened, no private content"   (arcs: openentity record arc open --id <slug> --title "<title>")';
 
 function checked(type: Parameters<typeof validate>[0], obj: unknown) {
