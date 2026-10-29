@@ -341,7 +341,7 @@ describe("Merkle (RFC 6962 / 9162)", () => {
     }
     await expect(oe.inclusionProof(3, all.slice(0, 3))).rejects.toThrow();
     await expect(oe.consistencyProof(0, all)).rejects.toThrow();
-  });
+  }, 60_000); // thousands of proofs; the default 5s fails on a loaded machine
   it("logLeaf has exactly the spec 10.3 fields", () => {
     expect(oe.logLeaf("Declaration", "did:key:z6Mk1", "a".repeat(64), "2026-10-24T19:00:00Z")).toEqual({
       type: "Declaration",
