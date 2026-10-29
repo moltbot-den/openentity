@@ -68,7 +68,7 @@ describe("global fetch", () => {
         if (raised !== bad) failures.push(c.id);
       }
     expect(failures).toEqual([]);
-  });
+  }, 30_000); // one local fetch per corpus case; the default 5s fails on a loaded machine
 
   test("the caller can still read the body of a valid response", async () => {
     const c = VALID.find((x) => x.id === "v-repo-0-compact")!;

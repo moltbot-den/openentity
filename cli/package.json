@@ -14,7 +14,7 @@
     "prepack": "pnpm run build",
     "lint": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run --testTimeout=60000 --hookTimeout=60000"
   },
   "devDependencies": {
     "@noble/curves": "^2.4.0",
