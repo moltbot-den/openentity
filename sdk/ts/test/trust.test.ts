@@ -68,7 +68,7 @@ describe("trust()", () => {
       "signed by another key": [await row(await oe.signAttestation(KEYS[EVIL], { issuer: MBD, subject: SUBJECT, claimType: "trust_tier", claim: { tier: 4, platform: "x" }, now: NOW }))],
       "hidden strike": [await row(viol, await oe.signRevocation(KEYS[MBD], viol, { issuer: GRC }))],
       "revocation not carried": [{ ...(await row(viol)), revoked_at: "2026-10-02T00:00:00Z" }],
-      "wrong subject": [await row(await oe.signAttestation(KEYS[MBD], { issuer: MBD, subject: SUBJECT.slice(0, -1) + "x", claimType: "trust_tier", claim: { tier: 4 }, now: NOW }))],
+      "wrong subject": [await row(await oe.signAttestation(KEYS[MBD], { issuer: MBD, subject: SUBJECT.slice(0, -1) + "x", claimType: "trust_tier", claim: { tier: 4, platform: "x" }, now: NOW }))],
     };
     for (const [name, rows] of Object.entries(cases)) {
       oe.clearTrustCache();

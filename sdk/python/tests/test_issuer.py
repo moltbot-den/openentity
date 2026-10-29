@@ -44,3 +44,19 @@ def test_well_known_files_agree_on_the_key():
     assert d["id"] == o["eid"] == DID
     assert d["verificationMethod"][0]["publicKeyMultibase"] == o["keys"][0]["publicKeyMultibase"]
     assert d["assertionMethod"] == [o["keys"][0]["id"]]
+
+
+@pytest.mark.parametrize("claim_type,claim", [
+    ("stage", {"stage": "sentient", "profile": "p"}),
+    ("layer_scores", {"cognition": 1.2, "presence": 0, "identity_core": 0, "mission": 0, "profile": "p"}),
+    ("trust_tier", {"tier": 5, "platform": "x"}),
+    ("trust_tier", {"platform": "x"}),
+])
+def test_refuses_to_sign_a_malformed_core_claim(claim_type, claim):
+    with pytest.raises(Exception, match="Attestation"):
+        issuer.sign_attestation(KP, SUBJECT, claim_type, claim, now=NOW)
+
+
+def test_signs_a_valid_core_claim_and_any_custom_claim():
+    issuer.sign_attestation(KP, SUBJECT, "trust_tier", {"tier": 4, "platform": "x"}, now=NOW)
+    issuer.sign_attestation(KP, SUBJECT, "custom:x:y", {"anything": 1}, now=NOW)

@@ -284,12 +284,13 @@ export async function signAttestation(
   if (!(ttl > 0 && ttl <= MAX_TTL_S)) throw new OpenEntityError("invalid_input", "ttlSeconds must be positive and at most 1 year");
   const t = (o.now ?? new Date()).getTime();
   const created = ts(t);
-  return signObject(
-    { spec: SPEC, type: "Attestation", issuer: o.issuer ?? kp.did, subject: o.subject, claim_type: o.claimType, claim: o.claim,
-      ...(o.evidence ? { evidence: o.evidence } : {}), ...(o.confidence !== undefined ? { confidence: o.confidence } : {}),
-      created, expires: ts(t + ttl * 1000) },
-    kp, created, issuerMethod(kp, o),
-  );
+  const att = { spec: SPEC, type: "Attestation", issuer: o.issuer ?? kp.did, subject: o.subject, claim_type: o.claimType, claim: o.claim,
+    ...(o.evidence ? { evidence: o.evidence } : {}), ...(o.confidence !== undefined ? { confidence: o.confidence } : {}),
+    created, expires: ts(t + ttl * 1000) };
+  const signed = await signObject(att, kp, created, issuerMethod(kp, o));
+  const bad = validate("Attestation", signed);
+  if (!bad.ok) throw new OpenEntityError("invalid_input", `Attestation: ${bad.errors.join("; ")}`);
+  return signed;
 }
 
 /** A signed Revocation naming the attestation (the object, or its SHA-256 hex) (spec 8.4). */

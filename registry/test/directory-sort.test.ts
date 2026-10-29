@@ -4,7 +4,7 @@ import { E, adopted, call, write } from "./helpers.ts";
 
 const iso = (ms: number) => new Date(ms).toISOString().replace(/\.\d+Z$/, "Z");
 const attest = (issuer: KeyPair, subject: string, claim_type: string) =>
-  signObject({ spec: "openentity/1.0", type: "Attestation", issuer: issuer.did, subject, claim_type, claim: { upheld: true }, created: iso(Date.now()), expires: iso(Date.now() + 86400_000) }, issuer);
+  signObject({ spec: "openentity/1.0", type: "Attestation", issuer: issuer.did, subject, claim_type, claim: { will_not_ref: "x", upheld: true, instances: 1 }, created: iso(Date.now()), expires: iso(Date.now() + 86400_000) }, issuer);
 
 describe("GET /entities sort and row columns (spec 10.2)", () => {
   it("sort=attested orders by unrevoked attestation count, ties newest; rows carry aliases, attestations and observers", async () => {

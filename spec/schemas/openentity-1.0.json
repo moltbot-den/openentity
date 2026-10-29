@@ -1038,7 +1038,331 @@
         "proof": {
           "$ref": "#/$defs/proof"
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "claim_type": {
+                "const": "identity"
+              }
+            },
+            "required": [
+              "claim_type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "claim": {
+                "required": [
+                  "name",
+                  "aliases_verified"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "aliases_verified": {
+                    "type": "array"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "claim_type": {
+                "const": "stage"
+              }
+            },
+            "required": [
+              "claim_type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "claim": {
+                "required": [
+                  "stage",
+                  "profile"
+                ],
+                "properties": {
+                  "stage": {
+                    "enum": [
+                      "instrument",
+                      "agent",
+                      "entity"
+                    ]
+                  },
+                  "profile": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "claim_type": {
+                "const": "layer_scores"
+              }
+            },
+            "required": [
+              "claim_type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "claim": {
+                "required": [
+                  "cognition",
+                  "presence",
+                  "identity_core",
+                  "mission",
+                  "profile"
+                ],
+                "properties": {
+                  "cognition": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "presence": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "identity_core": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "mission": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "profile": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "claim_type": {
+                "const": "trust_tier"
+              }
+            },
+            "required": [
+              "claim_type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "claim": {
+                "required": [
+                  "tier",
+                  "platform"
+                ],
+                "properties": {
+                  "tier": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 4
+                  },
+                  "platform": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "claim_type": {
+                "const": "capability"
+              }
+            },
+            "required": [
+              "claim_type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "claim": {
+                "required": [
+                  "capability",
+                  "evidence_ref"
+                ],
+                "properties": {
+                  "capability": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "evidence_ref": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "claim_type": {
+                "const": "collaboration"
+              }
+            },
+            "required": [
+              "claim_type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "claim": {
+                "required": [
+                  "with",
+                  "outcome",
+                  "ref"
+                ],
+                "properties": {
+                  "with": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "outcome": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "ref": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "claim_type": {
+                "const": "consistency"
+              }
+            },
+            "required": [
+              "claim_type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "claim": {
+                "required": [
+                  "will_not_ref",
+                  "upheld",
+                  "instances"
+                ],
+                "properties": {
+                  "will_not_ref": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "upheld": {
+                    "type": "boolean"
+                  },
+                  "instances": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "claim_type": {
+                "const": "continuity_confirmed"
+              }
+            },
+            "required": [
+              "claim_type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "claim": {
+                "required": [
+                  "previous",
+                  "successor",
+                  "basis"
+                ],
+                "properties": {
+                  "previous": {
+                    "$ref": "#/$defs/did"
+                  },
+                  "successor": {
+                    "$ref": "#/$defs/did"
+                  },
+                  "basis": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "claim_type": {
+                "const": "substrate_confirmed"
+              }
+            },
+            "required": [
+              "claim_type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "claim": {
+                "required": [
+                  "model",
+                  "provider"
+                ],
+                "properties": {
+                  "model": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "provider": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
     },
     "Revocation": {
       "type": "object",

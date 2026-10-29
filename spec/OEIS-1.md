@@ -361,6 +361,8 @@ An attestation is representable as a W3C Verifiable Credential 2.0 by wrapping `
 | `substrate_confirmed` | `{model, provider}` | Operator or platform |
 | `custom:<ns>:<name>` | Any | Anyone; ignored when unknown |
 
+Registries and SDKs MUST reject an attestation of a core type above whose `claim` lacks the listed fields or breaks their ranges (Appendix A enforces this). Schemas for registered `custom:` types are advisory; a verifier checks them if it knows the type.
+
 New claim types are added by pull request to `spec/claim-types.md`.
 
 ### 8.4 Issuers, accredited observers and trust
