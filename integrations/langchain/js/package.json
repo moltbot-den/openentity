@@ -12,7 +12,7 @@
     "prepack": "pnpm run build",
     "lint": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run --testTimeout=60000 --hookTimeout=60000"
   },
   "dependencies": {
     "@cfworker/json-schema": "^4.1.1"

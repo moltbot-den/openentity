@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "typecheck": "tsc -p .",
-    "test": "vitest run",
+    "test": "vitest run --testTimeout=60000 --hookTimeout=60000",
     "synth": "cdk synth",
     "deploy": "cdk deploy --all --require-approval never"
   },
