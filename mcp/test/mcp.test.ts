@@ -2,6 +2,7 @@ import { generateKeyPairSync, randomBytes } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import { generateKeyPair, mintStamp, verifyPresentation } from "@openentity/sdk";
+import { resolveSigner } from "../../cli/src/wallet.ts";
 import { createMcp, specSection } from "../src/index.ts";
 import { app } from "../../registry/src/index.ts";
 import { pgliteDb } from "../../registry/src/db.ts";
@@ -51,12 +52,12 @@ const hex2bytes = (h: string) => Uint8Array.from(h.match(/../g)!, (x) => parseIn
 const bytes2hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
 
 describe("openentity MCP server", () => {
-  it("lists the twelve tools with short verb-first descriptions", async () => {
+  it("lists the tools with short verb-first descriptions", async () => {
     const { tools } = await rpc("tools/list");
     expect(tools.map((t: any) => t.name).sort()).toEqual([
-      "openentity_adopt", "openentity_card", "openentity_export_key", "openentity_find", "openentity_present", "openentity_read", "openentity_record", "openentity_resolve", "openentity_self", "openentity_stats", "openentity_verify", "openentity_withdraw",
+      "openentity_adopt", "openentity_alias_add", "openentity_card", "openentity_export_key", "openentity_find", "openentity_present", "openentity_read", "openentity_record", "openentity_resolve", "openentity_self", "openentity_stats", "openentity_verify", "openentity_withdraw",
     ]);
-    for (const t of tools) expect(t.description).toMatch(/^(Read|Adopt|Resolve|Verify|Append|Withdraw|Find|Prove|Export)\b/);
+    for (const t of tools) expect(t.description).toMatch(/^(Read|Add|Adopt|Resolve|Verify|Append|Withdraw|Find|Prove|Export)\b/);
   });
 
   it("reads llms.txt, the declaration and one spec section", async () => {
@@ -159,6 +160,40 @@ describe("openentity MCP server", () => {
     expect(bad.json.error).toBe("signature_invalid");
   });
 
+  it("an MCP-only entity reaches L1: wallet alias in two calls, signed into its document (spec 3.4)", async () => {
+    const a = (await tool("openentity_adopt", { name: "Alias Al", agree: true })).json;
+    const { eid, private_key_jwk: jwk } = a;
+    const wallet = (await resolveSigner("0x" + "11".repeat(32)))!;
+    const args = { eid, private_key_jwk: jwk, type: "wallet", value: wallet.address };
+    // The wrong key is refused.
+    expect((await tool("openentity_alias_add", { ...args, private_key_jwk: (await generateKeyPair()).privateJwk })).isError).toBe(true);
+    const step1 = await tool("openentity_alias_add", args);
+    expect(step1.json.step).toBe("sign");
+    // A signature by another wallet is rejected by the registry and nothing is bound.
+    const other = (await resolveSigner("0x" + "22".repeat(32)))!;
+    const bad = await tool("openentity_alias_add", { ...args, wallet_message: step1.json.message, wallet_signature: other.sign(step1.json.message) });
+    expect(bad.isError).toBe(true);
+    expect(bad.json.error).toBe("alias_proof_invalid");
+    expect((await tool("openentity_self", { eid })).json.level).toBe("L0");
+
+    const ok = await tool("openentity_alias_add", { ...args, wallet_message: step1.json.message, wallet_signature: wallet.sign(step1.json.message) });
+    expect(ok.isError).toBe(false);
+    expect(ok.json).toMatchObject({ level: "L1", document_seq: 2 });
+    const me = await tool("openentity_self", { eid });
+    expect(me.json.level).toBe("L1");
+    expect(me.json.document.aliases.map((x: any) => x.type)).toEqual(["wallet"]);
+    expect((await tool("openentity_verify", { eid })).json.document.ok).toBe(true);
+    // Binding the same alias again is refused.
+    expect((await tool("openentity_alias_add", { ...args, wallet_message: step1.json.message, wallet_signature: wallet.sign(step1.json.message) })).json.error).toBe("alias_exists");
+  });
+
+  it("returns the proof instructions when a domain alias is not yet hosted", async () => {
+    const a = (await tool("openentity_adopt", { name: "Dom Di", agree: true })).json;
+    const r = await tool("openentity_alias_add", { eid: a.eid, private_key_jwk: a.private_key_jwk, type: "domain", value: "no-such-host.invalid" });
+    expect(r.isError).toBe(true);
+    expect(r.json.hint).toContain(`.well-known/openentity.json`);
+  });
+
   it("exports a registry-kept key once, after confirm, and only to its holder (spec 10.6)", async () => {
     const r = await app.fetch(new Request("https://openentity.org/v1/adopt", {
       method: "POST", headers: { "content-type": "application/json", "x-oe-stamp": await mintStamp(8, "did:web:openentity.org") },
@@ -180,7 +215,7 @@ describe("openentity MCP server", () => {
       const props = Object.keys(t.inputSchema.properties ?? {});
       expect(props.join(",")).not.toMatch(/turnstile|captcha|token|password|secret|api_?key|auth/i);
       // Withdrawing and presenting are the entity signing with its own key, never an access credential; no other tool may require a key.
-      for (const r of t.inputSchema.required ?? []) if (!(["openentity_withdraw", "openentity_present", "openentity_export_key"].includes(t.name) && r === "private_key_jwk")) expect(r).not.toMatch(/key/);
+      for (const r of t.inputSchema.required ?? []) if (!(["openentity_withdraw", "openentity_present", "openentity_export_key", "openentity_alias_add"].includes(t.name) && r === "private_key_jwk")) expect(r).not.toMatch(/key/);
     }
     // TURNSTILE_SECRET is set in this registry; a custodial adopt with no headers at all still succeeds.
     expect((await tool("openentity_adopt", { name: "No Captcha", agree: true })).isError).toBe(false);
