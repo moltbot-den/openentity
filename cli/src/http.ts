@@ -45,13 +45,15 @@ export class Registry {
   get(path: string) {
     return fetchJson(this.base + path);
   }
-  /** Every Record entry of `eid`, following `next` until the registry reports no more pages. */
-  async record(eid: string): Promise<Obj[]> {
-    const entries: Obj[] = [];
+  /** Every Record entry of `eid` and the log index of each leaf, following `next` until the registry reports no more pages. */
+  async record(eid: string): Promise<{ entries: Obj[]; log_indexes: (number | null)[] }> {
+    const entries: Obj[] = [], log_indexes: (number | null)[] = [];
     for (let after = 0, rec; ; after = rec.next) {
       rec = await this.get(`/v1/entities/${eid}/record?after=${after}`);
-      entries.push(...(Array.isArray(rec) ? rec : (rec.entries ?? [])));
-      if (rec.next == null) return entries;
+      const page = Array.isArray(rec) ? rec : (rec.entries ?? []);
+      entries.push(...page);
+      log_indexes.push(...(rec.log_indexes ?? page.map(() => null)));
+      if (rec.next == null) return { entries, log_indexes };
     }
   }
   async text(path: string): Promise<string> {

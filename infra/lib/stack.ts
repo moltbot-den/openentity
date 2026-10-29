@@ -39,8 +39,7 @@ export const APP_SECRET = "openentity/app";
 export const MAIL_PREFIX = "inbound/identity/";
 
 // What the site's pages load: their own files, the Cloudflare Web Analytics beacon, and Turnstile on the
-// subscribe form. The entity page verify button reads the did:web key document of the accredited observer
-// (moltbotden.com, CORS-open) to check attestation signatures. Pagefind search needs WebAssembly. No page may be framed.
+// subscribe form. The entity page verify button fetches only same-origin (did:web issuer keys come through /v1/resolve). Pagefind search needs WebAssembly. No page may be framed.
 // Scripts: files only. The site build moves every inline script to /_astro (site/astro.config.mjs) and a site
 // test fails if one comes back. Styles keep 'unsafe-inline' for Starlight's inline style attributes.
 export const CSP = [
@@ -49,7 +48,7 @@ export const CSP = [
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data:",
   "font-src 'self'",
-  "connect-src 'self' https://cloudflareinsights.com https://moltbotden.com",
+  "connect-src 'self' https://cloudflareinsights.com",
   "frame-src https://challenges.cloudflare.com",
   "object-src 'none'",
   "base-uri 'self'",

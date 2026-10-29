@@ -4,7 +4,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { buildDeclaration, buildDocument, canonicalize, checkpointBody, generateKeyPair, inclusionProof, leafHash, logLeaf, merkleRoot, nowSeconds, sha256Hex, signAttestation, signNote, signObject } from '@openentity/sdk';
+import { buildDeclaration, buildDocument, canonicalize, checkpointBody, generateKeyPair, inclusionProof, leafHash, logLeaf, merkleRoot, nowSeconds, recordEntryHash, sha256Hex, signAttestation, signNote, signObject } from '@openentity/sdk';
 import { renderEntity } from '../server/render';
 
 const script = readFileSync(join(import.meta.dirname, '..', 'public', 'verify.js'), 'utf8');
@@ -20,25 +20,27 @@ async function entity() {
 const hex = (b: Uint8Array) => Buffer.from(b).toString('hex');
 
 /** A two-leaf registry log (the Declaration and one Attestation) with a signed checkpoint, served through a fake fetch. */
-async function logFixture(e: Awaited<ReturnType<typeof entity>>, tamper?: (r: Record<string, any>) => void) {
+async function logFixture(e: Awaited<ReturnType<typeof entity>>, tamper?: (r: Record<string, any>) => void, webIssuer?: string) {
   const reg = await generateKeyPair();
   const obs = await generateKeyPair();
-  const att = await signAttestation(obs, { subject: e.eid, claimType: 'identity', claim: { name: 'Fixture', aliases_verified: [] } } as any);
+  const att = await signAttestation(obs, { subject: e.eid, claimType: 'identity', claim: { name: 'Fixture', aliases_verified: [] }, ...(webIssuer && { issuer: `did:web:${webIssuer}`, keyId: 'k' }) } as any);
   const leaves = [
     logLeaf('Declaration', e.eid, await sha256Hex(canonicalize(e.declaration)), '2026-10-28T00:00:00Z'),
     logLeaf('Attestation', e.eid, await sha256Hex(canonicalize(att)), '2026-10-28T00:00:01Z'),
+    logLeaf('RecordEntry', e.eid, await recordEntryHash(e.record[0]), '2026-10-28T00:00:02Z'),
   ];
   const hashes = await Promise.all(leaves.map((l) => leafHash(new TextEncoder().encode(canonicalize(l)))));
   const origin = 'fixture.test/log';
-  const note = await signNote(checkpointBody(origin, 2, await merkleRoot(hashes)), origin, reg);
+  const note = await signNote(checkpointBody(origin, 3, await merkleRoot(hashes)), origin, reg);
   const routes: Record<string, any> = {
     '/v1/spec': { registry: { publicKeyMultibase: reg.did.slice(8), log_origin: origin } },
-    '/v1/log/sth': { tree_size: 2, signature: note },
+    '/v1/log/sth': { tree_size: 3, signature: note },
   };
-  for (let i = 0; i < 2; i++) {
+  for (let i = 0; i < 3; i++) {
     routes[`/v1/log/entries?start=${i}&end=${i + 1}`] = { entries: [{ index: i, leaf: leaves[i] }] };
-    routes[`/v1/log/proof/${i}?tree_size=2`] = { leaf_hash: hex(hashes[i]), proof: (await inclusionProof(i, hashes)).map(hex) };
+    routes[`/v1/log/proof/${i}?tree_size=3`] = { leaf_hash: hex(hashes[i]), proof: (await inclusionProof(i, hashes)).map(hex) };
   }
+  if (webIssuer) routes[`/v1/resolve/${encodeURIComponent(`did:web:${webIssuer}`)}`] = { did: `did:web:${webIssuer}`, didDocument: { id: `did:web:${webIssuer}`, verificationMethod: [{ id: `did:web:${webIssuer}#k`, type: 'Multikey', publicKeyMultibase: obs.did.slice(8) }] } };
   tamper?.(routes);
   const fetch = async (u: string) => (u in routes ? { ok: true, status: 200, json: async () => routes[u] } : { ok: false, status: 404, json: async () => ({}) });
   return { att, fetch };
@@ -46,7 +48,7 @@ async function logFixture(e: Awaited<ReturnType<typeof entity>>, tamper?: (r: Re
 
 /** Render the page, then run the shipped script against it the way a browser would: find elements, wait for a click. */
 async function clickVerify(e: Awaited<ReturnType<typeof entity>>, log?: Awaited<ReturnType<typeof logFixture>>) {
-  const page = renderEntity(e.eid, { document: e.document, declaration: e.declaration, ...(log && { declaration_log_index: 0 }) }, { entries: e.record }, { attestations: log ? [{ attestation: log.att, log_index: 1 }] : [] });
+  const page = renderEntity(e.eid, { document: e.document, declaration: e.declaration, ...(log && { declaration_log_index: 0 }) }, { entries: e.record, ...(log && { log_indexes: [2] }) }, { attestations: log ? [{ attestation: log.att, log_index: 1 }] : [] });
   expect(page.html).toContain('class="oe-verify" hidden');
   expect(page.html).toContain('<script type="module" src="/verify.js"></script>');
   const embedded = /<script type="application\/json" id="oe-objects">([\s\S]*?)<\/script>/.exec(page.html)![1];
@@ -87,16 +89,17 @@ describe('in-browser verify button', () => {
   it('verifies the checkpoint, each leaf inclusion and the attestation signature', async () => {
     const e = await entity();
     const text = await clickVerify(e, await logFixture(e));
-    expect(text).toContain('Checkpoint: signature valid, tree size 2');
-    expect(text).toContain('Declaration: log inclusion OK (leaf 0 of 2)');
+    expect(text).toContain('Checkpoint: signature valid, tree size 3');
+    expect(text).toContain('Declaration: log inclusion OK (leaf 0 of 3)');
     expect(text).toContain('Attestation identity: signature valid, signed by its issuer');
-    expect(text).toContain('Attestation identity: log inclusion OK (leaf 1 of 2)');
+    expect(text).toContain('Attestation identity: log inclusion OK (leaf 1 of 3)');
+    expect(text).toContain('Record 1: log inclusion OK (leaf 2 of 3)');
     expect(text).not.toMatch(/FAILED|BROKEN|Verification error/);
   });
 
   it('fails when an inclusion proof is tampered with', async () => {
     const e = await entity();
-    const text = await clickVerify(e, await logFixture(e, (r) => { r['/v1/log/proof/0?tree_size=2'].proof[0] = '00'.repeat(32); }));
+    const text = await clickVerify(e, await logFixture(e, (r) => { r['/v1/log/proof/0?tree_size=3'].proof[0] = '00'.repeat(32); }));
     expect(text).toContain('Declaration: log inclusion FAILED (leaf 0)');
   });
 
@@ -108,7 +111,26 @@ describe('in-browser verify button', () => {
 
   it('fails when the checkpoint body was altered after signing', async () => {
     const e = await entity();
-    const text = await clickVerify(e, await logFixture(e, (r) => { r['/v1/log/sth'].signature = r['/v1/log/sth'].signature.replace('\n2\n', '\n3\n'); }));
+    const text = await clickVerify(e, await logFixture(e, (r) => { r['/v1/log/sth'].signature = r['/v1/log/sth'].signature.replace('\n3\n', '\n4\n'); }));
     expect(text).toContain('Checkpoint: FAILED');
+  });
+
+  it('fails when a record entry proof is tampered with', async () => {
+    const e = await entity();
+    const text = await clickVerify(e, await logFixture(e, (r) => { r['/v1/log/proof/2?tree_size=3'].proof[0] = '00'.repeat(32); }));
+    expect(text).toContain('Record 1: log inclusion FAILED (leaf 2)');
+  });
+
+  it('fails when the record leaf does not cover the entry shown', async () => {
+    const e = await entity();
+    const text = await clickVerify(e, await logFixture(e, (r) => { r['/v1/log/entries?start=2&end=3'].entries[0].leaf.object_sha256 = '00'.repeat(32); }));
+    expect(text).toMatch(/Record 1: log inclusion FAILED/);
+  });
+
+  it('verifies a did:web issuer on any domain through same-origin /v1/resolve, and labels where the key came from', async () => {
+    const e = await entity();
+    const text = await clickVerify(e, await logFixture(e, undefined, 'observer.example.net'));
+    expect(text).toContain('Attestation identity: signature valid, signed by its issuer (issuer key read from the registry mirror');
+    expect(text).not.toMatch(/FAILED|BROKEN|Verification error/);
   });
 });

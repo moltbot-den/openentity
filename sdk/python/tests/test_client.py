@@ -24,6 +24,7 @@ class Stub(BaseHTTPRequestHandler):
     refuse = False  # refuse every continuity link
     leaves: list = []  # the stub log's leaf objects; the checkpoint is signed by LOG_KEY
     forge_note = False
+    chain_base = 5  # log index of record entry 1; the verify test appends the chain's leaves there
     document: dict | None = None  # overrides GET /v1/entities/<eid>/document
 
     def log_message(self, *a):
@@ -81,7 +82,8 @@ class Stub(BaseHTTPRequestHandler):
             last = Stub.chain[-1] if Stub.chain else None
             head = {"seq": last["seq"], "hash": core.canonical_hash(last).hex()} if last else None
             after = int(parse_qs(u.query).get("after", ["0"])[0])
-            return self._send(200, {"head": head, "entries": [e for e in Stub.chain if e["seq"] > after]})
+            return self._send(200, {"head": head, "entries": [e for e in Stub.chain if e["seq"] > after],
+                                  "log_indexes": [Stub.chain_base + e["seq"] - 1 for e in Stub.chain if e["seq"] > after]})
         if u.path.endswith("/attestations"):
             return self._send(200, {"attestations": Stub.attestations})
         if u.path.endswith("/document"):
@@ -279,10 +281,16 @@ def test_cli_verify_entity_file_and_failures(url, home, capsys, tmp_path):
     Stub.leaves = [{"type": "Declaration", "eid": f"did:key:z{i}", "object_sha256": "00" * 32, "received_at": core.now()} for i in range(5)]
     Stub.entity = {"document": doc, "declaration": decl, "log_index": 3}
     client.record(SEED, [("arc_opened", {"arc_id": "a", "title": "A"}), ("arc_opened", {"arc_id": "b", "title": "B"})], registry=url)
+    Stub.leaves += [{"type": "RecordEntry", "eid": KP.did, "object_sha256": core.record_entry_hash(e), "received_at": core.now()} for e in Stub.chain]
     code, out, _ = run(capsys, "verify", KP.did, "--json", *reg)
     res = json.loads(out)
     names = [c["name"] for c in res["checks"]]
     assert code == 0 and res["ok"] and "record chain (2 entries)" in names and "checkpoint" in names and "log inclusion" in names
+    assert "record inclusion (2 entries)" in names
+    Stub.leaves[6] = {**Stub.leaves[6], "object_sha256": "00" * 32}  # the leaf for entry 2 covers some other object
+    code, out, _ = run(capsys, "verify", KP.did, *reg)
+    assert code == 3 and "FAIL record inclusion (2 entries): failed for 2" in out
+    Stub.leaves[6] = {**Stub.leaves[6], "object_sha256": core.record_entry_hash(Stub.chain[1])}
     Stub.forge_note = True  # checkpoint signed by a key other than the registry's
     assert run(capsys, "verify", KP.did, *reg)[0] == 3
     Stub.forge_note = False

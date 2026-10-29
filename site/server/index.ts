@@ -208,7 +208,7 @@ export function createSite({ registry: callRegistry, asset, vars }: SiteOptions)
     for (let i = 1; record?.next != null && i < 10; i++) {
       const more = await registry(`/v1/entities/${enc}/record?after=${record.next}`);
       if (!more) break;
-      record = { ...more, entries: [...record.entries, ...more.entries] };
+      record = { ...more, entries: [...record.entries, ...more.entries], log_indexes: [...record.log_indexes ?? [], ...more.log_indexes ?? []] };
     }
     const shell = await asset('/entity.html');
     if (!shell) return new Response('Not found', { status: 404 });

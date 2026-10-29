@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { canonicalize, generateKeyPair, nowSeconds, randomNonce, recordEntryHash, sha256Hex, signObject, type KeyPair } from "../src/sdk.ts";
-import { backfillObjects, exportObjects } from "../src/log.ts";
+import { backfillObjects, exportObjects, incorporate } from "../src/log.ts";
 import { E, adopted, call, write } from "./helpers.ts";
 
 const stance = (kp: KeyPair, seq: number, prev: string | null, context: string) =>
@@ -19,6 +19,19 @@ async function withRecord() {
 }
 
 describe("redacted record placeholders (spec 7.4)", () => {
+  it("record reads give each entry's log index, whose leaf covers the entry's hash, redacted or not", async () => {
+    const { kp, e1, e3, h2 } = await withRecord();
+    expect((await write("POST", `/entities/${kp.did}/record/redact`, kp.did, await redaction(kp, 2, h2))).status).toBe(201);
+    await incorporate(E);
+    const { log_indexes } = (await call("GET", `/entities/${kp.did}/record`)).body;
+    expect(log_indexes).toHaveLength(3);
+    const want = [await recordEntryHash(e1), h2, await recordEntryHash(e3)];
+    for (const [i, idx] of log_indexes.entries()) {
+      const { entries: le } = (await call("GET", `/log/entries?start=${idx}&end=${idx + 1}`)).body;
+      expect(le[0].leaf).toMatchObject({ type: "RecordEntry", eid: kp.did, object_sha256: want[i] });
+    }
+  });
+
   it("replaces the entry in reads with a placeholder that keeps its hash and chain position", async () => {
     const { kp, e1, e2, e3, h2 } = await withRecord();
     const red = await redaction(kp, 2, h2);

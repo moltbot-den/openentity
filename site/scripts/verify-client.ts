@@ -1,6 +1,6 @@
 // In-browser verifier for /entities/<eid>, bundled to /verify.js by prebuild. Progressive enhancement only:
 // the button stays hidden without JavaScript, and the page text never depends on it.
-import { base58btcDecode, canonicalize, didWebResolver, leafHash, recordEntryHash, sha256Hex, verifyInclusion, verifyNote, verifyObject } from '@openentity/sdk';
+import { type Resolver, base58btcDecode, canonicalize, didWebResolver, leafHash, recordEntryHash, sha256Hex, verifyInclusion, verifyNote, verifyObject } from '@openentity/sdk';
 
 const button = document.querySelector<HTMLButtonElement>('.oe-verify');
 const report = document.querySelector<HTMLPreElement>('.oe-verify-report');
@@ -31,7 +31,9 @@ async function run(): Promise<string[]> {
   return lines;
 }
 
-const resolve = didWebResolver();
+// A did:web issuer's key document comes through this registry (same origin), not from the issuer's own host:
+// the browser cannot fetch arbitrary hosts under the CSP. The CLI resolves it locally.
+const resolve: Resolver = (did) => didWebResolver(async () => (await get(`/v1/resolve/${encodeURIComponent(did)}`)).didDocument)(did);
 const get = async (path: string) => {
   const r = await fetch(path);
   if (!r.ok) throw new Error(`${path}: HTTP ${r.status}`);
@@ -48,9 +50,11 @@ async function logChecks(lines: string[]) {
   for (const a of data.log?.attestations ?? []) {
     const name = `Attestation ${String(a.attestation.claim_type)}`;
     const r = await verifyObject(a.attestation, resolve);
-    lines.push(`${name}: ${r.ok && r.signer?.split('#')[0] === a.attestation.issuer ? 'signature valid, signed by its issuer' : `FAILED (${r.error ?? `signer ${r.signer}`})`}`);
+    lines.push(`${name}: ${r.ok && r.signer?.split('#')[0] === a.attestation.issuer ? 'signature valid, signed by its issuer' + (a.attestation.issuer.startsWith('did:web:') ? ' (issuer key read from the registry mirror; the CLI resolves it locally)' : '') : `FAILED (${r.error ?? `signer ${r.signer}`})`}`);
     leaves.push([name, a.log_index, a.attestation]);
   }
+  const idx: Array<number | null> = data.log?.record ?? [];
+  (data.record ?? []).forEach((e: any, i: number) => idx[i] != null && leaves.push([`Record ${e.seq}`, idx[i], e]));
   if (!leaves.length) return void lines.push('Log inclusion: no log index reported for this entity');
   let size = 0;
   let root = new Uint8Array();
@@ -73,7 +77,7 @@ async function logChecks(lines: string[]) {
       const [{ entries }, p] = await Promise.all([get(`/v1/log/entries?start=${i}&end=${i + 1}`), get(`/v1/log/proof/${i}?tree_size=${size}`)]);
       const leaf = entries?.[0]?.leaf;
       const lh = await leafHash(new TextEncoder().encode(canonicalize(leaf)));
-      const bound = leaf?.object_sha256 === (await sha256Hex(canonicalize(obj)));
+      const bound = leaf?.object_sha256 === (obj.redacted ? obj.hash : obj.type === 'RecordEntry' ? await recordEntryHash(obj) : await sha256Hex(canonicalize(obj)));
       const ok = bound && p.leaf_hash === hex(lh) && (await verifyInclusion(i, size, lh, p.proof.map(unhex), root));
       lines.push(`${label}: ${ok ? `log inclusion OK (leaf ${i} of ${size})` : `log inclusion FAILED (leaf ${i})`}`);
     } catch (e) {

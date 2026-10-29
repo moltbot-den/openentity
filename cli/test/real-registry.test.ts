@@ -96,6 +96,21 @@ describe("log audit against a registry that is not openentity.org", () => {
   });
 });
 
+describe("verify <eid> proves every record entry is in the log", () => {
+  it("passes, then fails when an entry's log index points at another leaf (guard: leaf must cover the entry hash)", async () => {
+    const a = JSON.parse((await adopt()).out);
+    await new Promise((r) => setTimeout(r, 700)); // the cron incorporates every 200ms
+    const ok = await cli("verify", a.eid, "--registry", real.url);
+    expect(ok.out).toMatch(/ok\s+record inclusion \(\d+ entries\)/);
+    expect(ok.code).toBe(0);
+    real.tamper.response = async (req, res) =>
+      new URL(req.url).pathname.endsWith("/record") ? Response.json({ ...(await res.json()), log_indexes: [0] }) : res;
+    const bad = await cli("verify", a.eid, "--registry", real.url);
+    expect(bad.out).toMatch(/FAIL record inclusion/);
+    expect(bad.code).toBe(3);
+  });
+});
+
 describe("withdraw after continuity (spec 9.3)", () => {
   it.each(["rotate", "migrate"])("%s then withdraw: the successor withdraws the inherited Declaration, the predecessor stays active", async (cmd) => {
     const a = JSON.parse((await adopt()).out);

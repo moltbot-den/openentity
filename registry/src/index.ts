@@ -463,7 +463,7 @@ app.get("/entities/:eid/record", async (c) => {
   const after = Number(c.req.query("after") ?? 0) | 0;
   const rows = await c.env.db.all(`SELECT json, log_index FROM record_entries WHERE eid = $1 AND seq > $2 ORDER BY seq LIMIT ${PAGE}`, [eid, after]);
   const entries = rows.map((r) => JSON.parse(r.json));
-  return c.json({ eid, head: e.record_head_hash ? { seq: e.record_seq, hash: e.record_head_hash } : null, entries, next: rows.length === PAGE ? entries[entries.length - 1].seq : null });
+  return c.json({ eid, head: e.record_head_hash ? { seq: e.record_seq, hash: e.record_head_hash } : null, entries, log_indexes: rows.map((r) => r.log_index), next: rows.length === PAGE ? entries[entries.length - 1].seq : null });
 });
 
 app.get("/entities/:eid/attestations", async (c) => {

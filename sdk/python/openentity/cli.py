@@ -118,11 +118,14 @@ def _assert_eid(eid: str) -> str:
     return eid
 
 
-def _record_entries(reg, eid: str) -> list:
-    """Every Record entry, paging with ?after=<last seq> until an empty page (the registry caps a page at 1000)."""
+def _record_entries(reg, eid: str, indexes: list | None = None) -> list:
+    """Every Record entry, paging with ?after=<last seq> until an empty page (the registry caps a page at 1000).
+    `indexes`, when given, collects the log index of each entry's leaf."""
     entries = []
-    while page := reg.get(f"/v1/entities/{eid}/record?after={entries[-1]['seq'] if entries else 0}").get("entries"):
-        entries += page
+    while (r := reg.get(f"/v1/entities/{eid}/record?after={entries[-1]['seq'] if entries else 0}")).get("entries"):
+        entries += r["entries"]
+        if indexes is not None:
+            indexes += r.get("log_indexes") or [None] * len(r["entries"])
     return entries
 
 
@@ -1052,6 +1055,22 @@ def _log_checks(reg: Reg, index: int | None) -> list[dict]:
         return [{"name": "log inclusion", "ok": False, "detail": f"{type(e).__name__}: {e}"}]
 
 
+def _record_inclusion(reg: Reg, entries: list, indexes: list) -> list[dict]:
+    """Every entry's leaf is in the checkpoint's tree and covers the entry's hash (a redacted placeholder keeps its hash)."""
+    if not entries:
+        return []
+    try:
+        _, _, sth = _checkpoint(reg)
+        bad = []
+        for e, i in zip(entries, indexes):
+            ok, _, leaf = _inclusion(reg, i, sth) if i is not None else (False, "", None)
+            if not ok or (leaf or {}).get("object_sha256") != (e["hash"] if e.get("redacted") else core.record_entry_hash(e)):
+                bad.append(str(e["seq"]))
+        return [{"name": f"record inclusion ({len(entries)} entries)", "ok": not bad, "detail": f"failed for {', '.join(bad)}" if bad else ""}]
+    except _NET as e:
+        return [{"name": "record inclusion", "ok": False, "detail": f"{type(e).__name__}: {e}"}]
+
+
 def _report(target: str, checks: list[dict]):
     ok = all(c["ok"] for c in checks)
     text = "\n".join(f"{'ok  ' if c['ok'] else 'FAIL'} {c['name']}" + (f": {c['detail']}" if c.get("detail") else "") for c in checks)
@@ -1065,9 +1084,11 @@ def _verify(args):
         eid = ent.get("document", {}).get("eid", t)
         checks = _checks_of(ent["document"])
         checks += _checks_of(ent["declaration"]) if ent.get("declaration") else [{"name": "declaration", "ok": False, "detail": "registry returned no Declaration"}]
-        entries = _record_entries(reg, eid)
+        indexes: list = []
+        entries = _record_entries(reg, eid, indexes)
         checks += _chain_checks(entries, eid)
         checks += _log_checks(reg, ent.get("log_index", ent.get("declaration_log_index")))
+        checks += _record_inclusion(reg, entries, indexes)
     elif t.startswith(("http://", "https://")):
         checks = _checks_of(client._request(t))
     else:
