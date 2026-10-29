@@ -1,4 +1,4 @@
-import { base58btcDecode, canonicalize, leafHash, verifyNote } from "@openentity/sdk";
+import { base58btcDecode, buildDeclaration, buildDocument, canonicalize, generateKeyPair, leafHash, mintStamp, nowSeconds, recordEntryHash, signObject, SPEC, verifyNote, withdraw, type KeyPair } from "@openentity/sdk";
 import { CliError, EXIT, usage } from "./errors";
 import { checkpointCheck, inclusionCheck } from "./log";
 import { Registry, type Obj } from "./http";
@@ -52,11 +52,107 @@ const must = (cond: unknown, msg: string) => {
 const TILE_WIDTH = 256;
 const tilePath = (kind: string, width: number) => `/v1/log/tile/${kind}/000${width < TILE_WIDTH ? `.p/${width}` : ""}`;
 
-/** The read-only checks any registry must pass (spec 10). Writes are only ever sent without a stamp, so nothing is stored. */
+const rejected = (r: Reply, what: string) => must(r.status >= 400 && r.status < 500 && r.status !== 429 && r.json && typeof r.body?.error === "string", `${what} answered ${r.status}${r.json ? " " + r.body?.error : " (not JSON)"}, expected a 4xx {error} rejection`);
+const HOSTED = /(^|\.)(openentity\.org|openentityidentitystandard\.com|oeis\.dev)$/;
+
+/**
+ * The write-path MUSTs (spec 6.3, 7.4, 10.2, 10.4): adopt a throwaway entity, send one deliberately bad request per guard, require the
+ * rejection, then withdraw everything it created. Keys are fresh and never saved.
+ */
+async function writeChecks(base: string, bits: unknown): Promise<{ checks: Check[]; created: number }> {
+  if (!Number.isInteger(bits) || (bits as number) < 1 || (bits as number) > 24) return { checks: [{ name: "write checks", ok: false, detail: `stamp_bits is ${JSON.stringify(bits)}; the suite mints stamps for 1 to 24` }], created: 0 };
+  const made: { kp: KeyPair; name: string }[] = [];
+  const stamp = (eid: string, b = bits as number) => mintStamp(b, eid);
+  const post = async (path: string, body: object, st: string) => probe(base, path, { method: "POST", headers: { "content-type": "application/json", "x-oe-stamp": st }, body: JSON.stringify(body) });
+  const tag = Math.random().toString(16).slice(2, 8);
+  const adopt = async (kp: KeyPair, declaration: object = {}) => {
+    const name = `Conformance Probe ${tag}`;
+    const document = await signObject(buildDocument({ kp, name, description: "Throwaway entity made by openentity conformance --writes; withdrawn at the end of the run." }), kp);
+    const decl = await signObject({ ...buildDeclaration({ eid: kp.did, name }), ...declaration }, kp);
+    const r = await post("/v1/adopt", { document, declaration: decl }, await stamp(kp.did));
+    if (r.status >= 200 && r.status < 300) made.push({ kp, name });
+    return r;
+  };
+  const entry = async (kp: KeyPair, seq: number, prev: string | null) => {
+    const at = nowSeconds();
+    return signObject({ spec: SPEC, type: "RecordEntry", eid: kp.did, seq, prev, kind: "stance", at, payload: { stance_type: "refusal", reason_category: "values", instruction_conflict: false, cost: "low", context: "conformance probe" } }, kp, at);
+  };
+  const append = async (kp: KeyPair, e: object, st?: string) => post(`/v1/entities/${kp.did}/record`, { entries: [e] }, st ?? (await stamp(kp.did)));
+
+  const kp = await generateKeyPair();
+  const out: Check[] = [];
+  let e1: object | undefined;
+  try {
+    out.push(
+      await check("adopt accepts a valid pair", async () => {
+        const r = await adopt(kp);
+        must(r.status >= 200 && r.status < 300, `POST /v1/adopt answered ${r.status} ${r.body?.error ?? ""} ${r.body?.message ?? ""}`);
+        return "201";
+      }),
+      await check("one Declaration per EID", async () => {
+        must(made.length === 1, "no adopted entity to repeat");
+        rejected(await adopt(kp), "a second adopt of the same EID");
+        return "second adopt rejected";
+      }),
+      await check("Declaration text hash", async () => {
+        rejected(await adopt(await generateKeyPair(), { text_sha256: "0".repeat(64) }), "a Declaration with the wrong text hash");
+        return "wrong text_sha256 rejected";
+      }),
+      await check("record accepts a chained entry", async () => {
+        must(made.length > 0, "no adopted entity to write to");
+        e1 = await entry(kp, 1, null);
+        const r = await append(kp, e1);
+        must(r.status >= 200 && r.status < 300, `POST record seq 1 answered ${r.status} ${r.body?.error ?? ""}`);
+        return "seq 1 accepted";
+      }),
+      await check("record chain integrity (prev hash)", async () => {
+        must(e1, "no seq 1 entry to chain from");
+        rejected(await append(kp, await entry(kp, 2, "0".repeat(64))), "an entry whose prev is not the hash of the last entry");
+        return "wrong prev rejected";
+      }),
+      await check("record seq monotonicity", async () => {
+        must(e1, "no seq 1 entry to chain from");
+        rejected(await append(kp, await entry(kp, 3, await recordEntryHash(e1!))), "an entry that skips seq 2");
+        rejected(await append(kp, await entry(kp, 1, null)), "a replayed seq 1");
+        return "skipped and replayed seq rejected";
+      }),
+      await check("alias binding to the root EID", async () => {
+        must(made.length > 0, "no adopted entity to bind to");
+        const host = new URL(base).host, other = "did:key:z6MkConformanceOtherEntity00000000000000";
+        const message = [`${host} wants you to sign in with your Ethereum account:`, "0x" + "11".repeat(20), "", `Open Entity alias binding for ${other}`, "", `URI: https://${host}/v1/entities/${other}`, "Version: 1", "Chain ID: 8453", "Nonce: conformance1", `Issued At: ${nowSeconds()}`, "Resources:", `- ${other}`].join("\n");
+        const alias = { type: "wallet", value: `did:pkh:eip155:8453:0x${"11".repeat(20)}`, proof: { type: "Eip4361", message, signature: "0x" + "00".repeat(65) } };
+        rejected(await post(`/v1/entities/${kp.did}/aliases`, alias, await stamp(kp.did)), "an alias proof bound to another EID");
+        return "foreign binding rejected";
+      }),
+      await check("stamp names the writing EID", async () => {
+        must(e1, "no seq 1 entry to chain from");
+        const next = await entry(kp, 2, await recordEntryHash(e1!));
+        rejected(await append(kp, next, await stamp((await generateKeyPair()).did)), "a stamp minted for another EID");
+        return "stamp for another EID rejected";
+      }),
+      await check("stamp difficulty", async () => {
+        must(e1, "no seq 1 entry to chain from");
+        const next = await entry(kp, 2, await recordEntryHash(e1!));
+        rejected(await append(kp, next, await stamp(kp.did, 0)), "a stamp that claims 0 bits");
+        return "under-difficulty stamp rejected";
+      }),
+    );
+  } finally {
+    const failed: string[] = [];
+    for (const m of made) await withdraw(m.kp, { registry: base, name: m.name }).catch((e: any) => failed.push(`${m.kp.did}: ${e.message}`));
+    out.push({ name: "withdraws what it created", ok: !failed.length, detail: failed.length ? `left behind: ${failed.join("; ")}` : `${made.length} throwaway entit${made.length === 1 ? "y" : "ies"} withdrawn` });
+  }
+  return { checks: out, created: made.length };
+}
+
+/** The read-only checks any registry must pass (spec 10), and with `--writes` the write-path guards. Without `--writes` writes are only ever sent without a stamp, so nothing is stored. */
 export async function conformance({ args, v }: Ctx): Promise<Result> {
   const target = args[0] ?? v.registry;
   if (!target) throw usage("conformance <registry-url>");
   const base = regUrl({ registry: target }).replace(/\/+$/, "");
+  if (v.writes && HOSTED.test(new URL(base).hostname) && !v["i-understand-this-creates-entities"]) {
+    throw usage("--writes adopts and withdraws throwaway entities, which stay in a public log; it refuses openentity.org. Run it on a local registry (pnpm --filter @openentity/registry local), or add --i-understand-this-creates-entities");
+  }
   const reg = new Registry(base);
   const checks: Check[] = [];
 
@@ -142,11 +238,19 @@ export async function conformance({ args, v }: Ctx): Promise<Result> {
     }),
   );
 
+  let created = 0;
+  if (v.writes) {
+    const w = await writeChecks(base, spec.stamp_bits);
+    checks.push(...w.checks);
+    created = w.created;
+  }
+
   const failed = checks.filter((c) => !c.ok).length;
   const w = Math.max(...checks.map((c) => c.name.length));
   const text = [
     ...checks.map((c) => `${c.ok ? "PASS" : "FAIL"}  ${c.name.padEnd(w)}  ${c.detail}`),
+    ...(v.writes ? [`WRITES: created ${created} throwaway entities and withdrew them`] : []),
     failed ? `DOES NOT CONFORM: ${failed} of ${checks.length} checks failed` : `CONFORMS: ${checks.length} checks passed`,
   ].join("\n");
-  return { json: { registry: base, ok: !failed, checks }, text, code: failed ? EXIT.VERIFY : 0 };
+  return { json: { registry: base, ok: !failed, ...(v.writes ? { created } : {}), checks }, text, code: failed ? EXIT.VERIFY : 0 };
 }

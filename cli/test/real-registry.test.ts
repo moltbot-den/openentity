@@ -129,6 +129,14 @@ describe("conformance against the real registry app", () => {
     expect(await conf()).toEqual({ code: 0, failed: [] });
   });
 
+  it("passes the write-path checks and withdraws what it made", async () => {
+    const r = await cli("conformance", real.url, "--writes", "--json");
+    const j = JSON.parse(r.out);
+    expect(j.checks.filter((c: any) => !c.ok)).toEqual([]);
+    expect(r.code).toBe(0);
+    expect(j.created).toBeGreaterThan(0);
+  });
+
   it("fails when the stamp guard is removed (stampless writes reach the handler)", async () => {
     real.tamper.request = (req) => {
       if (req.method !== "POST" || req.headers.has("x-oe-stamp")) return req;
