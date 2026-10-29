@@ -104,7 +104,11 @@ describe("continuity (spec 9)", () => {
     const e = await call("GET", `/entities/${succ.did}`);
     expect(e.body.lineage.previous).toBe(a.kp.did);
     expect(e.body.declaration_inherited_from).toBe(a.kp.did);
-    expect((await call("GET", `/entities/${a.kp.did}`)).body.lineage.successor).toBe(succ.did);
+    expect(e.body.lineage.previous_link).toMatchObject({ basis: "rotation", link: { previous: a.kp.did, successor: succ.did, basis: "rotation" } });
+    const prevBody = (await call("GET", `/entities/${a.kp.did}`)).body;
+    expect(prevBody.lineage.successor).toBe(succ.did);
+    expect(prevBody.lineage.successor_link.basis).toBe("rotation");
+    expect(prevBody.lineage.previous_link).toBeNull();
     r = await write("POST", "/continuity", succ.did, { link: await link(b.kp, succ, "rotation", [b.kp, succ]) });
     expect(r.body.error).toBe("successor_has_predecessor");
   });
