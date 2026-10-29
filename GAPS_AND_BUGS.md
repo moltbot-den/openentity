@@ -21,7 +21,7 @@ Backlog for this repo. Ticket ids are `G-YYYY-NNN` across the Open Entity produc
 
 ---
 
-### G-2026-001 [open] P1 feature
+### G-2026-001 [fixed] P1 feature
 
 - file: sdk/ts/src/, sdk/python/openentity/
 - area: Entity Gateway
@@ -30,7 +30,7 @@ Backlog for this repo. Ticket ids are `G-YYYY-NNN` across the Open Entity produc
 - owner-agent: openentity
 - reviewer-agent: security
 - suggested-fix: ADR 0003: products use the package, not a copy. Profile in ADR 0005. Plan and protocol: docs/entity-gateway-plan.md and docs/adr/0005-entity-gateway.md in One-Frequency/oneentity.
-- linked-pr: (none yet)
+- linked-pr: https://github.com/moltbot-den/openentity/pull/97
 - linked-issue: (none yet)
 
 ### G-2026-002 [open] P2 feature
