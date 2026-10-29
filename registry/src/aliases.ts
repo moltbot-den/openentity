@@ -25,8 +25,14 @@ async function publicAddress(u: URL): Promise<{ address: string; family: number 
   return addrs.length > 0 && addrs.every((a) => !PRIVATE.check(a.address, a.family === 6 ? "ipv6" : "ipv4")) ? addrs[0] : null;
 }
 
-/** GET JSON from a host the caller does not control: public https hosts only, connected to the one address validated (no second resolution), no redirects, 5 s overall, 256 KB at most. Null on any failure. */
+/** GET JSON from a host the caller does not control (see getText). Null on any failure. */
 export async function getJson(url: string, accept = "application/json"): Promise<any> {
+  const t = await getText(url, accept);
+  try { return t === null ? null : JSON.parse(t); } catch { return null; }
+}
+
+/** GET text from a host the caller does not control: public https hosts only, connected to the one address validated (no second resolution), no redirects, 5 s overall, 256 KB at most. Null on any failure. */
+async function getText(url: string, accept: string): Promise<string | null> {
   let u: URL;
   try { u = new URL(url); } catch { return null; }
   const pin = await publicAddress(u);
@@ -39,7 +45,7 @@ export async function getJson(url: string, accept = "application/json"): Promise
       const parts: Buffer[] = [];
       let n = 0;
       res.on("data", (c: Buffer) => { if ((n += c.length) > FETCH_MAX_BYTES) { res.destroy(); resolve(null); } else parts.push(c); });
-      res.on("end", () => { try { resolve(JSON.parse(Buffer.concat(parts).toString("utf8"))); } catch { resolve(null); } });
+      res.on("end", () => resolve(Buffer.concat(parts).toString("utf8")));
       res.on("error", () => resolve(null));
     });
     req.on("error", () => resolve(null));
@@ -47,7 +53,7 @@ export async function getJson(url: string, accept = "application/json"): Promise
   });
 }
 
-/** DID document for did:key, did:pkh, did:web and did:plc; null when the method is unsupported or unreachable. */
+/** DID document for did:key, did:pkh, did:web, did:webvh and did:plc; null when the method is unsupported or unreachable. */
 export async function resolveDid(did: string): Promise<any> {
   if (did.startsWith("did:key:")) {
     publicKeyFromDidKey(did);
@@ -63,6 +69,16 @@ export async function resolveDid(did: string): Promise<any> {
     const [host, ...rest] = did.slice(8).split(":").map(decodeURIComponent);
     if (!DOMAIN.test(host)) return null;
     return getJson(rest.length ? `https://${host}/${rest.join("/")}/did.json` : `https://${host}/.well-known/did.json`);
+  }
+  if (did.startsWith("did:webvh:")) {
+    // Parity with the CLIs: the newest log entry's state. The log history and witnesses are not verified here either; the state must name this DID.
+    const [, , , host, ...rest] = did.split(":").map(decodeURIComponent);
+    if (!host || !DOMAIN.test(host)) return null;
+    const log = await getText(rest.length ? `https://${host}/${rest.join("/")}/did.jsonl` : `https://${host}/.well-known/did.jsonl`, "application/jsonl, text/plain");
+    let entry: any;
+    try { entry = JSON.parse(log?.trim().split("\n").at(-1) ?? ""); } catch { return null; }
+    const doc = entry?.state ?? entry;
+    return doc?.id === did ? doc : null;
   }
   if (/^did:plc:[a-z2-7]{24}$/.test(did)) return getJson(`https://plc.directory/${did}`);
   return null;
@@ -97,8 +113,21 @@ const personalDigest = (message: string) => {
   return keccak_256(Uint8Array.from([...enc.encode(`\x19Ethereum Signed Message:\n${msg.length}`), ...msg]));
 };
 
-async function ethCall(env: Env, to: string, data: string): Promise<string> {
-  const res = await fetch(env.BASE_RPC_URL, {
+// Public JSON-RPC endpoints for the chains where the ERC-8004 registries are deployed; Base comes from BASE_RPC_URL and EVM_RPC_URLS ({"<chainId>": url}) overrides any entry.
+const PUBLIC_RPC: Record<string, string> = {
+  "1": "https://ethereum-rpc.publicnode.com", "10": "https://mainnet.optimism.io", "137": "https://polygon-rpc.com", "42161": "https://arb1.arbitrum.io/rpc",
+  "84532": "https://sepolia.base.org", "11155111": "https://ethereum-sepolia-rpc.publicnode.com",
+};
+export function rpcUrl(env: Env, chainId: string): string | undefined {
+  let custom: Record<string, string> = {};
+  try { custom = JSON.parse(env.EVM_RPC_URLS || "{}"); } catch { /* ignore a malformed override */ }
+  return custom[chainId] ?? (chainId === "8453" ? env.BASE_RPC_URL : PUBLIC_RPC[chainId]);
+}
+
+async function ethCall(env: Env, chainId: string, to: string, data: string): Promise<string> {
+  const url = rpcUrl(env, chainId);
+  if (!url) throw new Error(`no RPC for eip155:${chainId}`);
+  const res = await fetch(url, {
     method: "POST", headers: { "content-type": "application/json" },
     body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_call", params: [{ to, data }, "latest"] }),
   });
@@ -109,11 +138,11 @@ async function ethCall(env: Env, to: string, data: string): Promise<string> {
 const word = (n: bigint | number) => BigInt(n).toString(16).padStart(64, "0");
 const selector = (sig: string) => hex(keccak_256(enc.encode(sig)).slice(0, 4));
 
-/** ERC-1271 isValidSignature(bytes32,bytes) on Base. */
-async function erc1271(env: Env, wallet: string, digest: Uint8Array, sigHex: string): Promise<boolean> {
+/** ERC-1271 isValidSignature(bytes32,bytes) on the wallet's chain. */
+async function erc1271(env: Env, chainId: string, wallet: string, digest: Uint8Array, sigHex: string): Promise<boolean> {
   const sig = sigHex.replace(/^0x/, "");
   const data = "0x1626ba7e" + hex(digest) + word(64) + word(sig.length / 2) + sig.padEnd(Math.ceil(sig.length / 64) * 64, "0");
-  return (await ethCall(env, wallet, data).catch(() => "0x")).startsWith("0x1626ba7e");
+  return (await ethCall(env, chainId, wallet, data).catch(() => "0x")).startsWith("0x1626ba7e");
 }
 
 const SIWE = /^(\S+) wants you to sign in with your Ethereum account:\n(0x[0-9a-fA-F]{40})\n\n(.+)\n\nURI: (\S+)\nVersion: (\S+)\nChain ID: (\d+)\nNonce: (\S+)\nIssued At: (\S+)\nResources:\n- (\S+)$/;
@@ -133,7 +162,7 @@ async function checkSiwe(env: Env, eid: string, proof: any, chainId: string, add
   let signer: string | undefined;
   try { signer = personalRecover(proof.message, proof.signature); } catch { /* maybe a contract wallet */ }
   if (signer === addr.toLowerCase()) return { signer };
-  if (chainId === "8453" && (await erc1271(env, addr, personalDigest(proof.message), proof.signature))) return { signer: addr.toLowerCase() };
+  if (await erc1271(env, chainId, addr, personalDigest(proof.message), proof.signature)) return { signer: addr.toLowerCase() };
   return { error: "signature does not recover to the message address" };
 }
 
@@ -150,8 +179,8 @@ function abiString(result: string): string {
  * service whose endpoint is the root EID. https (public host names only), ipfs (through a public gateway) and
  * on-chain data: URIs; the file is fetched with the same bounds as every other alias proof.
  */
-async function registrationFile(env: Env, eid: string, registry: string, agentId: bigint): Promise<string | null> {
-  const uri = abiString(await ethCall(env, registry, "0x" + selector("tokenURI(uint256)") + word(agentId)).catch(() => "0x"));
+async function registrationFile(env: Env, eid: string, chainId: string, registry: string, agentId: bigint): Promise<string | null> {
+  const uri = abiString(await ethCall(env, chainId, registry, "0x" + selector("tokenURI(uint256)") + word(agentId)).catch(() => "0x"));
   let file: any = null;
   const data = /^data:application\/json(;base64)?,(.*)$/s.exec(uri);
   if (data) {
@@ -187,12 +216,12 @@ export async function verifyAlias(env: Env, eid: string, a: AliasInput): Promise
   if (a.type === "erc8004") {
     const m = /^eip155:(\d+):(0x[0-9a-fA-F]{40}):(\d+)$/.exec(a.value);
     if (!m) return "erc8004 alias value must be eip155:<chainId>:<identityRegistry>:<agentId>";
-    if (m[1] !== "8453") return "only Base (eip155:8453) ERC-8004 registries are supported";
-    if (a.proof?.type !== "Eip4361") return registrationFile(env, eid, m[2], BigInt(m[3]));
+    if (!rpcUrl(env, m[1])) return `no RPC is configured for eip155:${m[1]}; ERC-8004 registries are supported on ${["8453", ...Object.keys(PUBLIC_RPC)].map((c) => "eip155:" + c).join(", ")}`;
+    if (a.proof?.type !== "Eip4361") return registrationFile(env, eid, m[1], m[2], BigInt(m[3]));
     const r = await checkSiwe(env, eid, a.proof, m[1]);
     if (r.error) return r.error;
     const id = word(BigInt(m[3]));
-    const addrOf = async (sig: string) => "0x" + (await ethCall(env, m[2], "0x" + selector(sig) + id).catch(() => "0x")).slice(-40).toLowerCase();
+    const addrOf = async (sig: string) => "0x" + (await ethCall(env, m[1], m[2], "0x" + selector(sig) + id).catch(() => "0x")).slice(-40).toLowerCase();
     if ((await addrOf("ownerOf(uint256)")) === r.signer || (await addrOf("getAgentWallet(uint256)")) === r.signer) return null;
     return "signing wallet is neither ownerOf nor getAgentWallet for this agent";
   }
@@ -204,12 +233,12 @@ export async function verifyAlias(env: Env, eid: string, a: AliasInput): Promise
     const t = Date.parse(p.issued);
     if (Number.isNaN(t) || t > Date.now() + 10 * 60_000 || t < Date.now() - 24 * 3600_000) return "issued must be within 24 hours of submission";
     const text = `Open Entity alias binding\neid: ${eid}\nalias: ${a.value}\nissued: ${p.issued}`;
-    // An Ed25519 root signs the spec 3.5 text directly; a did:pkh root signs it with its wallet (EIP-191, or ERC-1271 on Base).
+    // An Ed25519 root signs the spec 3.5 text directly; a did:pkh root signs it with its wallet (EIP-191, or ERC-1271 on its chain).
     const pkh = /^did:pkh:eip155:(\d+):(0x[0-9a-fA-F]{40})$/.exec(eid);
     if (p.type === "Eip191BindingSignature" && pkh && typeof p.signature === "string") {
       let signer: string | undefined;
       try { signer = personalRecover(text, p.signature); } catch { /* maybe a contract wallet */ }
-      const ok = signer === pkh[2].toLowerCase() || (pkh[1] === "8453" && (await erc1271(env, pkh[2], personalDigest(text), p.signature)));
+      const ok = signer === pkh[2].toLowerCase() || (await erc1271(env, pkh[1], pkh[2], personalDigest(text), p.signature));
       if (!ok) return "binding signature is not by this EID's wallet over the spec 3.5 text";
     } else if (p.type === "Ed25519BindingSignature" && typeof p.proofValue === "string") {
       let sig: Uint8Array<ArrayBuffer>;

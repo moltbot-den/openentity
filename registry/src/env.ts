@@ -8,6 +8,7 @@ export interface Env {
   STAMP_BITS: string;
   REGISTRY_HOST: string;
   BASE_RPC_URL: string;
+  EVM_RPC_URLS?: string; // JSON {"<chainId>": rpcUrl}; overrides the built-in public RPCs
   REGISTRY_KEY_JWK?: string;
   CUSTODY_KEY?: string;
   HASH_SALT?: string;

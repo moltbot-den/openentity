@@ -3,7 +3,7 @@ import { secp256k1 } from "@noble/curves/secp256k1.js";
 import { keccak_256 } from "@noble/hashes/sha3.js";
 import { base58btcEncode, buildDeclaration, buildDocument, canonicalize, eip712Digest, generateKeyPair, nowSeconds, sha256Hex, type KeyPair } from "../src/sdk.ts";
 import { hex } from "../src/env.ts";
-import { adopted, call, mockFetch, stamp, write } from "./helpers.ts";
+import { E, adopted, call, mockFetch, stamp, write } from "./helpers.ts";
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -104,6 +104,26 @@ describe("aliases (spec 3.4, 3.5)", () => {
     expect((await write("POST", `/entities/${a.kp.did}/aliases`, a.kp.did, { type: "erc8004", value, proof })).body.error).toBe("alias_proof_invalid");
     owner = w.address;
     expect((await write("POST", `/entities/${a.kp.did}/aliases`, a.kp.did, { type: "erc8004", value, proof })).status).toBe(201);
+  });
+
+  it("erc8004: verifies on the alias's own chain (spec 3.4), with a built-in RPC map and an EVM_RPC_URLS override", async () => {
+    const w = wallet(), hits: string[] = [];
+    const rpc = (name: string) => () => { hits.push(name); return { jsonrpc: "2.0", id: 1, result: "0x" + w.address.slice(2).padStart(64, "0") }; };
+    mockFetch({ "rpc.test": rpc("base"), "mainnet.optimism.io": rpc("op"), "ethereum-rpc.publicnode.com": rpc("eth"), "arb.test": rpc("arb-override"), "arb1.arbitrum.io": rpc("arb-default") });
+    const bind = async (chain: number, env = E) => {
+      const a = await adopted(), message = siwe(a.kp.did, w.address, chain);
+      const value = `eip155:${chain}:0x8004a169fb4a3325136eb29fa0ceb6d2e539a432:42`;
+      return call("POST", `/entities/${a.kp.did}/aliases`, { type: "erc8004", value, proof: { type: "Eip4361", message, signature: w.sign(message) } }, await stamp(a.kp.did), env);
+    };
+    for (const [chain, name] of [[8453, "base"], [10, "op"], [1, "eth"]] as const) {
+      expect((await bind(chain)).status).toBe(201);
+      expect(hits.pop()).toBe(name);
+    }
+    expect((await bind(42161, { ...E, EVM_RPC_URLS: JSON.stringify({ "42161": "https://arb.test" }) })).status).toBe(201);
+    expect(hits.pop()).toBe("arb-override");
+    const unknown = await bind(56);
+    expect([unknown.body.error, unknown.body.message]).toEqual(["alias_proof_invalid", expect.stringContaining("no RPC is configured for eip155:56")]);
+    expect(hits).toEqual([]);
   });
 
   it("erc8004: binds through the agent's registration file when it lists a DID service naming the root EID (spec 3.4)", async () => {

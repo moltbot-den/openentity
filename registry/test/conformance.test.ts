@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildDeclaration, buildDocument, generateKeyPair, nowSeconds, randomNonce, recordEntryHash, signObject, signProof, type KeyPair } from "../src/sdk.ts";
 import { scheduled } from "../src/index.ts";
-import { E, adopted, call, didWebDoc, later, mockFetch, signed, write } from "./helpers.ts";
+import { E, adopted, call, didWebDoc, later, mockFetch, signAs, signed, write } from "./helpers.ts";
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -83,6 +83,26 @@ describe("EID methods (spec 3.1)", () => {
     const declaration = await signObject(buildDeclaration({ eid, name: "Odd" }), kp);
     const r = await write("POST", "/adopt", eid, { document, declaration });
     expect([r.status, r.body.error]).toEqual([422, "unsupported_method"]);
+  });
+});
+
+describe("did:webvh (spec 3.1)", () => {
+  const scid = "QmXyz1234567890abcdefghijkLMNOPQRSTUVWXYZab";
+  it("resolves the newest log entry, adopts under it, and refuses a log whose state names another DID", async () => {
+    const kp = await generateKeyPair(), did = `did:webvh:${scid}:keys.example`;
+    const entry = (id: string, state: object = {}) => JSON.stringify({ versionId: "1-x", state: { id, verificationMethod: [{ id: `${id}#k`, type: "Multikey", controller: id, publicKeyMultibase: kp.did.slice(8) }], ...state } });
+    let log = `${entry(did, { stale: true })}\n${entry(did)}\n`;
+    mockFetch({ "keys.example/.well-known/did.jsonl": () => new Response(log) });
+    const r = await call("GET", `/resolve/${did}`);
+    expect([r.status, r.body.didDocument.id, r.body.didDocument.stale]).toEqual([200, did, undefined]);
+    const base = buildDocument({ kp, name: "Vh", description: "A test entity." }) as any;
+    const document = { ...base, eid: did, proof: await signAs({ ...base, eid: did }, kp, `${did}#k`) };
+    const decl = buildDeclaration({ eid: did, name: "Vh" });
+    const declaration = { ...decl, proof: await signAs(decl, kp, `${did}#k`) };
+    expect((await write("POST", "/adopt", did, { document, declaration })).status).toBe(201);
+    log = `${entry("did:webvh:other:keys.example")}\n`;
+    const bad = await call("GET", `/resolve/${did}`);
+    expect([bad.status, bad.body.error]).toEqual([404, "unresolvable"]);
   });
 });
 
