@@ -30,6 +30,13 @@ test("the cron fires every minute", () => {
   t.hasResourceProperties("AWS::Scheduler::Schedule", { ScheduleExpression: "rate(1 minute)" });
 });
 
+test("a cron that stops reporting ScheduledOk raises an alarm to the alerts topic", () => {
+  t.hasResourceProperties("AWS::CloudWatch::Alarm", {
+    Namespace: "OpenEntity", MetricName: "ScheduledOk", Statistic: "Sum", Period: 600, EvaluationPeriods: 3, Threshold: 1,
+    ComparisonOperator: "LessThanThreshold", TreatMissingData: "breaching", AlarmActions: Match.anyValue(),
+  });
+});
+
 test("CloudFront serves openentity.org, forwards the viewer address and the stamp header, and never caches dynamic paths", () => {
   t.hasResourceProperties("AWS::CloudFront::Distribution", {
     DistributionConfig: Match.objectLike({ Aliases: ["openentity.org"], DefaultCacheBehavior: Match.objectLike({ CachePolicyId: "4135ea2d-6df8-44a3-9df3-4b5a84be39ad" }) }),

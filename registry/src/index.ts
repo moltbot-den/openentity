@@ -961,29 +961,51 @@ async function accreditObservers(env: Env) {
   }
 }
 
+/** A CloudWatch Embedded Metric Format line: the log line becomes the metric, no SDK call. */
+const emf = (name: string, value: number) =>
+  console.log(JSON.stringify({ _aws: { Timestamp: Date.now(), CloudWatchMetrics: [{ Namespace: "OpenEntity", Dimensions: [[]], Metrics: [{ Name: name, Unit: "Count" }] }] }, [name]: value }));
+
 export async function scheduled(env: Env) {
-  const before = await latestSize(env.db);
-  // Spec 10.3: a checkpoint at least every 10 minutes. Ed25519 is deterministic, so an unchanged tree
-  // keeps the same signed note; the refreshed timestamp in /log/sth shows the log was checked.
-  if ((await incorporate(env)) === before) await env.db.run("UPDATE checkpoints SET timestamp = $1 WHERE tree_size = $2", [nowIso(), before]);
-  const s = await stats(env), d = today();
-  await env.db.run(
-    `INSERT INTO stats_daily (date, entities_l0, entities_l1, entities_l2, entities_l3, adoptions, record_entries, attestations, observers) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-     ON CONFLICT (date) DO UPDATE SET entities_l0 = excluded.entities_l0, entities_l1 = excluded.entities_l1, entities_l2 = excluded.entities_l2, entities_l3 = excluded.entities_l3,
-     adoptions = excluded.adoptions, record_entries = excluded.record_entries, attestations = excluded.attestations, observers = excluded.observers`,
-    [d, s.entities.l0, s.entities.l1, s.entities.l2, s.entities.l3, s.declarations_today, s.record_entries, s.attestations, s.observers],
-  );
-  const yesterday = new Date(Date.now() - 86400_000).toISOString().slice(0, 10);
-  await snapshot(env, yesterday);
-  await exportObjects(env, yesterday);
-  await accreditObservers(env);
+  const failures: unknown[] = [];
+  // Each step stands alone: one throw must not skip the rest. All failures rethrow at the end so the Lambda error alarm fires.
+  const step = async (name: string, f: () => Promise<unknown>) => {
+    try { await f(); } catch (e) { console.error(`scheduled ${name}`, e); failures.push(e); }
+  };
+  let s: Awaited<ReturnType<typeof stats>> | undefined;
+  await step("checkpoint", async () => {
+    const before = await latestSize(env.db);
+    // Spec 10.3: a checkpoint at least every 10 minutes. Ed25519 is deterministic, so an unchanged tree
+    // keeps the same signed note; the refreshed timestamp in /log/sth shows the log was checked.
+    if ((await incorporate(env)) === before) await env.db.run("UPDATE checkpoints SET timestamp = $1 WHERE tree_size = $2", [nowIso(), before]);
+  });
+  await step("stats", async () => {
+    s = await stats(env);
+    await env.db.run(
+      `INSERT INTO stats_daily (date, entities_l0, entities_l1, entities_l2, entities_l3, adoptions, record_entries, attestations, observers) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       ON CONFLICT (date) DO UPDATE SET entities_l0 = excluded.entities_l0, entities_l1 = excluded.entities_l1, entities_l2 = excluded.entities_l2, entities_l3 = excluded.entities_l3,
+       adoptions = excluded.adoptions, record_entries = excluded.record_entries, attestations = excluded.attestations, observers = excluded.observers`,
+      [today(), s.entities.l0, s.entities.l1, s.entities.l2, s.entities.l3, s.declarations_today, s.record_entries, s.attestations, s.observers],
+    );
+  });
+  // Yesterday first, then the six days before it: a day a failed run left without a file is filled in (two gets per file when done).
+  for (let i = 1; i <= 7; i++) {
+    const day = new Date(Date.now() - i * 86400_000).toISOString().slice(0, 10);
+    await step(`snapshot ${day}`, () => snapshot(env, day));
+    await step(`export ${day}`, () => exportObjects(env, day));
+  }
+  await step("accreditObservers", () => accreditObservers(env));
   // Stored levels follow the aliases an entity lists (spec 3.4); this puts rows written before that rule right.
   // ponytail: first 500 entities with a verified alias per run; page by eid if there are ever more.
-  for (const r of await env.db.all<{ eid: string }>("SELECT DISTINCT eid FROM aliases WHERE status = 'verified' ORDER BY eid LIMIT 500")) await refreshLevel(env.db, r.eid);
-  await sendDigest(env, s).catch((e) => console.error("digest", e));
+  await step("refreshLevel", async () => {
+    for (const r of await env.db.all<{ eid: string }>("SELECT DISTINCT eid FROM aliases WHERE status = 'verified' ORDER BY eid LIMIT 500")) await refreshLevel(env.db, r.eid);
+  });
+  if (s) await sendDigest(env, s).catch((e) => console.error("digest", e));
   // IP and stamp counters live 7 days, email hashes 24 hours, per-minute counters 1 hour (PRD 8, 7.3).
   const ago = (ms: number, len: number) => new Date(Date.now() - ms).toISOString().slice(0, len);
-  await env.db.run("DELETE FROM rate_events WHERE (key LIKE 'sub:%' AND window_start < $1) OR (key LIKE 'ipm:%' AND window_start < $2) OR (key LIKE 'fsm:%' AND window_start < $2) OR (key LIKE 'rdm:%' AND window_start < $2) OR window_start < $3 OR (window_start = 'fs' AND count < $4)", [ago(86400_000, 10), ago(3600_000, 16), ago(7 * 86400_000, 10), Math.floor(Date.now() / 1000) - FUNNEL_TTL]);
+  await step("cleanup", () => env.db.run("DELETE FROM rate_events WHERE (key LIKE 'sub:%' AND window_start < $1) OR (key LIKE 'ipm:%' AND window_start < $2) OR (key LIKE 'fsm:%' AND window_start < $2) OR (key LIKE 'rdm:%' AND window_start < $2) OR window_start < $3 OR (window_start = 'fs' AND count < $4)", [ago(86400_000, 10), ago(3600_000, 16), ago(7 * 86400_000, 10), Math.floor(Date.now() / 1000) - FUNNEL_TTL]));
+  // Heartbeat: one per fully successful run (every 10 minutes). The CronStalled alarm treats a missing one as a failure.
+  if (failures.length) throw new AggregateError(failures, `scheduled: ${failures.length} step(s) failed`);
+  emf("ScheduledOk", 1);
 }
 
 // The Lambda handler runs scheduled(env) when the minute is a multiple of 10, else incorporate(env):
