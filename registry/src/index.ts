@@ -9,7 +9,7 @@ import { type Env, REGISTRY_DID, LOG_ORIGIN, b64, nowIso } from "./env.ts";
 import { type Stmt, chain, consistencyProof, exportObjects, inclusionProof, incorporate, latestSize, leafFor, leafJson, registryKey, sequenced, snapshot, tileIndex, treeRoot, type LeafRow } from "./log.ts";
 import type { Db } from "./db.ts";
 import { sendDigest } from "./digest.ts";
-import { DOMAIN, getJson, platformDomain, resolveDid, resolver, verifyAlias } from "./aliases.ts";
+import { DOMAIN, getJson, platformDomain, resolveDid, resolver, Transient, verifyAlias } from "./aliases.ts";
 
 type C = Context<{ Bindings: Env }>;
 class HttpError extends Error {
@@ -967,6 +967,24 @@ async function accreditObservers(env: Env) {
   }
 }
 
+/**
+ * Spec 3.4: a registry re-checks stored alias proofs and demotes one that no longer holds (a lapsed domain, a transferred
+ * ERC-8004 token). A definitive failure sets status 'lapsed' and recomputes the level; a transient one (network, timeout,
+ * 5xx, RPC trouble) leaves the alias verified. Either way last_checked moves, so the next run takes the next oldest.
+ * ponytail: the 20 oldest-checked per 10-minute run is about 2,900 a day; raise it or add concurrency when verified aliases outgrow that.
+ */
+export const ALIAS_RECHECK_BATCH = 20;
+async function recheckAliases(env: Env) {
+  const rows = await env.db.all<{ eid: string; type: string; value: string; proof_json: string | null }>("SELECT eid, type, value, proof_json FROM aliases WHERE status = 'verified' ORDER BY COALESCE(last_checked, ''), eid LIMIT $1", [ALIAS_RECHECK_BATCH]);
+  for (const r of rows) {
+    let err: string | null;
+    try { err = await verifyAlias(env, r.eid, { type: r.type, value: r.value, proof: r.proof_json ? JSON.parse(r.proof_json) : undefined }, true); }
+    catch (e) { if (!(e instanceof Transient)) console.error("alias recheck", r.eid, r.value, e); err = null; }
+    await env.db.run("UPDATE aliases SET last_checked = $1, status = $2 WHERE eid = $3 AND type = $4 AND value = $5", [nowIso(), err ? "lapsed" : "verified", r.eid, r.type, r.value]);
+    if (err) { console.log(JSON.stringify({ aliasLapsed: r.eid, type: r.type, value: r.value, reason: err })); await refreshLevel(env.db, r.eid); }
+  }
+}
+
 /** A CloudWatch Embedded Metric Format line: the log line becomes the metric, no SDK call. */
 const emf = (name: string, value: number) =>
   console.log(JSON.stringify({ _aws: { Timestamp: Date.now(), CloudWatchMetrics: [{ Namespace: "OpenEntity", Dimensions: [[]], Metrics: [{ Name: name, Unit: "Count" }] }] }, [name]: value }));
@@ -1005,6 +1023,7 @@ export async function scheduled(env: Env) {
   await step("refreshLevel", async () => {
     for (const r of await env.db.all<{ eid: string }>("SELECT DISTINCT eid FROM aliases WHERE status = 'verified' ORDER BY eid LIMIT 500")) await refreshLevel(env.db, r.eid);
   });
+  await step("recheckAliases", () => recheckAliases(env));
   if (s) await sendDigest(env, s).catch((e) => console.error("digest", e));
   // IP and stamp counters live 7 days, email hashes 24 hours, per-minute counters 1 hour (PRD 8, 7.3).
   const ago = (ms: number, len: number) => new Date(Date.now() - ms).toISOString().slice(0, len);
