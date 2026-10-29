@@ -23,7 +23,7 @@ const hex = (b: Uint8Array) => Buffer.from(b).toString('hex');
 async function logFixture(e: Awaited<ReturnType<typeof entity>>, tamper?: (r: Record<string, any>) => void) {
   const reg = await generateKeyPair();
   const obs = await generateKeyPair();
-  const att = await signAttestation(obs, { subject: e.eid, claimType: 'identity', claim: { note: 'fixture' } } as any);
+  const att = await signAttestation(obs, { subject: e.eid, claimType: 'identity', claim: { name: 'Fixture', aliases_verified: [] } } as any);
   const leaves = [
     logLeaf('Declaration', e.eid, await sha256Hex(canonicalize(e.declaration)), '2026-10-28T00:00:00Z'),
     logLeaf('Attestation', e.eid, await sha256Hex(canonicalize(att)), '2026-10-28T00:00:01Z'),
