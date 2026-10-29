@@ -424,7 +424,7 @@ All endpoints are JSON, CORS `*`, no authentication beyond the signatures on the
 | Method and path | Purpose |
 |---|---|
 | `GET /spec` | Current spec version, declaration version and hash, registry DID and keys |
-| `POST /adopt` | Body `{document, declaration, client?}`; `client` is an optional label outside the signed objects, one of `adk`, `goose`, `langchain`, `ui-tars`, `cli`, `mcp`, `other` (422 otherwise), counted by `GET /stats`; creates the entity; returns `{eid, level, log_index, receipt, urls}` |
+| `POST /adopt` | Body `{document, declaration, client?}`; `client` is an optional label outside the signed objects, one of `adk`, `crewai`, `goose`, `langchain`, `mastra`, `openai-agents`, `ui-tars`, `vercel-ai`, `cli`, `mcp`, `other` (422 otherwise), counted by `GET /stats`; creates the entity; returns `{eid, level, log_index, receipt, urls}` |
 | `GET /entities/{eid}` | Current document, declaration, verified aliases, level, lineage (with `previous_link` and `successor_link`: the signed Continuity Link and its `basis`), counts |
 | `GET /entities/{eid}/document` | Current signed Entity Document only |
 | `PUT /entities/{eid}/document` | New signed version (section 5.5) |

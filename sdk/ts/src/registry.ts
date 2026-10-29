@@ -30,7 +30,7 @@ export async function rotate(o: { previous: KeyPair; registry?: string; successo
 // ---------------------------------------------------------------- adopt with a client label
 
 /** The registry's allowlist for the unsigned `client` label on POST /v1/adopt. */
-export const CLIENTS = ["adk", "goose", "langchain", "ui-tars", "cli", "other"] as const;
+export const CLIENTS = ["adk", "crewai", "goose", "langchain", "mastra", "openai-agents", "ui-tars", "vercel-ai", "cli", "other"] as const;
 export type Client = (typeof CLIENTS)[number];
 
 /** @internal */

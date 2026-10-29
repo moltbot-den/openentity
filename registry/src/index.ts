@@ -232,7 +232,7 @@ app.get("/spec", async (c) => {
 // ---------- adopt (spec 10.2, 6.3, 10.6) ----------
 
 /** The unsigned `client` label on POST /adopt: which kind of client adopted, for GET /stats `by_client`. Not part of any signed object. */
-const CLIENTS = ["adk", "goose", "langchain", "ui-tars", "cli", "mcp", "other"];
+const CLIENTS = ["adk", "crewai", "goose", "langchain", "mastra", "openai-agents", "ui-tars", "vercel-ai", "cli", "mcp", "other"];
 const clientLabel = (body: any): string | null => {
   if (body?.client == null) return null;
   if (!CLIENTS.includes(body.client)) fail(422, "invalid_client", `client must be one of ${CLIENTS.join(", ")}`);

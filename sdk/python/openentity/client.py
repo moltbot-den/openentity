@@ -15,7 +15,7 @@ except PackageNotFoundError:
     _VERSION = "dev"
 
 DEFAULT_REGISTRY = "https://openentity.org"
-CLIENTS = ("adk", "goose", "langchain", "ui-tars", "cli", "other")  # the registry's allowlist for the unsigned `client` label
+CLIENTS = ("adk", "crewai", "goose", "langchain", "mastra", "openai-agents", "ui-tars", "vercel-ai", "cli", "other")  # the registry's allowlist for the unsigned `client` label
 
 
 def _request(url: str, body: dict | None = None, headers: dict | None = None, method: str | None = None) -> dict:

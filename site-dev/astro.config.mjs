@@ -59,6 +59,12 @@ export default defineConfig({
             { label: 'TypeScript SDK', link: '/sdk/typescript' },
             { label: 'Python SDK', link: '/sdk/python' },
             { label: 'CLI reference', link: '/cli' },
+            { label: 'CrewAI tools', link: '/integrations/crewai' },
+            { label: 'OpenAI Agents SDK tools', link: '/integrations/openai-agents' },
+            { label: 'CrewAI tools', link: '/integrations/crewai' },
+            { label: 'OpenAI Agents SDK tools', link: '/integrations/openai-agents' },
+            { label: 'Vercel AI SDK', link: '/integrations/vercel-ai' },
+            { label: 'Mastra', link: '/integrations/mastra' },
           ],
         },
         {

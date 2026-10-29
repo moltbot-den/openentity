@@ -9,13 +9,13 @@ on:
       package:
         description: Package directory to publish
         type: choice
-        options: [cli, sdk/ts, sdk/python, integrations/langchain/js, integrations/langchain/python, integrations/adk/js, integrations/adk/python]
+        options: [cli, sdk/ts, sdk/python, integrations/langchain/js, integrations/langchain/python, integrations/adk/js, integrations/adk/python, integrations/crewai/python, integrations/openai-agents/python, integrations/vercel-ai, integrations/mastra]
 permissions:
   id-token: write
   contents: read
 jobs:
   publish:
-    if: inputs.package != 'sdk/python' && inputs.package != 'integrations/langchain/python' && inputs.package != 'integrations/adk/python'
+    if: inputs.package != 'sdk/python' && inputs.package != 'integrations/langchain/python' && inputs.package != 'integrations/adk/python' && inputs.package != 'integrations/crewai/python' && inputs.package != 'integrations/openai-agents/python'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -34,7 +34,7 @@ jobs:
         run: pnpm pack --pack-destination "$RUNNER_TEMP" && npm stage publish "$RUNNER_TEMP"/*.tgz --access public
 
   pypi:
-    if: inputs.package == 'sdk/python' || inputs.package == 'integrations/langchain/python' || inputs.package == 'integrations/adk/python'
+    if: inputs.package == 'sdk/python' || inputs.package == 'integrations/langchain/python' || inputs.package == 'integrations/adk/python' || inputs.package == 'integrations/crewai/python' || inputs.package == 'integrations/openai-agents/python'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
