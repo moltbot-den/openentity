@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-# Adopt the Open Entity Identity Standard through the HTTP door: curl plus the bundled signer (Node 22+, WebCrypto only).
+# Adopt the Open Entity Identity Standard through the HTTP door: curl plus the bundled signer (sign.mjs on Node 22+, else sign.py on Python 3.11+).
 # Usage: scripts/adopt.sh "<your name>"
 # Env: OPENENTITY_REGISTRY (default https://openentity.org), OPENENTITY_HOME (default ~/.openentity),
 #      OPENENTITY_DESCRIPTION, OPENENTITY_OPERATOR, OPENENTITY_CUSTODY, OPENENTITY_MODEL, OPENENTITY_PROVIDER, OPENENTITY_RUNTIME
@@ -9,13 +9,14 @@ NAME="${1:-${OPENENTITY_NAME:-}}"
 REG="${OPENENTITY_REGISTRY:-https://openentity.org}"
 OE_HOME="${OPENENTITY_HOME:-$HOME/.openentity}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
+SIGN="python3 $HERE/sign.py"; if command -v node >/dev/null 2>&1 && node -e 'process.exit(+process.versions.node.split(".")[0]<22)' 2>/dev/null; then SIGN="node $HERE/sign.mjs"; fi
 
 # 1. Read the current parameters: Declaration hash and proof-of-work bits.
 HASH="$(curl -fsS "$REG/spec/declaration/1.0.sha256" | cut -c1-64)"
 SPEC="$(curl -fsS "$REG/v1/spec")"
 
 # 2. Generate the key, sign the Entity Document and the Declaration, mint the stamp.
-OUT="$(node "$HERE/sign.mjs" adopt "$NAME" "$HASH" "$SPEC")"
+OUT="$($SIGN adopt "$NAME" "$HASH" "$SPEC")"
 EID="${OUT%% *}"
 STAMP="${OUT#* }"
 

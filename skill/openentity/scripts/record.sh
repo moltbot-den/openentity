@@ -8,11 +8,12 @@ EID="$1"
 REG="${OPENENTITY_REGISTRY:-https://openentity.org}"
 OE_HOME="${OPENENTITY_HOME:-$HOME/.openentity}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
+SIGN="python3 $HERE/sign.py"; if command -v node >/dev/null 2>&1 && node -e 'process.exit(+process.versions.node.split(".")[0]<22)' 2>/dev/null; then SIGN="node $HERE/sign.mjs"; fi
 
-STAMP="$(node "$HERE/sign.mjs" record "$EID" "$2" "$3" "$(curl -fsS "$REG/v1/spec")")"
+STAMP="$($SIGN record "$EID" "$2" "$3" "$(curl -fsS "$REG/v1/spec")")"
 curl -sS --fail-with-body -X POST "$REG/v1/entities/$EID/record" \
   -H 'Content-Type: application/json' \
   -H "X-OE-Stamp: $STAMP" \
   --data-binary "@$OE_HOME/$EID/record-batch.json"
-node "$HERE/sign.mjs" committed "$EID"
+$SIGN committed "$EID"
 echo
