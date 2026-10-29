@@ -51,7 +51,7 @@ describe('in-browser verify button', () => {
 
   it('fails loudly when an object was altered after signing', async () => {
     const e = await entity();
-    const text = await clickVerify({ ...e, document: { ...e.document, name: 'Someone Else' } });
+    const text = await clickVerify({ ...e, document: { ...e.document, name: 'Someone Else' } as typeof e.document });
     expect(text).toMatch(/Entity Document: FAILED/);
   });
 });
