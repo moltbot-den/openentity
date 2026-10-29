@@ -192,7 +192,7 @@ def test_adopt_and_cli(tmp_path, monkeypatch, capsys):
 def test_cli_version(capsys):
     with pytest.raises(SystemExit) as e:
         cli.main(["--version"])
-    assert e.value.code == 0 and "0.5.0" in capsys.readouterr().out
+    assert e.value.code == 0 and "0.5.1" in capsys.readouterr().out
 
 
 # ---- shared vectors, checked with the independent verifier's own logic ----
