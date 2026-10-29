@@ -454,12 +454,16 @@ app.get("/entities/:eid/declaration", async (c) => {
   return d ? c.body(d, 200, { "content-type": "application/json" }) : fail(404, "entity_not_found", `no declaration for ${eid}`);
 });
 
+/** Rows per page of the record and attestation reads; `next` is set when a page is full. */
+const PAGE = 1000;
+
 app.get("/entities/:eid/record", async (c) => {
   const eid = normalizeEid(c.req.param("eid"));
   const e = await mustEntity(c.env.db, eid);
   const after = Number(c.req.query("after") ?? 0) | 0;
-  const rows = await c.env.db.all("SELECT json, log_index FROM record_entries WHERE eid = $1 AND seq > $2 ORDER BY seq LIMIT 1000", [eid, after]);
-  return c.json({ eid, head: e.record_head_hash ? { seq: e.record_seq, hash: e.record_head_hash } : null, entries: rows.map((r) => JSON.parse(r.json)) });
+  const rows = await c.env.db.all(`SELECT json, log_index FROM record_entries WHERE eid = $1 AND seq > $2 ORDER BY seq LIMIT ${PAGE}`, [eid, after]);
+  const entries = rows.map((r) => JSON.parse(r.json));
+  return c.json({ eid, head: e.record_head_hash ? { seq: e.record_seq, hash: e.record_head_hash } : null, entries, next: rows.length === PAGE ? entries[entries.length - 1].seq : null });
 });
 
 app.get("/entities/:eid/attestations", async (c) => {
@@ -468,12 +472,14 @@ app.get("/entities/:eid/attestations", async (c) => {
   const chain = await lineage(db, eid);
   const where = [`a.subject IN (${IN(chain)})`], args: unknown[] = [...chain];
   const { issuer, claim_type, format } = c.req.query();
+  const offset = Math.max(0, Number(c.req.query("offset") ?? 0) | 0);
   if (issuer) where.push(`a.issuer = $${args.push(issuer)}`);
   if (claim_type) where.push(`a.claim_type = $${args.push(claim_type)}`);
-  const rows = await db.all(`SELECT a.*, o.did AS accredited, o.bootstrap, e.level AS issuer_level, EXISTS (SELECT 1 FROM disputes d WHERE d.object_sha256 = a.sha256) AS disputed FROM attestations a LEFT JOIN observers o ON o.did = a.issuer LEFT JOIN entities e ON e.eid = a.issuer WHERE ${where.join(" AND ")} ORDER BY a.created DESC LIMIT 1000`, args);
+  const rows = await db.all(`SELECT a.*, o.did AS accredited, o.bootstrap, e.level AS issuer_level, EXISTS (SELECT 1 FROM disputes d WHERE d.object_sha256 = a.sha256) AS disputed FROM attestations a LEFT JOIN observers o ON o.did = a.issuer LEFT JOIN entities e ON e.eid = a.issuer WHERE ${where.join(" AND ")} ORDER BY a.created DESC, a.sha256 LIMIT ${PAGE} OFFSET ${offset}`, args);
   const fp = await firstPartyIssuers(db, eid);
   return c.json({
     eid,
+    next: rows.length === PAGE ? offset + PAGE : null,
     attestations: rows.map((r) => {
       const a = JSON.parse(r.json);
       const vc = { "@context": ["https://www.w3.org/ns/credentials/v2"], type: ["VerifiableCredential", "OpenEntityAttestation"], issuer: a.issuer, validFrom: a.created, validUntil: r.expires, credentialSubject: { id: a.subject, claim_type: a.claim_type, ...a.claim }, evidence: a.evidence, proof: a.proof };

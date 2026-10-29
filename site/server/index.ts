@@ -198,16 +198,22 @@ export function createSite({ registry: callRegistry, asset, vars }: SiteOptions)
 
   async function entityPage(url: URL, eid: string): Promise<Response> {
     const enc = encodeURIComponent(eid);
-    const [entity, record, atts, disputes] = await Promise.all([
+    let [entity, record, atts, disputes] = await Promise.all([
       registry(`/v1/entities/${enc}`),
       registry(`/v1/entities/${enc}/record`),
       registry(`/v1/entities/${enc}/attestations`),
       registry(`/v1/entities/${enc}/disputes`),
     ]);
+    // ponytail: the registry pages the record at 1,000 entries; read at most 10 pages (10,000 entries) for the verify button, raise if an entity gets there.
+    for (let i = 1; record?.next != null && i < 10; i++) {
+      const more = await registry(`/v1/entities/${enc}/record?after=${record.next}`);
+      if (!more) break;
+      record = { ...more, entries: [...record.entries, ...more.entries] };
+    }
     const shell = await asset('/entity.html');
     if (!shell) return new Response('Not found', { status: 404 });
     const page = entity
-      ? renderEntity(eid, entity, record, atts, disputes)
+      ? renderEntity(eid, entity, record, atts, disputes, url.searchParams.get('entries') === 'all')
       : {
           title: 'Entity not found | Open Entity',
           description: 'No entity with this EID is in the Open Entity registry.',

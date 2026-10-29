@@ -355,3 +355,13 @@ def test_rotate_or_migrate_then_withdraw_against_the_real_registry(real_registry
     code, out = j(capsys, "withdraw", "--force", *reg)
     assert code == 0 and out["withdrawn"] is True
     assert get(new)["withdrawn"] is True and get(a["eid"])["withdrawn"] is False
+
+
+def test_record_entries_pages_until_an_empty_page():
+    pages = {0: [{"seq": i} for i in range(1, 1001)], 1000: [{"seq": 1001}], 1001: []}
+
+    class Reg:
+        def get(self, path):
+            return {"entries": pages[int(path.rsplit("=", 1)[1])]}
+
+    assert [e["seq"] for e in cli._record_entries(Reg(), "did:key:z")] == list(range(1, 1002))

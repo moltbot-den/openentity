@@ -177,8 +177,8 @@ export async function verifyCmd({ args, v }: Ctx): Promise<Result> {
     checks.push(...(await verifyOne(ent.document)));
     if (ent.declaration) checks.push(...(await verifyOne(ent.declaration)));
     else checks.push({ name: "declaration", ok: false, detail: "registry returned no Declaration" });
-    const rec = await reg.get(`/v1/entities/${eid}/record?after=0`).catch(() => ({ entries: [] }));
-    checks.push(...(await verifyRecord(Array.isArray(rec) ? rec : (rec.entries ?? []), eid)));
+    const rec = await reg.record(eid).catch(() => []);
+    checks.push(...(await verifyRecord(rec, eid)));
     const idx = ent.log_index ?? ent.declaration_log_index;
     if (idx !== undefined) {
       try {
