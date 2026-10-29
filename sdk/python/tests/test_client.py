@@ -41,7 +41,7 @@ class Stub(BaseHTTPRequestHandler):
         Stub.log.append(("GET", self.path, None, None))
         if u.path == "/v1/spec":
             reg = {"log_origin": ORIGIN, "publicKeyMultibase": "z" + core.b58encode(b"\xed\x01" + LOG_KEY.public)}
-            return self._send(200, {"spec": core.SPEC, "stamp_bits": BITS, "registry": reg})
+            return self._send(200, {"spec": core.SPEC, "stamp_bits": BITS, "registry": reg, "declaration": {"sha256": core.DECLARATION_SHA256}})
         hs = [core.leaf_hash(core.canonicalize(lf).encode()) for lf in Stub.leaves]
         if u.path == "/v1/log/sth":
             root = core.merkle_root(hs)
@@ -57,6 +57,8 @@ class Stub(BaseHTTPRequestHandler):
         if u.path.startswith("/v1/log/proof/"):
             i = int(u.path.rsplit("/", 1)[1])
             return self._send(200, {"leaf_hash": hs[i].hex(), "proof": [h.hex() for h in core.inclusion_proof(i, hs)]})
+        if u.path == "/v1/stats":
+            return self._send(200, {"entities": 3})
         if u.path == "/v1/entities":
             return self._send(200, {"entities": [{"eid": SUBJECT, "name": "N", "level": "L0"}], "page": 0, "next_page": None})
         if u.path.endswith("/record"):
@@ -72,13 +74,24 @@ class Stub(BaseHTTPRequestHandler):
             return self._send(200, Stub.entity or {"document": {"name": "Tester"}, "level": "L0"})
         self._send(404, {"error": "not_found", "message": u.path})
 
+    def do_PUT(self):
+        self.do_POST()
+
     def do_POST(self):
         body = json.loads(self.rfile.read(int(self.headers["content-length"])))
         stamp = self.headers.get("x-oe-stamp")
-        Stub.log.append(("POST", self.path, body, stamp))
-        eid = body.get("eid") or body.get("issuer") or body.get("link", {}).get("successor")
+        Stub.log.append((self.command, self.path, body, stamp))
+        eid = body.get("eid") or body.get("issuer") or body.get("link", {}).get("successor") or body.get("document", {}).get("eid")
         if not stamp or core.check_stamp(stamp, BITS, eid or self.path.split("/")[3]):
             return self._send(400, {"error": "stamp_required", "message": "stamp"})
+        if self.path == "/v1/adopt":
+            return self._send(200, {"eid": eid, "level": "L0", "log_index": 0, "urls": {"entity": "x"}, "receipt": {"leaf_hash": "ab"}})
+        if self.path.endswith("/aliases"):
+            return self._send(201, {"verified": True})
+        if self.path.endswith("/record/redact"):
+            return self._send(200, {"placeholder": {"seq": body["seq"], "redacted": True, "hash": body["entry_sha256"]}})
+        if self.command == "PUT":
+            return self._send(200, {"seq": body["seq"]}) if core.verify_object(body)[0] else self._send(422, {"error": "bad_signature", "message": "sig"})
         if self.path.endswith("/record"):
             for e in body["entries"]:
                 last = Stub.chain[-1] if Stub.chain else None
@@ -89,7 +102,7 @@ class Stub(BaseHTTPRequestHandler):
             return self._send(200, {"accepted": len(body["entries"])})
         if self.path == "/v1/continuity":
             link = body["link"]
-            ok = not Stub.refuse and all(core.verify_object({**link, "proof": p}) == (True, d) for p, d in zip(link["proofs"], (link["previous"], link["successor"])))
+            ok = not Stub.refuse and sorted(core.verify_object({**link, "proof": p}) for p in link["proofs"]) == sorted([(True, link["previous"]), (True, link["successor"])])
             if not ok or core.verify_object(body["document"])[1] != link["successor"]:
                 return self._send(422, {"error": "continuity_proof_missing", "message": "no"})
             return self._send(201, {"previous": link["previous"], "successor": link["successor"], "basis": link["basis"]})
@@ -115,7 +128,7 @@ KP = core.KeyPair(SEED)
 
 
 def posts(path):
-    return [b for m, p, b, _ in Stub.log if m == "POST" and p == path]
+    return [b for m, p, b, _ in Stub.log if m in ("POST", "PUT") and p == path]
 
 
 def test_withdraw_signs_a_withdrawal_for_the_registry_name(url):
@@ -180,11 +193,13 @@ def test_present_carries_only_current_attestations(url):
 
 @pytest.fixture
 def home(tmp_path, monkeypatch):
+    """An OPENENTITY_HOME holding one saved entity (KP), laid out like the npm CLI's."""
     monkeypatch.setenv("OPENENTITY_HOME", str(tmp_path))
     monkeypatch.delenv("OPENENTITY_REGISTRY", raising=False)
     monkeypatch.delenv("OPENENTITY_EID", raising=False)
-    (tmp_path / "keys").mkdir()
-    (tmp_path / "keys" / "k.json").write_text(json.dumps({"did": KP.did, "seed_hex": SEED.hex(), "name": "Saved"}))
+    doc, decl = client.build_adoption(KP, "Saved", "d", "http://x")
+    cli._create_dir(KP, doc, {"registry": "http://x", "docSeq": 1, "recordPushed": 0}, decl)
+    cli._set_current(KP.did)
     return tmp_path
 
 
@@ -217,15 +232,15 @@ def test_cli_record_from_flags_and_raw_payload(url, home, capsys):
 def test_cli_whoami_and_self(url, home, capsys):
     reg = ["--registry", url]
     code, out, _ = run(capsys, "whoami", "--json", *reg)
-    assert code == 0 and json.loads(out) == {"eid": KP.did, "name": "Tester", "level": "L0", "registry": url, "home": str(home)}
-    assert "name: Tester" in run(capsys, "whoami", *reg)[1]
-    code, out, _ = run(capsys, "whoami", "--json", "--registry", "http://127.0.0.1:1")  # offline: falls back to the key file
+    assert code == 0 and json.loads(out) == {"eid": KP.did, "name": "Saved", "level": "L0", "registry": url, "home": str(home)}
+    assert "name: Saved" in run(capsys, "whoami", *reg)[1]
+    code, out, _ = run(capsys, "whoami", "--json", "--registry", "http://127.0.0.1:1")  # offline: falls back to the saved state
     assert code == 0 and json.loads(out)["name"] == "Saved" and json.loads(out)["level"] is None
     for i in range(3):
-        client.record(SEED, [("arc_opened", {"arc_id": str(i), "title": "t"})], registry=url)
+        assert run(capsys, "record", "arc", "open", "--id", str(i), "--title", "t", "--no-push", *reg)[0] == 0
     code, out, _ = run(capsys, "self", "--entries", "2", "--json", *reg)
     res = json.loads(out)
-    assert code == 0 and res["document"]["name"] == "Tester" and [e["seq"] for e in res["entries"]] == [2, 3]
+    assert code == 0 and res["document"]["name"] == "Saved" and [e["seq"] for e in res["entries"]] == [2, 3]
     assert json.loads(run(capsys, "self", "--entries", "0", "--json", *reg)[1])["entries"] == []
     assert "last 3 record entries" in run(capsys, "self", *reg)[1]
     assert run(capsys, "self", "--entries", "-1", *reg)[0] == 1
@@ -277,13 +292,15 @@ def test_cli_exit_codes(url, home, capsys, monkeypatch):
     assert run(capsys, "present", "--audience", "https://v.example", "--nonce", "n1", *reg)[0] == 0
     assert json.loads(run(capsys, "present", "--audience", "a", "--nonce", "n", "--no-attestations", *reg)[1])["type"] == "Presentation"
     assert SUBJECT in run(capsys, "find", "--capability", "code-review", *reg)[1]
-    assert run(capsys, "find", "--registry", "http://127.0.0.1:1")[0] == 2  # unreachable
+    assert run(capsys, "find", "--capability", "x", "--registry", "http://127.0.0.1:1")[0] == 2  # unreachable
     for bad in ("bogus", "record"):  # argparse usage errors exit 1, not argparse's 2
         with pytest.raises(SystemExit) as e:
             run(capsys, bad)
         assert e.value.code == 1
     # local state: two keys and no --eid is 5, and --eid or OPENENTITY_EID picks one
-    (home / "keys" / "k2.json").write_text(json.dumps({"did": core.KeyPair().did, "seed_hex": "11" * 32}))
+    k2 = core.KeyPair(b"\x11" * 32)
+    cli._create_dir(k2, {"name": "Two"}, {"registry": url, "docSeq": 1, "recordPushed": 0})
+    (home / "current").unlink()
     assert run(capsys, "withdraw", "--force", *reg)[0] == 5
     assert run(capsys, "withdraw", "--force", "--eid", KP.did, *reg)[0] == 0
     monkeypatch.setenv("OPENENTITY_EID", KP.did)
@@ -298,14 +315,13 @@ def test_cli_registry_status_maps_to_exit_code(url, home, capsys, monkeypatch, s
     assert run(capsys, "record", "arc", "open", "--id", "a", "--title", "A", "--registry", url)[0] == code
 
 
-def test_cli_registry_comes_from_the_flag_env_or_the_saved_key(url, home, capsys, monkeypatch):
-    (home / "keys" / "k.json").write_text(json.dumps({"did": KP.did, "seed_hex": SEED.hex(), "registry": url}))
+def test_cli_registry_comes_from_the_flag_env_or_the_saved_state(url, home, capsys, monkeypatch):
+    st = json.loads((home / KP.did / "state.json").read_text())
+    (home / KP.did / "state.json").write_text(json.dumps({**st, "registry": url}))
     assert json.loads(run(capsys, "whoami", "--json")[1])["registry"] == url
     monkeypatch.setenv("OPENENTITY_REGISTRY", "http://127.0.0.1:1")
     assert json.loads(run(capsys, "whoami", "--json")[1])["registry"] == "http://127.0.0.1:1"
     assert json.loads(run(capsys, "whoami", "--json", "--registry", url)[1])["registry"] == url
-
-
 
 
 def test_rotate_signs_with_both_keys_stamps_for_the_successor_and_returns_the_new_seed(url):

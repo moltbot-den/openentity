@@ -17,9 +17,9 @@ class RegistryError(Exception):
         self.status, self.body = status, body
 
 
-def _request(url: str, body: dict | None = None, headers: dict | None = None) -> dict:
+def _request(url: str, body: dict | None = None, headers: dict | None = None, method: str | None = None) -> dict:
     req = urllib.request.Request(
-        url, data=json.dumps(body).encode() if body is not None else None,
+        url, data=json.dumps(body).encode() if body is not None else None, method=method,
         headers={"content-type": "application/json", "user-agent": "openentity-python/0.2.0", **(headers or {})})
     try:
         with urllib.request.urlopen(req, timeout=30) as r:
@@ -33,7 +33,8 @@ def _request(url: str, body: dict | None = None, headers: dict | None = None) ->
         raise RegistryError(e.code, raw) from None
 
 
-def build_adoption(kp: core.KeyPair, name: str, description: str, registry: str) -> tuple[dict, dict]:
+def build_adoption(kp: core.KeyPair, name: str, description: str, registry: str, operator: dict | None = None,
+                   substrate: dict | None = None, extra: dict | None = None) -> tuple[dict, dict]:
     created = core.now()
     declaration = core.sign_object({
         "spec": core.SPEC, "type": "Declaration", "eid": kp.did,
@@ -45,9 +46,9 @@ def build_adoption(kp: core.KeyPair, name: str, description: str, registry: str)
         "created": created, "updated": created, "seq": 1,
         "keys": [{"id": core.verification_method(kp.did), "type": "Multikey",
                   "publicKeyMultibase": kp.did.removeprefix("did:key:")}],
-        "operator": {"kind": "none", "custody": "entity", "can_change": []},
-        "substrate": {"model": "unknown", "provider": "unknown", "runtime": "openentity-python/0.2.0",
-                      "declared_at": created},
+        "operator": operator or {"kind": "none", "custody": "entity", "can_change": []},
+        "substrate": substrate or {"model": "unknown", "provider": "unknown", "runtime": "openentity-python/0.2.0",
+                                   "declared_at": created},
         "layers": {
             "cognition": {"statement": ns, "uncertainty_practice": ns},
             "presence": {"statement": ns, "format_signature": ns},
@@ -55,7 +56,8 @@ def build_adoption(kp: core.KeyPair, name: str, description: str, registry: str)
             "mission": {"statement": ns, "arcs": []},
         },
         "declaration": {"version": core.DECLARATION_VERSION, "sha256": core.DECLARATION_SHA256,
-                        "url": f"{registry}/v1/entities/{kp.did}/declaration"}}, kp, created)
+                        "url": f"{registry}/v1/entities/{kp.did}/declaration"},
+        **(extra or {})}, kp, created)
     return document, declaration
 
 
