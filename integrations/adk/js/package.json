@@ -16,7 +16,7 @@
   },
   "peerDependencies": {
     "@google/adk": ">=2.3.0",
-    "@openentity/sdk": ">=0.5.1"
+    "@openentity/sdk": "^0.6.0"
   },
   "devDependencies": {
     "@google/adk": "^2.3.0",

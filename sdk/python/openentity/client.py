@@ -37,27 +37,11 @@ def _request(url: str, body: dict | None = None, headers: dict | None = None, me
 def build_adoption(kp: core.KeyPair, name: str, description: str, registry: str, operator: dict | None = None,
                    substrate: dict | None = None, extra: dict | None = None) -> tuple[dict, dict]:
     created = core.now_seconds()
-    declaration = core.sign_object({
-        "spec": core.SPEC, "type": "Declaration", "eid": kp.did,
-        "declaration_version": core.DECLARATION_VERSION, "text_sha256": core.DECLARATION_SHA256,
-        "name": name, "created": created, "nonce": core.random_nonce()}, kp, created)
-    ns = "Not yet stated."  # spec 5.3 required fields per layer
-    document = core.sign_object({
-        "spec": core.SPEC, "eid": kp.did, "name": name, "description": description,
-        "created": created, "updated": created, "seq": 1,
-        "keys": [{"id": core.verification_method_id(kp.did), "type": "Multikey",
-                  "publicKeyMultibase": kp.did.removeprefix("did:key:")}],
-        "operator": operator or {"kind": "none", "custody": "entity", "can_change": []},
-        "substrate": substrate or {"model": "unknown", "provider": "unknown", "runtime": "unknown", "declared_at": created},
-        "layers": {
-            "cognition": {"statement": ns, "uncertainty_practice": ns},
-            "presence": {"statement": ns, "format_signature": ns},
-            "identity_core": {"statement": ns, "will_not": [], "values": []},
-            "mission": {"statement": ns, "arcs": []},
-        },
-        "declaration": {"version": core.DECLARATION_VERSION, "sha256": core.DECLARATION_SHA256,
-                        "url": f"{registry}/v1/entities/{kp.did}/declaration"},
-        **(extra or {})}, kp, created)
+    declaration = core.sign_object(core.build_declaration(kp.did, name, created), kp, created)
+    document = core.sign_object(core.build_document(
+        kp, name, description, operator, substrate, created=created,
+        extra={"declaration": {"version": core.DECLARATION_VERSION, "sha256": core.DECLARATION_SHA256,
+                               "url": f"{registry}/v1/entities/{kp.did}/declaration"}, **(extra or {})}), kp, created)
     return document, declaration
 
 

@@ -19,26 +19,27 @@ if [ -f pnpm-lock.yaml ]; then
   pnpm -r --if-present run test
 fi
 
+# uv projects run with --locked: a stale uv.lock fails here instead of being rewritten (fix: `uv lock` in that directory and commit it).
 # Independent Python implementation: its own tests, and every TS-generated vector must verify.
 if [ -d sdk/python ]; then
-  (cd sdk/python && uv run --quiet pytest -q) || fail=1
+  (cd sdk/python && uv run --locked --quiet pytest -q) || fail=1
   uv run --quiet scripts/independent_verifier.py --vectors test-vectors || fail=1
 fi
 
 # LangChain integration (Python half; the JS half runs with the pnpm workspace above). Both run the shared corpus in integrations/langchain/fixtures.
 if [ -d integrations/langchain/python ]; then
-  (cd integrations/langchain/python && uv run --quiet pytest -q) || fail=1
+  (cd integrations/langchain/python && uv run --locked --quiet pytest -q) || fail=1
 fi
 
 # Google ADK integration (Python half; the JS half runs with the pnpm workspace above). Mocked HTTP only.
 if [ -d integrations/adk/python ]; then
-  (cd integrations/adk/python && uv run --quiet pytest -q) || fail=1
+  (cd integrations/adk/python && uv run --locked --quiet pytest -q) || fail=1
 fi
 
 # CrewAI and OpenAI Agents SDK tools (Python only). Mocked registry; no network.
 for d in integrations/crewai/python integrations/openai-agents/python; do
   if [ -d $d ]; then
-    (cd $d && uv run --quiet pytest -q) || fail=1
+    (cd $d && uv run --locked --quiet pytest -q) || fail=1
   fi
 done
 

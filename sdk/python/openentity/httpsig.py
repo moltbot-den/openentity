@@ -24,7 +24,7 @@ def _digest(body: bytes) -> str:
     return f"sha-256=:{base64.b64encode(hashlib.sha256(body).digest()).decode()}:"
 
 
-def _base(method: str, url: str, components: list[str], digest: str | None, params: str) -> bytes:
+def http_sig_base(method: str, url: str, components: list[str], digest: str | None, params: str) -> bytes:
     lines = []
     for c in components:
         v = {"@method": method.upper(), "@target-uri": url, "content-digest": digest}[c]
@@ -52,7 +52,7 @@ def sign_request(method: str, url: str, body: bytes, private_key, did: str, *, c
         out["Content-Digest"] = _digest(body)
         comps.append("content-digest")
     params = f'({" ".join(chr(34) + c + chr(34) for c in comps)});created={created};expires={created + expires_in};nonce="{nonce}";keyid="{did}";alg="ed25519"'
-    sig = Ed25519PrivateKey.from_private_bytes(_seed(private_key)).sign(_base(method, url, comps, out.get("Content-Digest"), params))
+    sig = Ed25519PrivateKey.from_private_bytes(_seed(private_key)).sign(http_sig_base(method, url, comps, out.get("Content-Digest"), params))
     out["Signature-Input"] = f"sig1={params}"
     out["Signature"] = f"sig1=:{base64.b64encode(sig).decode()}:"
     return out
@@ -99,7 +99,7 @@ def verify_request(method: str, url: str, headers: Mapping[str, str], body: byte
     if p["expires"] - p["created"] > max_age:
         raise HttpSigError("lifetime_too_long")
     try:
-        Ed25519PublicKey.from_public_bytes(public).verify(base64.b64decode(s.group(1)), _base(method, url, comps, digest, params))
+        Ed25519PublicKey.from_public_bytes(public).verify(base64.b64decode(s.group(1)), http_sig_base(method, url, comps, digest, params))
     except (InvalidSignature, ValueError):
         raise HttpSigError("bad_signature") from None
     return {"did": keyid, "keyid": keyid, "created": p["created"], "expires": p["expires"], "nonce": p["nonce"]}

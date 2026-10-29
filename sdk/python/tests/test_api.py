@@ -13,18 +13,18 @@ TS_INDEX = pathlib.Path(__file__).parents[2] / "ts" / "src" / "index.ts"
 SNAPSHOT = """
 A2A_EXTENSION_URI CLIENTS DECLARATION_SHA256 DECLARATION_TEXT DECLARATION_VERSION DEFAULT_REGISTRY DISPUTE_REASONS HttpSigError
 Identity InvalidInputError KeyPair OpenEntityError REGISTRY_ERROR_CODES RegistryError SPEC TrustReport VerificationError
-a2a_extension adopt agent_card base58btc_decode base58btc_encode build_did_document build_openentity_json build_presentation
-build_rotation canonical_hash canonicalize check_stamp check_timestamp clear_trust_cache default_resolver
-did_key_from_public_key did_web_resolver dispute eip712_digest find generate_key_pair inclusion_proof key_pair_from_seed leaf_hash
-log_leaf merkle_root mint_stamp node_hash normalize_eid now_seconds parse_json present public_key_from_did_key random_nonce
-recover_eip712 record record_entry_hash rotate sha256 sha256_hex sign_attestation sign_object sign_proof sign_request
-sign_revocation successor_document trust validate verification_method_id verify_inclusion verify_note verify_object
-verify_presentation verify_request withdraw
+a2a_extension adopt agent_card base58btc_decode base58btc_encode build_declaration build_did_document build_document
+build_openentity_json build_presentation build_rotation canonical_hash canonicalize check_stamp check_timestamp checkpoint_body
+clear_trust_cache consistency_proof default_resolver did_key_from_public_key did_web_resolver dispute eip712_digest find
+generate_key_pair hash_data http_sig_base inclusion_proof key_pair_from_jwk key_pair_from_seed leaf_hash log_leaf merkle_root
+mint_stamp node_hash normalize_eid note_vkey now_seconds parse_json present public_key_from_did_key random_nonce record
+record_entry_hash recover_eip712 rotate sha256 sha256_hex sign_attestation sign_note sign_object sign_proof sign_request
+sign_revocation successor_document trust validate verification_method_id verify_consistency verify_inclusion verify_note
+verify_object verify_presentation verify_proof verify_request withdraw
 """.split()
 
-# In the TypeScript SDK only (camelCase there). Shrinks as the Python SDK gains them; never grows without a reason.
-TS_ONLY = {"build_declaration", "build_document", "checkpoint_body", "consistency_proof", "hash_data", "http_sig_base",
-           "key_pair_from_jwk", "note_vkey", "sign_note", "verify_consistency", "verify_proof"}
+# In the TypeScript SDK only (camelCase there). Empty since 0.6.1; a function added to one SDK must land in the other.
+TS_ONLY: set[str] = set()
 # In the Python SDK only.
 PY_ONLY = {"Identity", "InvalidInputError", "KeyPair", "REGISTRY_ERROR_CODES", "RegistryError", "TrustReport", "VerificationError",
            "canonical_hash", "default_resolver"}
