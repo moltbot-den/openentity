@@ -15,8 +15,8 @@ let real: Real;
 let home: string;
 beforeAll(async () => {
   real = await startReal();
-});
-afterAll(() => real.close());
+}, 60_000); // the in-process registry loads its database; the default 10s hook timeout fails under a loaded machine
+afterAll(() => real?.close());
 beforeEach(async () => {
   home = await mkdtemp(join(tmpdir(), "oe-real-"));
   process.env.OPENENTITY_HOME = home;
