@@ -255,3 +255,36 @@ describe("0.2.0 hardening", () => {
     await expect(new RuthlessSchemaGuard().fromOpenapi("file:///etc/hosts")).rejects.toThrow();
   });
 });
+
+describe("0.2.1 hardening", () => {
+  test("invalid schemas of every kind fail at register", () => {
+    const g = new RuthlessSchemaGuard({ ledger: false });
+    for (const bad of [{ type: "nope" }, { minimum: "x" }, { required: "a" }, { properties: 5 }, { pattern: "(" }, { items: "x" }, { enum: 5 }, { $ref: "#/nope" }, { properties: { a: { minLength: -1 } } }])
+      expect(() => g.register("t", bad), JSON.stringify(bad)).toThrow();
+    g.register("t", { type: ["object", "null"], properties: { a: { type: "string", pattern: "^a+$" } }, required: ["a"] });
+  });
+
+  test("stacked guards uninstall independently", async () => {
+    const s = await serve();
+    const orig = globalThis.fetch;
+    const a = new RuthlessSchemaGuard({ ledger: false, scope: "all" });
+    const b = new RuthlessSchemaGuard({ ledger: false, scope: "all" });
+    const offA = a.guardHttp();
+    const offB = b.guardHttp();
+    try {
+      offA();
+      const c = MALFORMED.find((x) => x.id === "m-html-0-ctjson")!;
+      await expect(fetch(`${s.base}/s/free/${c.id}`)).rejects.toBeInstanceOf(OpenEntitySchemaViolation); // b still guards
+      offB();
+      expect(globalThis.fetch).toBe(orig);
+      expect((await fetch(`${s.base}/s/free/${c.id}`)).status).toBe(200);
+    } finally { offA(); offB(); s.server.close(); }
+  });
+
+  test("a Command result is validated like a ToolMessage", async () => {
+    const g = new RuthlessSchemaGuard({ ledger: false, schemas: { t: { type: "object" } } });
+    const cmd = (text: string) => async () => ({ update: { messages: [new ToolMessage({ content: text, tool_call_id: "1", name: "t" })] } });
+    await call(g, req(), cmd("{}"));
+    await expect(call(g, req(), cmd("<html>"))).rejects.toBeInstanceOf(OpenEntitySchemaViolation);
+  });
+});

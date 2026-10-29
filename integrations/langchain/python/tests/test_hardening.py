@@ -83,3 +83,53 @@ def test_ledger_true_means_the_default_url_and_off_is_the_default():
 def test_from_openapi_refuses_non_http_urls():
     with pytest.raises(ValueError):
         RuthlessSchemaGuard().from_openapi("file:///etc/hosts")
+
+
+def test_command_result_is_validated_like_a_tool_message():
+    from langgraph.types import Command
+
+    g = RuthlessSchemaGuard({"t": {"type": "object"}})
+
+    class Req:
+        tool_call = {"name": "t", "args": {}, "id": "c1"}
+
+    def returns(text):
+        return lambda _: Command(update={"messages": [ToolMessage(text, tool_call_id="c1", name="t")]})
+
+    assert isinstance(g.wrap_tool_call(Req(), returns("{}")), Command)
+    with pytest.raises(OpenEntitySchemaViolation):
+        g.wrap_tool_call(Req(), returns("<html>"))
+
+
+def test_stacked_guards_uninstall_independently():
+    import httpx
+
+    a, b = RuthlessSchemaGuard(scope="all"), RuthlessSchemaGuard(scope="all")
+    orig = httpx.Client.send
+    off_a, off_b = a.guard_http(), b.guard_http()
+    patched = httpx.Client.send
+    off_a()
+    assert httpx.Client.send is patched and b._uninstall is not None  # b still guarded after a leaves
+    from langchain_openentity import http
+
+    assert http._ACTIVE == [b]
+    off_b()
+    assert httpx.Client.send is orig and not http._ACTIVE  # last one out restores the library
+
+
+def test_aiohttp_chunked_body_is_left_unread_for_the_caller(server):
+    import asyncio
+
+    import aiohttp
+
+    g = RuthlessSchemaGuard(scope="all")
+    g.guard_http()
+    try:
+        async def go():
+            async with aiohttp.ClientSession() as s, s.get(f"{server}/chunked", headers={"Accept": "application/json"}) as r:
+                assert r.headers["transfer-encoding"] == "chunked"
+                return [c async for c in r.content.iter_any()]
+
+        assert b"".join(asyncio.run(go())) == b'{"a": 1}'  # streamed through, not consumed by the guard
+    finally:
+        g.unguard_http()
