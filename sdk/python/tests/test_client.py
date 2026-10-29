@@ -43,19 +43,34 @@ class Stub(BaseHTTPRequestHandler):
             reg = {"log_origin": ORIGIN, "publicKeyMultibase": "z" + core.b58encode(b"\xed\x01" + LOG_KEY.public)}
             return self._send(200, {"spec": core.SPEC, "stamp_bits": BITS, "registry": reg, "declaration": {"sha256": core.DECLARATION_SHA256}})
         hs = [core.leaf_hash(core.canonicalize(lf).encode()) for lf in Stub.leaves]
-        if u.path == "/v1/log/sth":
+        if u.path.startswith("/v1/log/tile/"):
+            leaves = [core.canonicalize(lf).encode() for lf in Stub.leaves]
+            data = b"".join(hs) if "/tile/0/" in u.path else b"".join(len(x).to_bytes(2, "big") + x for x in leaves)
+            self.send_response(200)
+            self.send_header("content-length", str(len(data)))
+            self.end_headers()
+            return self.wfile.write(data)
+        if u.path in ("/v1/log/sth", "/v1/log/checkpoint"):
             root = core.merkle_root(hs)
             body = f"{ORIGIN}\n{len(hs)}\n{base64.b64encode(root).decode()}\n"
             keyid = core.sha256(ORIGIN.encode() + b"\n\x01" + LOG_KEY.public)[:4]
             sig = base64.b64encode(keyid + (KP if Stub.forge_note else LOG_KEY).private.sign(body.encode())).decode()
-            return self._send(200, {"tree_size": len(hs), "root_hash": root.hex(), "signature": f"{body}\n\u2014 {ORIGIN} {sig}\n"})
+            note = f"{body}\n\u2014 {ORIGIN} {sig}\n"
+            if u.path.endswith("checkpoint"):
+                self.send_response(200)
+                self.send_header("content-length", str(len(note.encode())))
+                self.end_headers()
+                return self.wfile.write(note.encode())
+            return self._send(200, {"tree_size": len(hs), "root_hash": root.hex(), "signature": note})
         if u.path == "/v1/log/entries":
-            i = int(parse_qs(u.query)["start"][0])
-            if i >= len(hs):
-                return self._send(200, {"entries": []})
-            return self._send(200, {"entries": [{"index": i, "leaf": Stub.leaves[i], "leaf_hash": hs[i].hex()}]})
+            q = parse_qs(u.query)
+            i = int(q["start"][0])
+            end = int(q.get("end", [i + 1])[0])
+            return self._send(200, {"entries": [{"index": k, "leaf": Stub.leaves[k], "leaf_hash": hs[k].hex()} for k in range(i, min(end, len(hs)))]})
         if u.path.startswith("/v1/log/proof/"):
             i = int(u.path.rsplit("/", 1)[1])
+            if i >= len(hs):
+                return self._send(404, {"error": "not_found", "message": "no such leaf"})
             return self._send(200, {"leaf_hash": hs[i].hex(), "proof": [h.hex() for h in core.inclusion_proof(i, hs)]})
         if u.path == "/v1/stats":
             return self._send(200, {"entities": 3})
@@ -70,6 +85,8 @@ class Stub(BaseHTTPRequestHandler):
             return self._send(200, {"attestations": Stub.attestations})
         if u.path.endswith("/document"):
             return self._send(200, client.build_adoption(core.KeyPair(SEED), "Tester", "d", "http://x")[0])
+        if "NoSuchEntity" in u.path:
+            return self._send(404, {"error": "not_found", "message": "no such entity"})
         if u.path.startswith("/v1/entities/"):
             return self._send(200, Stub.entity or {"document": {"name": "Tester"}, "level": "L0"})
         self._send(404, {"error": "not_found", "message": u.path})
@@ -87,6 +104,15 @@ class Stub(BaseHTTPRequestHandler):
         if self.path == "/v1/adopt":
             return self._send(200, {"eid": eid, "level": "L0", "log_index": 0, "urls": {"entity": "x"}, "receipt": {"leaf_hash": "ab"}})
         if self.path.endswith("/aliases"):
+            proof = body.get("proof") or {}
+            if proof.get("type") == "Eip4361":  # stands in for the registry's wallet check (and its Base RPC): the signature must recover the address in the message
+                from eth_account import Account
+                from eth_account.messages import encode_defunct
+                who = None if proof["signature"] == "0x" + "ab" * 65 else Account.recover_message(encode_defunct(text=proof["message"]), signature=proof["signature"])  # the two-step test sends a placeholder the stub does not judge
+                if who:
+                    if who not in proof["message"]:
+                        return self._send(422, {"error": "bad_wallet_proof", "message": "no"})
+                    Stub.entity = {"document": {"name": "Tester"}, "level": "L1"}
             return self._send(201, {"verified": True})
         if self.path.endswith("/record/redact"):
             return self._send(200, {"placeholder": {"seq": body["seq"], "redacted": True, "hash": body["entry_sha256"]}})

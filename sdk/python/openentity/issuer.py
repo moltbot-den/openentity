@@ -2,6 +2,7 @@
 
 `issuer` defaults to the signer's did:key. A did:web issuer passes its DID; the proof then names `<issuer>#<key_id>`,
 the key `did_document` publishes. Registry submission stays with `client` (POST /v1/attestations, stamped, spec 10.4)."""
+import re
 from datetime import datetime, timedelta, timezone
 
 from . import core
@@ -59,3 +60,22 @@ def openentity_json(did: str, public: bytes, name: str, description: str, *, key
                       "publicKeyMultibase": core.did_key(public).removeprefix("did:key:")}],
             "operator": operator or {"kind": "organization", "name": name, "custody": "operator", "can_change": []},
             **({"extensions": extensions} if extensions else {})}
+
+
+A2A_EXTENSION_URI = "https://openentity.org/spec/1.0"
+
+
+def a2a_extension(eid: str, document_url: str) -> dict:
+    """The spec 11.2 A2A AgentExtension block."""
+    return {"uri": A2A_EXTENSION_URI, "description": "Open Entity identity (OEIS-1) of this agent", "required": False, "params": {"eid": eid, "document": document_url}}
+
+
+def agent_card(doc: dict, url: str, document_url: str, version: str = "1.0.0") -> dict:
+    """A full A2A AgentCard for an Entity Document: each capability slug becomes a skill. `url` is the agent's A2A endpoint."""
+    skills = []
+    for slug in doc.get("capabilities") or []:
+        ns, name = slug.split(":", 1) if ":" in slug else ("", slug)
+        skills.append({"id": slug, "name": re.sub(r"[-.]", " ", name), "description": f"Self-declared capability: {slug}", "tags": [ns, name] if ns else [name]})
+    return {"name": doc["name"], "description": doc["description"], "url": url, "version": version,
+            "capabilities": {"streaming": False, "pushNotifications": False, "extensions": [a2a_extension(doc["eid"], document_url)]},
+            "defaultInputModes": ["text/plain"], "defaultOutputModes": ["text/plain"], "skills": skills}

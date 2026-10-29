@@ -5,4 +5,4 @@ from .httpsig import HttpSigError, sign_request, verify_request  # noqa: F401
 from .identity import Identity  # noqa: F401
 from .report import TrustReport, trust  # noqa: F401
 
-__version__ = "0.5.0"
+__version__ = "0.5.1"
