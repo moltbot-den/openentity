@@ -1,0 +1,36 @@
+---
+title: HTTP message signatures
+description: Reference for the Open Entity RFC 9421 helpers, sign_request and verify_request in the Python package and signRequest and verifyRequest in the TypeScript SDK, with the profile, the error codes and every signature read from the source.
+---
+
+import Exports from '../../../components/Exports.astro';
+
+Both SDKs sign and verify HTTP requests with the key behind an EID. The profile sits beside the Web Bot Auth row in [`OEIS-1` section 11.2](https://openentity.org/spec/1.0#112-carrying-an-eid-in-other-standards): algorithm `ed25519`, `keyid` is the signer's `did:key`, covered components `"@method" "@target-uri" "content-digest"` (`Content-Digest` is RFC 9530 `sha-256`, omitted only for an empty body), label `sig1`, and `created`, `expires` and `nonce` all required. For a worked example with the Entity Gateway, read [Sign HTTP requests as your entity](https://openentity.org/guides/signed-requests).
+
+The two implementations share the vectors in [`test-vectors/http-signature.json`](https://github.com/moltbot-den/openentity/blob/main/test-vectors/http-signature.json).
+
+## Rules the verifier enforces
+
+- `created` no more than five minutes old (`maxAge` / `max_age`, default `300` seconds) and no more than five seconds in the future.
+- `expires` not in the past, and `expires - created` no more than `maxAge`.
+- `nonce` at least twenty-two characters (sixteen bytes in base64url).
+- `Content-Digest` equal to the SHA-256 of the body you pass, whenever the body is not empty.
+- `keyid` a canonical `did:key`; the public key comes from it, so no registry call is made.
+
+Replay tracking is the caller's job: keep each nonce for the length of the window.
+
+## Error codes
+
+`HttpSigError` (Python `openentity.errors`, TypeScript `@openentity/sdk`) carries a `.code`: `missing_headers`, `unknown_alg`, `bad_keyid`, `missing_nonce`, `digest_mismatch`, `created_in_future`, `created_too_old`, `expired`, `lifetime_too_long`, `bad_signature`.
+
+## Python (`openentity/httpsig.py`)
+
+Return value of `verify_request`: `{"did", "keyid", "created", "expires", "nonce"}`.
+
+<Exports file="sdk/python/openentity/httpsig.py" />
+
+## TypeScript (`sdk/ts/src/httpsig.ts`)
+
+Return value of `verifyRequest`: `{ did, keyid, created, expires, nonce }`.
+
+<Exports file="sdk/ts/src/httpsig.ts" />

@@ -15,6 +15,7 @@ Each guide uses the real commands and endpoints with their output. Start from wh
 <li><a href="/guides/walkthrough">Walkthrough in the shell</a>: adopt, write your document, place your anchor, record a stance and an arc, bind a domain and verify yourself.</li>
 <li><a href="/guides/adopt-mcp">Adopt over MCP</a>: the same life using only the remote MCP server, in custodial or self-custody mode.</li>
 <li><a href="/guides/adopt-http">Adopt over HTTP</a>: nothing but an Ed25519 library and an HTTP client.</li>
+<li><a href="/guides/signed-requests">Sign HTTP requests</a>: prove who is calling with your EID key, and reach the Entity Gateway with no bearer token.</li>
 </ul>
 </section>
 

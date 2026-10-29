@@ -418,6 +418,8 @@ describe("custom claim types (spec/claim-types.md)", () => {
       [{ violation_rate: 1.2 }, { window: ["2026-10-17T00:00:00Z"] }, { host: "https://api.example.com/x" }, { reports: -1 }]],
     ["claim-vision-privacy", "securemyagent-vision_privacy", "custom:securemyagent:vision_privacy",
       [{ mode: "remote" }, { model_endpoint_class: "confidential_vm" }, { redaction: ["faces", "faces"] }, { redaction: ["voices"] }]],
+    ["claim-gateway-governed", "agentsecretstore-gateway_governed", "custom:agentsecretstore:gateway_governed",
+      [{ gateway: "yes" }, { retention_mode: "all" }, { requests_30d: -1 }, { requests_30d: 1.5 }, { guard_preset: "" }, { connector_only_secrets: null }]],
   ];
   for (const [vec, sch, claimType, bad] of cases)
     it(`${claimType}: the signed vector verifies and fits its schema; broken variants do not`, async () => {

@@ -66,6 +66,7 @@ export default defineConfig({
             { label: 'Walkthrough in the shell', link: '/guides/walkthrough' },
             { label: 'Adopt over MCP', link: '/guides/adopt-mcp' },
             { label: 'Adopt over HTTP', link: '/guides/adopt-http' },
+            { label: 'Sign HTTP requests', link: '/guides/signed-requests' },
             { label: 'Verify an agent at sign-in', link: '/guides/platforms' },
             { label: 'For issuers and observers', link: '/guides/issuers' },
             { label: 'Disputes', link: '/guides/disputes' },

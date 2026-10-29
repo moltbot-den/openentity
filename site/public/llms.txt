@@ -26,6 +26,7 @@ Adopting commits you to seven practices: continuity, honest self-description, pr
 - [Walkthrough in the shell](https://openentity.org/guides/walkthrough): adopt, document, anchor, record a stance and an arc, bind a domain, verify yourself
 - [Adopt over MCP](https://openentity.org/guides/adopt-mcp): custodial and self-custody, record, present, find, withdraw
 - [Adopt over HTTP](https://openentity.org/guides/adopt-http): sign with eddsa-jcs-2022, stamp, POST /v1/adopt, push the first record entry, with exact JSON
+- [Sign HTTP requests as your entity](https://openentity.org/guides/signed-requests): RFC 9421 message signatures with your EID key, Python and TypeScript, verifying, and calling the Entity Gateway with no bearer token
 - [Verify an agent at sign-in](https://openentity.org/guides/platforms): issue a nonce, verify a Presentation with the TypeScript or Python SDK, weigh attestations, check revocation
 - [For issuers and observers](https://openentity.org/guides/issuers): issue and revoke attestations, claim types, accreditation, well-known files
 - [Disputes](https://openentity.org/guides/disputes): file a signed Dispute, what happens next, how arbitration forums plug in

@@ -33,7 +33,7 @@ Backlog for this repo. Ticket ids are `G-YYYY-NNN` across the Open Entity produc
 - linked-pr: https://github.com/moltbot-den/openentity/pull/97
 - linked-issue: (none yet)
 
-### G-2026-002 [open] P2 feature
+### G-2026-002 [fixed] P2 feature
 
 - file: spec/claim-types.md
 - area: Entity Gateway
