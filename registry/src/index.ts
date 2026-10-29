@@ -455,7 +455,7 @@ app.get("/entities/:eid/declaration", async (c) => {
 });
 
 /** Rows per page of the record and attestation reads; `next` is set when a page is full. */
-const PAGE = 1000;
+const PAGE = 1000, MAX_OFFSET = 100_000; // an OFFSET scans and discards every skipped row, so it is capped; narrow with issuer or claim_type past it
 
 app.get("/entities/:eid/record", async (c) => {
   const eid = normalizeEid(c.req.param("eid"));
@@ -472,7 +472,8 @@ app.get("/entities/:eid/attestations", async (c) => {
   const chain = await lineage(db, eid);
   const where = [`a.subject IN (${IN(chain)})`], args: unknown[] = [...chain];
   const { issuer, claim_type, format } = c.req.query();
-  const offset = Math.max(0, Number(c.req.query("offset") ?? 0) | 0);
+  const offset = Number(c.req.query("offset") ?? 0);
+  if (!Number.isInteger(offset) || offset < 0 || offset > MAX_OFFSET) fail(400, "bad_offset", `offset must be an integer from 0 to ${MAX_OFFSET}`);
   if (issuer) where.push(`a.issuer = $${args.push(issuer)}`);
   if (claim_type) where.push(`a.claim_type = $${args.push(claim_type)}`);
   const rows = await db.all(`SELECT a.*, o.did AS accredited, o.bootstrap, e.level AS issuer_level, EXISTS (SELECT 1 FROM disputes d WHERE d.object_sha256 = a.sha256) AS disputed FROM attestations a LEFT JOIN observers o ON o.did = a.issuer LEFT JOIN entities e ON e.eid = a.issuer WHERE ${where.join(" AND ")} ORDER BY a.created DESC, a.sha256 LIMIT ${PAGE} OFFSET ${offset}`, args);
@@ -974,9 +975,13 @@ async function accreditObservers(env: Env) {
  * ponytail: the 20 oldest-checked per 10-minute run is about 2,900 a day; raise it or add concurrency when verified aliases outgrow that.
  */
 export const ALIAS_RECHECK_BATCH = 20;
+/** The app Lambda times out at 30 s; slow hosts must not eat the run (digest, cleanup and the heartbeat follow). The rest wait for the next run. */
+const ALIAS_RECHECK_BUDGET_MS = 12_000;
 async function recheckAliases(env: Env) {
   const rows = await env.db.all<{ eid: string; type: string; value: string; proof_json: string | null }>("SELECT eid, type, value, proof_json FROM aliases WHERE status = 'verified' ORDER BY COALESCE(last_checked, ''), eid LIMIT $1", [ALIAS_RECHECK_BATCH]);
+  const start = Date.now();
   for (const r of rows) {
+    if (Date.now() - start > ALIAS_RECHECK_BUDGET_MS) break;
     let err: string | null;
     try { err = await verifyAlias(env, r.eid, { type: r.type, value: r.value, proof: r.proof_json ? JSON.parse(r.proof_json) : undefined }, true); }
     catch (e) { if (!(e instanceof Transient)) console.error("alias recheck", r.eid, r.value, e); err = null; }

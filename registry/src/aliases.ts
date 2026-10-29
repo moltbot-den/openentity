@@ -19,7 +19,7 @@ const FETCH_TIMEOUT_MS = 5_000, FETCH_MAX_BYTES = 256 * 1024;
 // CGNAT, reserved and multicast. BlockList treats IPv4-mapped IPv6 as the IPv4 address.
 const PRIVATE = new BlockList();
 for (const [net, bits] of [["0.0.0.0", 8], ["10.0.0.0", 8], ["100.64.0.0", 10], ["127.0.0.0", 8], ["169.254.0.0", 16], ["172.16.0.0", 12], ["192.0.0.0", 24], ["192.168.0.0", 16], ["198.18.0.0", 15], ["224.0.0.0", 3]] as const) PRIVATE.addSubnet(net, bits, "ipv4");
-for (const [net, bits] of [["::", 128], ["::1", 128], ["64:ff9b::", 96], ["fc00::", 7], ["fe80::", 10], ["ff00::", 8], ["2001:db8::", 32]] as const) PRIVATE.addSubnet(net, bits, "ipv6");
+for (const [net, bits] of [["::", 128], ["::1", 128], ["64:ff9b::", 96], ["fc00::", 7], ["fe80::", 10], ["ff00::", 8], ["2001:db8::", 32], ["2002::", 16]] as const) PRIVATE.addSubnet(net, bits, "ipv6");
 
 /** https only, no credentials, a DNS name (never an IP literal in any notation). Resolves once; returns the address to connect to, or null when any resolved address is non-public. */
 async function publicAddress(u: URL, strict = false): Promise<{ address: string; family: number } | null> {
@@ -57,6 +57,9 @@ async function getText(url: string, accept: string, strict = false): Promise<str
   });
 }
 
+/** The colon-separated parts of a DID with percent escapes decoded; null on a malformed escape. */
+const decodeParts = (s: string): string[] | null => { try { return s.split(":").map(decodeURIComponent); } catch { return null; } };
+
 /** DID document for did:key, did:pkh, did:web, did:webvh and did:plc; null when the method is unsupported or unreachable. */
 export async function resolveDid(did: string): Promise<any> {
   if (did.startsWith("did:key:")) {
@@ -70,19 +73,19 @@ export async function resolveDid(did: string): Promise<any> {
     return { id: did, verificationMethod: [{ id: vm, type: "EcdsaSecp256k1RecoveryMethod2020", controller: did, blockchainAccountId: `eip155:${pkh[1]}:${pkh[2]}` }], assertionMethod: [vm] };
   }
   if (did.startsWith("did:web:")) {
-    const [host, ...rest] = did.slice(8).split(":").map(decodeURIComponent);
+    const [host, ...rest] = decodeParts(did.slice(8)) ?? [""];
     if (!DOMAIN.test(host)) return null;
     return getJson(rest.length ? `https://${host}/${rest.join("/")}/did.json` : `https://${host}/.well-known/did.json`);
   }
   if (did.startsWith("did:webvh:")) {
     // Parity with the CLIs: the newest log entry's state. The log history and witnesses are not verified here either; the state must name this DID.
-    const [, , , host, ...rest] = did.split(":").map(decodeURIComponent);
+    const [, , , host, ...rest] = decodeParts(did) ?? [];
     if (!host || !DOMAIN.test(host)) return null;
     const log = await getText(rest.length ? `https://${host}/${rest.join("/")}/did.jsonl` : `https://${host}/.well-known/did.jsonl`, "application/jsonl, text/plain");
     let entry: any;
     try { entry = JSON.parse(log?.trim().split("\n").at(-1) ?? ""); } catch { return null; }
-    const doc = entry?.state ?? entry;
-    return doc?.id === did ? doc : null;
+    const doc = entry?.state;
+    return doc && typeof doc === "object" && doc.id === did ? doc : null;
   }
   if (/^did:plc:[a-z2-7]{24}$/.test(did)) return getJson(`https://plc.directory/${did}`);
   return null;
@@ -134,7 +137,7 @@ async function ethCall(env: Env, chainId: string, to: string, data: string): Pro
   let j: any;
   try {
     const res = await fetch(url, {
-      method: "POST", headers: { "content-type": "application/json" },
+      method: "POST", headers: { "content-type": "application/json" }, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
       body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_call", params: [{ to, data }, "latest"] }),
     });
     if (!res.ok) throw new Error(`rpc http ${res.status}`);
@@ -224,6 +227,8 @@ export async function verifyAlias(env: Env, eid: string, a: AliasInput, recheck 
     const wk = await get(`https://${m[1]}/.well-known/openentity.json`);
     if (wk?.eid === eid) return null;
     const dns = await get(`https://cloudflare-dns.com/dns-query?name=_openentity.${m[1]}&type=TXT`, "application/dns-json");
+    // A SERVFAIL or REFUSED answer is the resolver's trouble, not proof the record is gone (0 = NOERROR, 3 = NXDOMAIN).
+    if (recheck && dns && dns.Status !== 0 && dns.Status !== 3) throw new Transient(`doh status ${dns.Status}`);
     const txt = (dns?.Answer ?? []).map((r: any) => String(r.data).replace(/^"|"$/g, "").replace(/" "/g, ""));
     return txt.includes(`eid=${eid}`) ? null : "neither /.well-known/openentity.json nor _openentity TXT names this EID";
   }

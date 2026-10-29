@@ -150,7 +150,7 @@ export async function conformance({ args, v }: Ctx): Promise<Result> {
   const target = args[0] ?? v.registry;
   if (!target) throw usage("conformance <registry-url>");
   const base = regUrl({ registry: target }).replace(/\/+$/, "");
-  if (v.writes && HOSTED.test(new URL(base).hostname) && !v["i-understand-this-creates-entities"]) {
+  if (v.writes && HOSTED.test(new URL(base).hostname.replace(/\.+$/, "")) && !v["i-understand-this-creates-entities"]) {
     throw usage("--writes adopts and withdraws throwaway entities, which stay in a public log; it refuses openentity.org. Run it on a local registry (pnpm --filter @openentity/registry local), or add --i-understand-this-creates-entities");
   }
   const reg = new Registry(base);
