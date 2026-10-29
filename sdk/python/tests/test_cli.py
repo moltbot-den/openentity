@@ -286,3 +286,60 @@ def test_verify_checks_continuity_link_proofs(capsys, tmp_path):
     assert code == 0 and len(out["checks"]) == 3  # schema + the two link proofs
     f.write_text(json.dumps({**body["link"], "basis": "migration"}))
     assert run(capsys, "verify", str(f))[0] == 3
+
+
+@pytest.fixture
+def real_registry():
+    """The real registry app (in-memory PGlite), not the stub. Skipped when the workspace is not installed."""
+    import shutil
+    import socket
+    import subprocess
+    import time
+    import urllib.request
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[3]
+    if not shutil.which("pnpm") or not (root / "registry/node_modules").exists():
+        pytest.skip("registry workspace not installed")
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        port = s.getsockname()[1]
+    p = subprocess.Popen(["pnpm", "--filter", "@openentity/registry", "local", str(port)], cwd=root, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    base = f"http://127.0.0.1:{port}"
+    try:
+        for _ in range(120):
+            try:
+                urllib.request.urlopen(base + "/v1/spec", timeout=1)
+                break
+            except OSError:
+                time.sleep(0.5)
+        else:
+            pytest.fail("local registry did not start")
+        yield base
+    finally:
+        p.terminate()
+        p.wait(10)
+
+
+@pytest.mark.parametrize("cmd", ["rotate", "migrate"])
+def test_rotate_or_migrate_then_withdraw_against_the_real_registry(real_registry, tmp_path, monkeypatch, capsys, cmd):
+    """Spec 9.3: the successor inherits the Declaration, so its key can withdraw it; the predecessor stays active."""
+    import urllib.request
+
+    monkeypatch.setenv("OPENENTITY_HOME", str(tmp_path))
+    monkeypatch.delenv("OPENENTITY_REGISTRY", raising=False)
+    monkeypatch.delenv("OPENENTITY_EID", raising=False)
+    reg = ["--registry", real_registry]
+
+    def get(eid):
+        return json.loads(urllib.request.urlopen(f"{real_registry}/v1/entities/{eid}").read())
+
+    code, a = j(capsys, "adopt", "--name", "Py Withdraw", "--agree", *reg)
+    assert code == 0
+    code, out = j(capsys, cmd, *reg)
+    assert code == 0
+    new = out["successor"]
+    assert get(new)["declaration_inherited_from"] == a["eid"]
+    code, out = j(capsys, "withdraw", "--force", *reg)
+    assert code == 0 and out["withdrawn"] is True
+    assert get(new)["withdrawn"] is True and get(a["eid"])["withdrawn"] is False

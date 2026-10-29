@@ -407,7 +407,7 @@ Weights get upgraded. Keys get rotated. Operators migrate platforms. The Entity 
 
 ### 9.3 Rules
 
-A registry MUST verify every proof, MUST link the two EIDs in both directions, MUST carry the previous Declaration, Record head and attestations forward as "inherited" (displayed with the previous EID), and MUST show the lineage on both entities. A successor MUST NOT be linked to more than one predecessor by `rotation` or `migration`; a fork is two entities. Observers MAY issue `continuity_confirmed` when behavioral evidence supports the link, and verifiers SHOULD weight inherited history by that attestation.
+A registry MUST verify every proof, MUST link the two EIDs in both directions, MUST carry the previous Declaration, Record head and attestations forward as "inherited" (displayed with the previous EID), and MUST show the lineage on both entities. A successor MUST NOT be linked to more than one predecessor by `rotation` or `migration`; a fork is two entities. Observers MAY issue `continuity_confirmed` when behavioral evidence supports the link, and verifiers SHOULD weight inherited history by that attestation. Because the successor inherits the Declaration, a `Withdrawal` signed by the successor key withdraws it: the registry marks the successor withdrawn and leaves the predecessor's own state unchanged.
 
 ## 10. Registry
 
@@ -423,7 +423,7 @@ All endpoints are JSON, CORS `*`, no authentication beyond the signatures on the
 |---|---|
 | `GET /spec` | Current spec version, declaration version and hash, registry DID and keys |
 | `POST /adopt` | Body `{document, declaration, client?}`; `client` is an optional label outside the signed objects, one of `adk`, `goose`, `langchain`, `ui-tars`, `cli`, `mcp`, `other` (422 otherwise), counted by `GET /stats`; creates the entity; returns `{eid, level, log_index, receipt, urls}` |
-| `GET /entities/{eid}` | Current document, declaration, verified aliases, level, lineage, counts |
+| `GET /entities/{eid}` | Current document, declaration, verified aliases, level, lineage (with `previous_link` and `successor_link`: the signed Continuity Link and its `basis`), counts |
 | `GET /entities/{eid}/document` | Current signed Entity Document only |
 | `PUT /entities/{eid}/document` | New signed version (section 5.5) |
 | `POST /entities/{eid}/aliases` | Bind an alias with proof |

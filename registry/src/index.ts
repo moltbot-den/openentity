@@ -367,6 +367,11 @@ app.get("/entities/:eid", async (c) => {
   const chain = await lineage(db, eid);
   const decl = await db.first(`SELECT eid, json, log_index, withdrawn_at FROM declarations WHERE eid IN (${IN(chain)}) ORDER BY received_at DESC LIMIT 1`, chain);
   const aliases = await db.all("SELECT type, value, status, verified_at, log_index FROM aliases WHERE eid = $1", [eid]);
+  // Spec 9: show the signed Continuity Link and its basis (rotation, migration, recovery) on both entities.
+  const linkOf = async (col: "successor" | "previous") => {
+    const r = await db.first(`SELECT basis, json FROM continuity_links WHERE ${col === "successor" ? "successor" : "previous"} = $1`, [eid]);
+    return r ? { basis: r.basis, link: JSON.parse(r.json) } : null;
+  };
   const attestations = (await db.first(`SELECT COUNT(*) AS n FROM attestations WHERE subject IN (${IN(chain)}) AND revoked_at IS NULL`, chain))?.n;
   // Spec 10.7: derived at read time from the newest verified record entry or liveness attestation; the registry never stores or accepts it.
   const last_active = (await db.first<{ t: string | null }>(`SELECT ${lastActive("$1")} AS t`, [eid]))?.t ?? null;
@@ -375,7 +380,7 @@ app.get("/entities/:eid", async (c) => {
     declaration: decl ? JSON.parse(decl.json) : null, declaration_note: DECLARATION_NOTE,
     declaration_inherited_from: decl && decl.eid !== eid ? decl.eid : null,
     level: LEVEL(e.level), level_label: e.level_label, aliases, log_index: e.adopted_log_index,
-    lineage: { previous: e.predecessor_eid, successor: e.successor_eid, chain },
+    lineage: { previous: e.predecessor_eid, successor: e.successor_eid, chain, previous_link: await linkOf("successor"), successor_link: await linkOf("previous") },
     counts: { record_entries: e.record_seq, attestations, document_versions: e.latest_seq },
     record_head: e.record_head_hash ? { seq: e.record_seq, hash: e.record_head_hash } : null,
     withdrawn: !!e.withdrawn_at, withdrawn_at: e.withdrawn_at, suppressed: !!e.suppressed, founding: !!e.founding,
@@ -695,13 +700,19 @@ app.post("/withdraw", async (c) => {
   schema("Withdrawal", w);
   window(w.created, "withdrawal");
   await signedBy(w, eid, "withdrawal");
-  const d = await db.first("SELECT withdrawn_at FROM declarations WHERE eid = $1 AND version = $2", [eid, w.declaration_version]);
+  const chain = await lineage(db, eid);
+  const d = await db.first(`SELECT eid, withdrawn_at FROM declarations WHERE eid IN (${IN(chain, 2)}) AND version = $1 ORDER BY received_at DESC LIMIT 1`, [w.declaration_version, ...chain]);
   if (!d) fail(404, "declaration_not_found", `no Declaration ${w.declaration_version} for ${eid}`);
-  if (d.withdrawn_at) fail(409, "already_withdrawn", "already withdrawn");
+  // Spec 9.3: a successor inherits its predecessor's Declaration, so its key may withdraw it. The predecessor's own row and state stay as they are.
+  const inherited = d.eid !== eid;
+  const self = await entity(db, eid);
+  if (inherited ? self?.withdrawn_at : d.withdrawn_at) fail(409, "already_withdrawn", "already withdrawn");
   const now = nowIso(), s = await sha(w);
   const l = await leafFor("Withdrawal", eid, s, now);
   const idx = await sequenced(db, [l], [
-    ["UPDATE declarations SET withdrawn_at = $1, withdrawal_json = $2 WHERE eid = $3 AND version = $4", [now, JSON.stringify(w), eid, w.declaration_version]],
+    inherited
+      ? ["UPDATE entities SET withdrawal_json = $1 WHERE eid = $2", [JSON.stringify(w), eid]]
+      : ["UPDATE declarations SET withdrawn_at = $1, withdrawal_json = $2 WHERE eid = $3 AND version = $4", [now, JSON.stringify(w), eid, w.declaration_version]],
     ["UPDATE entities SET withdrawn_at = $1, level = NULL, level_label = NULL, updated = $1 WHERE eid = $2", [now, eid]],
   ]);
   return c.json({ eid, withdrawn: true, ...receipt(c, idx, l) }, 201);
