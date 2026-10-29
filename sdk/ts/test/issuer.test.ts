@@ -41,3 +41,17 @@ describe("issuer helpers", () => {
     expect(doc.assertionMethod).toEqual([o.keys[0].id]);
   });
 });
+
+describe("core claim shapes (spec 8.3)", () => {
+  const sign = (claimType: string, claim: object) => oe.signAttestation(kp, { subject, claimType, claim, now });
+  it("refuses to sign a malformed core claim", async () => {
+    await expect(sign("stage", { stage: "sentient", profile: "entity-framework/1.0" })).rejects.toThrow(/Attestation/);
+    await expect(sign("layer_scores", { cognition: 1.2, presence: 0, identity_core: 0, mission: 0, profile: "p" })).rejects.toThrow(/Attestation/);
+    await expect(sign("trust_tier", { tier: 5, platform: "x" })).rejects.toThrow(/Attestation/);
+    await expect(sign("trust_tier", { platform: "x" })).rejects.toThrow(/Attestation/);
+  });
+  it("signs a valid core claim and any custom claim", async () => {
+    await expect(sign("trust_tier", { tier: 4, platform: "x" })).resolves.toBeTruthy();
+    await expect(sign("custom:x:y", { anything: 1 })).resolves.toBeTruthy();
+  });
+});

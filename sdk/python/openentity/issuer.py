@@ -5,7 +5,7 @@ the key `did_document` publishes. Registry submission stays with `client` (POST 
 import re
 from datetime import datetime, timedelta, timezone
 
-from . import core
+from . import core, schema
 from .errors import InvalidInputError
 
 MAX_TTL = timedelta(days=365)  # spec 8.4
@@ -30,7 +30,10 @@ def sign_attestation(kp: core.KeyPair, subject: str, claim_type: str, claim: dic
     obj = {"spec": core.SPEC, "type": "Attestation", "issuer": issuer or kp.did, "subject": subject,
            "claim_type": claim_type, "claim": claim, **({"evidence": evidence} if evidence else {}),
            **({"confidence": confidence} if confidence is not None else {}), "created": created, "expires": _ts(t + ttl)}
-    return core.sign_object(obj, kp, created, _method(kp, issuer, key_id))
+    signed = core.sign_object(obj, kp, created, _method(kp, issuer, key_id))
+    if errs := schema.validate("Attestation", signed):
+        raise InvalidInputError("Attestation: " + "; ".join(errs))
+    return signed
 
 
 def sign_revocation(kp: core.KeyPair, attested: dict | str, *, issuer: str | None = None, key_id: str = "key-1",

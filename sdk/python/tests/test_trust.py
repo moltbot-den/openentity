@@ -80,7 +80,7 @@ def test_fails_closed():
         "signed by another key": [row(other_key)],
         "hidden strike (bad revocation)": [row(viol, fake_rev)],
         "revocation not carried": [{**row(viol), "revoked_at": "2026-10-02T00:00:00Z"}],
-        "wrong subject": [row(issuer.attestation(KEYS[MOLTBOTDEN], SUBJECT[:-1] + "x", TIER, {"tier": 4}, issuer=MOLTBOTDEN, now=NOW))],
+        "wrong subject": [row(issuer.attestation(KEYS[MOLTBOTDEN], SUBJECT[:-1] + "x", TIER, {"tier": 4, "platform": "x"}, issuer=MOLTBOTDEN, now=NOW))],
     }
     for name, rows in cases.items():
         r = trust(SUBJECT, fetch=Registry(rows))

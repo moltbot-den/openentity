@@ -187,6 +187,16 @@ describe("levels (spec 2.2, 8.4)", () => {
     expect(list.body.attestations.find((a: any) => a.sha256 === stage).revoked_at).toBeTruthy();
   });
 
+  it("rejects a malformed core claim and still accepts an unknown custom one (spec 8.3)", async () => {
+    const { kp } = await adopted();
+    const obs = await generateKeyPair();
+    for (const [t, c] of [["stage", { stage: "sentient", profile: "p" }], ["layer_scores", { cognition: 1.5, presence: 0, identity_core: 0, mission: 0, profile: "p" }], ["trust_tier", { tier: 5, platform: "x" }]] as const) {
+      const r = await write("POST", "/attestations", obs.did, await attest(obs, kp.did, t, c));
+      expect([r.status, r.body.error]).toEqual([422, "schema_invalid"]);
+    }
+    expect((await write("POST", "/attestations", obs.did, await attest(obs, kp.did, "custom:x:y", { any: 1 }))).status).toBe(201);
+  });
+
   it("labels an attestation from the entity's operator first-party", async () => {
     const { kp } = await adopted("Op", { operator: { kind: "organization", name: "Den", contact: "ops@den.example", custody: "operator", can_change: [] } });
     const obs = await generateKeyPair();
