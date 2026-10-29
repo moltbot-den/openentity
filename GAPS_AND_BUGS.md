@@ -42,5 +42,5 @@ Backlog for this repo. Ticket ids are `G-YYYY-NNN` across the Open Entity produc
 - owner-agent: openentity
 - reviewer-agent: security
 - suggested-fix: Plan and protocol: docs/entity-gateway-plan.md and docs/adr/0005-entity-gateway.md in One-Frequency/oneentity.
-- linked-pr: (none yet)
+- linked-pr: https://github.com/moltbot-den/openentity/pull/134
 - linked-issue: (none yet)
