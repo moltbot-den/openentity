@@ -778,7 +778,7 @@ export function buildOpenEntityJson(did: string, publicKey: Uint8Array, o: { nam
 // ---------------------------------------------------------------- adopt with a client label
 
 /** The registry's allowlist for the unsigned `client` label on POST /v1/adopt. */
-export const CLIENTS = ["adk", "crewai", "goose", "langchain", "openai-agents", "ui-tars", "cli", "other"] as const;
+export const CLIENTS = ["adk", "crewai", "goose", "langchain", "mastra", "openai-agents", "ui-tars", "vercel-ai", "cli", "other"] as const;
 export type Client = (typeof CLIENTS)[number];
 
 async function registryJson(url: string, init?: RequestInit): Promise<any> {

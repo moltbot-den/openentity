@@ -9,7 +9,7 @@ on:
       package:
         description: Package directory to publish
         type: choice
-        options: [cli, sdk/ts, sdk/python, integrations/langchain/js, integrations/langchain/python, integrations/adk/js, integrations/adk/python, integrations/crewai/python, integrations/openai-agents/python]
+        options: [cli, sdk/ts, sdk/python, integrations/langchain/js, integrations/langchain/python, integrations/adk/js, integrations/adk/python, integrations/crewai/python, integrations/openai-agents/python, integrations/vercel-ai, integrations/mastra]
 permissions:
   id-token: write
   contents: read
