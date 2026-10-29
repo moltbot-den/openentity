@@ -16,7 +16,7 @@ from .issuer import (A2A_EXTENSION_URI, a2a_extension, agent_card, build_did_doc
 from .report import TrustReport, clear_trust_cache, did_web_resolver, trust
 from .schema import validate
 
-__version__ = "0.6.2"
+__version__ = "0.6.3"
 
 __all__ = sorted([
     *_core, "CLIENTS", "DEFAULT_REGISTRY", "DISPUTE_REASONS", "adopt", "dispute", "find", "present", "record", "rotate", "withdraw",
