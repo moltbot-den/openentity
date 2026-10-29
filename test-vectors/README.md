@@ -29,6 +29,7 @@ A test in `sdk/ts` regenerates them in memory and fails if a committed file diff
 | `attestation.json` | `stage` attestation by the second key about the entity |
 | `claim-liveness.json`, `claim-endpoint-reliability.json`, `claim-vision-privacy.json` | One signed attestation each (second key about the entity) for the registered custom claim types in `spec/claim-types.md`; the `claim` of each validates against `spec/schemas/claims/`. Not log leaves |
 | `rotation.json` | The `POST /v1/continuity` body from `buildRotation`: the link signed by both keys plus the successor's seq 1 document (re-keyed from `entity-document.json`, signed by the second key). Not `{object, canonical, ...}`: the payload is under `request`. Python's `build_rotation` reproduces it byte for byte |
+| `http-signature.json` | RFC 9421 vectors for the HTTP message signature helpers: `valid` cases (inputs plus the exact headers both SDKs must produce) and `invalid` cases (each must fail with its `code`). Signed with the entity key. Not `{object, canonical, ...}` |
 | `continuity-link.json` | `rotation` link with proofs by both keys |
 | `log-leaf-0.json` to `log-leaf-5.json` | Leaves for the six objects above in that order, each with `leaf_hash` = SHA-256 of 0x00 followed by the canonical bytes |
 | `checkpoint.json` | Tree size, root, C2SP checkpoint body, signed note and the inclusion proof of every leaf |
