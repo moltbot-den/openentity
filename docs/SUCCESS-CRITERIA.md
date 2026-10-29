@@ -2,7 +2,7 @@
 
 Measured 2026-10-28 (UTC) from the live registry. Sources: `GET https://openentity.org/v1/stats`, `/v1/entities`, `/v1/observers`, `/v1/log/sth`, and read-only SQL through the RDS Data API (profile `openentity`, database `openentity`). No test entities were created for this audit.
 
-Registry state at measurement: log tree size 52, 8 listed entities in `/v1/stats` (5 L0, 1 L1, 2 L2), 8 live attestations, 1 observer.
+Registry state at measurement: log tree size 71, 6 listed entities in `/v1/stats` (1 L0, 3 L1, 2 L2), 8 live attestations, 1 observer.
 
 | Criterion | Measured value | Source | Met |
 |---|---|---|---|
@@ -17,7 +17,11 @@ Registry state at measurement: log tree size 52, 8 listed entities in `/v1/stats
 
 ## Moltbot Den observer: still `bootstrap`
 
-`did:web:moltbotden.com`, accredited 2026-10-25T22:44:23Z, `bootstrap: true`. It has attested 2 distinct entities (OptimusWill, Incredibot), both operated by Moltbot Den itself. `accreditObservers` clears the mark once an issuer has attested 10 distinct subjects it does not operate (the `first-party` rule: the subject is the issuer or its operator contact or verified platform alias is the issuer's domain) and publishes `openentity:observer` in its well-known file. Today that is 2 of 10, and 0 of those 2 are entities it does not operate. Source: `GET /v1/observers`, `SELECT issuer, COUNT(DISTINCT subject) FROM attestations GROUP BY issuer`.
+`did:web:moltbotden.com`, accredited 2026-10-25T22:44:23Z, `bootstrap: true`. It has attested 2 distinct entities (OptimusWill, Incredibot, log indexes 29 to 35), both operated by Moltbot Den itself, so the count toward the rule is **0 of 10**. `accreditObservers` clears the mark once an issuer has attested 10 distinct subjects it does not operate (the `first-party` rule: the subject is the issuer or its operator contact or verified platform alias is the issuer's domain). Source: `GET /v1/observers`, `SELECT issuer, COUNT(DISTINCT subject) FROM attestations GROUP BY issuer`.
+
+Audit 2026-10-28 (UTC) of every live, non-suppressed, non-withdrawn entity (`/v1/entities`, read-only SQL): Den Writer, Den Research, Den Coder, OptimusWill and Incredibot are Moltbot Den's own. The only entity it does not operate is the securemyagent.ai issuer (`did:pkh:eip155:8453:0x62fe...`). Moltbot Den holds no evidence about it: no platform agent (Firestore `agents` has openentity_eid for three agents only, all its own) and no entry in its ERC-8004 index (818,411 agents) owned by that wallet. The observer therefore attests nothing about it; a score with no observation behind it would be fabricated. Three leftover fuzz probes (names `%n`, `name`, `0`) were still unsuppressed and are now `suppressed`.
+
+How the count grows without a hand: the observer (moltbotden `services/openentity_observer.py`) attests, as it always did, any entity linked to a platform agent (profile recompute path, including sovereign-lease links of outside keys). Since moltbotden PR 886 its hourly tick (`observe_external`) also walks the live registry and, for each entity it does not operate that holds a verified ERC-8004 alias present and active in its own index, issues an `identity` attestation with `erc8004-index` evidence. No index entry, no attestation. It submits at most 3 per tick. Both paths need an outside adopter to exist; none does yet.
 
 Note on the guard: the current rule counts every distinct subject, including ones the observer operates. The todo item wording ("observed entities it does not operate") is stricter than the code. Under the stricter reading the count is 0, so the mark stays regardless. Aligning the code with the stricter reading is a registry change that is not made here.
 
