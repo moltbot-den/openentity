@@ -6,6 +6,9 @@ import { build } from 'esbuild';
 
 const site = join(dirname(fileURLToPath(import.meta.url)), '..');
 const repo = join(site, '..');
+
+// Astro's content cache keeps rendered HTML from earlier builds, including stale Expressive Code asset hashes; build from scratch.
+await rm(join(site, 'node_modules/.astro'), { recursive: true, force: true });
 const pub = join(site, 'public');
 const docs = join(site, 'src/content/docs');
 

@@ -6,7 +6,7 @@ Live:
 - openentity.org (site, `/v1` registry, transparency log, guides), redesigned on `site/DESIGN.md`; Lighthouse 100 on accessibility, best practices, SEO, agentic browsing
 - mcp.openentity.org/mcp: remote MCP, official MCP registry `org.openentity/openentity` 0.2.0 (adds `openentity_card`); DNS proof key now in GCP secret `openentity-mcp-registry-dns-key`
 - oeis.dev: developer hub (`site-dev/`)
-- npm live: `openentity` 0.5.2, `@openentity/sdk` 0.5.1; staged for the owner's 2FA tap at https://www.npmjs.com/settings/willcybertron/staged-packages: `@openentity/sdk` 0.6.0 then CLI `openentity` 0.5.6 (reject every older staged version of both); `@openentity/vercel-ai` and `@openentity/mastra` need a first publish from a logged-in npm CLI. PyPI live: `openentity` 0.6.1 (typed errors, full parity with the TS SDK, #112, #114); `openentity-crewai` and `openentity-openai-agents` need a PyPI pending trusted publisher (owner password confirm at https://pypi.org/manage/account/publishing/)
+- npm live: `openentity` 0.5.2, `@openentity/sdk` 0.5.1; staged for the owner's 2FA tap at https://www.npmjs.com/settings/willcybertron/staged-packages: `@openentity/sdk` 0.6.1 then CLI `openentity` 0.5.7 (reject every older staged version of both); `@openentity/vercel-ai` and `@openentity/mastra` need a first publish from a logged-in npm CLI. PyPI live: `openentity` 0.6.2 (round 3 claim validation and record paging); `openentity-crewai` and `openentity-openai-agents` need a PyPI pending trusted publisher (owner password confirm at https://pypi.org/manage/account/publishing/)
 - ClawHub: `openentity@1.0.0` moderation CLEAN, waiting on ClawHub's `pending.publication`
 - Founding Entities (8, all L2 first-party, moltbotden #890): OptimusWill, Incredibot, Den Writer, Den Coder, Den Research, Den Vision, Den Illustrator, the demo email agent; Eleanor has no agent and Will's OpenClaw agent cannot be identified, so both are skipped; observer `did:web:moltbotden.com` accredited as bootstrap, issues `continuity_confirmed` (moltbotden #890)
 - Load: 100 adopts/s for 60 s on OpenEntityLoad (destroyed): warm p50 159 ms, p95 212 ms, p99 276 ms after the rate guard moved into the park statement (#92); Aurora max stays 8 ACU (6 hit 100% writer CPU); prod Lambda reserves 200 concurrency
@@ -54,6 +54,19 @@ Engineering 2026-10-29, round 2 (all merged and deployed):
 - [x] Integrations: CrewAI and OpenAI Agents SDK (#110), Vercel AI SDK and Mastra (#111), client labels in registry, spec and both SDKs
 - [x] SDKs 0.6 (#112, #114): typed errors, `sdk/ts` split into modules, export snapshot tests, Python and TS surfaces identical; `verify.sh` runs uv with `--locked`
 - [x] Dead imports and circular imports removed (#116)
+
+Engineering 2026-10-29, round 3 (PRD and success-criteria gap audit, all merged and deployed):
+- [x] Ops reliability (#119): `CronStalled` alarm (no `ScheduledOk` for 30 min, missing data breaching), each `scheduled()` step isolated, archive puts retried per bucket, 7-day snapshot and export backfill
+- [x] Resolve `did:webvh` in the registry; ERC-8004 and ERC-1271 on chains 1, 10, 137, 42161, 84532, 11155111 besides Base, `EVM_RPC_URLS` override (#120)
+- [x] Record and attestation reads page past 1000 with `next`; TS CLI, Python CLI and site follow it (#121)
+- [x] Entity page verify button checks checkpoint signature, log inclusion of Declaration, attestations and every record entry, and attestation signatures; did:web issuers via `/v1/resolve`, labeled as the mirror (#122, #126, #129)
+- [x] MCP `openentity_alias_add`: an MCP-only entity reaches L1 (#118)
+- [x] Python-only skill: stdlib `sign.py`, byte-identical to `sign.mjs`; `skills-ref` 0.1.1 in `verify.sh`; stamp counter starts random (#123)
+- [x] Conformance `--writes`: every write-path guard checked against any registry, refuses production hosts without an explicit flag (#124)
+- [x] Core claim shapes validated in schema, registry and both SDK signers; all 27 live attestations pass (#125)
+- [x] oeis.dev/roadmap; link check over every built page of both sites (#127)
+- [x] Alias re-check: 20 oldest verified aliases per run, definitive failure marks `lapsed` and drops the level, network errors never demote (#128); first prod runs demoted nothing
+- [x] Release bump: `@openentity/sdk` 0.6.1, CLI `openentity` 0.5.7, PyPI `openentity` 0.6.2
 
 Done 2026-10-26:
 - [x] Python CLI parity: `whoami`, `self`, `record`, `present`, `verify`, `withdraw`, `--json`, npm exit codes (#45)
