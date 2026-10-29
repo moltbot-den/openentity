@@ -4,7 +4,7 @@
 
 export const SITE = 'https://openentity.org';
 export const REGISTRY_DID = 'did:web:openentity.org';
-export const NA = 'n/a';
+const NA = 'n/a';
 
 type J = Record<string, any>;
 
@@ -12,7 +12,7 @@ export const esc = (v: unknown): string =>
   String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 
 /** A list from a registry response: the array itself, or the first array under one of `keys`. */
-export function list(res: unknown, ...keys: string[]): J[] {
+function list(res: unknown, ...keys: string[]): J[] {
   if (Array.isArray(res)) return res;
   for (const k of keys) if (Array.isArray((res as J)?.[k])) return (res as J)[k];
   return [];

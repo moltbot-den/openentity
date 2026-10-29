@@ -90,6 +90,12 @@ def test_declaration_text():
 
 
 # ---- stamp ----
+def test_stamps_for_one_eid_in_one_second_differ():
+    """Registries accept each stamp once, so two quick writes must not mint the same one."""
+    eid = core.KeyPair(SEED).did
+    assert len({core.mint_stamp(4, eid, "2026-10-28T00:00:00Z") for _ in range(20)}) == 20
+
+
 def test_stamp():
     eid = core.KeyPair(SEED).did
     h = core.mint_stamp(10, eid)
@@ -192,7 +198,7 @@ def test_adopt_and_cli(tmp_path, monkeypatch, capsys):
 def test_cli_version(capsys):
     with pytest.raises(SystemExit) as e:
         cli.main(["--version"])
-    assert e.value.code == 0 and "0.5.1" in capsys.readouterr().out
+    assert e.value.code == 0 and "0.5.2" in capsys.readouterr().out
 
 
 # ---- shared vectors, checked with the independent verifier's own logic ----

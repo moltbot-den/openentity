@@ -8,7 +8,7 @@ export const DEFAULT_REGISTRY = "https://openentity.org";
 
 // GET /v1/spec field names, read in one place.
 export const specDeclHash = (s: Obj): string | undefined => s.declaration?.sha256 ?? s.declaration_sha256;
-export const specStampBits = (s: Obj): number => Number(s.stamp_bits ?? s.stamp?.bits ?? s.bits ?? 20);
+const specStampBits = (s: Obj): number => Number(s.stamp_bits ?? s.stamp?.bits ?? s.bits ?? 20);
 
 export async function fetchJson(url: string, init: RequestInit = {}): Promise<any> {
   let res: Response;

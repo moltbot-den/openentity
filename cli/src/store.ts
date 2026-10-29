@@ -46,7 +46,7 @@ export function assertEid(eid: string): string {
   return eid;
 }
 
-export async function currentEid(v: Obj): Promise<string> {
+async function currentEid(v: Obj): Promise<string> {
   const given = v.eid ?? process.env.OPENENTITY_EID;
   if (given) return assertEid(normalizeEid(given));
   try {

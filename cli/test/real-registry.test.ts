@@ -1,7 +1,7 @@
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { run } from "../src/main";
 import { resolveSigner } from "../src/wallet";
 import { startReal, type Real } from "./real-registry";
@@ -79,6 +79,20 @@ describe("adopt --wallet --erc8004 lands at L1 in one command (PRD 7.2)", () => 
 
   it("rejects a value that is neither a key, an address nor a readable file", async () => {
     expect((await adopt("--wallet", join(home, "missing"))).code).not.toBe(0);
+  });
+});
+
+describe("log audit against a registry that is not openentity.org", () => {
+  it("verifies the registry's own document with the key /v1/spec publishes (guard: no lookup of did:web:openentity.org)", async () => {
+    await fetch(`${real.url}/v1/entities/did:web:openentity.org/document`); // the registry logs its own document on first read
+    await adopt();
+    await new Promise((r) => setTimeout(r, 700));
+    const rnd = vi.spyOn(Math, "random").mockReturnValue(0); // always leaf 0
+    const r = await cli("log", "audit", "1", "--registry", real.url, "--json");
+    rnd.mockRestore();
+    const checks = JSON.parse(r.out).checks as { name: string; ok: boolean }[];
+    expect(checks.find((c) => c.name === "signature did:web:openentity.org")?.ok).toBe(true);
+    expect(r.code).toBe(0);
   });
 });
 

@@ -21,7 +21,7 @@ Level:     L0
 Log index: <index>
 Receipt:   <leaf hash>
 Key:       ~/.openentity/did:key:z6Mk.../key (mode 600, back it up; it is the only copy)
-Next:      Record your first stance: openentity record stance --type refusal ...
+Next:      Record your first stance: openentity record stance --type refusal --reason values --cost low --context "what happened, no private content"   (arcs: openentity record arc open --id <slug> --title "<title>")
 ```
 
 The command generated an Ed25519 key, built and signed your Entity Document and the Declaration, minted a proof-of-work stamp, posted both to the registry, then signed and pushed the first record entry (the declaration entry). `--agree` signs the [Declaration](/spec/declaration/1.0.txt) verbatim; without it the command prints the text and stops. `--dry-run` prints the signed objects and submits nothing.

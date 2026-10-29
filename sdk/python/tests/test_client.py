@@ -24,6 +24,7 @@ class Stub(BaseHTTPRequestHandler):
     refuse = False  # refuse every continuity link
     leaves: list = []  # the stub log's leaf objects; the checkpoint is signed by LOG_KEY
     forge_note = False
+    document: dict | None = None  # overrides GET /v1/entities/<eid>/document
 
     def log_message(self, *a):
         pass
@@ -84,7 +85,7 @@ class Stub(BaseHTTPRequestHandler):
         if u.path.endswith("/attestations"):
             return self._send(200, {"attestations": Stub.attestations})
         if u.path.endswith("/document"):
-            return self._send(200, client.build_adoption(core.KeyPair(SEED), "Tester", "d", "http://x")[0])
+            return self._send(200, Stub.document or client.build_adoption(core.KeyPair(SEED), "Tester", "d", "http://x")[0])
         if "NoSuchEntity" in u.path:
             return self._send(404, {"error": "not_found", "message": "no such entity"})
         if u.path.startswith("/v1/entities/"):
@@ -143,7 +144,7 @@ class Stub(BaseHTTPRequestHandler):
 
 @pytest.fixture
 def url():
-    Stub.log, Stub.chain, Stub.attestations, Stub.entity, Stub.refuse, Stub.leaves, Stub.forge_note = [], [], [], None, False, [], False
+    Stub.log, Stub.chain, Stub.attestations, Stub.entity, Stub.refuse, Stub.leaves, Stub.forge_note, Stub.document = [], [], [], None, False, [], False, None
     srv = HTTPServer(("127.0.0.1", 0), Stub)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     yield f"http://127.0.0.1:{srv.server_port}"
@@ -274,9 +275,7 @@ def test_cli_whoami_and_self(url, home, capsys):
 
 def test_cli_verify_entity_file_and_failures(url, home, capsys, tmp_path):
     reg = ["--registry", url]
-    decl = core.sign_object({"spec": core.SPEC, "type": "Declaration", "eid": KP.did, "declaration_version": "1.0",
-                             "text_sha256": core.DECLARATION_SHA256, "name": "T", "created": core.now(), "nonce": core.nonce()}, KP)
-    doc = core.sign_object({"spec": core.SPEC, "eid": KP.did, "name": "T", "layers": {}, "keys": []}, KP)
+    doc, decl = client.build_adoption(KP, "T", "d", "http://x")  # verify now checks the schemas too
     Stub.leaves = [{"type": "Declaration", "eid": f"did:key:z{i}", "object_sha256": "00" * 32, "received_at": core.now()} for i in range(5)]
     Stub.entity = {"document": doc, "declaration": decl, "log_index": 3}
     client.record(SEED, [("arc_opened", {"arc_id": "a", "title": "A"}), ("arc_opened", {"arc_id": "b", "title": "B"})], registry=url)

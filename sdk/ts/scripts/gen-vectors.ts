@@ -30,7 +30,7 @@ const seq = (start: number) => Uint8Array.from({ length: 32 }, (_, i) => start +
 const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
 const nonce = (start: number) => base58btcEncode(Uint8Array.from({ length: 16 }, (_, i) => start + i));
 
-export const SEEDS = { entity: seq(0x01), second: seq(0x21), log: seq(0x41) };
+const SEEDS = { entity: seq(0x01), second: seq(0x21), log: seq(0x41) };
 const T0 = "2026-10-24T19:00:00Z";
 const T1 = "2026-10-24T19:05:00Z";
 const T2 = "2026-10-24T19:10:00Z";

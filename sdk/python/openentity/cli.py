@@ -955,13 +955,15 @@ def _checks_of(o: dict) -> list[dict]:
     t = o.get("type") or ("EntityDocument" if "layers" in o and "keys" in o else None)
     if not t:
         return [{"name": "type", "ok": False, "detail": "cannot tell what kind of object this is"}]
+    errs = schema.validate(t, o)
+    head = [{"name": f"{t} schema", "ok": not errs, "detail": "; ".join(errs)}]
     if t == "ContinuityLink":
         bare = {k: v for k, v in o.items() if k != "proofs"}
-        cs = [{"name": f"link proof {i} ({p.get('verificationMethod')})", "ok": (r := core.verify_object({**bare, "proof": p}, _resolver))[0], "detail": None if r[0] else r[1]}
+        cs = head + [{"name": f"link proof {i} ({p.get('verificationMethod')})", "ok": (r := core.verify_object({**bare, "proof": p}, _resolver))[0], "detail": None if r[0] else r[1]}
               for i, p in enumerate(o.get("proofs") or [])]
-        return cs or [{"name": "link proofs", "ok": False, "detail": "none"}]
+        return cs if len(cs) > 1 else cs + [{"name": "link proofs", "ok": False, "detail": "none"}]
     ok, who = core.verify_object(o, _resolver)
-    checks = [{"name": "signature", "ok": ok, "detail": None if ok else who}]
+    checks = head + [{"name": "signature", "ok": ok, "detail": None if ok else who}]
     if ok and o.get("eid") and t in ("EntityDocument", "Declaration", "RecordEntry", "Withdrawal"):
         checks.append({"name": "signed by the EID", "ok": who == o["eid"], "detail": who})
     if t == "Declaration" and o.get("declaration_version") == "1.0":
@@ -1092,6 +1094,8 @@ def _log(args):
             raise _usage("log audit <n>")
         import random
         ok, detail, sth = _checkpoint(reg)
+        mb = (reg.spec().get("registry") or {}).get("publicKeyMultibase")  # a registry that is not openentity.org signs with its /v1/spec key
+        res = lambda did: {"ed25519": _keys_of({"verificationMethod": [{"publicKeyMultibase": mb}]})} if mb and did.split("#")[0] == "did:web:openentity.org" else _resolver(did)
         checks = [{"name": "checkpoint", "ok": ok, "detail": detail}]
         for _ in range(min(int(arg or 5), sth["tree_size"])):
             i = random.randrange(sth["tree_size"])
@@ -1099,7 +1103,7 @@ def _log(args):
             checks.append({"name": f"inclusion {i}", "ok": ok, "detail": detail})
             if ok and (leaf or {}).get("eid"):  # object signature: the entity's current document must verify under its own key
                 try:
-                    s_ok, who = core.verify_object(reg.get(f"/v1/entities/{leaf['eid']}/document"), _resolver)
+                    s_ok, who = core.verify_object(reg.get(f"/v1/entities/{leaf['eid']}/document"), res)
                     checks.append({"name": f"signature {leaf['eid']}", "ok": s_ok, "detail": "document signature valid" if s_ok else f"document signature invalid: {who}"})
                 except _NET as e:
                     checks.append({"name": f"signature {leaf['eid']}", "ok": False, "detail": str(e)})

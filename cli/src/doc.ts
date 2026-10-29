@@ -92,7 +92,7 @@ const ALNUM = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 const nonce = () => [...crypto.getRandomValues(new Uint8Array(16))].map((b) => ALNUM[b % ALNUM.length]).join("");
 
 /** EIP-4361 message with the fixed fields of spec 3.5. */
-export function siweMessage(host: string, address: string, chainId: number, eid: string, issuedAt: string, n = nonce()): string {
+function siweMessage(host: string, address: string, chainId: number, eid: string, issuedAt: string, n = nonce()): string {
   return [
     `${host} wants you to sign in with your Ethereum account:`,
     address,

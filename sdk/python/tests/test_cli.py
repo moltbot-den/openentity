@@ -4,7 +4,7 @@ import re
 import stat
 
 import pytest
-from test_client import KP, Stub, home, posts, run, url  # noqa: F401  (fixtures and the stub registry)
+from test_client import KP, LOG_KEY, Stub, home, posts, run, url  # noqa: F401  (fixtures and the stub registry)
 
 from openentity import cli, core
 
@@ -139,6 +139,21 @@ def test_alias_wallet_is_two_step_with_an_external_siwe_signature(url, home, cap
     assert code == 0 and "Chain ID: 84532" in out["message"]
 
 
+def test_verify_reports_a_schema_check_like_the_npm_cli(capsys, tmp_path):
+    bad = tmp_path / "bad.json"
+    bad.write_text(json.dumps(core.sign_object({"spec": core.SPEC, "eid": KP.did, "name": "T", "layers": {}, "keys": []}, KP)))
+    code, out = j(capsys, "verify", str(bad))
+    assert code == 3 and out["checks"][0]["name"] == "EntityDocument schema" and not out["checks"][0]["ok"]
+
+
+def test_log_audit_checks_the_registry_document_with_the_key_its_spec_publishes(url, capsys):
+    """The registry's DID names openentity.org, but a registry elsewhere signs with its /v1/spec key (guard: no lookup of did:web:openentity.org)."""
+    Stub.leaves = [{"type": "Declaration", "eid": "did:web:openentity.org", "object_sha256": "00" * 32, "received_at": core.now()}]
+    Stub.document = core.sign_object({"spec": core.SPEC, "eid": "did:web:openentity.org", "name": "registry"}, LOG_KEY, method="did:web:openentity.org#key-1")
+    code, out = j(capsys, "log", "audit", "1", "--registry", url)
+    assert code == 0 and {"name": "signature did:web:openentity.org", "ok": True, "detail": "document signature valid"} in out["checks"]
+
+
 def test_record_push_and_redact(url, home, capsys):
     reg = ["--registry", url]
     assert run(capsys, "record", "arc", "open", "--id", "a", "--title", "A", "--no-push", *reg)[0] == 0
@@ -268,6 +283,6 @@ def test_verify_checks_continuity_link_proofs(capsys, tmp_path):
     f = tmp_path / "l.json"
     f.write_text(json.dumps(body["link"]))
     code, out = j(capsys, "verify", str(f))
-    assert code == 0 and len(out["checks"]) == 2
+    assert code == 0 and len(out["checks"]) == 3  # schema + the two link proofs
     f.write_text(json.dumps({**body["link"], "basis": "migration"}))
     assert run(capsys, "verify", str(f))[0] == 3
