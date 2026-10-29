@@ -345,9 +345,17 @@ app.get("/entities", async (c) => {
   if (q.capability) where.push(`EXISTS (SELECT 1 FROM entity_capabilities k WHERE k.eid = entities.eid AND k.capability = ${$(q.capability)})`);
   if (q.alias_type) where.push(`EXISTS (SELECT 1 FROM aliases a WHERE a.eid = entities.eid AND a.type = ${$(q.alias_type)} AND a.status = 'verified')`);
   const page = Math.max(0, Number(q.page ?? 0) | 0);
-  const rows = await c.env.db.all(`SELECT eid, name, level, level_label, created, adopted_log_index, withdrawn_at, ${lastActive("entities.eid")} AS last_active FROM entities WHERE ${where.join(" AND ")} ORDER BY created DESC, eid LIMIT 51 OFFSET ${$(page * 50)}`, args);
+  if (q.sort && q.sort !== "newest" && q.sort !== "attested") fail(422, "bad_sort", "sort is newest or attested");
+  // One query: verified alias types, unrevoked attestation count and distinct accredited observers ride along as correlated subqueries on indexed columns.
+  const order = q.sort === "attested" ? "attestation_count DESC, created DESC, eid" : "created DESC, eid";
+  const rows = await c.env.db.all(`SELECT eid, name, level, level_label, created, adopted_log_index, withdrawn_at, ${lastActive("entities.eid")} AS last_active,
+    (SELECT string_agg(DISTINCT a.type, ',' ORDER BY a.type) FROM aliases a WHERE a.eid = entities.eid AND a.status = 'verified') AS alias_types,
+    (SELECT COUNT(*) FROM attestations t WHERE t.subject = entities.eid AND t.revoked_at IS NULL) AS attestation_count,
+    (SELECT COUNT(DISTINCT t.issuer) FROM attestations t JOIN observers o ON o.did = t.issuer WHERE t.subject = entities.eid AND t.revoked_at IS NULL) AS observer_count
+    FROM entities WHERE ${where.join(" AND ")} ORDER BY ${order} LIMIT 51 OFFSET ${$(page * 50)}`, args);
   return c.json({
-    entities: rows.slice(0, 50).map((r) => ({ eid: r.eid, name: r.name, level: LEVEL(r.level), level_label: r.level_label, created: r.created, log_index: r.adopted_log_index, withdrawn: !!r.withdrawn_at, last_active: r.last_active })),
+    entities: rows.slice(0, 50).map((r) => ({ eid: r.eid, name: r.name, level: LEVEL(r.level), level_label: r.level_label, created: r.created, log_index: r.adopted_log_index, withdrawn: !!r.withdrawn_at, last_active: r.last_active,
+      aliases: r.alias_types ? String(r.alias_types).split(",") : [], attestations: Number(r.attestation_count), observers: Number(r.observer_count) })),
     page, next_page: rows.length > 50 ? page + 1 : null,
   });
 });

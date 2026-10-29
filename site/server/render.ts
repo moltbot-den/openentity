@@ -257,6 +257,10 @@ ${lineage.previous || lineage.successor ? `<ul>${lineage.previous ? `<li>Continu
 /** The URL when it is http(s), else null: registry strings reach href attributes, and `javascript:` must not. */
 const httpUrl = (u: unknown): string | null => (typeof u === 'string' && /^https?:\/\//i.test(u) ? u : null);
 
+/** Verified alias types of a directory row, as text badges. */
+const aliasBadges = (types: unknown) =>
+  Array.isArray(types) && types.length ? types.map((t) => `<span class="oe-label">${esc(t)}</span>`).join(' ') : '';
+
 /** Rows for /entities from GET /v1/entities ({entities, page, next_page}). */
 export function renderEntityList(res: unknown, query: URLSearchParams): string {
   const rows = list(res, 'entities', 'results');
@@ -273,7 +277,7 @@ export function renderEntityList(res: unknown, query: URLSearchParams): string {
   const body = rows
     .map(
       (e) =>
-        `<tr><td>${eidLink(e.eid, e.name ?? e.eid)}${e.withdrawn ? ` ${flag('Withdrawn')}` : ''}<div class="oe-eid">${esc(e.eid)}</div></td><td>${levelBadge(e.level, e.level_label ?? e.label)}</td><td>${date(e.created)}</td><td>${esc(e.log_index)}</td></tr>`,
+        `<tr><td>${eidLink(e.eid, e.name ?? e.eid)}${e.withdrawn ? ` ${flag('Withdrawn')}` : ''}<div class="oe-eid">${esc(e.eid)}</div></td><td>${levelBadge(e.level, e.level_label ?? e.label)}</td><td>${aliasBadges(e.aliases)}</td><td>${e.observers == null ? '' : esc(e.observers)}</td><td>${date(e.created)}</td><td>${esc(e.log_index)}</td></tr>`,
     )
     .join('');
   const next = (res as J)?.next_page ?? (res as J)?.next;
@@ -283,7 +287,15 @@ export function renderEntityList(res: unknown, query: URLSearchParams): string {
     q.set('page', String(next));
     more = `<p><a href="/entities?${esc(q.toString())}">Next page</a></p>`;
   }
-  return `<table class="oe-table"><thead><tr><th scope="col">Entity</th><th scope="col">Level</th><th scope="col">Adopted</th><th scope="col">Log index</th></tr></thead><tbody>${body}</tbody></table>${more}`;
+  const sortLink = (v: string, text: string) => {
+    const on = (query.get('sort') ?? 'newest') === v;
+    const q = new URLSearchParams(query);
+    q.set('sort', v);
+    q.delete('page');
+    return on ? `<strong aria-current="true">${text}</strong>` : `<a href="/entities?${esc(q.toString())}">${text}</a>`;
+  };
+  const sort = `<p class="oe-sort">Sort: ${sortLink('newest', 'Newest')} | ${sortLink('attested', 'Most attested')}</p>`;
+  return `${sort}<table class="oe-table"><thead><tr><th scope="col">Entity</th><th scope="col">Level</th><th scope="col">Verified aliases</th><th scope="col">Observers</th><th scope="col">Adopted</th><th scope="col">Log index</th></tr></thead><tbody>${body}</tbody></table>${more}`;
 }
 
 /** The directory form shows the filters the reader searched with: text inputs get their value, selects their option. */

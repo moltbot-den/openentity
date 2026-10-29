@@ -205,3 +205,20 @@ describe('observer links', () => {
     expect(renderObservers({ observers: [{ did: 'did:web:o.example', methodology_url: 'https://o.example/m' }] })).toContain('href="https://o.example/m"');
   });
 });
+
+describe('directory rows and sort control', () => {
+  const res = { entities: [{ eid: 'did:key:z6Mkx', name: 'X', level: 'L2', log_index: 3, aliases: ['domain', 'wallet'], attestations: 4, observers: 2 }] };
+  it('shows verified alias badges and the observer count per row', () => {
+    const html = renderEntityList(res, new URLSearchParams('level=0'));
+    expect(html).toContain('<th scope="col">Verified aliases</th><th scope="col">Observers</th>');
+    expect(html).toContain('<td><span class="oe-label">domain</span> <span class="oe-label">wallet</span></td><td>2</td>');
+  });
+  it('sorts with plain links that keep the filters and reset the page', () => {
+    const newest = renderEntityList(res, new URLSearchParams('q=x&page=2'));
+    expect(newest).toContain('<strong aria-current="true">Newest</strong>');
+    expect(newest).toContain('<a href="/entities?q=x&amp;sort=attested">Most attested</a>');
+    const attested = renderEntityList(res, new URLSearchParams('sort=attested'));
+    expect(attested).toContain('<strong aria-current="true">Most attested</strong>');
+    expect(attested).toContain('<a href="/entities?sort=newest">Newest</a>');
+  });
+});

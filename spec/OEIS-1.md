@@ -437,7 +437,7 @@ All endpoints are JSON, CORS `*`, no authentication beyond the signatures on the
 | `POST /entities/{eid}/custody/export` | Body: a Presentation to the registry; returns the kept custodial key once and deletes it (section 10.6) |
 | `POST /disputes` | Submit a signed Dispute against an entity or one of its objects (`object_sha256`); logged; answered within 14 days |
 | `GET /entities/{eid}/disputes` | Disputes filed about the entity; attestation listings mark disputed attestations with `disputed: true` |
-| `GET /entities?q=&level=&alias_type=&capability=&since=&page=` | Directory search; `q` matches a case-insensitive substring of the name or the EID |
+| `GET /entities?q=&level=&alias_type=&capability=&since=&sort=&page=` | Directory search; `q` matches a case-insensitive substring of the name or the EID. `sort=newest` (default) orders by adoption time, newest first; `sort=attested` orders by the count of unrevoked attestations about the entity, ties newest first; any other value is 422. Each row carries `aliases` (types of verified aliases), `attestations` (unrevoked count) and `observers` (distinct accredited observers with an unrevoked attestation) |
 | `GET /observers` | Accredited observers with methodology URLs and accreditation dates |
 | `GET /resolve/{did}` | DID resolution for supported methods |
 | `POST /verify` | Verify any object; returns the verification report `{type, schema, signatures, object_sha256, log_index, timestamp, ok}`, where `timestamp` is `{ok: true}`, `{ok: false, reason}` (for example a `created` more than 24 hours old) or `null` when the object has no `created` (convenience; verifiers SHOULD also verify locally) |
