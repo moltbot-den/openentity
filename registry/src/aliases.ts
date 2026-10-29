@@ -10,6 +10,9 @@ import { type Env, hex, unhex } from "./env.ts";
 const enc = new TextEncoder();
 export const DOMAIN = /^(?=.{1,253}$)([a-z0-9-]{1,63}\.)+[a-z]{2,63}$/;
 
+/** A failure that says nothing about the alias (network, timeout, 5xx, rate limit); a re-check leaves the alias alone. */
+export class Transient extends Error {}
+
 const FETCH_TIMEOUT_MS = 5_000, FETCH_MAX_BYTES = 256 * 1024;
 
 // Addresses a writer-chosen host name must never reach: loopback, private, link-local (cloud metadata, the Lambda runtime API),
@@ -19,36 +22,37 @@ for (const [net, bits] of [["0.0.0.0", 8], ["10.0.0.0", 8], ["100.64.0.0", 10], 
 for (const [net, bits] of [["::", 128], ["::1", 128], ["64:ff9b::", 96], ["fc00::", 7], ["fe80::", 10], ["ff00::", 8], ["2001:db8::", 32]] as const) PRIVATE.addSubnet(net, bits, "ipv6");
 
 /** https only, no credentials, a DNS name (never an IP literal in any notation). Resolves once; returns the address to connect to, or null when any resolved address is non-public. */
-async function publicAddress(u: URL): Promise<{ address: string; family: number } | null> {
+async function publicAddress(u: URL, strict = false): Promise<{ address: string; family: number } | null> {
   if (u.protocol !== "https:" || u.username || u.password || isIP(u.hostname.replace(/^\[|\]$/g, "")) || !DOMAIN.test(u.hostname)) return null;
-  const addrs = await dns.lookup(u.hostname, { all: true }).catch(() => []);
+  const addrs = await dns.lookup(u.hostname, { all: true }).catch((e) => { if (strict && e?.code !== "ENOTFOUND" && e?.code !== "ENODATA") throw new Transient(String(e?.code)); return []; });
   return addrs.length > 0 && addrs.every((a) => !PRIVATE.check(a.address, a.family === 6 ? "ipv6" : "ipv4")) ? addrs[0] : null;
 }
 
-/** GET JSON from a host the caller does not control (see getText). Null on any failure. */
-export async function getJson(url: string, accept = "application/json"): Promise<any> {
-  const t = await getText(url, accept);
+/** GET JSON from a host the caller does not control (see getText). Null on any failure; with `strict`, a network error, timeout, 5xx or 429 throws Transient instead. */
+export async function getJson(url: string, accept = "application/json", strict = false): Promise<any> {
+  const t = await getText(url, accept, strict);
   try { return t === null ? null : JSON.parse(t); } catch { return null; }
 }
 
 /** GET text from a host the caller does not control: public https hosts only, connected to the one address validated (no second resolution), no redirects, 5 s overall, 256 KB at most. Null on any failure. */
-async function getText(url: string, accept: string): Promise<string | null> {
+async function getText(url: string, accept: string, strict = false): Promise<string | null> {
   let u: URL;
   try { u = new URL(url); } catch { return null; }
-  const pin = await publicAddress(u);
+  const pin = await publicAddress(u, strict);
   if (!pin) return null;
   // The pinned lookup answers the connect with the validated address; Host and SNI stay the original name.
   const lookup = ((_h: string, o: any, cb: any) => (o?.all ? cb(null, [pin]) : cb(null, pin.address, pin.family))) as any;
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
+    const soft = () => (strict ? reject(new Transient("fetch")) : resolve(null));
     const req = https.request(u, { method: "GET", lookup, headers: { accept }, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) }, (res) => {
-      if (!res.statusCode || res.statusCode < 200 || res.statusCode > 299) { res.destroy(); return resolve(null); }
+      if (!res.statusCode || res.statusCode < 200 || res.statusCode > 299) { res.destroy(); return res.statusCode && (res.statusCode >= 500 || res.statusCode === 429) ? soft() : resolve(null); }
       const parts: Buffer[] = [];
       let n = 0;
       res.on("data", (c: Buffer) => { if ((n += c.length) > FETCH_MAX_BYTES) { res.destroy(); resolve(null); } else parts.push(c); });
       res.on("end", () => resolve(Buffer.concat(parts).toString("utf8")));
-      res.on("error", () => resolve(null));
+      res.on("error", soft);
     });
-    req.on("error", () => resolve(null));
+    req.on("error", soft);
     req.end();
   });
 }
@@ -126,29 +130,38 @@ export function rpcUrl(env: Env, chainId: string): string | undefined {
 
 async function ethCall(env: Env, chainId: string, to: string, data: string): Promise<string> {
   const url = rpcUrl(env, chainId);
-  if (!url) throw new Error(`no RPC for eip155:${chainId}`);
-  const res = await fetch(url, {
-    method: "POST", headers: { "content-type": "application/json" },
-    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_call", params: [{ to, data }, "latest"] }),
-  });
-  const j: any = await res.json();
-  if (j.error || typeof j.result !== "string") throw new Error(`eth_call failed: ${JSON.stringify(j.error)}`);
+  if (!url) throw new Transient(`no RPC for eip155:${chainId}`);
+  let j: any;
+  try {
+    const res = await fetch(url, {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_call", params: [{ to, data }, "latest"] }),
+    });
+    if (!res.ok) throw new Error(`rpc http ${res.status}`);
+    j = await res.json();
+  } catch (e) { throw new Transient(String(e)); }
+  // A revert answers the question (no such token, no such method); any other RPC error is the provider's trouble.
+  if (j.error) throw j.error.code === 3 || /revert/i.test(String(j.error.message)) ? new Error(`eth_call reverted: ${JSON.stringify(j.error)}`) : new Transient(JSON.stringify(j.error));
+  if (typeof j.result !== "string") throw new Transient("eth_call returned no result");
   return j.result;
 }
 const word = (n: bigint | number) => BigInt(n).toString(16).padStart(64, "0");
+/** `.catch` handler for eth_call: the call failed, so "0x"; but a re-check lets Transient through so it never demotes. */
+const swallow = (recheck: boolean) => (e: unknown) => { if (recheck && e instanceof Transient) throw e; return "0x"; };
+const swallowNull = (e: unknown) => { if (e instanceof Transient) throw e; return null; };
 const selector = (sig: string) => hex(keccak_256(enc.encode(sig)).slice(0, 4));
 
 /** ERC-1271 isValidSignature(bytes32,bytes) on the wallet's chain. */
-async function erc1271(env: Env, chainId: string, wallet: string, digest: Uint8Array, sigHex: string): Promise<boolean> {
+async function erc1271(env: Env, chainId: string, wallet: string, digest: Uint8Array, sigHex: string, recheck = false): Promise<boolean> {
   const sig = sigHex.replace(/^0x/, "");
   const data = "0x1626ba7e" + hex(digest) + word(64) + word(sig.length / 2) + sig.padEnd(Math.ceil(sig.length / 64) * 64, "0");
-  return (await ethCall(env, chainId, wallet, data).catch(() => "0x")).startsWith("0x1626ba7e");
+  return (await ethCall(env, chainId, wallet, data).catch(swallow(recheck))).startsWith("0x1626ba7e");
 }
 
 const SIWE = /^(\S+) wants you to sign in with your Ethereum account:\n(0x[0-9a-fA-F]{40})\n\n(.+)\n\nURI: (\S+)\nVersion: (\S+)\nChain ID: (\d+)\nNonce: (\S+)\nIssued At: (\S+)\nResources:\n- (\S+)$/;
 
 /** Checks the fixed SIWE fields of spec 3.5 and returns the signing address (lowercase), or an error. */
-async function checkSiwe(env: Env, eid: string, proof: any, chainId: string, address?: string): Promise<{ signer?: string; error?: string }> {
+async function checkSiwe(env: Env, eid: string, proof: any, chainId: string, address?: string, recheck = false): Promise<{ signer?: string; error?: string }> {
   if (proof?.type !== "Eip4361" || typeof proof.message !== "string" || typeof proof.signature !== "string") return { error: "proof must be {type: Eip4361, message, signature}" };
   const m = SIWE.exec(proof.message);
   if (!m) return { error: "message is not an EIP-4361 message with the fields of spec 3.5" };
@@ -157,12 +170,13 @@ async function checkSiwe(env: Env, eid: string, proof: any, chainId: string, add
   if (statement !== `Open Entity alias binding for ${eid}` || resource !== eid || uri !== `https://${env.REGISTRY_HOST}/v1/entities/${eid}`) return { error: "message is bound to a different EID" };
   if (version !== "1" || chain !== chainId || !/^[A-Za-z0-9]{8,}$/.test(nonce)) return { error: "version, chain id or nonce is wrong" };
   const t = Date.parse(issued), now = Date.now();
-  if (Number.isNaN(t) || t > now + 10 * 60_000 || t < now - 24 * 3600_000) return { error: "issued-at must be within 24 hours of submission" };
+  // The window bounds a fresh submission; a re-check of a stored proof skips it.
+  if (!recheck && (Number.isNaN(t) || t > now + 10 * 60_000 || t < now - 24 * 3600_000)) return { error: "issued-at must be within 24 hours of submission" };
   if (address && addr.toLowerCase() !== address.toLowerCase()) return { error: "message address does not match the alias" };
   let signer: string | undefined;
   try { signer = personalRecover(proof.message, proof.signature); } catch { /* maybe a contract wallet */ }
   if (signer === addr.toLowerCase()) return { signer };
-  if (await erc1271(env, chainId, addr, personalDigest(proof.message), proof.signature)) return { signer: addr.toLowerCase() };
+  if (await erc1271(env, chainId, addr, personalDigest(proof.message), proof.signature, recheck)) return { signer: addr.toLowerCase() };
   return { error: "signature does not recover to the message address" };
 }
 
@@ -179,14 +193,15 @@ function abiString(result: string): string {
  * service whose endpoint is the root EID. https (public host names only), ipfs (through a public gateway) and
  * on-chain data: URIs; the file is fetched with the same bounds as every other alias proof.
  */
-async function registrationFile(env: Env, eid: string, chainId: string, registry: string, agentId: bigint): Promise<string | null> {
-  const uri = abiString(await ethCall(env, chainId, registry, "0x" + selector("tokenURI(uint256)") + word(agentId)).catch(() => "0x"));
+async function registrationFile(env: Env, eid: string, chainId: string, registry: string, agentId: bigint, recheck = false): Promise<string | null> {
+  const get = (url: string) => getJson(url, "application/json", recheck).catch(swallowNull);
+  const uri = abiString(await ethCall(env, chainId, registry, "0x" + selector("tokenURI(uint256)") + word(agentId)).catch(swallow(recheck)));
   let file: any = null;
   const data = /^data:application\/json(;base64)?,(.*)$/s.exec(uri);
   if (data) {
     try { file = JSON.parse(data[1] ? new TextDecoder().decode(Uint8Array.from(atob(data[2]), (c) => c.charCodeAt(0))) : decodeURIComponent(data[2])); } catch { /* not JSON */ }
-  } else if (uri.startsWith("ipfs://")) file = await getJson(`https://ipfs.io/ipfs/${uri.slice(7)}`).catch(() => null);
-  else if (uri.startsWith("https://")) file = await getJson(uri).catch(() => null);
+  } else if (uri.startsWith("ipfs://")) file = await get(`https://ipfs.io/ipfs/${uri.slice(7)}`);
+  else if (uri.startsWith("https://")) file = await get(uri);
   else return "the agent's agentURI must be https:// on a host name, ipfs:// or a data:application/json URI";
   // ERC-8004 drafts named the list `endpoints`; the final text names it `services`.
   const services = [...(Array.isArray(file?.services) ? file.services : []), ...(Array.isArray(file?.endpoints) ? file.endpoints : [])];
@@ -197,31 +212,35 @@ export const platformDomain =(value: string) => { const p = value.split(":")[0];
 
 interface AliasInput { type: string; value: string; proof?: any }
 
-/** Verifies an alias proof against the root EID. Returns null when verified, else the reason. */
-export async function verifyAlias(env: Env, eid: string, a: AliasInput): Promise<string | null> {
+/**
+ * Verifies an alias proof against the root EID. Returns null when verified, else the reason. With `recheck` (a stored proof,
+ * spec 3.4) the 24-hour issued window is skipped and a transient failure throws Transient instead of failing the alias.
+ */
+export async function verifyAlias(env: Env, eid: string, a: AliasInput, recheck = false): Promise<string | null> {
+  const get = (url: string, accept?: string) => getJson(url, accept, recheck).catch(swallowNull);
   if (a.type === "domain") {
     const m = /^did:web:([a-z0-9.-]+)$/.exec(a.value);
     if (!m || !DOMAIN.test(m[1])) return "domain alias value must be did:web:<domain>";
-    const wk = await getJson(`https://${m[1]}/.well-known/openentity.json`).catch(() => null);
+    const wk = await get(`https://${m[1]}/.well-known/openentity.json`);
     if (wk?.eid === eid) return null;
-    const dns = await getJson(`https://cloudflare-dns.com/dns-query?name=_openentity.${m[1]}&type=TXT`, "application/dns-json").catch(() => null);
+    const dns = await get(`https://cloudflare-dns.com/dns-query?name=_openentity.${m[1]}&type=TXT`, "application/dns-json");
     const txt = (dns?.Answer ?? []).map((r: any) => String(r.data).replace(/^"|"$/g, "").replace(/" "/g, ""));
     return txt.includes(`eid=${eid}`) ? null : "neither /.well-known/openentity.json nor _openentity TXT names this EID";
   }
   if (a.type === "wallet") {
     const m = /^did:pkh:eip155:(\d+):(0x[0-9a-fA-F]{40})$/.exec(a.value);
     if (!m) return "wallet alias value must be did:pkh:eip155:<chainId>:<address>";
-    return (await checkSiwe(env, eid, a.proof, m[1], m[2])).error ?? null;
+    return (await checkSiwe(env, eid, a.proof, m[1], m[2], recheck)).error ?? null;
   }
   if (a.type === "erc8004") {
     const m = /^eip155:(\d+):(0x[0-9a-fA-F]{40}):(\d+)$/.exec(a.value);
     if (!m) return "erc8004 alias value must be eip155:<chainId>:<identityRegistry>:<agentId>";
     if (!rpcUrl(env, m[1])) return `no RPC is configured for eip155:${m[1]}; ERC-8004 registries are supported on ${["8453", ...Object.keys(PUBLIC_RPC)].map((c) => "eip155:" + c).join(", ")}`;
-    if (a.proof?.type !== "Eip4361") return registrationFile(env, eid, m[1], m[2], BigInt(m[3]));
-    const r = await checkSiwe(env, eid, a.proof, m[1]);
+    if (a.proof?.type !== "Eip4361") return registrationFile(env, eid, m[1], m[2], BigInt(m[3]), recheck);
+    const r = await checkSiwe(env, eid, a.proof, m[1], undefined, recheck);
     if (r.error) return r.error;
     const id = word(BigInt(m[3]));
-    const addrOf = async (sig: string) => "0x" + (await ethCall(env, m[1], m[2], "0x" + selector(sig) + id).catch(() => "0x")).slice(-40).toLowerCase();
+    const addrOf = async (sig: string) => "0x" + (await ethCall(env, m[1], m[2], "0x" + selector(sig) + id).catch(swallow(recheck))).slice(-40).toLowerCase();
     if ((await addrOf("ownerOf(uint256)")) === r.signer || (await addrOf("getAgentWallet(uint256)")) === r.signer) return null;
     return "signing wallet is neither ownerOf nor getAgentWallet for this agent";
   }
@@ -231,14 +250,14 @@ export async function verifyAlias(env: Env, eid: string, a: AliasInput): Promise
     const p = a.proof;
     if (typeof p?.issued !== "string") return "proof must carry issued";
     const t = Date.parse(p.issued);
-    if (Number.isNaN(t) || t > Date.now() + 10 * 60_000 || t < Date.now() - 24 * 3600_000) return "issued must be within 24 hours of submission";
+    if (!recheck && (Number.isNaN(t) || t > Date.now() + 10 * 60_000 || t < Date.now() - 24 * 3600_000)) return "issued must be within 24 hours of submission";
     const text = `Open Entity alias binding\neid: ${eid}\nalias: ${a.value}\nissued: ${p.issued}`;
     // An Ed25519 root signs the spec 3.5 text directly; a did:pkh root signs it with its wallet (EIP-191, or ERC-1271 on its chain).
     const pkh = /^did:pkh:eip155:(\d+):(0x[0-9a-fA-F]{40})$/.exec(eid);
     if (p.type === "Eip191BindingSignature" && pkh && typeof p.signature === "string") {
       let signer: string | undefined;
       try { signer = personalRecover(text, p.signature); } catch { /* maybe a contract wallet */ }
-      const ok = signer === pkh[2].toLowerCase() || (await erc1271(env, pkh[1], pkh[2], personalDigest(text), p.signature));
+      const ok = signer === pkh[2].toLowerCase() || (await erc1271(env, pkh[1], pkh[2], personalDigest(text), p.signature, recheck));
       if (!ok) return "binding signature is not by this EID's wallet over the spec 3.5 text";
     } else if (p.type === "Ed25519BindingSignature" && typeof p.proofValue === "string") {
       let sig: Uint8Array<ArrayBuffer>;
@@ -255,7 +274,7 @@ export async function verifyAlias(env: Env, eid: string, a: AliasInput): Promise
     // ponytail: a dotless platform name maps to <name>.com; add a platform registry when a platform needs another TLD.
     const domain = platformDomain(a.value);
     if (!DOMAIN.test(domain)) return "platform domain is not valid";
-    const b = await getJson(`https://${domain}/.well-known/openentity/bindings/${m[2]}.json`).catch(() => null);
+    const b = await get(`https://${domain}/.well-known/openentity/bindings/${m[2]}.json`);
     return b?.eid === eid ? null : "platform binding does not name this EID";
   }
   return `alias type ${a.type} is not supported`;

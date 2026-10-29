@@ -3,6 +3,8 @@ import { secp256k1 } from "@noble/curves/secp256k1.js";
 import { keccak_256 } from "@noble/hashes/sha3.js";
 import { base58btcEncode, buildDeclaration, buildDocument, canonicalize, eip712Digest, generateKeyPair, nowSeconds, sha256Hex, type KeyPair } from "../src/sdk.ts";
 import { hex } from "../src/env.ts";
+import dns from "node:dns/promises";
+import { ALIAS_RECHECK_BATCH, scheduled } from "../src/index.ts";
 import { E, adopted, call, mockFetch, stamp, write } from "./helpers.ts";
 
 afterEach(() => vi.restoreAllMocks());
@@ -174,5 +176,67 @@ describe("aliases (spec 3.4, 3.5)", () => {
     const ok = await write("POST", `/entities/${a.kp.did}/aliases`, a.kp.did, { type: "platform", value, proof: await platformProof(a.kp, value) });
     expect(ok.status).toBe(201);
     expect((await call("GET", `/entities/${a.kp.did}`)).body.aliases[0]).toMatchObject({ type: "platform", value, status: "verified" });
+  });
+});
+
+describe("alias re-check (spec 3.4)", () => {
+  const status = async (eid: string, value: string) => (await E.db.first("SELECT status, last_checked FROM aliases WHERE eid = $1 AND value = $2", [eid, value]))!;
+  const level = async (eid: string) => (await call("GET", `/entities/${eid}`)).body.level;
+  const bindDomain = async (host: string) => {
+    const value = `did:web:${host}`, a = await adopted(host, { aliases: [{ type: "domain", value }] });
+    mockFetch({ [`${host}/.well-known/openentity.json`]: () => ({ eid: a.kp.did }) });
+    expect((await write("POST", `/entities/${a.kp.did}/aliases`, a.kp.did, { type: "domain", value })).body.level).toBe("L1");
+    return { eid: a.kp.did, value };
+  };
+
+  it("demotes a domain alias whose well-known file is gone, and the level drops", async () => {
+    const { eid, value } = await bindDomain("gone.example");
+    mockFetch({});
+    await scheduled(E);
+    expect((await status(eid, value)).status).toBe("lapsed");
+    expect(await level(eid)).toBe("L0");
+  });
+
+  it("keeps a domain alias through a 5xx and a DNS failure, but still moves last_checked", async () => {
+    const { eid, value } = await bindDomain("flaky.example");
+    const before = (await status(eid, value)).last_checked;
+    await new Promise((r) => setTimeout(r, 1100));
+    mockFetch({ "flaky.example": () => new Response("down", { status: 503 }) });
+    await scheduled(E);
+    expect(await status(eid, value)).toMatchObject({ status: "verified" });
+    expect((await status(eid, value)).last_checked > before).toBe(true);
+    vi.restoreAllMocks();
+    vi.spyOn(dns, "lookup").mockRejectedValue(Object.assign(new Error("try again"), { code: "EAI_AGAIN" }));
+    await scheduled(E);
+    expect((await status(eid, value)).status).toBe("verified");
+    expect(await level(eid)).toBe("L1");
+  });
+
+  it("erc8004: a transferred token demotes; an RPC timeout does not", async () => {
+    const value = "eip155:8453:0x8004a169fb4a3325136eb29fa0ceb6d2e539a432:99", a = await adopted("Nft", { aliases: [{ type: "erc8004", value }] }), w = wallet();
+    const message = siwe(a.kp.did, w.address);
+    const proof = { type: "Eip4361", message, signature: w.sign(message) };
+    let owner = w.address, down = false;
+    const rpc = () => { if (down) throw new Error("timeout"); return { jsonrpc: "2.0", id: 1, result: "0x" + owner.slice(2).padStart(64, "0") }; };
+    mockFetch({ "rpc.test": rpc });
+    expect((await write("POST", `/entities/${a.kp.did}/aliases`, a.kp.did, { type: "erc8004", value, proof })).body.level).toBe("L1");
+    down = true;
+    await scheduled(E);
+    expect((await status(a.kp.did, value)).status).toBe("verified");
+    down = false;
+    owner = wallet().address;
+    await scheduled(E);
+    expect((await status(a.kp.did, value)).status).toBe("lapsed");
+    expect(await level(a.kp.did)).toBe("L0");
+  });
+
+  it("checks at most ALIAS_RECHECK_BATCH aliases per run, oldest first", async () => {
+    const n = ALIAS_RECHECK_BATCH + 5;
+    for (let i = 0; i < n; i++) await E.db.run("INSERT INTO aliases (eid, type, value, proof_json, verified_at, last_checked, status) VALUES ($1, 'domain', $2, 'null', 'x', $3, 'verified')", [`did:key:zBatch${i}`, `did:web:batch${i}.example`, `0001-01-01T00:00:${String(i).padStart(2, "0")}Z`]);
+    mockFetch({});
+    await scheduled(E);
+    const rows = await E.db.all("SELECT value, status FROM aliases WHERE eid LIKE 'did:key:zBatch%'");
+    const lapsed = rows.filter((r) => r.status === "lapsed").map((r) => r.value).sort();
+    expect(lapsed).toEqual(Array.from({ length: ALIAS_RECHECK_BATCH }, (_, i) => `did:web:batch${i}.example`).sort());
   });
 });

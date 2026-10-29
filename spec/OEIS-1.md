@@ -119,6 +119,8 @@ An alias binds another identifier to the EID. Each alias carries its own proof s
 
 A valid proof shows that someone controls the domain, wallet or account; it does not show that the entity wants it bound, because the proof names the EID but never needs the EID's key. An alias therefore counts only when the entity consents: it is listed in `aliases` of the entity's current signed Entity Document. A registry MAY store a valid proof for an alias the document does not list, MUST show it as `unclaimed`, and MUST NOT count it toward a level, list it as verified, or use it as a basis for recovery (section 9.2) or accreditation (section 8.4). Listing and dropping an alias takes effect with the next document version (section 5.5).
 
+A registry SHOULD re-check stored alias proofs from time to time and MUST stop counting an alias whose proof definitively no longer holds (a domain file removed, an ERC-8004 token transferred away) toward a level; it then shows the alias as `lapsed`. A network error, timeout or provider failure is not a definitive failure and leaves the alias as it was. Re-checking does not apply the 24-hour submission window of section 3.5.
+
 For the `erc8004` registration-file path the alias is submitted without a proof. The registry reads the agent's `agentURI` with `tokenURI(agentId)` on the identity registry, fetches it (an `https://` URL on a host name, an `ipfs://` URI through a public gateway, or an on-chain `data:application/json` URI) with the same bounds as every other proof fetch (no redirects, 5 seconds, 256 KB), and accepts the alias when the file's `services` list (`endpoints` in earlier ERC-8004 drafts) holds an entry `{"name": "DID", "endpoint": "<root EID>"}`.
 
 ### 3.5 Binding message
