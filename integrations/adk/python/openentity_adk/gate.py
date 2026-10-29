@@ -54,6 +54,16 @@ def evaluate(eid: str, *, min_tier: int = 2, require_sma: bool = True, deny_on_v
     return None
 
 
+def _check(eid, counterparty_arg: str | None, args: dict, bar: dict) -> dict | None:
+    """Run the bar on the subject; a denial names whose record failed, so the model does not blame itself for the payee."""
+    who, denied = _subject(eid, counterparty_arg, args)
+    denied = denied or evaluate(who, **bar)
+    if denied:
+        denied["subject"] = "counterparty" if counterparty_arg else "self"
+        denied["detail"] = ("The other agent" if counterparty_arg else "This agent") + f" was checked: {denied['detail']}"
+    return denied
+
+
 def _subject(eid, counterparty_arg: str | None, args: dict) -> tuple[str | None, dict | None]:
     """Whose trust to check: (eid, None), or (None, denial) when there is no one to check."""
     if counterparty_arg:
@@ -91,8 +101,7 @@ def open_entity_verified(min_tier: int = 2, require_sma: bool = True, deny_on_vi
                 args = sig.bind_partial(*a, **kw).arguments
             except TypeError:
                 args = {}
-            who, denied = _subject(eid, counterparty_arg, args)
-            return denied or evaluate(who, **bar)
+            return _check(eid, counterparty_arg, args, bar)
 
         if inspect.iscoroutinefunction(fn):
             async def run(*a, **kw):
@@ -122,7 +131,4 @@ class OpenEntityGate(BasePlugin):
         if tool.name not in self.high_risk:
             return None
 
-        def check() -> dict | None:
-            who, denied = _subject(self._eid, self.counterparty_arg, tool_args or {})
-            return denied or evaluate(who, **self._bar)
-        return await asyncio.to_thread(check)
+        return await asyncio.to_thread(_check, self._eid, self.counterparty_arg, tool_args or {}, self._bar)

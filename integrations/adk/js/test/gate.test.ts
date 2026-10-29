@@ -99,6 +99,18 @@ describe("counterparty checks", () => {
     expect(seen).toEqual([OTHER]);
     expect(await send({ eid: "nope", amount: 1 })).toMatchObject({ reason: "counterparty_missing" });
   });
+  test("denials say whose record failed", async () => {
+    // Seen live: told only "trust_tier 0 is below 2", the model said its own tier was too low when the payee's was.
+    const counterparty = new OpenEntityGate(["pay_agent"], { counterpartyArg: "eid", trust: fn(report({ tier: 0 })) });
+    const d: any = await counterparty.beforeToolCallback({ tool: pay, toolArgs: { eid: OTHER }, toolContext: null as any });
+    expect(d.subject).toBe("counterparty");
+    expect(d.detail).toMatch(/^The other agent/);
+    expect(((await counterparty.beforeToolCallback({ tool: pay, toolArgs: {}, toolContext: null as any })) as any).subject).toBe("counterparty");
+    const own = new OpenEntityGate(["pay_agent"], { eid: EID, trust: fn(report({ tier: 0 })) });
+    const o: any = await own.beforeToolCallback({ tool: pay, toolArgs: {}, toolContext: null as any });
+    expect(o.subject).toBe("self");
+    expect(o.detail).toMatch(/^This agent/);
+  });
   test("a bad violation threshold fails at construction", () => {
     expect(() => new OpenEntityGate(["x"], { denyOnViolation: "severe" as any })).toThrow();
     expect(() => openEntityVerified(() => 1, { denyOnViolation: "severe" as any })).toThrow();

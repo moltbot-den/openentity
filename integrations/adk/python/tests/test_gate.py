@@ -218,3 +218,20 @@ def test_openentity_preset_exposes_only_read_tools():
         assert oe._is_tool_selected(tool(name), None)
     for name in ("openentity_export_key", "openentity_withdraw", "openentity_adopt", "openentity_record", "openentity_present", "openentity_self"):
         assert not oe._is_tool_selected(tool(name), None)
+
+
+async def test_denials_say_whose_record_failed():
+    """Seen live: told only "trust_tier 0 is below 2", the model said its own tier was too low when the payee's was."""
+    counterparty = OpenEntityGate(["pay_agent"], counterparty_arg="eid", trust_fn=fn(report(tier=0)))
+    d = await counterparty.before_tool_callback(tool=PAY, tool_args={"eid": OTHER}, tool_context=None)
+    assert d["subject"] == "counterparty" and d["detail"].startswith("The other agent")
+    missing = await counterparty.before_tool_callback(tool=PAY, tool_args={}, tool_context=None)
+    assert missing["subject"] == "counterparty"
+    own = OpenEntityGate(["pay_agent"], eid=EID, trust_fn=fn(report(tier=0)))
+    d = await own.before_tool_callback(tool=PAY, tool_args={}, tool_context=None)
+    assert d["subject"] == "self" and d["detail"].startswith("This agent")
+
+    @open_entity_verified(counterparty_arg="eid", trust_fn=fn(report(tier=0)))
+    def pay(eid: str):
+        return "paid"
+    assert pay(OTHER)["subject"] == "counterparty"
