@@ -233,7 +233,8 @@ export function createSite({ registry: callRegistry, asset, vars }: SiteOptions)
     const path = url.pathname;
     // Built pages are files (`/adopt.html`); the URL is the clean path. One URL per page.
     if (path.endsWith('.html')) {
-      const clean = path.slice(0, -'.html'.length).replace(/(^|\/)index$/, '/') || '/';
+      // Leading slashes collapse to one: `//host/x` would resolve as another host.
+      const clean = path.slice(0, -'.html'.length).replace(/(^|\/)index$/, '/').replace(/^\/+/, '/') || '/';
       return Response.redirect(new URL(clean + url.search, url), 301);
     }
     if (path.length > 1 && path.endsWith('/')) {

@@ -148,6 +148,10 @@ describe("continuity (spec 9)", () => {
       "lost.example/.well-known/did.json": () => didWebDoc("lost.example", domainKey),
     });
     expect((await write("POST", `/entities/${a.kp.did}/aliases`, a.kp.did, { type: "domain", value: "did:web:lost.example" })).status).toBe(201);
+    // The key holder lists the alias in a signed document while it still holds the key; only then does it count for recovery.
+    const { proof: _p, ...base } = a.document as any;
+    const listed = await signObject({ ...base, seq: 2, updated: later(60), aliases: [{ type: "domain", value: "did:web:lost.example" }] }, a.kp);
+    expect((await write("PUT", `/entities/${a.kp.did}/document`, a.kp.did, listed)).status).toBe(200);
     const { proofs, ...unsigned } = await link(a.kp, succ, "recovery", [succ]);
     const byAlias = await signAs(unsigned, domainKey, "did:web:lost.example#k");
     r = await write("POST", "/continuity", succ.did, { link: { ...unsigned, proofs: [...proofs, byAlias] }, document });

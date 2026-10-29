@@ -255,6 +255,8 @@ export function recoverEip712(digest: Uint8Array, sigHex: string): string {
   if (sig.length !== 65) throw new Error("signature must be 65 bytes");
   const v = sig[64] >= 27 ? sig[64] - 27 : sig[64];
   if (v > 1) throw new Error("invalid recovery id");
+  // EIP-2: only the low-s form. The high-s twin recovers the same address, so it would give one signed object a second hash.
+  if (BigInt("0x" + toHex(sig.slice(32, 64))) > secp256k1.Point.Fn.ORDER / 2n) throw new Error("signature s is in the upper half");
   const pub = secp256k1.recoverPublicKey(concat(Uint8Array.of(v), sig.slice(0, 64)), digest, { prehash: false });
   const uncompressed = secp256k1.Point.fromBytes(pub).toBytes(false);
   const addr = toHex(keccak_256(uncompressed.slice(1)).slice(12));
@@ -389,7 +391,7 @@ const validators = new Map<string, Validator>();
 
 /** Schema check (spec Appendix A) plus size caps: 16 KB for a RecordEntry (7.4), 64 KB for anything else (5.2). */
 export function validate(type: ObjectType, obj: unknown): { ok: boolean; errors: string[] } {
-  if (!(type in bundle.$defs)) return { ok: false, errors: [`unknown object type ${type}`] };
+  if (!Object.hasOwn(bundle.$defs, type)) return { ok: false, errors: [`unknown object type ${type}`] };
   let bytes: number;
   try {
     bytes = utf8(canonicalize(obj)).length;
