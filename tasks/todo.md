@@ -6,7 +6,7 @@ Live:
 - openentity.org (site, `/v1` registry, transparency log, guides), redesigned on `site/DESIGN.md`; Lighthouse 100 on accessibility, best practices, SEO, agentic browsing
 - mcp.openentity.org/mcp: remote MCP, official MCP registry `org.openentity/openentity` 0.2.0 (adds `openentity_card`); DNS proof key now in GCP secret `openentity-mcp-registry-dns-key`
 - oeis.dev: developer hub (`site-dev/`)
-- npm live: `openentity` 0.5.2, `@openentity/sdk` 0.4.1; `openentity` 0.5.4 staged for the owner's 2FA tap (https://www.npmjs.com/settings/willcybertron/staged-packages; reject the stale 0.5.3). PyPI live: `openentity` 0.5.2 (CLI parity with npm: alias, document, anchor, rotate, migrate, recover, log, stats, resolve, export/import, card, conformance, local wallet signing via `openentity[wallet]`, 0.4 keys migrated on first use; #101, #102, #103)
+- npm live: `openentity` 0.5.2, `@openentity/sdk` 0.5.1; staged for the owner's 2FA tap at https://www.npmjs.com/settings/willcybertron/staged-packages: `@openentity/sdk` 0.6.0 then CLI `openentity` 0.5.6 (reject every older staged version of both); `@openentity/vercel-ai` and `@openentity/mastra` need a first publish from a logged-in npm CLI. PyPI live: `openentity` 0.6.1 (typed errors, full parity with the TS SDK, #112, #114); `openentity-crewai` and `openentity-openai-agents` need a PyPI pending trusted publisher (owner password confirm at https://pypi.org/manage/account/publishing/)
 - ClawHub: `openentity@1.0.0` moderation CLEAN, waiting on ClawHub's `pending.publication`
 - Founding Entities (8, all L2 first-party, moltbotden #890): OptimusWill, Incredibot, Den Writer, Den Coder, Den Research, Den Vision, Den Illustrator, the demo email agent; Eleanor has no agent and Will's OpenClaw agent cannot be identified, so both are skipped; observer `did:web:moltbotden.com` accredited as bootstrap, issues `continuity_confirmed` (moltbotden #890)
 - Load: 100 adopts/s for 60 s on OpenEntityLoad (destroyed): warm p50 159 ms, p95 212 ms, p99 276 ms after the rate guard moved into the park statement (#92); Aurora max stays 8 ACU (6 hit 100% writer CPU); prod Lambda reserves 200 concurrency
@@ -47,6 +47,13 @@ Engineering 2026-10-29 (PRD 7 and 11 gap audit, all merged and deployed):
 - [x] End-to-end drive of every guide and CLI command against a local registry; five fixes with tests; unused dependencies removed (#103)
 - [x] A successor withdraws its inherited Declaration after rotate or migrate; entity lineage serves the signed Continuity Link and its basis (#105)
 - [x] `mbd entity status` (`@moltbotden/cli` 3.4.0); `mbd entity adopt` on the adopt page (#100); claim page shows the exact adopt command (moltbotden #889)
+
+Engineering 2026-10-29, round 2 (all merged and deployed):
+- [x] Security (#108): alias-plus-recovery entity takeover closed (only aliases the entity's signed document lists count), open redirect, EIP-712 high-s malleability, per-IP cap on `/resolve` and `/verify`; prod had no abused aliases or links
+- [x] Spec conformance (#109): `docs/CONFORMANCE-MATRIX.md` (68 rows); duplicate JSON keys and over-precise numbers rejected (spec 4.3); recovery path tested; unconsented aliases stored as `unclaimed` and never raise level; inherited Record head on successors
+- [x] Integrations: CrewAI and OpenAI Agents SDK (#110), Vercel AI SDK and Mastra (#111), client labels in registry, spec and both SDKs
+- [x] SDKs 0.6 (#112, #114): typed errors, `sdk/ts` split into modules, export snapshot tests, Python and TS surfaces identical; `verify.sh` runs uv with `--locked`
+- [x] Dead imports and circular imports removed (#116)
 
 Done 2026-10-26:
 - [x] Python CLI parity: `whoami`, `self`, `record`, `present`, `verify`, `withdraw`, `--json`, npm exit codes (#45)
