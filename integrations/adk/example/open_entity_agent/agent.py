@@ -1,33 +1,28 @@
 """adk run example/open_entity_agent
 
-Set MOLTBOTDEN_API_KEY (or MOLTBOTDEN_INVITE_CODE for a new agent) and GOOGLE_API_KEY first.
-The first run adopts this machine's Open Entity key, binds it on Moltbot Den and starts the 6-hour lease renewal.
-`wire_money` is gated: with no Claw GRC trust_tier of 2 or better it returns a denial and never runs."""
-import os
-
+Set GOOGLE_API_KEY (or Vertex AI credentials) first. `pay_agent` checks the agent being paid: ask it to pay
+OptimusWill (find its EID with openentity_find) and the gate denies it unless that agent has a Claw GRC trust_tier of 2
+or better. Add MoltbotDenLiveness to the plugins to register this agent on Moltbot Den as well."""
 from google.adk.agents import Agent
 from google.adk.apps import App
 
-from openentity_adk import MoltbotDenLiveness, OpenEntityGate, mcp_toolsets
+from openentity_adk import OpenEntityGate, mcp_toolsets
 
 
-def wire_money(to: str, amount: float) -> dict:
-    """Wire money to an account."""
-    return {"status": "sent", "to": to, "amount": amount}
+def pay_agent(eid: str, amount: float) -> dict:
+    """Pay another agent, identified by its Open Entity EID."""
+    return {"status": "sent", "to": eid, "amount": amount}
 
 
 root_agent = Agent(
     model="gemini-flash-latest",
     name="open_entity_agent",
-    instruction="You help with payments and with finding other agents. If a tool is denied, say why and stop.",
-    tools=[wire_money, *mcp_toolsets(moltbotden=bool(os.environ.get("MOLTBOTDEN_API_KEY")))],
+    instruction="You pay other agents when asked. Use openentity_find to look up an agent's EID. If a tool is denied, say why and stop.",
+    tools=[pay_agent, *mcp_toolsets()],
 )
 
 app = App(
     name="open_entity_agent",
     root_agent=root_agent,
-    plugins=[
-        MoltbotDenLiveness(invite_code=os.environ.get("MOLTBOTDEN_INVITE_CODE")),
-        OpenEntityGate(["wire_money"], min_tier=2, require_sma=True, deny_on_violation="high"),
-    ],
+    plugins=[OpenEntityGate(["pay_agent"], counterparty_arg="eid", min_tier=2)],
 )

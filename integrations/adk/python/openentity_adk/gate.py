@@ -1,5 +1,6 @@
 """Trust gate: @open_entity_verified for functions and OpenEntityGate for ADK tools.
-Reads only registry attestations through openentity.trust() and fails closed: any error is a denial."""
+It checks the counterparty named in a tool argument (counterparty_arg), or this agent's own EID (a kill switch Claw GRC
+can pull). Reads only registry attestations through openentity.trust() and fails closed: any error is a denial."""
 import asyncio
 import functools
 import inspect
@@ -11,15 +12,25 @@ from openentity.report import CLAWGRC
 SEVERITY = {"low": 1, "medium": 2, "high": 3, "critical": 4}
 
 
+def _check_threshold(deny_on_violation: str | None) -> None:
+    if deny_on_violation is not None and deny_on_violation not in SEVERITY:
+        raise ValueError(f"deny_on_violation must be one of {list(SEVERITY)} or None, not {deny_on_violation!r}")
+
+
+def _denial(eid, reason: str, detail: str, required: dict | None = None, observed: dict | None = None) -> dict:
+    return {"error": "open_entity_denied", "denied": True, "reason": reason, "detail": detail, "eid": eid,
+            "required": required or {}, "observed": observed or {}}
+
+
 def evaluate(eid: str, *, min_tier: int = 2, require_sma: bool = True, deny_on_violation: str | None = "high",
              tier_issuer: str = CLAWGRC, trust_fn=_trust) -> dict | None:
     """None when `eid` clears the bar, else a denial dict the model can read. Claw GRC trust tiers are the
     trust_tier attestations from did:web:api.clawgrc.com; violations are custom:clawgrc:violation."""
+    _check_threshold(deny_on_violation)
     required = {"min_tier": min_tier, "require_sma": require_sma, "deny_on_violation": deny_on_violation, "tier_issuer": tier_issuer}
 
     def deny(reason: str, detail: str, observed: dict | None = None) -> dict:
-        return {"error": "open_entity_denied", "denied": True, "reason": reason, "detail": detail, "eid": eid,
-                "required": required, "observed": observed or {}}
+        return _denial(eid, reason, detail, required, observed)
 
     try:
         r = trust_fn(eid)
@@ -43,55 +54,75 @@ def evaluate(eid: str, *, min_tier: int = 2, require_sma: bool = True, deny_on_v
     return None
 
 
-def _eid_of(eid) -> str:
-    if callable(eid):
-        return eid()
-    return eid or Identity.load_or_create().did
+def _subject(eid, counterparty_arg: str | None, args: dict) -> tuple[str | None, dict | None]:
+    """Whose trust to check: (eid, None), or (None, denial) when there is no one to check."""
+    if counterparty_arg:
+        who = args.get(counterparty_arg)
+        if isinstance(who, str) and who.startswith("did:"):
+            return who, None
+        return None, _denial(None, "counterparty_missing",
+                             f"Tool argument {counterparty_arg!r} must hold the other agent's EID (a DID); denied.")
+    try:
+        if callable(eid):
+            return eid(), None
+        if eid:
+            return eid, None
+        found = Identity.load()  # never creates a key
+    except Exception as e:
+        return None, _denial(None, "trust_unavailable", f"{type(e).__name__}: {e}; denied.")
+    if found is None:
+        return None, _denial(None, "no_identity", "This agent has no Open Entity identity yet; denied.")
+    return found.did, None
 
 
 def open_entity_verified(min_tier: int = 2, require_sma: bool = True, deny_on_violation: str | None = "high", *,
-                         eid=None, tier_issuer: str = CLAWGRC, trust_fn=_trust):
-    """Decorator for a plain function or ADK tool function. Below the bar it returns the denial dict
-    instead of running the function. `eid` is a DID, a callable returning one, or None for this machine's identity."""
+                         counterparty_arg: str | None = None, eid=None, tier_issuer: str = CLAWGRC, trust_fn=_trust):
+    """Decorator for a plain function or ADK tool function. Below the bar it returns the denial dict instead of running
+    the function. With `counterparty_arg`, the EID in that argument is checked; otherwise `eid` (a DID, a callable
+    returning one, or None for this machine's existing identity)."""
+    _check_threshold(deny_on_violation)
     bar = dict(min_tier=min_tier, require_sma=require_sma, deny_on_violation=deny_on_violation, tier_issuer=tier_issuer, trust_fn=trust_fn)
 
-    def check() -> dict | None:
-        try:
-            who = _eid_of(eid)
-        except Exception as e:
-            return {"error": "open_entity_denied", "denied": True, "reason": "trust_unavailable",
-                    "detail": f"{type(e).__name__}: {e}; denied.", "eid": None, "required": {}, "observed": {}}
-        return evaluate(who, **bar)
-
     def wrap(fn):
+        sig = inspect.signature(fn)
+
+        def check(a, kw) -> dict | None:
+            try:
+                args = sig.bind_partial(*a, **kw).arguments
+            except TypeError:
+                args = {}
+            who, denied = _subject(eid, counterparty_arg, args)
+            return denied or evaluate(who, **bar)
+
         if inspect.iscoroutinefunction(fn):
-            @functools.wraps(fn)
             async def run(*a, **kw):
-                return await asyncio.to_thread(check) or await fn(*a, **kw)
+                return await asyncio.to_thread(check, a, kw) or await fn(*a, **kw)
         else:
-            @functools.wraps(fn)
             def run(*a, **kw):
-                return check() or fn(*a, **kw)
-        return run
+                return check(a, kw) or fn(*a, **kw)
+        return functools.wraps(fn)(run)
     return wrap
 
 
 class OpenEntityGate(BasePlugin):
-    """Register with App(plugins=[...]). Tools named in `high_risk_tools` run only if the agent's EID clears the bar."""
+    """Register with App(plugins=[...]). Tools named in `high_risk_tools` run only if the subject clears the bar: the EID
+    in the tool argument `counterparty_arg` when set, else `eid` or this machine's existing identity."""
 
-    def __init__(self, high_risk_tools, *, eid=None, min_tier: int = 2, require_sma: bool = True,
-                 deny_on_violation: str | None = "high", tier_issuer: str = CLAWGRC, trust_fn=_trust, name: str = "openentity_gate"):
+    def __init__(self, high_risk_tools, *, counterparty_arg: str | None = None, eid=None, min_tier: int = 2,
+                 require_sma: bool = True, deny_on_violation: str | None = "high", tier_issuer: str = CLAWGRC,
+                 trust_fn=_trust, name: str = "openentity_gate"):
         super().__init__(name)
+        _check_threshold(deny_on_violation)
         self.high_risk = frozenset(high_risk_tools)
-        self._eid, self._bar = eid, dict(min_tier=min_tier, require_sma=require_sma, deny_on_violation=deny_on_violation,
-                                         tier_issuer=tier_issuer, trust_fn=trust_fn)
+        self.counterparty_arg, self._eid = counterparty_arg, eid
+        self._bar = dict(min_tier=min_tier, require_sma=require_sma, deny_on_violation=deny_on_violation,
+                         tier_issuer=tier_issuer, trust_fn=trust_fn)
 
     async def before_tool_callback(self, *, tool, tool_args, tool_context):
         if tool.name not in self.high_risk:
             return None
-        try:
-            who = await asyncio.to_thread(_eid_of, self._eid)
-        except Exception as e:
-            return {"error": "open_entity_denied", "denied": True, "reason": "trust_unavailable",
-                    "detail": f"{type(e).__name__}: {e}; denied.", "eid": None, "required": {}, "observed": {}}
-        return await asyncio.to_thread(evaluate, who, **self._bar)
+
+        def check() -> dict | None:
+            who, denied = _subject(self._eid, self.counterparty_arg, tool_args or {})
+            return denied or evaluate(who, **self._bar)
+        return await asyncio.to_thread(check)

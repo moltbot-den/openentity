@@ -4,14 +4,14 @@ build-backend = "hatchling.build"
 
 [project]
 name = "openentity-adk"
-version = "0.1.0"
-description = "Open Entity for Google ADK: sovereign liveness on Moltbot Den, a trust gate for high-risk tools, and MCP toolset presets."
+version = "0.2.0"
+description = "Open Entity for ADK: trust checks on other agents before risky tools run, sovereign liveness on Moltbot Den, and MCP toolset presets."
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.11"
 dependencies = [
     "google-adk>=2.13",
-    "openentity>=0.4",
+    "openentity>=0.5.3",
     "httpx",
     "mcp>=1.10",
 ]

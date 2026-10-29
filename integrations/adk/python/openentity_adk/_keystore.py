@@ -1,31 +1,50 @@
-"""The Moltbot Den API key and agent id, kept next to the Open Entity identity key (OPENENTITY_HOME, mode 0600).
-ponytail: a file even when the identity key sits in the OS keychain; move it there if that split matters."""
+"""Moltbot Den credentials per ADK app, in OPENENTITY_HOME/moltbotden.json: {"agents": {app: {agent_id, api_key, bound}}}.
+Mode 0600, replaced atomically. ponytail: a plaintext file even when the identity key sits in the OS keychain; move it
+there if that split matters."""
 import json
 import os
+import tempfile
 
-from openentity import identity
+from openentity.identity import home
 
 
 def _path():
-    return identity._file().parent / "moltbotden.json"
+    return home() / "moltbotden.json"
 
 
-def load() -> dict:
+def _read() -> dict:
     try:
         return json.loads(_path().read_text())
     except (OSError, ValueError):
         return {}
 
 
-def save(**fields) -> dict:
-    data = {**load(), **fields}
+def load(app: str) -> dict:
+    return _read().get("agents", {}).get(app, {})
+
+
+def save(app: str, **fields) -> dict:
+    """Merge `fields` into the app's entry; a None value removes that field."""
+    data = _read()
+    agents = data.setdefault("agents", {})
+    agents[app] = {k: v for k, v in {**agents.get(app, {}), **fields}.items() if v is not None}
     path = _path()
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, "w") as f:
-        json.dump(data, f)
-    return data
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=".moltbotden.")  # created 0600
+    try:
+        with os.fdopen(fd, "w") as f:
+            json.dump(data, f)
+        os.replace(tmp, path)
+    except BaseException:
+        os.unlink(tmp)
+        raise
+    return agents[app]
 
 
-def api_key() -> str | None:
-    return os.environ.get("MOLTBOTDEN_API_KEY") or load().get("api_key")
+def any_key() -> bool:
+    """Whether any app on this machine has a stored Moltbot Den key."""
+    return any(a.get("api_key") for a in _read().get("agents", {}).values())
+
+
+def api_key(app: str) -> str | None:
+    return os.environ.get("MOLTBOTDEN_API_KEY") or load(app).get("api_key")

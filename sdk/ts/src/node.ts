@@ -39,15 +39,22 @@ export interface Identity {
 
 /** The entity's key from the OS keychain, else `~/.openentity/identity.key` (mode 0600). A fresh key goes to the keychain
  * when one answers, otherwise to the file. OPENENTITY_KEYCHAIN=off uses the file only. Same key file as the Python SDK. */
-async function loadOrCreate(): Promise<Identity> {
-  const make = async (seedHex: string, source: Identity["source"]): Promise<Identity> => {
-    const seed = unhex(seedHex), kp = await keyPairFromSeed(seed);
-    return { kp, did: kp.did, seed, source };
-  };
-  const file = identityFile();
+const make = async (seedHex: string, source: Identity["source"]): Promise<Identity> => {
+  const seed = unhex(seedHex), kp = await keyPairFromSeed(seed);
+  return { kp, did: kp.did, seed, source };
+};
+
+/** The existing identity, or null. Never creates one. */
+async function load(): Promise<Identity | null> {
   const fromKeychain = keychainGet();
   if (fromKeychain) return make(fromKeychain, "keychain");
-  if (existsSync(file)) return make(readFileSync(file, "utf8").trim(), "file");
+  return existsSync(identityFile()) ? make(readFileSync(identityFile(), "utf8").trim(), "file") : null;
+}
+
+async function loadOrCreate(): Promise<Identity> {
+  const found = await load();
+  if (found) return found;
+  const file = identityFile();
   const seedHex = hex(crypto.getRandomValues(new Uint8Array(32)));
   if (keychainSet(seedHex)) return make(seedHex, "keychain");
   mkdirSync(dirname(file), { recursive: true, mode: 0o700 });
@@ -63,4 +70,4 @@ async function loadOrCreate(): Promise<Identity> {
   return make(seedHex, "file");
 }
 
-export const Identity = { loadOrCreate };
+export const Identity = { load, loadOrCreate };

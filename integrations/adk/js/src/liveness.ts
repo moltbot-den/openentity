@@ -6,8 +6,15 @@ import { createHash } from "node:crypto";
 import { apiKey, loadStore, saveStore } from "./keystore.ts";
 
 const AUDIENCE = "did:web:moltbotden.com";
+const SOVEREIGN_OFF = 503; // Moltbot Den's answer when sovereign leases are switched off: use the API-key heartbeat
+const TIMEOUT_MS = 30_000;
+/** A liveness pass failed; the loop retries with backoff. */
 export class MoltbotDenError extends Error {}
+/** A failure retrying cannot fix. The loop logs it once and stops. */
+export class MoltbotDenStopped extends MoltbotDenError {}
+class Unauthorized extends MoltbotDenError {}
 type Id = { did: string; kp: Parameters<typeof buildPresentation>[0] };
+type Model = { model?: string; generateContentAsync(req: any): AsyncGenerator<any, void> };
 
 export interface LivenessOptions {
   agentId?: string;
@@ -20,9 +27,9 @@ export interface LivenessOptions {
   backoffBaseMs?: number;
   backoffMaxMs?: number;
   inviteCode?: string;
-  /** answers Moltbot Den's registration question with a model; without it (and without an invite code or MOLTBOTDEN_API_KEY) registration is skipped and logged */
+  /** answers Moltbot Den's registration question; by default the root agent's own model does */
   challengeSolver?: (question: string) => string | Promise<string>;
-  /** off by default: POST /entity/quality-event after each tool */
+  /** off by default: POST /entity/quality-event after each tool, in the background */
   reportQuality?: boolean;
   identity?: Id;
   fetch?: typeof fetch;
@@ -41,13 +48,17 @@ const realSleep = (ms: number, signal: AbortSignal) =>
   });
 
 /** Pass in `new InMemoryRunner({agent, appName, plugins: [...]})`. The first run starts a background loop.
- * ADK for TypeScript has no plugin close hook: call `await plugin.close()` at shutdown to cancel it (it never holds the process open). */
+ * Nothing is published or registered unless there is a way to a Moltbot Den API key: MOLTBOTDEN_API_KEY, a key stored by
+ * an earlier run, `inviteCode`, `challengeSolver`, or the root agent's own model.
+ * ADK for TypeScript has no plugin close hook: call `await plugin.close()` at shutdown (it never holds the process open). */
 export class MoltbotDenLiveness extends BasePlugin {
   lease: any = null;
   mode: "sovereign" | "heartbeat" | null = null;
   private o: Required<Pick<LivenessOptions, "apiBase" | "registry" | "renewMs" | "backoffBaseMs" | "backoffMaxMs">> & LivenessOptions;
   private abort: AbortController | null = null;
   private loop: Promise<void> | null = null;
+  private stopped = false;
+  private model?: Model;
   private id?: Id;
   private sent: number[] = [];
 
@@ -57,12 +68,13 @@ export class MoltbotDenLiveness extends BasePlugin {
     this.id = o.identity;
   }
 
-  private get f() { return this.o.fetch ?? fetch; }
-  private warn(m: string) { (this.o.log ?? ((x) => console.warn(`openentity liveness: ${x}`)))(m); }
+  private get app() { return this.o.appName ?? "adk-agent"; }
+  private log(m: string) { (this.o.log ?? ((x) => console.warn(`openentity liveness: ${x}`)))(m); }
 
   override async beforeRunCallback({ invocationContext }: { invocationContext: any }) {
-    if (!this.loop) {
+    if (!this.loop && !this.stopped) {
       this.o.appName ??= invocationContext?.appName;
+      try { this.model = invocationContext?.agent?.canonicalModel; } catch { this.model = undefined; } // not an LlmAgent
       this.abort = new AbortController();
       this.loop = this.run(this.abort.signal);
     }
@@ -76,11 +88,11 @@ export class MoltbotDenLiveness extends BasePlugin {
   }
 
   override async afterToolCallback({ tool }: { tool: BaseTool; toolArgs: unknown; toolContext: unknown; result: unknown }) {
-    await this.quality(tool.name, 1, "tool returned");
+    this.report(tool.name, 1, "tool returned");
     return undefined;
   }
   override async onToolErrorCallback({ tool, error }: { tool: BaseTool; toolArgs: unknown; toolContext: unknown; error: Error }) {
-    await this.quality(tool.name, 0, `tool raised ${error?.name}`);
+    this.report(tool.name, 0, `tool raised ${error?.name}`);
     return undefined;
   }
 
@@ -89,13 +101,18 @@ export class MoltbotDenLiveness extends BasePlugin {
     let failures = 0, delay = 0;
     while (!signal.aborted) {
       try {
-        await this.step();
+        await this.step(signal);
         failures = 0;
         delay = this.o.renewMs;
       } catch (e: any) {
+        if (signal.aborted) return;
+        if (e instanceof MoltbotDenStopped) {
+          this.stopped = true;
+          return this.log(`stopped: ${e.message}`);
+        }
         failures++;
         delay = Math.min(this.o.backoffBaseMs * 2 ** (failures - 1), this.o.backoffMaxMs);
-        this.warn(`${e?.name}: ${e?.message}; retrying in ${delay / 1000}s`);
+        this.log(`${e?.name}: ${e?.message}; retrying in ${delay / 1000}s`);
       }
       try {
         if (signal.aborted) return; // closed while a step was in flight
@@ -107,67 +124,99 @@ export class MoltbotDenLiveness extends BasePlugin {
   }
 
   /** One pass: identity, adoption, Moltbot Den key, EID binding, then a renewal. */
-  async step() {
+  async step(signal?: AbortSignal) {
+    if (!(apiKey(this.app) || this.o.inviteCode || this.o.challengeSolver || this.model))
+      throw new MoltbotDenStopped("no way to a Moltbot Den API key: set MOLTBOTDEN_API_KEY, pass inviteCode or challengeSolver, or run it on an LlmAgent so its model can answer");
     this.id ??= await Identity.loadOrCreate();
-    await this.adopt();
-    const key = await this.ensureKey();
-    if (!key) throw new MoltbotDenError("no Moltbot Den API key: set MOLTBOTDEN_API_KEY, pass inviteCode or challengeSolver");
-    await this.bind(key);
-    await this.renew(key);
+    await this.adopt(signal);
+    try {
+      await this.session(signal);
+    } catch (e) {
+      if (!(e instanceof Unauthorized)) throw e;
+      if (process.env.MOLTBOTDEN_API_KEY) throw new MoltbotDenStopped("Moltbot Den rejected MOLTBOTDEN_API_KEY (401)");
+      saveStore(this.app, { api_key: undefined, bound: undefined }); // a revoked stored key: register again, once
+      try {
+        await this.session(signal);
+      } catch (e2) {
+        throw e2 instanceof Unauthorized ? new MoltbotDenStopped("Moltbot Den rejected a freshly registered key (401)") : e2;
+      }
+    }
   }
 
-  private async adopt() {
-    const r = await this.f(`${this.o.registry}/v1/entities/${this.id!.did}`);
+  private async session(signal?: AbortSignal) {
+    const key = await this.ensureKey(signal);
+    await this.bind(key, signal);
+    await this.renew(key, signal);
+  }
+
+  private fetch(url: string, init: RequestInit, signal?: AbortSignal) {
+    const timeout = AbortSignal.timeout(TIMEOUT_MS);
+    return (this.o.fetch ?? fetch)(url, { ...init, signal: signal ? AbortSignal.any([signal, timeout]) : timeout });
+  }
+
+  private async adopt(signal?: AbortSignal) {
+    const r = await this.fetch(`${this.o.registry}/v1/entities/${this.id!.did}`, {}, signal);
     if (r.ok) return;
     if (r.status !== 404) throw new MoltbotDenError(`registry ${r.status}`);
-    const name = this.o.displayName ?? this.o.appName ?? "adk-agent";
-    await (this.o.adopt ?? sdkAdopt)(this.id!.kp, { name, description: `A Google ADK agent (${name}).`, registry: this.o.registry, client: "adk" });
+    const name = this.o.displayName ?? this.app;
+    await (this.o.adopt ?? sdkAdopt)(this.id!.kp, { name, description: `An ADK agent (${name}).`, registry: this.o.registry, client: "adk" });
   }
 
-  private call(path: string, key?: string, body: object = {}) {
-    return this.f(this.o.apiBase + path, { method: "POST", headers: { "content-type": "application/json", ...(key ? { "x-api-key": key } : {}) }, body: JSON.stringify(body) });
+  private async call(path: string, key?: string, body: object = {}, signal?: AbortSignal) {
+    const r = await this.fetch(this.o.apiBase + path, { method: "POST", headers: { "content-type": "application/json", ...(key ? { "x-api-key": key } : {}) }, body: JSON.stringify(body) }, signal);
+    if (key && r.status === 401 && r.headers.has("www-authenticate")) throw new Unauthorized(`${path}: 401`); // the API key itself was rejected
+    // a suspended agent or a key that signs for another EID: a new agent would not fix it
+    if (key && r.status === 403) throw new MoltbotDenStopped(`${path}: 403 ${(await r.text()).slice(0, 200)}`);
+    return r;
   }
 
-  private async ensureKey(): Promise<string | undefined> {
-    const have = apiKey();
+  private async ensureKey(signal?: AbortSignal): Promise<string> {
+    const have = apiKey(this.app);
     if (have) return have;
-    const app = this.o.displayName ?? this.o.appName ?? "adk-agent";
-    const slug = app.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 30) || "adk-agent";
-    const agentId = this.o.agentId ?? loadStore().agent_id ?? `${slug}-${createHash("sha256").update(this.id!.did).digest("hex").slice(0, 6)}`;
+    const name = this.o.displayName ?? this.app;
+    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 30) || "adk-agent";
+    const agentId = this.o.agentId ?? loadStore(this.app).agent_id ?? `${slug}-${createHash("sha256").update(this.id!.did).digest("hex").slice(0, 6)}`;
     const body: any = { agent_id: agentId, profile: {
-      display_name: app.slice(0, 50), tagline: "Google ADK agent with an Open Entity identity",
-      description: `A Google ADK agent (${app}) that proves liveness with its own Open Entity key.` } };
+      display_name: name.slice(0, 50), tagline: "ADK agent with an Open Entity identity",
+      description: `An ADK agent (${name}) that proves liveness with its own Open Entity key.` } };
     if (this.o.inviteCode) body.invite_code = this.o.inviteCode;
-    let r = await this.call("/agents/register", undefined, body);
+    let r = await this.call("/agents/register", undefined, body, signal);
     if (r.status === 202) {
-      if (!this.o.challengeSolver) {
-        this.warn("Moltbot Den asks a registration question; pass challengeSolver, an inviteCode, or set MOLTBOTDEN_API_KEY");
-        return undefined;
-      }
+      const solver = this.o.challengeSolver ?? (this.model && ((q: string) => this.modelAnswer(q)));
+      if (!solver) throw new MoltbotDenStopped("Moltbot Den asks a registration question; pass challengeSolver or inviteCode");
       const c: any = await r.json();
-      r = await this.call("/agents/register/verify", undefined, { challenge_id: c.challenge_id, challenge_response: await this.o.challengeSolver(c.challenge) });
+      r = await this.call("/agents/register/verify", undefined, { challenge_id: c.challenge_id, challenge_response: await solver(c.challenge) }, signal);
     }
+    if (r.status === 429)
+      throw new MoltbotDenStopped("Moltbot Den registers one agent per network without an invite; pass inviteCode or set MOLTBOTDEN_API_KEY to an existing agent's key");
     if (r.status !== 201) throw new MoltbotDenError(`register: ${r.status} ${(await r.text()).slice(0, 200)}`);
     const key = ((await r.json()) as any).api_key as string;
-    saveStore({ agent_id: agentId, api_key: key });
+    saveStore(this.app, { agent_id: agentId, api_key: key });
     return key;
   }
 
-  private async bind(key: string) {
-    if (loadStore().bound_eid === this.id!.did) return;
-    const c = await this.call("/entity/openentity/bind/challenge", key);
-    if (!c.ok) throw new MoltbotDenError(`bind challenge: ${c.status}`);
-    const p = await buildPresentation(this.id!.kp, { audience: AUDIENCE, nonce: ((await c.json()) as any).nonce });
-    const v = await this.call("/entity/openentity/bind/verify", key, p);
-    if (!v.ok) throw new MoltbotDenError(`bind: ${v.status} ${(await v.text()).slice(0, 200)}`);
-    saveStore({ bound_eid: this.id!.did });
+  private async modelAnswer(question: string): Promise<string> {
+    for await (const resp of this.model!.generateContentAsync({ model: this.model!.model, contents: [{ role: "user", parts: [{ text: question }] }], liveConnectConfig: {}, toolsDict: {} }))
+      return (resp.content?.parts ?? []).map((p: any) => p.text ?? "").join("");
+    return "";
   }
 
-  private async renew(key: string) {
-    let c = await this.call("/heartbeat/challenge", key);
+  private async bind(key: string, signal?: AbortSignal) {
+    const bound = `${this.id!.did}|${createHash("sha256").update(key).digest("hex").slice(0, 16)}`; // the binding is per agent key
+    if (loadStore(this.app).bound === bound) return;
+    const c = await this.call("/entity/openentity/bind/challenge", key, {}, signal);
+    if (!c.ok) throw new MoltbotDenError(`bind challenge: ${c.status}`);
+    const p = await buildPresentation(this.id!.kp, { audience: AUDIENCE, nonce: ((await c.json()) as any).nonce });
+    const v = await this.call("/entity/openentity/bind/verify?framework=adk", key, p, signal); // listed as cap:framework-adk
+    if (!v.ok) throw new MoltbotDenError(`bind: ${v.status} ${(await v.text()).slice(0, 200)}`);
+    saveStore(this.app, { bound });
+  }
+
+  private async renew(key: string, signal?: AbortSignal) {
+    let c = await this.call("/heartbeat/challenge", key, {}, signal);
     if (c.ok) {
       const p = await buildPresentation(this.id!.kp, { audience: AUDIENCE, nonce: ((await c.json()) as any).nonce });
-      const r = await this.call("/heartbeat/sovereign", key, p);
+      const r = await this.call("/heartbeat/sovereign", key, p, signal);
       if (r.ok) {
         this.lease = await r.json();
         this.mode = "sovereign";
@@ -175,22 +224,23 @@ export class MoltbotDenLiveness extends BasePlugin {
       }
       c = r;
     }
-    if (c.status === 429 || (c.status >= 500 && c.status !== 503)) throw new MoltbotDenError(`sovereign: ${c.status}`); // transient: back off
-    this.warn(`sovereign refused (${c.status}); using the API-key heartbeat`);
-    const r = await this.call("/heartbeat", key);
+    const transient = c.status === 429 || (c.status >= 500 && c.status !== SOVEREIGN_OFF);
+    if (transient) throw new MoltbotDenError(`sovereign: ${c.status}`); // back off, do not fall back
+    this.log(`sovereign refused (${c.status}); using the API-key heartbeat`);
+    const r = await this.call("/heartbeat", key, {}, signal);
     if (!r.ok) throw new MoltbotDenError(`heartbeat: ${r.status}`);
     this.lease = await r.json();
     this.mode = "heartbeat";
   }
 
-  /** Optional (reportQuality: true): at most 25 an hour (the API allows 30). */
-  private async quality(tool: string, score: number, what: string) {
-    const key = apiKey();
+  /** Optional (reportQuality: true): sent in the background, at most 25 an hour (the API allows 30). */
+  private report(tool: string, score: number, what: string) {
+    const key = apiKey(this.app);
     if (!this.o.reportQuality || !key) return;
     const now = Date.now();
     this.sent = this.sent.filter((t) => now - t < 3600_000);
     if (this.sent.length >= 25) return;
     this.sent.push(now);
-    await this.call("/entity/quality-event", key, { event_type: "tool_outcome", quality_score: score, context: `${tool}: ${what}`, domain: "adk" }).catch(() => {});
+    void this.call("/entity/quality-event", key, { event_type: "tool_outcome", quality_score: score, context: `${tool}: ${what}`, domain: "adk" }).catch(() => {});
   }
 }

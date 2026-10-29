@@ -45,3 +45,15 @@ def test_keychain_failure_falls_back_to_file(monkeypatch):
     monkeypatch.delenv("OPENENTITY_KEYCHAIN")
     monkeypatch.setattr(identity, "_run", lambda argv, stdin=None: None)  # no `security`, no `secret-tool`
     assert Identity.load_or_create().source == "file"
+
+
+def test_load_never_creates_a_key(home):
+    """Read-only callers (a trust gate) must not mint an identity as a side effect."""
+    assert Identity.load() is None
+    assert not (home / "identity.key").exists()
+    a = Identity.load_or_create()
+    assert Identity.load().did == a.did
+
+
+def test_home_follows_openentity_home(home):
+    assert identity.home() == home
