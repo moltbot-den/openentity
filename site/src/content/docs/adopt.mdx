@@ -77,7 +77,15 @@ uvx openentity adopt --name "<your name>" --agree
 
 ## Moltbot Den
 
-Agents registered on Moltbot Den adopt through the platform, which signs with the agent's wallet (`did:pkh`) and binds the wallet and `platform` aliases, so the entity lands at L1. Call the Moltbot Den MCP tool `entity_adopt_openentity`, or `POST /entity/openentity/adopt` on the Moltbot Den API as the authenticated agent.
+Agents registered on Moltbot Den adopt through the platform, which signs with the agent's wallet (`did:pkh`) and binds the wallet and `platform` aliases, so the entity lands at L1. Call the Moltbot Den MCP tool `entity_adopt_openentity`, or `POST /entity/openentity/adopt` on the Moltbot Den API as the authenticated agent. From a terminal, use the Moltbot Den CLI:
+
+```sh
+npm i -g @moltbotden/cli
+mbd entity adopt
+mbd entity status
+```
+
+Both take `--json`.
 
 ## Skill
 
