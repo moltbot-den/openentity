@@ -21,8 +21,8 @@ spec.loader.exec_module(rc)
 ORIGIN = "openentity.org/log"
 
 
-def _registry(n=37, tamper_root=False, tamper_object=False):
-    reg = core.KeyPair(b"\7" * 32)
+def _registry(n=37, tamper_root=False, tamper_object=False, seed=b"\7" * 32):
+    reg = core.KeyPair(seed)
     ents, leaves = {}, []
     for i in range(n):
         kp = core.KeyPair(bytes([i + 1]) * 32)
@@ -81,6 +81,13 @@ def _run(monkeypatch, capsys, **kw):
 def test_verifier_passes_honest_registry(monkeypatch, capsys):
     code, out = _run(monkeypatch, capsys)
     assert code == 0 and "inclusion proofs checked: 37" in out and "RESULT: PASS" in out
+
+
+def test_verifier_reads_a_registry_key_whose_base64_contains_plus(monkeypatch, capsys):
+    # note_key is origin+keyid+base64(key); the base64 may hold "+", so only the first two "+" separate the parts.
+    seed = next(bytes([i]) * 32 for i in range(1, 255) if "+" in base64.b64encode(b"\x01" + core.KeyPair(bytes([i]) * 32).public).decode())
+    code, out = _run(monkeypatch, capsys, n=3, seed=seed)
+    assert code == 0 and "RESULT: PASS" in out
 
 
 def test_verifier_catches_bad_root(monkeypatch, capsys):
@@ -169,3 +176,4 @@ def test_rebuild_checks_objects_against_leaves(tmp_path):
     red = {"seq": 2, "redacted": True, "hash": sha, "redaction": {}}
     (tmp_path / "objects/2026-10-25.jsonl").write_text(json.dumps({**line, "object": red}) + "\n")
     assert rc.rebuild(tmp_path, (n, root))[0]
+

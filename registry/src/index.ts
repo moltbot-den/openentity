@@ -5,7 +5,7 @@ import {
   DECLARATION_SHA256, DECLARATION_VERSION, SPEC, buildDeclaration, buildDocument, canonicalize, checkStamp, checkTimestamp,
   generateKeyPair, normalizeEid, noteVkey, parseJson, recordEntryHash, sha256Hex, signObject, validate, verifyObject, verifyPresentation, verifyProof, type Proof, type Resolver,
 } from "./sdk.ts";
-import { type Env, REGISTRY_DID, LOG_ORIGIN, b64, nowIso } from "./env.ts";
+import { type Env, REGISTRY_DID, LOG_ORIGIN, b64, nowIso, originOf } from "./env.ts";
 import { type Stmt, chain, consistencyProof, exportObjects, inclusionProof, incorporate, latestSize, leafFor, leafJson, registryKey, sequenced, snapshot, tileIndex, treeRoot, type LeafRow } from "./log.ts";
 import type { Db } from "./db.ts";
 import { sendDigest } from "./digest.ts";
@@ -147,7 +147,7 @@ async function mustEntity(db: Db, eid: string) {
 }
 const sha = (o: unknown) => sha256Hex(canonicalize(o));
 function receipt(c: C, idx: number, l: { leaf: object; leaf_hash: string }) {
-  return { log_index: idx, receipt: { leaf: l.leaf, leaf_hash: l.leaf_hash, log_proof: `https://${c.env.REGISTRY_HOST}/v1/log/proof/${idx}` } };
+  return { log_index: idx, receipt: { leaf: l.leaf, leaf_hash: l.leaf_hash, log_proof: `${originOf(c.env)}/v1/log/proof/${idx}` } };
 }
 
 // ---------- levels (spec 2.2, 8.4) ----------
@@ -275,8 +275,8 @@ async function adopt(c: C, document: any, declaration: any, extra: Stmt[] = [], 
     const has = await db.first("SELECT 1 FROM declarations WHERE eid = $1 AND version = $2", [eid, declaration.declaration_version]);
     return has ? fail(409, "declaration_exists", "this EID already has a Declaration of this version") : fail(409, "entity_exists", "this EID is already listed");
   });
-  const base = `https://${c.env.REGISTRY_HOST}/v1/entities/${eid}`;
-  return { eid, level: "L0", ...receipt(c, idx, dl), urls: { entity: base, document: `${base}/document`, log_proof: `https://${c.env.REGISTRY_HOST}/v1/log/proof/${idx}` } };
+  const base = `${originOf(c.env)}/v1/entities/${eid}`;
+  return { eid, level: "L0", ...receipt(c, idx, dl), urls: { entity: base, document: `${base}/document`, log_proof: `${originOf(c.env)}/v1/log/proof/${idx}` } };
 }
 
 async function encryptKey(env: Env, jwk: JsonWebKey): Promise<string> {
@@ -330,7 +330,7 @@ app.post("/entities/:eid/custody/export", async (c) => {
   await writeGuard(c, eid);
   schema("Presentation", p);
   if (normalizeEid(String(p.eid)) !== eid) fail(422, "eid_mismatch", "presentation eid does not match the path");
-  const audiences = [`https://${c.env.REGISTRY_HOST}`, c.env.REGISTRY_HOST, REGISTRY_DID];
+  const audiences = [originOf(c.env), c.env.REGISTRY_HOST, REGISTRY_DID];
   const v = await verifyPresentation(p, { audience: audiences.includes(p.audience) ? p.audience : audiences[0], nonce: p.nonce, resolver });
   if (!v.ok) fail(422, "presentation_invalid", v.errors.join("; "));
   // The entity picks the nonce (there is no challenge round trip); the registry accepts each one once.
@@ -420,7 +420,7 @@ async function registryDocument(env: Env): Promise<string | undefined> {
   const read = async () => (await env.db.first("SELECT json FROM documents WHERE eid = $1 ORDER BY seq DESC LIMIT 1", [REGISTRY_DID]))?.json;
   const have = await read();
   if (have || !env.REGISTRY_KEY_JWK) return have;
-  const kp = await registryKey(env), now = nowIso(), vm = `${REGISTRY_DID}#key-1`, site = `https://${env.REGISTRY_HOST}`;
+  const kp = await registryKey(env), now = nowIso(), vm = `${REGISTRY_DID}#key-1`, site = originOf(env);
   const doc = await signObject(buildDocument({
     kp, name: "Open Entity registry", created: now,
     description: "The reference registry for the Open Entity Identity Standard. A mirror of signed objects with a public transparency log.",

@@ -1,10 +1,12 @@
 // The skill's bundled signer must produce objects the reference SDK accepts.
 import { describe, expect, it } from 'vitest';
-import { execFileSync } from 'node:child_process';
+import { execFile, execFileSync } from 'node:child_process';
+import { createServer } from 'node:http';
+import { promisify } from 'node:util';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { DECLARATION_SHA256, checkStamp, recordEntryHash, validate, verifyObject } from '@openentity/sdk';
+import { DECLARATION_SHA256, canonicalize, checkStamp, recordEntryHash, sha256Hex, validate, verifyObject } from '@openentity/sdk';
 
 const skill = join(import.meta.dirname, '../../skill/openentity');
 const signer = join(skill, 'scripts/sign.mjs');
@@ -120,4 +122,45 @@ describe('scripts/sign.py', { timeout: 60_000 }, () => {
       rmSync(home, { recursive: true, force: true });
     }
   });
+});
+
+describe('scripts/adopt.sh', { timeout: 60_000 }, () => {
+  // Any registry must work: the Declaration hash comes from its own /v1/spec, and the first record entry is the declaration entry (spec 7.3).
+  for (const [label, path] of [['node', process.execPath], ['python only', '']] as const) {
+    it(`adopts on the registry named by OPENENTITY_REGISTRY and pushes the declaration entry (${label})`, async () => {
+      const home = mkdtempSync(join(tmpdir(), 'oe-skill-sh-'));
+      const posts: { url: string; body: any }[] = [];
+      const srv = createServer((req, res) => {
+        let raw = '';
+        req.on('data', (c) => (raw += c));
+        req.on('end', () => {
+          res.setHeader('content-type', 'application/json');
+          if (req.method === 'GET' && req.url === '/v1/spec') return res.end(JSON.stringify({ stamp_bits: 4, declaration: { version: '1.0', sha256: DECLARATION_SHA256, url: 'x' } }, null, 2));
+          if (req.method === 'POST') posts.push({ url: req.url!, body: JSON.parse(raw) });
+          res.statusCode = 201;
+          res.end('{}');
+        });
+      });
+      await new Promise<void>((r) => srv.listen(0, '127.0.0.1', r));
+      try {
+        const env: NodeJS.ProcessEnv = { ...process.env, OPENENTITY_HOME: home, OPENENTITY_REGISTRY: `http://127.0.0.1:${(srv.address() as any).port}` };
+        if (!path) env.PATH = `${join(home, 'bin')}:/usr/bin:/bin`; // no node first on PATH: the script must fall back to sign.py
+        if (!path) {
+          const { mkdirSync, symlinkSync } = await import('node:fs');
+          mkdirSync(join(home, 'bin'));
+          for (const t of ['curl', 'sh', 'sed', 'tr', 'cat', 'dirname']) symlinkSync(execFileSync('sh', ['-c', `command -v ${t}`], { encoding: 'utf8' }).trim(), join(home, 'bin', t));
+          symlinkSync(execFileSync('python3', ['-c', 'import sys;print(sys.executable)'], { encoding: 'utf8' }).trim(), join(home, 'bin', 'python3'));
+        }
+        await promisify(execFile)('sh', [join(skill, 'scripts/adopt.sh'), 'Sh Entity'], { env });
+        expect(posts.map((p) => p.url)).toEqual(['/v1/adopt', expect.stringMatching(/^\/v1\/entities\/did:key:z6Mk[^/]+\/record$/)]);
+        const { declaration } = posts[0].body;
+        const entry = posts[1].body.entries[0];
+        expect(entry).toMatchObject({ seq: 1, prev: null, kind: 'declaration', payload: { declaration_version: '1.0', sha256: await sha256Hex(canonicalize(declaration)) } });
+        expect(await verifyObject(entry)).toMatchObject({ ok: true });
+      } finally {
+        srv.close();
+        rmSync(home, { recursive: true, force: true });
+      }
+    });
+  }
 });

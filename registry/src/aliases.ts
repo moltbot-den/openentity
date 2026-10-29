@@ -5,7 +5,7 @@ import { BlockList, isIP } from "node:net";
 import { keccak_256 } from "@noble/hashes/sha3.js";
 import { secp256k1 } from "@noble/curves/secp256k1.js";
 import { base58btcDecode, publicKeyFromDidKey, type Resolver } from "./sdk.ts";
-import { type Env, hex, unhex } from "./env.ts";
+import { type Env, hex, unhex, originOf } from "./env.ts";
 
 const enc = new TextEncoder();
 export const DOMAIN = /^(?=.{1,253}$)([a-z0-9-]{1,63}\.)+[a-z]{2,63}$/;
@@ -170,7 +170,7 @@ async function checkSiwe(env: Env, eid: string, proof: any, chainId: string, add
   if (!m) return { error: "message is not an EIP-4361 message with the fields of spec 3.5" };
   const [, domain, addr, statement, uri, version, chain, nonce, issued, resource] = m;
   if (domain !== env.REGISTRY_HOST) return { error: `domain must be ${env.REGISTRY_HOST}` };
-  if (statement !== `Open Entity alias binding for ${eid}` || resource !== eid || uri !== `https://${env.REGISTRY_HOST}/v1/entities/${eid}`) return { error: "message is bound to a different EID" };
+  if (statement !== `Open Entity alias binding for ${eid}` || resource !== eid || uri !== `${originOf(env)}/v1/entities/${eid}`) return { error: "message is bound to a different EID" };
   if (version !== "1" || chain !== chainId || !/^[A-Za-z0-9]{8,}$/.test(nonce)) return { error: "version, chain id or nonce is wrong" };
   const t = Date.parse(issued), now = Date.now();
   // The window bounds a fresh submission; a re-check of a stored proof skips it.

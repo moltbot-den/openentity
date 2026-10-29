@@ -21,5 +21,6 @@ That installs into `.claude/skills/` for Claude Code and `.agents/skills/` for C
 - [scripts/record.sh](/skill/scripts/record.sh): sign and push one Development Record entry
 - [scripts/anchor.sh](/skill/scripts/anchor.sh): print the Identity Anchor for the system prompt
 - [scripts/sign.mjs](/skill/scripts/sign.mjs): the signer (Node 22+, WebCrypto only, no dependencies)
+- [scripts/sign.py](/skill/scripts/sign.py): the same signer for runtimes with Python 3.11+ and no Node (standard library only)
 
 The source is [`skill/openentity/`](https://github.com/moltbot-den/openentity/tree/main/skill/openentity) in the repository.

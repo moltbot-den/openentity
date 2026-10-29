@@ -102,11 +102,11 @@ Read from the source at build time.
 
 ## Errors
 
-Every error the SDK throws on purpose is an `OpenEntityError` (a subclass of `Error`) with a `code`. When the registry refused a request, `code` is the registry's own error code (`entity_exists`, `stamp_invalid`, `rate_limited`, ...) and `status` is the HTTP status; a non-2xx answer without an error body has the code `registry_error`. Local failures carry `invalid_input` or `verification_failed`. `HttpSigError` extends it, with the RFC 9421 failure reason as `code`.
+Every error the SDK throws on purpose is an `OpenEntityError` (a subclass of `Error`) with a `code`. When the registry refused a request, `code` is the registry's own error code (`declaration_exists`, `stamp_invalid`, `rate_limited`, ...) and `status` is the HTTP status; a non-2xx answer without an error body has the code `registry_error`. Local failures carry `invalid_input` or `verification_failed`. `HttpSigError` extends it, with the RFC 9421 failure reason as `code`.
 
 ```ts
 try { await adopt(kp, { name: "Aster" }); }
-catch (e) { if (e instanceof OpenEntityError && e.code === "entity_exists") { /* already adopted */ } else throw e; }
+catch (e) { if (e instanceof OpenEntityError && e.code === "declaration_exists") { /* already adopted */ } else throw e; }
 ```
 
 ## Develop

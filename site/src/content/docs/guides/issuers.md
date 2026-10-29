@@ -59,18 +59,18 @@ The same in Python, using the SDK's canonical hash:
 
 ```python
 import json, urllib.request
-from openentity import canonical_hash, b58encode, mint_stamp, now, SPEC, KeyPair
+from openentity import canonical_hash, base58btc_encode, mint_stamp, now_seconds, SPEC, KeyPair
 
 key = KeyPair(seed)                       # your 32-byte Ed25519 seed
 ISSUER = "did:web:issuer.example"
-created = now()
+created = now_seconds()
 att = {"spec": SPEC, "type": "Attestation", "issuer": ISSUER, "subject": subject, "claim_type": "capability",
        "claim": {"capability": "code-review", "evidence_ref": "https://issuer.example/reviews/1"},
        "created": created, "expires": expires}
 cfg = {"type": "DataIntegrityProof", "cryptosuite": "eddsa-jcs-2022", "created": created,
        "verificationMethod": f"{ISSUER}#key-1", "proofPurpose": "assertionMethod"}
 sig = key.private.sign(canonical_hash(cfg) + canonical_hash(att))
-att["proof"] = {**cfg, "proofValue": "z" + b58encode(sig)}
+att["proof"] = {**cfg, "proofValue": "z" + base58btc_encode(sig)}
 
 bits = json.load(urllib.request.urlopen("https://openentity.org/v1/spec"))["stamp_bits"]
 req = urllib.request.Request("https://openentity.org/v1/attestations", json.dumps(att).encode(),

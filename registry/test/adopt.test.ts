@@ -17,6 +17,16 @@ describe("adopt", () => {
     expect(e.body.aliases).toEqual([]);
   });
 
+  it("emits http URLs when REGISTRY_SCHEME is http (a local registry), https otherwise", async () => {
+    const local = { ...E, REGISTRY_HOST: "127.0.0.1:8787", REGISTRY_SCHEME: "http" };
+    const kp = await generateKeyPair();
+    const r = await call("POST", "/adopt", await signed(kp), await stamp(kp.did), local);
+    expect(r.status).toBe(201);
+    expect(r.body.urls.entity).toBe(`http://127.0.0.1:8787/v1/entities/${kp.did}`);
+    expect(r.body.receipt.log_proof).toMatch(/^http:\/\/127\.0\.0\.1:8787\/v1\/log\/proof\//);
+    expect((await adopted("Prod")).res.urls.entity).toMatch(/^https:\/\/openentity\.org\//);
+  });
+
   it("validates the schema before checking any signature", async () => {
     const kp = await generateKeyPair();
     const { document, declaration } = await signed(kp);

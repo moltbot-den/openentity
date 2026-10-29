@@ -107,14 +107,14 @@ await verifyPresentation(presentation, { audience, nonce, resolver });
 
 ```python
 import json, urllib.request
-from openentity import verify_presentation, default_resolver, b58decode
+from openentity import verify_presentation, default_resolver, base58btc_decode
 
 def resolver(did: str) -> dict:
     if did.startswith("did:web:"):
         host, *path = did[8:].split(":")
         url = f"https://{host}/{'/'.join(path)}/did.json" if path else f"https://{host}/.well-known/did.json"
         doc = json.load(urllib.request.urlopen(url, timeout=10))
-        return {"ed25519": [b58decode(m["publicKeyMultibase"][1:])[2:]
+        return {"ed25519": [base58btc_decode(m["publicKeyMultibase"][1:])[2:]
                             for m in doc.get("verificationMethod", [])
                             if m.get("publicKeyMultibase", "").startswith("z6Mk")]}
     return default_resolver(did)

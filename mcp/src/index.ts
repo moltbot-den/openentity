@@ -36,9 +36,10 @@ export interface McpDeps {
   registry: (req: Request) => Promise<Response>;
   /** In-process call into the site, for llms.txt and the spec text. */
   site: (req: Request) => Promise<Response>;
+  /** The registry's public origin; defaults to https://openentity.org. A local registry passes its own. */
+  origin?: string;
 }
 
-const ORIGIN = "https://openentity.org";
 const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
 const unhex = (s: string) => Uint8Array.from(s.match(/../g) ?? [], (x) => parseInt(x, 16));
 const text = (o: unknown, isError = false) => ({
@@ -84,7 +85,7 @@ export function createMcp(deps: McpDeps): (req: Request) => Promise<Response> {
   };
 }
 
-function serve({ registry, site }: McpDeps): (req: Request) => Promise<Response> {
+function serve({ registry, site, origin: ORIGIN = "https://openentity.org" }: McpDeps): (req: Request) => Promise<Response> {
   return async (req) => {
     // Per-IP limits in the registry key on the viewer address, so pass the caller's through.
     const fwd: Record<string, string> = {};
