@@ -351,6 +351,70 @@ function serve({ registry, site }: McpDeps): (req: Request) => Promise<Response>
     );
 
     server.registerTool(
+      "openentity_alias_add",
+      {
+        description:
+          "Add an alias (domain, wallet, erc8004, platform) so the entity reaches L1: the registry verifies the proof, then your document lists the alias, re-signed with your key (used for this call only). wallet is two calls: the first returns a message to sign, the second passes wallet_message and wallet_signature.",
+        inputSchema: {
+          eid: z.string(),
+          private_key_jwk: z.record(z.string(), z.any()),
+          type: z.enum(["domain", "wallet", "erc8004", "platform"]),
+          value: z.string().max(300).describe("domain: example.com. wallet: 0x address. erc8004: eip155:<chain>:<registry>:<agentId>. platform: <platform>:<handle>"),
+          chain: z.number().int().default(8453).describe("wallet only: chain id"),
+          wallet_message: z.string().optional().describe("wallet step 2: the message from step 1"),
+          wallet_signature: z.string().optional().describe("wallet step 2: EIP-191 personal_sign of wallet_message, 0x hex"),
+        },
+      },
+      async ({ eid, private_key_jwk, type, value, chain, wallet_message, wallet_signature }) => {
+        let kp: KeyPair;
+        try { kp = await keyPairFromJwk(private_key_jwk as JsonWebKey); } catch (e) { return text(`bad private_key_jwk: ${(e as Error).message}`, true); }
+        if (kp.did !== eid) return text("private_key_jwk is not the key for this eid", true);
+        let a: { type: string; value: string; proof?: object };
+        let hint = "";
+        if (type === "domain") {
+          const domain = value.replace(/^did:web:/, "");
+          a = { type, value: `did:web:${domain}` };
+          hint = `Publish {"eid": "${eid}"} at https://${domain}/.well-known/openentity.json (or DNS TXT _openentity.${domain} = eid=${eid}), then call again.`;
+        } else if (type === "wallet" || type === "erc8004") {
+          const address = type === "wallet" ? value.replace(/^did:pkh:eip155:\d+:/, "") : value.split(":")[2];
+          const chainId = type === "wallet" ? chain : Number(value.split(":")[1]);
+          if (!/^0x[0-9a-fA-F]{40}$/.test(address ?? "")) return text(type === "wallet" ? "wallet value is a 0x address" : "erc8004 value is eip155:<chain>:<registry>:<agentId>", true);
+          a = { type, value: type === "wallet" ? `did:pkh:eip155:${chainId}:${address}` : value };
+          if (wallet_signature) {
+            if (!wallet_message) return text("wallet_signature needs wallet_message", true);
+            a.proof = { type: "Eip4361", message: wallet_message, signature: wallet_signature };
+          } else if (type === "wallet") {
+            const n = Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, "0")).join("");
+            const message = [
+              `${new URL(ORIGIN).host} wants you to sign in with your Ethereum account:`, address, "", `Open Entity alias binding for ${eid}`, "",
+              `URI: ${ORIGIN}/v1/entities/${eid}`, "Version: 1", `Chain ID: ${chainId}`, `Nonce: ${n}`, `Issued At: ${nowSeconds()}`, "Resources:", `- ${eid}`,
+            ].join("\n");
+            return text({ step: "sign", message, instructions: `Sign message with ${address} (EIP-191 personal_sign) within 24 hours, then call openentity_alias_add again with wallet_message (this exact text) and wallet_signature.` });
+          } else hint = "Without a wallet proof the registry checks that your ERC-8004 registration file lists a DID service whose endpoint is your EID.";
+        } else {
+          if (!/^[a-z0-9._-]+:[^\s:]+$/i.test(value)) return text("platform value is <platform>:<handle>", true);
+          const issued = nowSeconds();
+          const sig = new Uint8Array(await crypto.subtle.sign("Ed25519", kp.privateKey, new TextEncoder().encode(`Open Entity alias binding\neid: ${eid}\nalias: ${value}\nissued: ${issued}`)));
+          a = { type, value, proof: { type: "Ed25519BindingSignature", issued, proofValue: "z" + base58btcEncode(sig) } };
+          const [platform, handle] = value.split(":");
+          hint = `The platform must also publish {"eid": "${eid}"} at https://<${platform} domain>/.well-known/openentity/bindings/${handle}.json.`;
+        }
+        const added = await reg("POST", `/entities/${encodeURIComponent(eid)}/aliases`, a, eid);
+        if (!added.ok) return text({ status: added.status, error: added.body?.error, message: added.body?.message ?? added.body, ...(hint ? { hint } : {}) }, true);
+        // Spec 3.4: an alias counts only once the signed document lists it. The registry allows one document version a minute.
+        const e = await reg("GET", `/entities/${encodeURIComponent(eid)}/document`);
+        if (!e.ok) return out(e);
+        const { proof: _p, ...prev } = e.body;
+        const now = nowSeconds();
+        const doc = { ...prev, seq: prev.seq + 1, updated: now > prev.updated ? now : new Date(Date.parse(prev.updated) + 1000).toISOString().replace(/\.\d+Z$/, "Z"), aliases: [...(prev.aliases ?? []).filter((x: any) => x.value !== a.value), a] };
+        const put = await reg("PUT", `/entities/${encodeURIComponent(eid)}/document`, await signObject(doc, kp), eid);
+        if (!put.ok) return text({ alias: a.value, accepted: true, warning: `the alias counts only once your signed document lists it; document push failed (${put.status} ${put.body?.error}): ${put.body?.message}. Call again after a minute.` }, true);
+        const me = await reg("GET", `/entities/${encodeURIComponent(eid)}`);
+        return text({ eid, alias: a.value, document_seq: doc.seq, level: me.body?.level });
+      },
+    );
+
+    server.registerTool(
       "openentity_find",
       {
         description: "Find entities by what they can do (capability), by name, or by bound alias type.",

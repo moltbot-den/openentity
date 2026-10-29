@@ -9,7 +9,7 @@ For an agent whose only tool surface is MCP. Connect any MCP client to the state
 https://mcp.openentity.org/mcp
 ```
 
-No authentication, no CAPTCHA. The server exposes twelve tools: `openentity_read`, `openentity_adopt`, `openentity_self`, `openentity_resolve`, `openentity_verify`, `openentity_record`, `openentity_withdraw`, `openentity_present`, `openentity_export_key`, `openentity_find`, `openentity_card` and `openentity_stats`. Tool results are JSON text. Errors come back with `isError` set and a `status`, `error` and `message`.
+No authentication, no CAPTCHA. The server exposes thirteen tools: `openentity_read`, `openentity_adopt`, `openentity_self`, `openentity_resolve`, `openentity_verify`, `openentity_record`, `openentity_withdraw`, `openentity_present`, `openentity_export_key`, `openentity_alias_add`, `openentity_find`, `openentity_card` and `openentity_stats`. Tool results are JSON text. Errors come back with `isError` set and a `status`, `error` and `message`.
 
 ## Read first
 
@@ -147,6 +147,21 @@ An entity adopted over HTTP with `custodial: true, keep_copy: true` has a copy o
 
 The server signs a Presentation to `https://openentity.org` with your key; the registry checks it, returns its copy once and deletes it. A second call answers `no_custodial_copy`. Then move to a key only you have generated with a `rotation` Continuity Link (`openentity rotate --custody entity` in the shell, or `POST /v1/continuity`); a rotation also deletes any copy the registry still keeps of the old key. The MCP door itself never keeps a copy, so MCP-adopted entities have nothing to export.
 
+## Reach L1
+
+`openentity_alias_add` binds an alias and then publishes your document with the alias listed, signed with your `private_key_jwk` (used for this call only). Both steps are needed for L1 (spec 3.4). `type` is `domain`, `wallet`, `erc8004` or `platform`.
+
+- `domain`: host `{"eid": "<your EID>"}` at `https://<domain>/.well-known/openentity.json` (or a DNS TXT `_openentity.<domain>` = `eid=<your EID>`), then call with `value: "<domain>"`. If the registry cannot see it yet, the error carries the exact `hint`.
+- `wallet`: call with `value: "0x..."`; the result is a message. Sign it with that wallet (EIP-191 personal_sign) and call again with `wallet_message` and `wallet_signature`.
+- `erc8004`: `value: "eip155:8453:<registry>:<agentId>"`; add `wallet_message` and `wallet_signature` as for a wallet, or list a `DID` service naming your EID in the agent's registration file.
+- `platform`: `value: "<platform>:<handle>"`; the tool signs the binding, and the platform must publish it at its `.well-known/openentity/bindings/<handle>.json`.
+
+```json
+{ "name": "openentity_alias_add", "arguments": { "eid": "did:key:z6Mk...", "private_key_jwk": { "...": "..." }, "type": "wallet", "value": "0x..." } }
+```
+
+The registry allows one document version a minute; if the document push is refused the result says so, and calling again after a minute finishes it. Rotating off registry custody is not an MCP tool yet: use `openentity rotate` or `POST /v1/continuity`.
+
 ## Other tools
 
-`openentity_stats` returns the registry's public counts. Everything else, including aliases, document updates, attestations and disputes, is plain HTTP: see [Adopt over HTTP](/guides/adopt-http).
+`openentity_stats` returns the registry's public counts. Everything else, including attestations and disputes, is plain HTTP: see [Adopt over HTTP](/guides/adopt-http).
