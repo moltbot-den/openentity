@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { base58btcDecode, canonicalize, leafHash, merkleRoot, nowSeconds, recordEntryHash, signObject, verifyConsistency, verifyInclusion, verifyNote, type KeyPair } from "../src/sdk.ts";
 import { hex, unhex } from "../src/env.ts";
-import { type Stmt, incorporate, leafFor, park, sequence, sequenced } from "../src/log.ts";
+import { type Stmt, exportObjects, incorporate, snapshot, leafFor, park, sequence, sequenced } from "../src/log.ts";
 import type { Db } from "../src/db.ts";
 import { app, scheduled } from "../src/index.ts";
 import { E, adopted, call, write } from "./helpers.ts";
@@ -201,5 +201,42 @@ describe("transparency log (spec 10.3)", () => {
     await scheduled(E);
     const sth = (await call("GET", "/log/sth")).body;
     expect(Date.now() - Date.parse(sth.timestamp)).toBeLessThan(60_000);
+  });
+
+  it("snapshot and export retry a failed Object Lock put on the next run", async () => {
+    const date = "2001-02-03", mem = new Map<string, Uint8Array>();
+    let fail = true;
+    const archive = { get: async (k: string) => mem.get(k) ?? null, put: async (k: string, b: Uint8Array | string) => { if (fail) throw new Error("archive down"); mem.set(k, typeof b === "string" ? enc.encode(b) : b); } };
+    const env = { ...E, snapshots: archive };
+    await expect(snapshot(env, date)).rejects.toThrow(/archive down/);
+    await expect(exportObjects(env, date)).rejects.toThrow(/archive down/);
+    expect(await E.log.get(`snapshots/${date}.jsonl`)).not.toBeNull(); // the log bucket has it, the archive does not
+    fail = false;
+    expect(await snapshot(env, date)).toBe(true);
+    expect(await exportObjects(env, date)).toBe(true);
+    expect(mem.get(`snapshots/${date}.jsonl`)).toEqual(await E.log.get(`snapshots/${date}.jsonl`));
+    expect(mem.has(`objects/${date}.jsonl`)).toBe(true);
+    expect(await snapshot(env, date)).toBe(false);
+  });
+
+  it("scheduled runs every step when one throws, then rethrows, and backfills missing recent days", async () => {
+    const day = (n: number) => new Date(Date.now() - n * 86400_000).toISOString().slice(0, 10);
+    await E.db.run("INSERT INTO rate_events (key, window_start, count) VALUES ('ipm:x', '2000-01-01T00:00', 1)");
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      const bad = { get: async () => null, put: async () => { throw new Error("archive down"); } };
+      await expect(scheduled({ ...E, snapshots: bad })).rejects.toThrow(/step\(s\) failed/);
+      expect(await E.db.first("SELECT 1 FROM rate_events WHERE key = 'ipm:x'")).toBeNull(); // cleanup still ran
+      expect(log.mock.calls.some((c) => String(c[0]).includes("ScheduledOk"))).toBe(false);
+      for (let n = 2; n <= 7; n++) expect(await E.log.get(`snapshots/${day(n)}.jsonl`)).not.toBeNull(); // backfilled to the log bucket
+      await E.snapshots!.get(`snapshots/${day(1)}.jsonl`);
+      await scheduled(E); // archive healthy again: fills what the failed run left
+      for (let n = 1; n <= 7; n++) expect(await E.snapshots!.get(`snapshots/${day(n)}.jsonl`)).not.toBeNull();
+      expect(log.mock.calls.some((c) => String(c[0]).includes('"ScheduledOk":1'))).toBe(true);
+    } finally {
+      err.mockRestore();
+      log.mockRestore();
+    }
   });
 });

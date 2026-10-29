@@ -189,18 +189,25 @@ export interface LeafRow { idx: number; leaf_hash: string; type: string; eid: st
 export const leafJson = (l: Pick<LeafRow, "type" | "eid" | "object_sha256" | "received_at">) =>
   canonicalize(logLeaf(l.type, l.eid, l.object_sha256, l.received_at));
 
+/**
+ * Write `key` to the log bucket and to the Object Lock bucket, each checked on its own, so a failed archive put is
+ * retried on the next run. The archive copy is the log bucket's bytes, so both always hold the same file.
+ */
+async function store(env: Env, key: string, build: () => Promise<string>): Promise<boolean> {
+  let body = await env.log.get(key), wrote = false;
+  if (!body) { body = new TextEncoder().encode(await build()); await env.log.put(key, body, "application/jsonl"); wrote = true; }
+  if (env.snapshots && !(await env.snapshots.get(key))) { await env.snapshots.put(key, body, "application/jsonl"); wrote = true; }
+  return wrote;
+}
+
 /** Daily snapshot: one JSON line per leaf of `date`, then the latest checkpoint. Copied to the Object Lock bucket when configured. */
 export async function snapshot(env: Env, date: string): Promise<boolean> {
-  const key = `snapshots/${date}.jsonl`;
-  if (await env.log.get(key)) return false;
+  return store(env, `snapshots/${date}.jsonl`, async () => {
   const leaves = await env.db.all<LeafRow>("SELECT * FROM log_leaves WHERE received_at >= $1 AND received_at < $2 ORDER BY idx", [`${date}T00:00:00Z`, `${date}T99`]);
   const cp = await env.db.first("SELECT tree_size, root_hash, timestamp, signed_note FROM checkpoints ORDER BY tree_size DESC LIMIT 1");
   // ponytail: whole day in one string; stream to S3 if a day's leaves outgrow Lambda memory.
-  const body = [...leaves.map((l) => JSON.stringify({ index: l.idx, leaf: JSON.parse(leafJson(l)), leaf_hash: l.leaf_hash })), JSON.stringify({ checkpoint: cp })].join("\n") + "\n";
-  await env.log.put(key, body, "application/jsonl");
-  if (env.snapshots) await env.snapshots.put(key, body, "application/jsonl");
-  else console.log(`snapshot ${key}: off-site copy skipped, no snapshots bucket`);
-  return true;
+  return [...leaves.map((l) => JSON.stringify({ index: l.idx, leaf: JSON.parse(leafJson(l)), leaf_hash: l.leaf_hash })), JSON.stringify({ checkpoint: cp })].join("\n") + "\n";
+  });
 }
 
 /**
@@ -212,7 +219,7 @@ export async function snapshot(env: Env, date: string): Promise<boolean> {
  */
 export async function exportObjects(env: Env, date: string): Promise<boolean> {
   const key = `objects/${date}.jsonl`;
-  if (await env.log.get(key)) return false;
+  return store(env, key, async () => {
   const leaves = await env.db.all<LeafRow>("SELECT * FROM log_leaves WHERE received_at >= $1 AND received_at < $2 ORDER BY idx", [`${date}T00:00:00Z`, `${date}T99`]);
   const found = new Map<string, any>();
   const add = async (o: any): Promise<void> => {
@@ -239,10 +246,8 @@ export async function exportObjects(env: Env, date: string): Promise<boolean> {
     else missing++;
   }
   if (missing) console.error(`objects ${key}: ${missing} of ${leaves.length} objects are not in the database`);
-  const body = lines.join("");
-  await env.log.put(key, body, "application/jsonl");
-  if (env.snapshots) await env.snapshots.put(key, body, "application/jsonl");
-  return true;
+  return lines.join("");
+  });
 }
 
 /** One-off: write the objects file of every day from the first leaf through `lastDate` that has none yet. Returns the days written. */

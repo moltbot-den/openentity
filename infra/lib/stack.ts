@@ -354,6 +354,16 @@ export class OpenEntityStack extends Stack {
       }).addAlarmAction(new cwActions.SnsAction(alerts));
     alarm("AppErrors", fn.metricErrors({ period: Duration.minutes(5), statistic: "Sum" }));
     alarm("AppThrottles", fn.metricThrottles({ period: Duration.minutes(5), statistic: "Sum" }));
+    // The cron is rate(1 minute) with no retries and its Errors share the app's metric, so a cron that fails every run can stay under
+    // the alarms above. scheduled() emits ScheduledOk after a fully successful run (every 10 minutes); three silent 10-minute periods,
+    // whether from a crash, a failed step, a stale checkpoint or a missing snapshot, raise this alarm.
+    new cw.Alarm(this, "CronStalled", {
+      metric: new cw.Metric({ namespace: "OpenEntity", metricName: "ScheduledOk", statistic: "Sum", period: Duration.minutes(10) }),
+      threshold: 1,
+      evaluationPeriods: 3,
+      comparisonOperator: cw.ComparisonOperator.LESS_THAN_THRESHOLD,
+      treatMissingData: cw.TreatMissingData.BREACHING,
+    }).addAlarmAction(new cwActions.SnsAction(alerts));
     new budgets.CfnBudget(this, "Budget", {
       budget: { budgetName: "openentity-monthly", budgetType: "COST", timeUnit: "MONTHLY", budgetLimit: { amount: 150, unit: "USD" } },
       notificationsWithSubscribers: [
