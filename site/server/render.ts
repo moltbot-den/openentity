@@ -248,7 +248,7 @@ ${lineage.previous || lineage.successor ? `<ul>${lineage.previous ? `<li>Continu
 <p>Verify locally, without trusting this registry: <code>openentity verify ${esc(eid)}</code>. The signed objects are at <a href="/v1/entities/${esc(eid)}">/v1/entities/${esc(eid)}</a>.</p>
 <p><button type="button" class="oe-verify" hidden>Verify in this browser</button></p>
 <pre class="oe-verify-report" hidden></pre>
-<script type="application/json" id="oe-objects">${embed({ eid, document: entity.document, declaration: entity.declaration, record: entries, log: { declaration: declIndex ?? null, attestations: atts.filter((x) => x.log_index != null).map((x) => ({ attestation: x.attestation ?? x, log_index: x.log_index })) } })}</script>
+<script type="application/json" id="oe-objects">${embed({ eid, document: entity.document, declaration: entity.declaration, record: entries, log: { declaration: declIndex ?? null, record: (recordRes as J)?.log_indexes ?? [], attestations: atts.filter((x) => x.log_index != null).map((x) => ({ attestation: x.attestation ?? x, log_index: x.log_index })) } })}</script>
 <script type="module" src="/verify.js"></script>`;
 
   return {

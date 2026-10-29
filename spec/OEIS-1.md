@@ -434,7 +434,7 @@ All endpoints are JSON, CORS `*`, no authentication beyond the signatures on the
 | `PUT /entities/{eid}/document` | New signed version (section 5.5) |
 | `POST /entities/{eid}/aliases` | Bind an alias with proof |
 | `POST /entities/{eid}/record` | Append up to 100 Record entries |
-| `GET /entities/{eid}/record?after=<seq>` | Read the published record, at most 1,000 entries in `seq` order after `<seq>`; `next` is the `seq` to pass as `after` for the following page, `null` on the last |
+| `GET /entities/{eid}/record?after=<seq>` | Read the published record, at most 1,000 entries in `seq` order after `<seq>`; `log_indexes[i]` is the log index of `entries[i]`'s leaf, whose `object_sha256` is the entry's hash (as in `prev`); `next` is the `seq` to pass as `after` for the following page, `null` on the last |
 | `POST /entities/{eid}/record/redact` | Submit a signed Redaction; the entry is served as a placeholder from then on (section 7.4) |
 | `GET /entities/{eid}/attestations?issuer=&claim_type=&offset=` | Attestations and revocations, at most 1,000 per page; `next` is the `offset` of the following page, `null` on the last |
 | `POST /attestations` | Submit an attestation or revocation |

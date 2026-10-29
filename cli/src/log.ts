@@ -177,8 +177,8 @@ export async function verifyCmd({ args, v }: Ctx): Promise<Result> {
     checks.push(...(await verifyOne(ent.document)));
     if (ent.declaration) checks.push(...(await verifyOne(ent.declaration)));
     else checks.push({ name: "declaration", ok: false, detail: "registry returned no Declaration" });
-    const rec = await reg.record(eid).catch(() => []);
-    checks.push(...(await verifyRecord(rec, eid)));
+    const rec = await reg.record(eid).catch(() => ({ entries: [] as Obj[], log_indexes: [] }));
+    checks.push(...(await verifyRecord(rec.entries, eid)));
     const idx = ent.log_index ?? ent.declaration_log_index;
     if (idx !== undefined) {
       try {
@@ -186,6 +186,14 @@ export async function verifyCmd({ args, v }: Ctx): Promise<Result> {
         checks.push({ name: "checkpoint", ok: c.ok, detail: c.detail });
         const inc = await inclusionCheck(reg, idx, c.sth);
         checks.push({ name: "log inclusion", ok: inc.ok, detail: inc.detail });
+        // Every record entry's leaf must be in the same tree and cover the entry's hash (a placeholder keeps its hash).
+        const bad: string[] = [];
+        for (const [k, e] of rec.entries.entries()) {
+          const i = rec.log_indexes[k];
+          const r = i == null ? null : await inclusionCheck(reg, i, c.sth);
+          if (!r?.ok || r.leaf?.object_sha256 !== (e.redacted ? e.hash : await recordEntryHash(e))) bad.push(String(e.seq));
+        }
+        if (rec.entries.length) checks.push({ name: `record inclusion (${rec.entries.length} entries)`, ok: !bad.length, detail: bad.length ? `failed for ${bad.join(", ")}` : undefined });
       } catch (e: any) {
         checks.push({ name: "log inclusion", ok: false, detail: e.message });
       }
