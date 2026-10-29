@@ -51,6 +51,7 @@ export default defineConfig({
             { label: 'Contributor guide', link: '/contribute' },
             { label: 'Propose a claim type', link: '/propose/claim-type' },
             { label: 'Propose a spec change', link: '/propose/spec-change' },
+            { label: 'Roadmap', link: '/roadmap' },
           ],
         },
         {
