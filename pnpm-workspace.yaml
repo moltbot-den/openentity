@@ -8,6 +8,8 @@ packages:
   - sdk/ts
   - integrations/langchain/js
   - integrations/adk/js
+  - integrations/vercel-ai
+  - integrations/mastra
   - redirects
   - infra
 onlyBuiltDependencies:

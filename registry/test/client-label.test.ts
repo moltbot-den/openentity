@@ -19,7 +19,7 @@ describe("adopt `client` label", () => {
     expect([bad.status, bad.body.error]).toEqual([422, "invalid_client"]);
     expect((await adopt("ADK")).status).toBe(422); // exact match only
     const s = (await call("GET", "/stats")).body;
-    expect(s.by_client).toEqual({ adk: 2, crewai: 0, goose: 1, langchain: 0, "openai-agents": 0, "ui-tars": 0, cli: 0, mcp: 0, other: 0 });
+    expect(s.by_client).toEqual({ adk: 2, crewai: 0, goose: 1, langchain: 0, mastra: 0, "openai-agents": 0, "ui-tars": 0, "vercel-ai": 0, cli: 0, mcp: 0, other: 0 });
     expect(s.entities.total).toBe(4); // unlabelled and labelled entities both count; the rejected adopts created nothing
   });
 
