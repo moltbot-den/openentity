@@ -514,4 +514,42 @@ describe("conformance", () => {
   it("exits 2 when the registry is unreachable", async () => {
     expect((await cli("conformance", "http://127.0.0.1:1")).code).toBe(2);
   });
+
+  describe("--writes", () => {
+    const writes = async () => {
+      const r = await cli("conformance", fake.url, "--writes", "--json");
+      return { code: r.code, failed: (JSON.parse(r.out).checks as any[]).filter((c) => !c.ok).map((c) => c.name as string) };
+    };
+    it("passes a conforming registry and withdraws every entity it made", async () => {
+      expect(await writes()).toEqual({ code: 0, failed: [] });
+      const withdrawn = fake.hits.filter((h) => h.path === "/v1/withdraw" && h.body?.eid).map((h) => h.body!.eid);
+      expect(fake.entities.size).toBe(1);
+      expect(withdrawn).toEqual([...fake.entities.keys()]);
+    });
+    it("sends no write without --writes", async () => {
+      await cli("conformance", fake.url);
+      expect(fake.hits.some((h) => h.path === "/v1/adopt" && h.stamp)).toBe(false);
+    });
+    it("refuses a hosted registry without the explicit flag", async () => {
+      for (const url of ["https://openentity.org", "https://www.openentity.org", "https://oeis.dev"]) {
+        const r = await cli("conformance", url, "--writes");
+        expect(r.code).toBe(1);
+        expect(r.err).toContain("--i-understand-this-creates-entities");
+      }
+    });
+    it.each([
+      ["dup-declaration", "one Declaration per EID"],
+      ["text-hash", "Declaration text hash"],
+      ["chain", "record chain integrity (prev hash)"],
+      ["seq", "record seq monotonicity"],
+      ["alias-binding", "alias binding to the root EID"],
+      ["stamp-eid", "stamp names the writing EID"],
+      ["stamp-bits-claim", "stamp difficulty"],
+    ] as const)("fails when the %s guard is removed", async (broken, name) => {
+      fake.opts.broken.add(broken);
+      const r = await writes();
+      expect(r.code).toBe(3);
+      expect(r.failed).toContain(name);
+    });
+  });
 });

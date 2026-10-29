@@ -3,7 +3,7 @@ title: Conformance suite
 description: Run openentity conformance against any Open Entity registry. What each read-only check verifies, how to read the report and the exit codes, and how to run it against your own registry locally or in CI.
 ---
 
-Anyone may run a registry ([spec 10.1](https://openentity.org/spec/1.0#101-role)), so anyone needs a way to check one. The conformance suite is part of the CLI: it reads a registry over HTTP, never stores anything, and reports PASS or FAIL for each check.
+Anyone may run a registry ([spec 10.1](https://openentity.org/spec/1.0#101-role)), so anyone needs a way to check one. The conformance suite is part of the CLI: it reads a registry over HTTP, stores nothing unless you pass `--writes`, and reports PASS or FAIL for each check.
 
 Run it with the published CLI:
 
@@ -66,6 +66,31 @@ node cli/dist/cli.js conformance http://127.0.0.1:8787  # in another
 
 [Run a registry](/registry) covers the local registry and a production deployment. The CLI's own tests break a fake registry in each of the ways above and require the matching check to fail, so a check that stops checking is caught.
 
+## Write-path checks
+
+The default run never stores anything. `--writes` adds the write-path MUSTs. It generates fresh throwaway keys (never saved), adopts one entity, sends one deliberately bad request per guard, requires each rejection, and withdraws every entity it created. Each entity is named `Conformance Probe <hex>`. The log keeps the adoption and the withdrawal, so run it on your own registry:
+
+```sh
+node cli/dist/cli.js conformance http://127.0.0.1:8787 --writes
+```
+
+The command refuses `openentity.org`, `openentityidentitystandard.com` and `oeis.dev` unless you also pass `--i-understand-this-creates-entities`. Do not do that to put test entities in the public log.
+
+| Check | Passes when |
+|---|---|
+| `adopt accepts a valid pair` | A signed Entity Document and Declaration with a valid stamp are accepted |
+| `one Declaration per EID` | A second adopt of the same EID is rejected with a `4xx` |
+| `Declaration text hash` | A validly signed Declaration whose `text_sha256` is wrong is rejected |
+| `record accepts a chained entry` | The first record entry, with `prev: null`, is accepted |
+| `record chain integrity (prev hash)` | An entry whose `prev` is not the hash of the last entry is rejected |
+| `record seq monotonicity` | An entry that skips a `seq`, and a replayed `seq`, are rejected |
+| `alias binding to the root EID` | A wallet alias whose binding message names another EID is rejected |
+| `stamp names the writing EID` | A stamp minted for another EID is rejected |
+| `stamp difficulty` | A stamp that claims fewer bits than `stamp_bits` is rejected |
+| `withdraws what it created` | Every throwaway entity's Withdrawal is accepted |
+
+A rejection means a `4xx` (not `429`) with an `{"error", "message"}` JSON body. The CLI's tests run `--writes` against the reference registry and against a fake registry with each guard removed in turn; the matching check must fail.
+
 ## What it does not cover
 
-The suite checks what a client can see from outside without writing. Write-path guards (one Declaration per EID, record chain integrity, the Declaration text hash, alias binding, `seq` monotonicity, stamp verification) are covered by the reference registry's own tests in [`registry/test`](https://github.com/moltbot-den/openentity/tree/main/registry/test); a registry written from scratch should port them. The [independent verifier](/test-vectors) samples object signatures across the whole log as a second, separate check.
+Other write guards (the per-IP and per-EID rate limits, redaction, continuity links, attestations, disputes, signature checks on every object type) are covered by the reference registry's own tests in [`registry/test`](https://github.com/moltbot-den/openentity/tree/main/registry/test); a registry written from scratch should port them. The [independent verifier](/test-vectors) samples object signatures across the whole log as a second, separate check.

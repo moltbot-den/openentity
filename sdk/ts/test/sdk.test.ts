@@ -257,7 +257,7 @@ describe("proof-of-work stamp", () => {
     expect(await oe.checkStamp(h, 8, "did:key:z6MkOther", NOW)).toMatch(/different eid/);
     expect(await oe.checkStamp(h, 8, eid, new Date("2026-10-24T19:10:01Z"))).toMatch(/older/);
     expect(await oe.checkStamp(h, 8, eid, new Date("2026-10-24T18:49:59Z"))).toMatch(/future/);
-    expect(await oe.checkStamp(h, 9, eid, NOW)).toMatch(/9/);
+    expect(await oe.checkStamp(h.replace(/^1:8:/, "1:7:"), 8, eid, NOW)).toMatch(/claims 7/); // not `h` at 9 bits: half of all 8-bit stamps have 9
     expect(await oe.checkStamp(h.replace(/^1:8:/, "1:30:"), 8, eid, NOW)).toMatch(/fewer than 8/);
     expect(await oe.checkStamp("garbage", 8, eid, NOW)).toMatch(/malformed/);
     expect(await oe.checkStamp(h.replace(/:([^:]+)$/, ":0OIl"), 8, eid, NOW)).toMatch(/malformed/);

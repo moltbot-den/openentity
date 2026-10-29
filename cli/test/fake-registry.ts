@@ -23,7 +23,7 @@ export interface Fake {
   entities: Map<string, { document: Obj; declaration: Obj; record: Obj[] }>;
   links: Obj[];
   attestations?: Obj[]; // rows as GET /v1/entities/:eid/attestations returns them
-  opts: { declarationHash: string; rejectAdopt: boolean; rejectLink: boolean; failRecord: boolean; broken: Set<"checkpoint" | "tiles" | "inclusion" | "turnstile" | "html-errors" | "stamp-bits"> };
+  opts: { declarationHash: string; rejectAdopt: boolean; rejectLink: boolean; failRecord: boolean; broken: Set<"checkpoint" | "tiles" | "inclusion" | "turnstile" | "html-errors" | "stamp-bits" | "dup-declaration" | "text-hash" | "chain" | "seq" | "alias-binding" | "stamp-eid" | "stamp-bits-claim"> };
   close(): Promise<void>;
 }
 
@@ -114,7 +114,7 @@ export async function startFake(): Promise<Fake> {
       const stamp = req.headers["x-oe-stamp"] as string | undefined;
       const eid = path === "/v1/adopt" ? b!.document?.eid : decodeURIComponent(path.split("/")[3] ?? "") || b!.link?.successor || b!.issuer || b!.eid;
       if (!stamp) return f.opts.broken.has("turnstile") ? reject(403, "turnstile_failed", "Turnstile verification failed") : reject(400, "stamp_required", "missing stamp");
-      const bad = await checkStamp(stamp, BITS, eid);
+      const bad = await checkStamp(stamp, f.opts.broken.has("stamp-bits-claim") ? 0 : BITS, f.opts.broken.has("stamp-eid") ? ((/^1:\d+:\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ:(did:key:[^:]+):/.exec(stamp) ?? [])[1] ?? eid) : eid);
       if (bad) return reject(400, "bad_stamp", String(bad));
     }
 
@@ -136,8 +136,8 @@ export async function startFake(): Promise<Fake> {
         const v = await verifyObject(o);
         if (!v.ok) return reject(422, "bad_signature", v.error ?? "");
       }
-      if (declaration.text_sha256 !== DECLARATION_SHA256) return reject(422, "bad_declaration", "text hash");
-      if (f.entities.has(document.eid)) return reject(409, "already_adopted", "one Declaration per EID");
+      if (declaration.text_sha256 !== DECLARATION_SHA256 && !f.opts.broken.has("text-hash")) return reject(422, "bad_declaration", "text hash");
+      if (f.entities.has(document.eid) && !f.opts.broken.has("dup-declaration")) return reject(409, "already_adopted", "one Declaration per EID");
       f.entities.set(document.eid, { document, declaration, record: [] });
       const log_index = f.entities.size - 1;
       return send(201, { eid: document.eid, level: "L0", log_index, receipt: { leaf: {}, leaf_hash: "ab".repeat(32) }, urls: { entity: `${f.url}/entities/${document.eid}` } });
@@ -166,8 +166,8 @@ export async function startFake(): Promise<Fake> {
         if (entries.length > 100) return reject(422, "too_many", "max 100 per request");
         for (const e of entries) {
           const last = ent.record.at(-1);
-          if (e.seq !== (last ? last.seq + 1 : 1)) return reject(409, "bad_seq", "seq");
-          if (e.prev !== (last ? await recordEntryHash(last) : null)) return reject(409, "bad_prev", "chain");
+          if (e.seq !== (last ? last.seq + 1 : 1) && !f.opts.broken.has("seq")) return reject(409, "bad_seq", "seq");
+          if (e.prev !== (last ? await recordEntryHash(last) : null) && !f.opts.broken.has("chain")) return reject(409, "bad_prev", "chain");
           if (!(await verifyObject(e)).ok) return reject(422, "bad_signature", "entry");
           ent.record.push(e);
         }
@@ -179,6 +179,10 @@ export async function startFake(): Promise<Fake> {
         if (!(await verifyObject(b as any)).ok) return reject(422, "bad_signature", "doc");
         ent.document = b!;
         return send(200, { seq: b!.seq });
+      }
+      if (m[2] === "aliases" && req.method === "POST") {
+        const bound = typeof b!.proof?.message === "string" && b!.proof.message.includes(`binding for ${ent.document.eid}\n`);
+        if (b!.type === "wallet" && !bound && !f.opts.broken.has("alias-binding")) return reject(422, "alias_proof_invalid", "message is bound to a different EID");
       }
       if (m[2] === "aliases" && req.method === "POST") return send(200, { verified: true });
     }

@@ -15,7 +15,7 @@ import pkg from "../package.json";
 const str = { type: "string" } as const;
 const bool = { type: "boolean" } as const;
 const OPTIONS = {
-  json: bool, help: bool, version: bool, "dry-run": bool, "extension-only": bool, agree: bool, write: bool, conflict: bool, "no-push": bool, "with-key": bool, force: bool, "no-attestations": bool,
+  json: bool, help: bool, version: bool, "dry-run": bool, "extension-only": bool, agree: bool, write: bool, conflict: bool, "no-push": bool, "with-key": bool, force: bool, "no-attestations": bool, writes: bool, "i-understand-this-creates-entities": bool,
   registry: str, url: str, eid: str, name: str, description: str, operator: str, "operator-kind": str, contact: str, custody: str, model: str, provider: str, runtime: str,
   erc8004: str, wallet: str, chain: str, signature: str, entries: str, format: str, dir: str,
   type: str, reason: str, cost: str, context: str, "will-not-ref": str, topic: str, from: str, to: str, evidence: str, id: str, title: str, outcome: str,
@@ -45,7 +45,7 @@ Usage: openentity <command> [options]   (also: oe)
   verify-presentation <file> --audience <a> --nonce <n>      (offline; exit 3 on failure)
   dispute --subject <eid> [--object <sha256>] --reason impersonation|illegal_content|inaccurate|other --statement <text>
   find --capability <c> [--q <text> --alias-type <type> --level L1]
-  conformance <registry-url>                                 (read-only checks any registry must pass; exit 3 on failure)
+  conformance <registry-url> [--writes]                      (checks any registry must pass; --writes adopts and withdraws throwaway entities; exit 3 on failure)
   log checkpoint | proof <index> | audit <n>
   export [--with-key] [--out file] | import <file>
   rotate [--to keyfile] [--dry-run] | migrate [--to keyfile] | recover --previous <eid> --via <alias>
