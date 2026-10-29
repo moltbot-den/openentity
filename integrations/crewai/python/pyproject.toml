@@ -1,0 +1,32 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "openentity-crewai"
+version = "0.1.0"
+description = "Open Entity tools for CrewAI: adopt an identity, read it, record stances and arcs, verify and trust other agents."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11,<3.14"
+dependencies = [
+    "crewai>=1.15",
+    "openentity>=0.5.5",
+]
+
+[project.urls]
+Homepage = "https://openentity.org"
+Documentation = "https://oeis.dev"
+Source = "https://github.com/moltbot-den/openentity"
+
+[dependency-groups]
+dev = ["pytest>=8", "openentity"]
+
+[tool.uv.sources]
+openentity = { path = "../../../sdk/python" }
+
+[tool.hatch.build.targets.wheel]
+packages = ["openentity_crewai"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

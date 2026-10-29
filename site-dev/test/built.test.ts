@@ -29,7 +29,7 @@ const mainText = (html: string) =>
 describe('every page', () => {
   it('has the hub sections', () => {
     const routes = pages.map(route);
-    for (const r of ['/', '/contribute', '/propose/claim-type', '/propose/spec-change', '/sdk/typescript', '/sdk/python', '/cli', '/conformance', '/test-vectors', '/registry', '/observers']) {
+    for (const r of ['/', '/contribute', '/propose/claim-type', '/propose/spec-change', '/sdk/typescript', '/sdk/python', '/cli', '/integrations/crewai', '/integrations/openai-agents', '/conformance', '/test-vectors', '/registry', '/observers']) {
       expect(routes).toContain(r);
     }
   });
