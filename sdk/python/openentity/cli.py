@@ -1,7 +1,7 @@
 """The `openentity` command, same commands, flags, exit codes and ~/.openentity layout as the npm CLI.
 
 Layout: <home>/<eid>/{key (Ed25519 JWK, 0600), entity.json, declaration.json, state.json, record.jsonl, draft.json}, <home>/current.
-Not ported: `card` and `conformance` (npm CLI only), and the JSON-schema check before signing (the registry validates)."""
+Not ported: the JSON-schema check before signing and in verify (the registry validates)."""
 import argparse
 import base64
 import json
@@ -18,7 +18,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from . import __version__, client, core
+from . import __version__, client, core, wallet
 
 EXIT_OK, EXIT_USAGE, EXIT_NETWORK, EXIT_VERIFY, EXIT_REJECTED, EXIT_STATE = range(6)  # same codes as the npm CLI
 NEXT_STEP = ('Record your first stance: openentity record stance --type refusal --reason values --cost low --context "what happened, no private content"'
@@ -251,7 +251,7 @@ def _parser() -> argparse.ArgumentParser:
         return p
 
     add("adopt", "adopt the Open Entity Identity Standard", bools=("agree", "dry-run"),
-        flags=("name", "description", "operator", "operator-kind", "contact", "custody", "model", "provider", "runtime", "capabilities", "wallet", "erc8004"))
+        flags=("name", "description", "operator", "operator-kind", "contact", "custody", "model", "provider", "runtime", "capabilities", "wallet", "erc8004", "chain"))
     add("whoami", "show the current entity")
     add("self", "show the entity document and the last local record entries", flags=("entries",)).set_defaults(entries="10")
     add("stats", "public counts")
@@ -261,7 +261,7 @@ def _parser() -> argparse.ArgumentParser:
             flags=("payload", "type", "reason", "cost", "context", "will-not-ref", "topic", "from", "to", "evidence", "id", "title", "outcome", "with", "role", "ref", "event", "link"),
             bools=("conflict", "no-push"))
     r.set_defaults(conflict=False)
-    add("alias", "add domain|wallet|erc8004|platform <value>", "sub", "type", "value", flags=("wallet", "chain", "signature"))
+    add("alias", "add domain|wallet|erc8004|platform <value>", "sub", "type", "value?", flags=("wallet", "chain", "signature"))
     add("verify", "verify an EID, URL or file", "target")
     add("resolve", "resolve a did:key, did:web, did:webvh, did:pkh or did:plc", "did")
     add("present", "answer a verifier's challenge", flags=("audience", "nonce"), bools=("no-attestations",))
@@ -269,6 +269,8 @@ def _parser() -> argparse.ArgumentParser:
     add("dispute", "file a signed Dispute", flags=("subject", "object", "reason", "statement"))
     add("find", "search the directory", flags=("capability", "q", "alias-type", "level"))
     add("log", "checkpoint | proof <index> | audit <n>", "sub", "arg?")
+    add("card", "A2A Agent Card as JSON, or only its Open Entity extension", flags=("url",), bools=("extension-only",))
+    add("conformance", "read-only checks any registry must pass (exit 3 on failure)", "url?")
     add("export", "write a portable bundle (key excluded unless --with-key)", flags=("out",), bools=("with-key",))
     add("import", "restore from a bundle", "file", flags=("key",), bools=("force",))
     link_flags = ("to", "operator", "operator-kind", "custody", "model", "provider", "runtime")
@@ -286,6 +288,14 @@ def _wallet_did(w: str, chain: int = 8453) -> str:
     if re.fullmatch(r"0x[0-9a-fA-F]{40}", w):
         return f"did:pkh:eip155:{chain}:{w}"
     raise _usage(f"not a wallet address or did:pkh: {w}")
+
+
+def _signer(spec):
+    """The key behind --wallet (or OPENENTITY_WALLET_KEY), None for a bare address."""
+    try:
+        return wallet.resolve_signer(spec)
+    except ValueError as err:
+        raise _usage(str(err))
 
 
 def _spec_decl_hash(s: dict) -> str | None:
@@ -310,7 +320,10 @@ def _adopt(args):
                 **({"contact": args.contact} if args.contact else {}), "custody": args.custody or "entity", "can_change": []}
     substrate = ({"model": args.model or "unknown", "provider": args.provider or "unknown", "runtime": args.runtime or "unknown", "declared_at": created}
                  if args.model or args.provider or args.runtime else None)
-    aliases = ([{"type": "wallet", "value": _wallet_did(args.wallet)}] if args.wallet else []) + ([{"type": "erc8004", "value": args.erc8004}] if args.erc8004 else [])
+    # A wallet key (or OPENENTITY_WALLET_KEY) proves the wallet and ERC-8004 aliases right after adopt (PRD 7.2); a bare address is only declared.
+    signer = _signer(args.wallet) if args.wallet or args.erc8004 else None
+    chain = int(args.chain or 8453)
+    aliases = ([{"type": "wallet", "value": _wallet_did(signer.address if signer else args.wallet, chain)}] if signer or args.wallet else []) + ([{"type": "erc8004", "value": args.erc8004}] if args.erc8004 else [])
     caps = [c.strip() for c in (args.capabilities or "").split(",") if c.strip()]
     desc = args.description or os.environ.get("OPENENTITY_DESCRIPTION") or f"{name}, an entity adopted under the Open Entity Identity Standard."
     document, declaration = client.build_adoption(kp, name, desc, reg.base, operator, substrate,
@@ -338,6 +351,14 @@ def _adopt(args):
         _push_record(e)
     except (client.RegistryError, urllib.error.URLError, TimeoutError):
         pass
+    if signer:
+        for kind, value in [("wallet", signer.address)] + ([("erc8004", args.erc8004)] if args.erc8004 else []):
+            try:
+                _alias(argparse.Namespace(**{**vars(args), "sub": "add", "type": kind, "value": value, "eid": kp.did, "signature": None}))
+            except CliError as err:
+                raise CliError(EXIT_VERIFY, f"adopted {kp.did} at {state['level']}, but the {kind} proof failed: {err}\nRetry: openentity alias add {kind} {value} --wallet <key>")
+        state["level"] = reg.get(f"/v1/entities/{kp.did}").get("level", state["level"])
+        _write_json(d / "state.json", state)
     out = {"eid": res.get("eid", kp.did), "level": state["level"], "entity_url": (res.get("urls") or {}).get("entity"), "log_index": res.get("log_index"),
            "receipt": res.get("receipt"), "key_file": str(d / "key"), "next": NEXT_STEP}
     rc = out["receipt"]
@@ -548,9 +569,14 @@ def siwe_message(host: str, address: str, chain_id: int, eid: str, issued_at: st
                       "Resources:", f"- {eid}"])
 
 
-def _wallet_proof(e: Entity, args, wallet: str, chain: int, cmd: str):
-    """Two-step wallet proof (an external EIP-191 signature, no key here): first call prints the message and stores it, the second attaches --signature."""
-    address = _checksum(wallet)
+def _wallet_proof(e: Entity, args, addr: str, chain: int, cmd: str, signer=None):
+    """With a wallet key, signs here. Without one, two steps (an external EIP-191 signature): first call prints the message and stores it, the second attaches --signature."""
+    address = _checksum(addr)
+    if signer:
+        if signer.address != address:
+            raise _usage(f"the wallet key controls {signer.address}, not {address}")
+        msg = siwe_message(urllib.parse.urlparse(e.reg.base).netloc, address, chain, e.eid, core.now())
+        return address, {"type": "Eip4361", "message": msg, "signature": signer.sign(msg)}, None
     pending = e.dir / f"pending-wallet-{address.lower()}.json"
     if not args.signature:
         msg = siwe_message(urllib.parse.urlparse(e.reg.base).netloc, address, chain, e.eid, core.now())
@@ -567,14 +593,19 @@ def _wallet_proof(e: Entity, args, wallet: str, chain: int, cmd: str):
 def _alias(args):
     if args.sub != "add":
         raise _usage("alias add domain|wallet|erc8004|platform <value>")
-    e, kind, raw, hint = _load(args), args.type, args.value, ""
+    signer = _signer(args.wallet)
+    kind = args.type
+    raw = args.value or (signer.address if signer and kind == "wallet" else None)
+    if not kind or not raw:
+        raise _usage("alias add domain|wallet|erc8004|platform <value>")
+    e, hint = _load(args), ""
     if kind == "domain":
         domain = re.sub(r"^did:web:", "", raw)
         a = {"type": kind, "value": f"did:web:{domain}"}
         hint = f'Publish {{"eid": "{e.eid}"}} at https://{domain}/.well-known/openentity.json (or DNS TXT _openentity.{domain} = eid={e.eid}), then re-run.'
     elif kind == "wallet":
         parts = _wallet_did(raw, int(args.chain or 8453)).split(":")
-        address, proof, prompt = _wallet_proof(e, args, parts[4], int(parts[3]), f"{kind} {raw}")
+        address, proof, prompt = _wallet_proof(e, args, parts[4], int(parts[3]), f"{kind} {raw}", signer)
         if prompt:
             return prompt
         a = {"type": kind, "value": f"did:pkh:eip155:{parts[3]}:{address}", "proof": proof}
@@ -582,8 +613,8 @@ def _alias(args):
         if not re.fullmatch(r"eip155:\d+:0x[0-9a-fA-F]{40}:\d+", raw):
             raise _usage("erc8004 value is eip155:<chainId>:<identityRegistry>:<agentId>")
         a = {"type": kind, "value": raw}
-        if args.wallet:
-            _, proof, prompt = _wallet_proof(e, args, _wallet_did(args.wallet).split(":")[4], int(raw.split(":")[1]), f"{kind} {raw}")
+        if signer or args.wallet:
+            _, proof, prompt = _wallet_proof(e, args, signer.address if signer else _wallet_did(args.wallet).split(":")[4], int(raw.split(":")[1]), f"{kind} {raw}", signer)
             if prompt:
                 return prompt
             a["proof"] = proof
@@ -773,6 +804,163 @@ def _inclusion(reg: Reg, index: int, sth: dict) -> tuple[bool, str, dict | None]
     return ok, f"leaf {index} included in tree of {sth['tree_size']}" if ok else f"inclusion proof for leaf {index} FAILED", leaf
 
 
+# ---- card and conformance ----
+A2A_EXTENSION_URI = "https://openentity.org/spec/1.0"
+
+
+def _a2a_extension(eid: str, document_url: str) -> dict:
+    return {"uri": A2A_EXTENSION_URI, "description": "Open Entity identity (OEIS-1) of this agent", "required": False, "params": {"eid": eid, "document": document_url}}
+
+
+def _card(args):
+    """The spec 11.2 A2A AgentExtension block (--extension-only) or a full agent-card.json, for the local entity or for --eid read from the registry."""
+    if args.eid:
+        reg = Reg(_registry_url(args))
+        doc = reg.get(f"/v1/entities/{urllib.parse.quote(_assert_eid(args.eid), safe=':')}/document")
+    else:
+        e = _load(args)
+        doc, reg = e.doc, e.reg
+    document_url = f"{reg.base}/v1/entities/{doc['eid']}/document"
+    if args.extension_only:
+        out = _a2a_extension(doc["eid"], document_url)
+    else:
+        url = args.url or (doc.get("endpoints") or {}).get("web")
+        if not url:
+            raise _usage("card needs the agent's endpoint: pass --url <https://...>, or use --extension-only")
+        skills = []
+        for slug in doc.get("capabilities") or []:
+            ns, name = slug.split(":", 1) if ":" in slug else (None, slug)
+            skills.append({"id": slug, "name": re.sub(r"[-.]", " ", name), "description": f"Self-declared capability: {slug}", "tags": [ns, name] if ns else [name]})
+        out = {"name": doc["name"], "description": doc["description"], "url": url, "version": "1.0.0",
+               "capabilities": {"streaming": False, "pushNotifications": False, "extensions": [_a2a_extension(doc["eid"], document_url)]},
+               "defaultInputModes": ["text/plain"], "defaultOutputModes": ["text/plain"], "skills": skills}
+    return out, _dump(out)
+
+
+def _probe(base: str, path: str, method: str = "GET", body: bytes | None = None) -> tuple[int, bool, object, bytes]:
+    """Any HTTP answer, 4xx and 5xx included: (status, is_json, parsed body, raw). Only an unreachable registry raises."""
+    req = urllib.request.Request(base + path, data=body, method=method, headers={"user-agent": "openentity-conformance", **({"content-type": "application/json"} if body else {})})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            status, ctype, raw = r.status, r.headers.get("content-type", ""), r.read()
+    except urllib.error.HTTPError as err:
+        status, ctype, raw = err.code, err.headers.get("content-type", ""), err.read()
+    except (urllib.error.URLError, TimeoutError) as err:
+        raise CliError(EXIT_NETWORK, f"network error: {method} {base + path}: {getattr(err, 'reason', err)}")
+    is_json, parsed = "json" in ctype, raw.decode("utf-8", "replace")
+    if is_json:
+        try:
+            parsed = json.loads(parsed)
+        except ValueError:
+            pass  # declared JSON, not JSON: the checks that read the body fail on it
+    return status, is_json, parsed, raw
+
+
+def _must(cond, msg: str):
+    if not cond:
+        raise ValueError(msg)
+
+
+def _conformance(args):
+    """The read-only checks any registry must pass (spec 10). Writes are only ever sent without a stamp, so nothing is stored."""
+    target = args.url or args.registry
+    if not target:
+        raise _usage("conformance <registry-url>")
+    base = _registry_url(argparse.Namespace(registry=target)).rstrip("/")
+    reg, checks = Reg(base), []
+
+    def check(name, fn):
+        try:
+            checks.append({"name": name, "ok": True, "detail": fn()})
+        except Exception as err:  # a throw is a failure, not a crash
+            if isinstance(err, CliError):
+                raise
+            checks.append({"name": name, "ok": False, "detail": str(err)})
+
+    status, is_json, first, _ = _probe(base, "/v1/spec")
+    spec = first if isinstance(first, dict) else {}
+    r = spec.get("registry") or {}
+
+    def spec_endpoint():
+        _must(status == 200 and is_json, f"GET /v1/spec answered {status}{'' if is_json else ' (not JSON)'}")
+        _must(spec.get("spec") == "openentity/1.0", f"spec is {json.dumps(spec.get('spec'))}, expected \"openentity/1.0\"")
+        _must(re.fullmatch(r"[0-9a-f]{64}", (spec.get("declaration") or {}).get("sha256") or ""), "declaration.sha256 is not 64 hex characters")
+        _must(isinstance(r.get("publicKeyMultibase"), str), "registry.publicKeyMultibase missing")
+        _must(isinstance(r.get("log_origin"), str), "registry.log_origin missing")
+        return f"declaration {spec['declaration']['sha256'][:12]}, origin {r['log_origin']}"
+
+    def stamp_bits():
+        b = spec.get("stamp_bits")
+        _must(isinstance(b, int) and not isinstance(b, bool) and 1 <= b <= 32, f"stamp_bits is {json.dumps(b)}, expected an integer from 1 to 32")
+        return f"{b} bits"
+
+    check("spec endpoint", spec_endpoint)
+    check("stamp_bits", stamp_bits)
+    try:
+        cp_ok, cp_detail, sth = _checkpoint(reg)
+    except _NET as err:
+        cp_ok, cp_detail, sth = False, str(err), {}
+
+    def checkpoint():
+        _must(cp_ok, cp_detail)
+        note = _probe(base, "/v1/log/checkpoint")[3].decode()
+        _must(core.verify_note(note, r["log_origin"], core.b58decode(r["publicKeyMultibase"][1:])[-32:]), "GET /v1/log/checkpoint does not verify against the published key")
+        return cp_detail
+
+    check("checkpoint signature", checkpoint)
+    size = sth.get("tree_size") or 0
+    if cp_ok and size > 0:
+        def inclusion(i):
+            ok, detail, _ = _inclusion(reg, i, sth)
+            _must(ok, detail)
+            return detail
+
+        for i in dict.fromkeys([0, size // 4, size // 2, 3 * size // 4, size - 1]):
+            check(f"inclusion proof {i}", lambda i=i: inclusion(i))
+
+        def tiles():
+            w = min(size, 256)
+            entries = reg.get(f"/v1/log/entries?start=0&end={w}").get("entries") or []
+            _must(len(entries) == w, f"expected {w} log entries, got {len(entries)}")
+            leaves = [core.canonicalize(e["leaf"]).encode() for e in entries]
+            tile = lambda kind: f"/v1/log/tile/{kind}/000" + (f".p/{w}" if w < 256 else "")
+            st, _, _, raw = _probe(base, tile("0"))
+            _must(st == 200, f"hash tile answered {st}")
+            _must(raw == b"".join(core.leaf_hash(x) for x in leaves), "hash tile 0/000 differs from the leaf hashes")
+            st, _, _, raw = _probe(base, tile("entries"))
+            _must(st == 200, f"entry bundle answered {st}")
+            off = 0
+            for k, x in enumerate(leaves):
+                n = int.from_bytes(raw[off:off + 2], "big")
+                _must(raw[off + 2:off + 2 + n] == x, f"entry bundle leaf {k} differs from /v1/log/entries")
+                off += 2 + n
+            _must(off == len(raw), "entry bundle has trailing bytes")
+            return f"{w} hashes and entries match"
+
+        check("tiles match leaves", tiles)
+
+    def errors_are_json():
+        for path in ["/v1/entities/did:key:z6MkConformanceNoSuchEntity00000000000000", "/v1/log/proof/999999999"]:
+            st, is_j, body, _ = _probe(base, path)
+            _must(400 <= st < 500, f"GET {path} answered {st}, expected a 4xx")
+            _must(is_j and isinstance(body, dict) and isinstance(body.get("error"), str), f'GET {path} error body is not {{"error": ...}} JSON')
+        return "4xx answers carry {error, message}"
+
+    def no_turnstile():
+        for path in ["/v1/adopt", "/v1/disputes", "/v1/withdraw"]:
+            st, is_j, body, _ = _probe(base, path, "POST", b"{}")
+            got = body.get("error") if is_j and isinstance(body, dict) else "(not JSON)"
+            _must(st == 400 and got == "stamp_required", f"POST {path} without a stamp answered {st} {got}, expected 400 stamp_required")
+        return "stampless writes answer stamp_required"
+
+    check("errors are JSON", errors_are_json)
+    check("no Turnstile on agent endpoints", no_turnstile)
+    failed, w = sum(not c["ok"] for c in checks), max(len(c["name"]) for c in checks)
+    text = "\n".join([*(f"{'PASS' if c['ok'] else 'FAIL'}  {c['name'].ljust(w)}  {c['detail']}" for c in checks),
+                      f"DOES NOT CONFORM: {failed} of {len(checks)} checks failed" if failed else f"CONFORMS: {len(checks)} checks passed"])
+    return {"registry": base, "ok": not failed, "checks": checks}, text, EXIT_VERIFY if failed else EXIT_OK
+
+
 _NET = (client.RegistryError, urllib.error.URLError, KeyError, IndexError, ValueError, TypeError)
 
 
@@ -848,6 +1036,8 @@ def _log(args):
             raise _usage("log audit <n>")
         import random
         ok, detail, sth = _checkpoint(reg)
+        mb = (reg.spec().get("registry") or {}).get("publicKeyMultibase")  # a registry that is not openentity.org signs with its /v1/spec key
+        res = lambda did: {"ed25519": _keys_of({"verificationMethod": [{"publicKeyMultibase": mb}]})} if mb and did.split("#")[0] == "did:web:openentity.org" else _resolver(did)
         checks = [{"name": "checkpoint", "ok": ok, "detail": detail}]
         for _ in range(min(int(arg or 5), sth["tree_size"])):
             i = random.randrange(sth["tree_size"])
@@ -855,7 +1045,7 @@ def _log(args):
             checks.append({"name": f"inclusion {i}", "ok": ok, "detail": detail})
             if ok and (leaf or {}).get("eid"):  # object signature: the entity's current document must verify under its own key
                 try:
-                    s_ok, who = core.verify_object(reg.get(f"/v1/entities/{leaf['eid']}/document"), _resolver)
+                    s_ok, who = core.verify_object(reg.get(f"/v1/entities/{leaf['eid']}/document"), res)
                     checks.append({"name": f"signature {leaf['eid']}", "ok": s_ok, "detail": "document signature valid" if s_ok else f"document signature invalid: {who}"})
                 except _NET as e:
                     checks.append({"name": f"signature {leaf['eid']}", "ok": False, "detail": str(e)})
@@ -978,7 +1168,7 @@ def _recover(args):
 COMMANDS = {"adopt": _adopt, "whoami": _whoami, "self": _self, "stats": _stats, "anchor": _anchor, "document": _document, "record": _record, "alias": _alias,
             "verify": _verify, "resolve": _resolve, "present": _present, "verify-presentation": _verify_presentation, "dispute": _dispute, "find": _find,
             "log": _log, "export": _export, "import": _import, "rotate": lambda a: _link(a, "rotation"), "migrate": lambda a: _link(a, "migration"),
-            "recover": _recover, "withdraw": _withdraw}
+            "recover": _recover, "withdraw": _withdraw, "card": _card, "conformance": _conformance}
 
 
 def main(argv: list[str] | None = None) -> int:

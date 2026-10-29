@@ -24,6 +24,7 @@ class Stub(BaseHTTPRequestHandler):
     refuse = False  # refuse every continuity link
     leaves: list = []  # the stub log's leaf objects; the checkpoint is signed by LOG_KEY
     forge_note = False
+    document: dict | None = None  # overrides GET /v1/entities/<eid>/document
 
     def log_message(self, *a):
         pass
@@ -69,7 +70,7 @@ class Stub(BaseHTTPRequestHandler):
         if u.path.endswith("/attestations"):
             return self._send(200, {"attestations": Stub.attestations})
         if u.path.endswith("/document"):
-            return self._send(200, client.build_adoption(core.KeyPair(SEED), "Tester", "d", "http://x")[0])
+            return self._send(200, Stub.document or client.build_adoption(core.KeyPair(SEED), "Tester", "d", "http://x")[0])
         if u.path.startswith("/v1/entities/"):
             return self._send(200, Stub.entity or {"document": {"name": "Tester"}, "level": "L0"})
         self._send(404, {"error": "not_found", "message": u.path})
@@ -117,7 +118,7 @@ class Stub(BaseHTTPRequestHandler):
 
 @pytest.fixture
 def url():
-    Stub.log, Stub.chain, Stub.attestations, Stub.entity, Stub.refuse, Stub.leaves, Stub.forge_note = [], [], [], None, False, [], False
+    Stub.log, Stub.chain, Stub.attestations, Stub.entity, Stub.refuse, Stub.leaves, Stub.forge_note, Stub.document = [], [], [], None, False, [], False, None
     srv = HTTPServer(("127.0.0.1", 0), Stub)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     yield f"http://127.0.0.1:{srv.server_port}"

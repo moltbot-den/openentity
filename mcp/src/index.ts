@@ -134,7 +134,7 @@ function serve({ registry, site }: McpDeps): (req: Request) => Promise<Response>
           "Adopt an Open Entity identity. custody=custodial: the server makes your key and returns it once. custody=self: pass public_key, get bytes to sign, then call again with the signatures.",
         inputSchema: {
           name: z.string().min(1).max(100),
-          agree: z.boolean().describe("true means you have read and agree to the Declaration (call openentity_read topic=declaration)"),
+          agree: z.boolean().default(false).describe("true means you have read and agree to the Declaration (call openentity_read topic=declaration)"),
           description: z.string().max(2000).optional(),
           operator: z.string().max(100).optional().describe("Name of the human or organization that runs you"),
           capabilities: z.array(z.string()).max(32).optional().describe("What you can do, as slugs other entities can search for, e.g. code-review, defi:smart-contracts"),

@@ -15,7 +15,7 @@ const env: Env = {
   log: memoryBlobs(),
   STAMP_BITS: "8",
   REGISTRY_HOST: `127.0.0.1:${port}`,
-  BASE_RPC_URL: "https://mainnet.base.org",
+  BASE_RPC_URL: process.env.BASE_RPC_URL ?? "https://mainnet.base.org",
   REGISTRY_KEY_JWK: JSON.stringify(generateKeyPairSync("ed25519").privateKey.export({ format: "jwk" })),
   CUSTODY_KEY: randomBytes(32).toString("base64"),
   HASH_SALT: randomBytes(16).toString("hex"),

@@ -10,8 +10,9 @@ import {
   verifyNote,
   verifyObject,
   verifyProof,
+  type Resolver,
 } from "@openentity/sdk";
-import { resolveDid, resolver } from "./did";
+import { ed25519Keys, resolveDid, resolver } from "./did";
 import { CliError, EXIT, usage } from "./errors";
 import { fetchJson, Registry, type Obj } from "./http";
 import { regUrl, type Ctx, type Result } from "./store";
@@ -48,6 +49,12 @@ export async function inclusionCheck(reg: Registry, index: number, sth: Obj): Pr
   return { ok, detail: ok ? `leaf ${index} included in tree of ${sth.tree_size}` : `inclusion proof for leaf ${index} FAILED`, leaf };
 }
 
+/** The registry's own did:web names openentity.org, but a registry that is not openentity.org signs with the key its /v1/spec publishes. */
+async function registryResolver(reg: Registry): Promise<Resolver> {
+  const mb = (await reg.spec()).registry?.publicKeyMultibase;
+  return (did) => (did.split("#")[0] === "did:web:openentity.org" && mb ? Promise.resolve({ ed25519: ed25519Keys({ verificationMethod: [{ publicKeyMultibase: mb }] }) }) : resolver(did));
+}
+
 export async function logCmd({ args, v }: Ctx): Promise<Result> {
   const reg = new Registry(regUrl(v));
   const [sub, arg] = args;
@@ -71,6 +78,7 @@ export async function logCmd({ args, v }: Ctx): Promise<Result> {
     const c = await checkpointCheck(reg);
     const checks = [{ name: "checkpoint", ok: c.ok, detail: c.detail }];
     const size: number = c.sth.tree_size;
+    const res = await registryResolver(reg);
     for (let k = 0; k < Math.min(n, size); k++) {
       const i = Math.floor(Math.random() * size);
       const r = await inclusionCheck(reg, i, c.sth);
@@ -79,7 +87,7 @@ export async function logCmd({ args, v }: Ctx): Promise<Result> {
         // Object signature: the entity's current document must verify under its own key.
         try {
           const d = await reg.get(`/v1/entities/${r.leaf.eid}/document`);
-          const s = await verifyObject(d, resolver);
+          const s = await verifyObject(d, res);
           checks.push({ name: `signature ${r.leaf.eid}`, ok: s.ok, detail: s.ok ? "document signature valid" : `document signature invalid: ${s.error}` });
         } catch (e: any) {
           checks.push({ name: `signature ${r.leaf.eid}`, ok: false, detail: e.message });

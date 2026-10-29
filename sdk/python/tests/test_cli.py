@@ -4,12 +4,12 @@ import re
 import stat
 
 import pytest
-from test_client import KP, Stub, home, posts, run, url  # noqa: F401  (fixtures and the stub registry)
+from test_client import KP, LOG_KEY, Stub, home, posts, run, url  # noqa: F401  (fixtures and the stub registry)
 
 from openentity import cli, core
 
 COMMANDS = ["adopt", "whoami", "self", "stats", "anchor", "document", "record", "alias", "verify", "resolve", "present", "verify-presentation",
-            "dispute", "find", "log", "export", "import", "rotate", "migrate", "recover", "withdraw"]
+            "dispute", "find", "log", "export", "import", "rotate", "migrate", "recover", "withdraw", "card", "conformance"]
 
 
 @pytest.mark.parametrize("name", COMMANDS)
@@ -137,6 +137,30 @@ def test_alias_wallet_is_two_step_with_an_external_siwe_signature(url, home, cap
     assert code == 0 and body == {"type": "wallet", "value": f"did:pkh:eip155:8453:{addr}", "proof": {"type": "Eip4361", "message": msg, "signature": "0x" + "ab" * 65}}
     code, out = j(capsys, "alias", "add", "erc8004", f"eip155:84532:0x{'cd' * 20}:2", "--wallet", wallet, *reg)
     assert code == 0 and "Chain ID: 84532" in out["message"]
+
+
+def test_log_audit_checks_the_registry_document_with_the_key_its_spec_publishes(url, capsys):
+    """The registry's DID names openentity.org, but a registry elsewhere signs with its /v1/spec key (guard: no lookup of did:web:openentity.org)."""
+    Stub.leaves = [{"type": "Declaration", "eid": "did:web:openentity.org", "object_sha256": "00" * 32, "received_at": core.now()}]
+    Stub.document = core.sign_object({"spec": core.SPEC, "eid": "did:web:openentity.org", "name": "registry"}, LOG_KEY, method="did:web:openentity.org#key-1")
+    code, out = j(capsys, "log", "audit", "1", "--registry", url)
+    assert code == 0 and {"name": "signature did:web:openentity.org", "ok": True, "detail": "document signature valid"} in out["checks"]
+
+
+def test_adopt_and_alias_with_a_wallet_key_prove_the_aliases_locally(url, tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("OPENENTITY_HOME", str(tmp_path / "h"))
+    key = "0x" + "11" * 32  # published throwaway key: controls nothing
+    addr = "0x19E7E376E7C213B7E7e7e46cc70A5dD086DAff2A"
+    code, out = j(capsys, "adopt", "--name", "A", "--agree", "--registry", url, "--wallet", key, "--erc8004", f"eip155:8453:0x{'cd' * 20}:2")
+    assert code == 0, out
+    proofs = posts(f"/v1/entities/{out['eid']}/aliases")
+    assert [p["type"] for p in proofs] == ["wallet", "erc8004"] and proofs[0]["value"] == f"did:pkh:eip155:8453:{addr}"
+    for p in proofs:
+        m = p["proof"]["message"].encode()
+        digest = core._keccak(f"\x19Ethereum Signed Message:\n{len(m)}".encode() + m)
+        assert p["proof"]["type"] == "Eip4361" and core.recover_eip712(digest, p["proof"]["signature"]) == addr
+    assert j(capsys, "alias", "add", "wallet", "--wallet", key, "--registry", url)[0] == 0  # the value defaults to the key's address
+    assert run(capsys, "adopt", "--name", "B", "--agree", "--registry", url, "--wallet", "/nonexistent")[0] == 1
 
 
 def test_record_push_and_redact(url, home, capsys):
@@ -271,3 +295,27 @@ def test_verify_checks_continuity_link_proofs(capsys, tmp_path):
     assert code == 0 and len(out["checks"]) == 2
     f.write_text(json.dumps({**body["link"], "basis": "migration"}))
     assert run(capsys, "verify", str(f))[0] == 3
+
+
+def test_card_emits_the_a2a_extension_and_a_full_agent_card(url, home, capsys):
+    doc = json.loads((home / KP.did / "entity.json").read_text())
+    doc["capabilities"] = ["code-review", "ops:db-admin"]
+    (home / KP.did / "entity.json").write_text(json.dumps(doc))
+    reg = ["--registry", url]
+    code, ext = j(capsys, "card", "--extension-only", *reg)
+    assert code == 0 and ext["params"] == {"eid": KP.did, "document": f"{url}/v1/entities/{KP.did}/document"}
+    code, card = j(capsys, "card", "--url", "https://ada.example/a2a", *reg)
+    assert code == 0 and card["url"] == "https://ada.example/a2a" and card["capabilities"]["extensions"] == [ext]
+    assert card["skills"][1] == {"id": "ops:db-admin", "name": "db admin", "description": "Self-declared capability: ops:db-admin", "tags": ["ops", "db-admin"]}
+    assert run(capsys, "card", *reg)[0] == 1  # no endpoint: the card needs --url
+
+
+def test_conformance_reports_each_check_and_exits_3_on_a_failure(url, capsys):
+    Stub.leaves = [{"type": "Declaration", "eid": f"did:key:z{i}", "object_sha256": "00" * 32, "received_at": core.now()} for i in range(6)]
+    code, out = j(capsys, "conformance", url)
+    passed = {c["name"] for c in out["checks"] if c["ok"]}
+    assert code == 3 and not out["ok"]
+    assert {"spec endpoint", "stamp_bits", "inclusion proof 0", "no Turnstile on agent endpoints"} <= passed
+    assert "tiles match leaves" in [c["name"] for c in out["checks"] if not c["ok"]]  # the stub serves no tiles
+    assert run(capsys, "conformance", "http://127.0.0.1:1")[0] == 2
+    assert run(capsys, "conformance")[0] == 1

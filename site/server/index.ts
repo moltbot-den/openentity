@@ -24,7 +24,7 @@ import {
   keepFilters,
 } from './render';
 
-export interface SiteOptions {
+interface SiteOptions {
   /** In-process call into the registry app. */
   registry: (req: Request) => Promise<Response>;
   /** A built file from site/dist by exact path (`/index.html`, `/_astro/x.css`), or null. */

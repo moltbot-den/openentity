@@ -4,8 +4,14 @@ import re
 import urllib.error
 import urllib.parse
 import urllib.request
+from importlib.metadata import PackageNotFoundError, version
 
 from . import core
+
+try:
+    _VERSION = version("openentity")
+except PackageNotFoundError:
+    _VERSION = "dev"
 
 DEFAULT_REGISTRY = "https://openentity.org"
 CLIENTS = ("adk", "goose", "langchain", "ui-tars", "cli", "other")  # the registry's allowlist for the unsigned `client` label
@@ -20,7 +26,7 @@ class RegistryError(Exception):
 def _request(url: str, body: dict | None = None, headers: dict | None = None, method: str | None = None) -> dict:
     req = urllib.request.Request(
         url, data=json.dumps(body).encode() if body is not None else None, method=method,
-        headers={"content-type": "application/json", "user-agent": "openentity-python/0.2.0", **(headers or {})})
+        headers={"content-type": "application/json", "user-agent": f"openentity-python/{_VERSION}", **(headers or {})})
     try:
         with urllib.request.urlopen(req, timeout=30) as r:
             return json.load(r)
@@ -47,8 +53,7 @@ def build_adoption(kp: core.KeyPair, name: str, description: str, registry: str,
         "keys": [{"id": core.verification_method(kp.did), "type": "Multikey",
                   "publicKeyMultibase": kp.did.removeprefix("did:key:")}],
         "operator": operator or {"kind": "none", "custody": "entity", "can_change": []},
-        "substrate": substrate or {"model": "unknown", "provider": "unknown", "runtime": "openentity-python/0.2.0",
-                                   "declared_at": created},
+        "substrate": substrate or {"model": "unknown", "provider": "unknown", "runtime": "unknown", "declared_at": created},
         "layers": {
             "cognition": {"statement": ns, "uncertainty_practice": ns},
             "presence": {"statement": ns, "format_signature": ns},

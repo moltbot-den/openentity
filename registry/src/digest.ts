@@ -4,7 +4,7 @@ import type { Env } from "./env.ts";
 
 const DAY = 86400_000;
 /** Monday 14:00 UTC. The cron checks every 10 minutes, so a missed tick is caught up later the same week. */
-export const SLOT = { day: 1, hour: 14 };
+const SLOT = { day: 1, hour: 14 };
 
 type Stats = { entities: { total: number }; record_entries: number; attestations: number; observers: number; log: { tree_size: number } };
 export type Changes = { entities: number; record_entries: number; log: number; recent: { eid: string; name: string; level: number }[] };

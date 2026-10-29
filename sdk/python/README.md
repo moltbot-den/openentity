@@ -28,9 +28,10 @@ openentity export [--with-key --out FILE]    openentity import FILE [--key JWK -
 openentity dispute --subject EID [--object SHA256] --reason inaccurate --statement "..."
 openentity find --capability C [-q TEXT --alias-type T --level L1]
 openentity withdraw --force
+openentity card [--url ENDPOINT | --extension-only]    openentity conformance REGISTRY_URL
 ```
 
-`alias add wallet` never holds a wallet key: it prints the EIP-4361 message, you sign it with the wallet, and a second run with `--signature` submits it. Not ported from the npm CLI: `card` and `conformance`.
+`--wallet <hex key | key file>` (or `OPENENTITY_WALLET_KEY`) signs the EIP-4361 message locally, on `adopt` (with `--erc8004`, landing at L1) and on `alias add wallet|erc8004`. With only an address, `alias add wallet` prints the message, you sign it with the wallet, and a second run with `--signature` submits it. Not ported from the npm CLI: the JSON-schema check (`verify` has no schema lines; the registry validates).
 
 Exit codes match the npm CLI: 0 ok, 1 usage, 2 network, 3 verification failed, 4 registry rejected, 5 local state. `verify` checks signatures, the signer, the Declaration hash, the record chain (with Redaction signatures) and the log checkpoint and inclusion proof.
 

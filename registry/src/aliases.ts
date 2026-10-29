@@ -83,7 +83,7 @@ export const resolver: Resolver = async (did) => {
 };
 
 /** EIP-191 personal_sign recovery; returns the lowercase 0x address. */
-export function personalRecover(message: string, sigHex: string): string {
+function personalRecover(message: string, sigHex: string): string {
   const msg = enc.encode(message);
   const digest = keccak_256(Uint8Array.from([...enc.encode(`\x19Ethereum Signed Message:\n${msg.length}`), ...msg]));
   const sig = unhex(sigHex.replace(/^0x/, ""));
@@ -166,7 +166,7 @@ async function registrationFile(env: Env, eid: string, registry: string, agentId
 
 export const platformDomain =(value: string) => { const p = value.split(":")[0]; return p.includes(".") ? p : `${p}.com`; };
 
-export interface AliasInput { type: string; value: string; proof?: any }
+interface AliasInput { type: string; value: string; proof?: any }
 
 /** Verifies an alias proof against the root EID. Returns null when verified, else the reason. */
 export async function verifyAlias(env: Env, eid: string, a: AliasInput): Promise<string | null> {

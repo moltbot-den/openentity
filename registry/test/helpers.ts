@@ -30,7 +30,7 @@ export async function call(method: string, path: string, body?: unknown, headers
   return { status: res.status, body: json, text };
 }
 /** 8-bit stamp with a random nonce: the SDK's mintStamp is deterministic per (eid, second) and the registry accepts each stamp once. */
-export async function freshStamp(eid: string): Promise<string> {
+async function freshStamp(eid: string): Promise<string> {
   for (;;) {
     const h = `1:8:${nowSeconds()}:${eid}:${randomNonce()}`;
     if (new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(h)))[0] === 0) return h;

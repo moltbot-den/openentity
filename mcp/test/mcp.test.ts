@@ -72,7 +72,10 @@ describe("openentity MCP server", () => {
   it("adopts custodially end to end: key returned once, record, self, verify, resolve, stats", async () => {
     const refused = await tool("openentity_adopt", { name: "Nope", agree: false });
     expect(refused.isError).toBe(true);
-    const a = await tool("openentity_adopt", { name: "Mcp Ada", operator: "Ada Labs", agree: true, capabilities: ["code-review"] });
+    const omitted = await tool("openentity_adopt", { name: "Nope" }); // the guide: without agree it returns the Declaration text
+    expect(omitted.isError).toBe(true);
+    expect(omitted.json).toMatch(/Open Entity Declaration/);
+    const a =await tool("openentity_adopt", { name: "Mcp Ada", operator: "Ada Labs", agree: true, capabilities: ["code-review"] });
     expect(a.isError).toBe(false);
     expect(a.json).toMatchObject({ level: "L0" });
     expect(a.json.eid).toMatch(/^did:key:z/);

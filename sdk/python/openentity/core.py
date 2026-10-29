@@ -332,7 +332,8 @@ def _zero_bits(h: bytes) -> int:
 
 
 def mint_stamp(bits: int, eid: str, created: str | None = None) -> str:
-    created, i = created or now(), 0
+    # Random start so two stamps for the same EID in the same second differ (registries reject reuse).
+    created, i = created or now(), int.from_bytes(os.urandom(4), "big")
     while True:
         header = f"1:{bits}:{created}:{eid}:{b58encode(i.to_bytes(8, 'big'))}"
         if _zero_bits(sha256(header)) >= bits:
