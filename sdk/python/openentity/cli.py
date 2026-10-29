@@ -205,7 +205,7 @@ def _read_record(d: pathlib.Path) -> list[dict]:
 
 def _append_entry(e: Entity, kind: str, payload: dict) -> dict:
     last = (_read_record(e.dir) or [None])[-1]
-    at = core.now()
+    at = core.now_seconds()
     entry = core.sign_object({"spec": core.SPEC, "type": "RecordEntry", "eid": e.eid, "seq": last["seq"] + 1 if last else 1,
                               "prev": core.canonical_hash(last).hex() if last else None, "kind": kind, "at": at, "payload": payload}, e.kp, at)
     if len(json.dumps(entry)) > 16 * 1024:
@@ -340,7 +340,7 @@ def _adopt(args):
         if theirs != core.DECLARATION_SHA256:
             raise CliError(EXIT_VERIFY, f"refusing to sign: registry declaration hash {theirs or '(missing)'} differs from this CLI's {core.DECLARATION_SHA256}. Upgrade the CLI or check --registry.")
     kp = core.KeyPair()
-    created = core.now()
+    created = core.now_seconds()
     op_name = args.operator or os.environ.get("OPENENTITY_OPERATOR")
     operator = {"kind": args.operator_kind or ("human" if op_name else "none"), **({"name": op_name} if op_name else {}),
                 **({"contact": args.contact} if args.contact else {}), "custody": args.custody or "entity", "can_change": []}
@@ -439,7 +439,7 @@ def _withdraw(args):
         raise _usage("withdraw marks this entity withdrawn in the append-only log and cannot be undone; re-run with --force")
     e = _load(args)
     w = core.sign_object({"spec": core.SPEC, "type": "Withdrawal", "eid": e.eid, "declaration_version": (e.declaration or {}).get("declaration_version", core.DECLARATION_VERSION),
-                          "name": e.doc.get("name"), "created": core.now(), "nonce": core.nonce()}, e.kp)
+                          "name": e.doc.get("name"), "created": core.now_seconds(), "nonce": core.random_nonce()}, e.kp)
     res = e.reg.send("POST", "/v1/withdraw", w, e.eid)
     _write_json(e.dir / "withdrawal.json", w)
     return res, f"withdrawn: {e.eid} (log index {res.get('log_index')})"
@@ -550,7 +550,7 @@ def _conformance(args):
 
     def checkpoint_signature():
         _must(cp["ok"], cp["detail"])
-        pk = core.b58decode(spec["registry"]["publicKeyMultibase"][1:])[-32:]
+        pk = core.base58btc_decode(spec["registry"]["publicKeyMultibase"][1:])[-32:]
         note = _probe(base, "/v1/log/checkpoint")[3].decode("utf8")
         _must(core.verify_note(note, spec["registry"]["log_origin"], pk), "GET /v1/log/checkpoint does not verify against the published key")
         return cp["detail"]
@@ -727,7 +727,7 @@ def _push_draft(e):
     if d == _strip(e.doc):
         return {"pushed": False}, "nothing to push"
     d["seq"] = e.doc["seq"] + 1
-    now = core.now()  # updated MUST increase (spec 5.5); two pushes in one second would tie, so step past the last one
+    now = core.now_seconds()  # updated MUST increase (spec 5.5); two pushes in one second would tie, so step past the last one
     d["updated"] = now if now > e.doc["updated"] else time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(core._ts(e.doc["updated"]).timestamp() + 1))
     signed = core.sign_object(d, e.kp)
     _checked("EntityDocument", signed)
@@ -796,11 +796,11 @@ def _wallet_proof(e: Entity, args, wallet: str, chain: int, cmd: str, signer: Si
     if signer:
         if signer.address != address:
             raise _usage(f"the wallet key controls {signer.address}, not {address}")
-        msg = siwe_message(urllib.parse.urlparse(e.reg.base).netloc, address, chain, e.eid, core.now())
+        msg = siwe_message(urllib.parse.urlparse(e.reg.base).netloc, address, chain, e.eid, core.now_seconds())
         return address, {"type": "Eip4361", "message": msg, "signature": signer.sign(msg)}, None
     pending = e.dir / f"pending-wallet-{address.lower()}.json"
     if not args.signature:
-        msg = siwe_message(urllib.parse.urlparse(e.reg.base).netloc, address, chain, e.eid, core.now())
+        msg = siwe_message(urllib.parse.urlparse(e.reg.base).netloc, address, chain, e.eid, core.now_seconds())
         _write_json(pending, {"message": msg})
         nxt = f"openentity alias add {cmd} --wallet {address} --signature 0x<signature>"
         return address, None, ({"message": msg, "next": nxt}, f"Sign this message with {address} (EIP-191 personal_sign), then run:\n  {nxt}\n\n{msg}")
@@ -841,9 +841,9 @@ def _alias(args):
     elif kind == "platform":
         if not re.fullmatch(r"[a-z0-9._-]+:[^\s:]+", raw, re.I):
             raise _usage("platform value is <platform>:<handle>")
-        issued = core.now()
+        issued = core.now_seconds()
         sig = e.kp.private.sign(f"Open Entity alias binding\neid: {e.eid}\nalias: {raw}\nissued: {issued}".encode())
-        a = {"type": kind, "value": raw, "proof": {"type": "Ed25519BindingSignature", "issued": issued, "proofValue": "z" + core.b58encode(sig)}}
+        a = {"type": kind, "value": raw, "proof": {"type": "Ed25519BindingSignature", "issued": issued, "proofValue": "z" + core.base58btc_encode(sig)}}
         platform, handle = raw.split(":")
         hint = f'The platform must also publish {{"eid": "{e.eid}"}} at https://<{platform} domain>/.well-known/openentity/bindings/{handle}.json, or issue an identity attestation.'
     else:
@@ -873,8 +873,8 @@ def _record(args):
         entry = next((x for x in _read_record(e.dir) if x["seq"] == seq), None)
         if not entry:
             raise _usage("record redact <seq>: the seq of an entry in your local record")
-        created = core.now()
-        red = core.sign_object({"spec": core.SPEC, "type": "Redaction", "eid": e.eid, "seq": seq, "entry_sha256": core.canonical_hash(entry).hex(), "created": created, "nonce": core.nonce()}, e.kp, created)
+        created = core.now_seconds()
+        red = core.sign_object({"spec": core.SPEC, "type": "Redaction", "eid": e.eid, "seq": seq, "entry_sha256": core.canonical_hash(entry).hex(), "created": created, "nonce": core.random_nonce()}, e.kp, created)
         r = e.reg.send("POST", f"/v1/entities/{e.eid}/record/redact", red, e.eid)
         return {"redaction": red, "placeholder": r.get("placeholder")}, f"redacted seq {seq}: the registry now serves a placeholder that keeps its hash and chain position"
     if args.kind == "push":
@@ -912,7 +912,7 @@ def _keys_of(doc: dict) -> list[bytes]:
     for vm in doc.get("verificationMethod") or []:
         mb, jwk = vm.get("publicKeyMultibase"), vm.get("publicKeyJwk") or {}
         if mb and mb.startswith("z"):
-            b = core.b58decode(mb[1:])
+            b = core.base58btc_decode(mb[1:])
             if len(b) == 34 and b[:2] == b"\xed\x01":
                 out.append(b[2:])
             elif len(b) == 32:
@@ -927,7 +927,7 @@ def resolve_did(did: str) -> dict:
     p = did.split(":")
     if p[:2] == ["did", "key"]:
         try:
-            core.public_from_did_key(did)
+            core.public_key_from_did_key(did)
         except ValueError as e:
             raise CliError(EXIT_VERIFY, f"cannot resolve {did}: {e}")
         mb = did.removeprefix("did:key:")
@@ -1016,7 +1016,7 @@ def _checkpoint(reg: Reg) -> tuple[bool, str, dict]:
     r, sth = reg.spec().get("registry") or {}, reg.get("/v1/log/sth")
     if not r.get("publicKeyMultibase"):
         return False, "registry publishes no checkpoint key in /v1/spec", sth
-    ok = core.verify_note(sth["signature"], r.get("log_origin", "openentity.org/log"), core.b58decode(r["publicKeyMultibase"][1:])[-32:])
+    ok = core.verify_note(sth["signature"], r.get("log_origin", "openentity.org/log"), core.base58btc_decode(r["publicKeyMultibase"][1:])[-32:])
     return ok, f"checkpoint signature valid, tree size {sth['tree_size']}" if ok else "checkpoint signature INVALID", sth
 
 
@@ -1172,7 +1172,7 @@ def _successor_doc(prev: dict, kp: core.KeyPair, args, now: str) -> dict:
 def _link(args, basis: str):
     old = _load(args)
     kp = _kp_from_jwk(_read_json(args.to)) if args.to else core.KeyPair()
-    created = core.now()
+    created = core.now_seconds()
     body = core.build_rotation(old.kp, kp, _successor_doc(old.doc, kp, args, created), basis, created)
     _checked("ContinuityLink", body["link"])
     if args.dry_run:
@@ -1226,9 +1226,9 @@ def _recover(args):
     reg = Reg(_registry_url(args))
     prev = reg.get(f"/v1/entities/{args.previous}/document")
     kp = _kp_from_jwk(_read_json(args.to)) if args.to else core.KeyPair()
-    created = core.now()
+    created = core.now_seconds()
     doc = core.sign_object(_successor_doc(prev, kp, args, created), kp, created)
-    link0 = {"spec": core.SPEC, "type": "ContinuityLink", "previous": args.previous, "successor": kp.did, "basis": "recovery", "created": created, "nonce": core.nonce()}
+    link0 = {"spec": core.SPEC, "type": "ContinuityLink", "previous": args.previous, "successor": kp.did, "basis": "recovery", "created": created, "nonce": core.random_nonce()}
     d = _create_dir(kp, doc, {"registry": reg.base, "docSeq": 1, "recordPushed": 0})
     _write_json(d / "pending-recovery.json", {"link": link0, "successorProof": core.sign_proof(link0, kp, created), "via": args.via})
     digest = "0x" + core.eip712_digest("ContinuityLink", core.canonical_hash(link0).hex(), created).hex()

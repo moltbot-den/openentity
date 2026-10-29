@@ -12,6 +12,21 @@ from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey, Ed25519PublicKey
 from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 
+from .errors import InvalidInputError
+
+# The public names. The old 0.5 names (last line of the file) stay importable from `openentity.core` but are not re-exported.
+__all__ = [
+    "SPEC", "DECLARATION_VERSION", "DECLARATION_TEXT", "DECLARATION_SHA256", "KeyPair",
+    "sha256", "sha256_hex", "record_entry_hash", "base58btc_encode", "base58btc_decode", "parse_json", "canonicalize", "canonical_hash",
+    "did_key_from_public_key", "public_key_from_did_key", "verification_method_id", "normalize_eid",
+    "generate_key_pair", "key_pair_from_seed", "now_seconds", "random_nonce", "check_timestamp",
+    "sign_proof", "sign_object", "verify_object", "default_resolver", "successor_document", "build_rotation",
+    "eip712_digest", "recover_eip712", "build_presentation", "verify_presentation",
+    "mint_stamp", "check_stamp", "leaf_hash", "node_hash", "merkle_root", "inclusion_proof", "verify_inclusion",
+    "verify_note", "log_leaf",
+]
+
+
 SPEC = "openentity/1.0"
 DECLARATION_VERSION = "1.0"
 _B58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
@@ -35,11 +50,15 @@ def sha256(data: str | bytes) -> bytes:
     return hashlib.sha256(data.encode() if isinstance(data, str) else data).digest()
 
 
+def sha256_hex(data: str | bytes) -> str:
+    return sha256(data).hex()
+
+
 DECLARATION_SHA256 = sha256(DECLARATION_TEXT).hex()
 
 
 # ---- base58btc ----
-def b58encode(b: bytes) -> str:
+def base58btc_encode(b: bytes) -> str:
     n = int.from_bytes(b, "big")
     out = ""
     while n:
@@ -48,9 +67,11 @@ def b58encode(b: bytes) -> str:
     return "1" * (len(b) - len(b.lstrip(b"\0"))) + out
 
 
-def b58decode(s: str) -> bytes:
+def base58btc_decode(s: str) -> bytes:
     n = 0
     for c in s:
+        if c not in _B58:
+            raise InvalidInputError(f'invalid base58btc character "{c}"')
         n = n * 58 + _B58.index(c)
     body = n.to_bytes((n.bit_length() + 7) // 8, "big")
     return b"\0" * (len(s) - len(s.lstrip("1"))) + body
@@ -61,7 +82,7 @@ def _num(x) -> str:
     if isinstance(x, int):
         return str(x)
     if not math.isfinite(x):
-        raise ValueError("JCS: NaN and Infinity are not JSON")
+        raise InvalidInputError("JCS: NaN and Infinity are not JSON")
     if x == 0:
         return "0"
     t = Decimal(repr(abs(x))).normalize().as_tuple()
@@ -84,7 +105,7 @@ def parse_json(text: str):
     def pairs(items):
         keys = [k for k, _ in items]
         if len(keys) != len(set(keys)):
-            raise ValueError(f"duplicate key {next(k for k in keys if keys.count(k) > 1)!r}")
+            raise InvalidInputError(f"duplicate key {next(k for k in keys if keys.count(k) > 1)!r}")
         return dict(items)
     return json.loads(text, object_pairs_hook=pairs)
 
@@ -121,20 +142,20 @@ def canonical_hash(v) -> bytes:
 
 
 # ---- did:key (spec 3.3) ----
-def did_key(public: bytes) -> str:
-    return "did:key:z" + b58encode(b"\xed\x01" + public)
+def did_key_from_public_key(public: bytes) -> str:
+    return "did:key:z" + base58btc_encode(b"\xed\x01" + public)
 
 
-def public_from_did_key(did: str) -> bytes:
+def public_key_from_did_key(did: str) -> bytes:
     if not did.startswith("did:key:z"):
-        raise ValueError("not a did:key")
-    raw = b58decode(did[9:])
+        raise InvalidInputError("not a did:key")
+    raw = base58btc_decode(did[9:])
     if raw[:2] != b"\xed\x01" or len(raw) != 34:
-        raise ValueError("not an Ed25519 did:key")
+        raise InvalidInputError("not an Ed25519 did:key")
     return raw[2:]
 
 
-def verification_method(did: str) -> str:
+def verification_method_id(did: str) -> str:
     return f"{did}#{did.removeprefix('did:key:')}"
 
 
@@ -143,15 +164,15 @@ class KeyPair:
         self.seed = seed or os.urandom(32)
         self.private = Ed25519PrivateKey.from_private_bytes(self.seed)
         self.public = self.private.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw)
-        self.did = did_key(self.public)
+        self.did = did_key_from_public_key(self.public)
 
 
-def now() -> str:
+def now_seconds() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def nonce() -> str:
-    return b58encode(os.urandom(16))
+def random_nonce() -> str:
+    return base58btc_encode(os.urandom(16))
 
 
 # ---- eddsa-jcs-2022 (spec 4.1) ----
@@ -163,10 +184,10 @@ def _signing_input(obj: dict, proof: dict) -> bytes:
 
 def sign_proof(obj: dict, kp: KeyPair, created: str | None = None, method: str | None = None) -> dict:
     """`method` names the verification method; it defaults to the did:key of `kp`, a did:web signer passes `did:web:x#key-1`."""
-    proof = {"type": "DataIntegrityProof", "cryptosuite": "eddsa-jcs-2022", "created": created or now(),
-             "verificationMethod": method or verification_method(kp.did), "proofPurpose": "assertionMethod"}
+    proof = {"type": "DataIntegrityProof", "cryptosuite": "eddsa-jcs-2022", "created": created or now_seconds(),
+             "verificationMethod": method or verification_method_id(kp.did), "proofPurpose": "assertionMethod"}
     sig = kp.private.sign(_signing_input(obj, proof))
-    return {**proof, "proofValue": "z" + b58encode(sig)}
+    return {**proof, "proofValue": "z" + base58btc_encode(sig)}
 
 
 def sign_object(obj: dict, kp: KeyPair, created: str | None = None, method: str | None = None) -> dict:
@@ -176,19 +197,19 @@ def sign_object(obj: dict, kp: KeyPair, created: str | None = None, method: str 
 # ---- continuity (spec 9) ----
 def successor_document(prev: dict, nxt: KeyPair, created: str | None = None) -> dict:
     """The successor's unsigned seq 1 document: `prev` re-keyed, aliases dropped (their proofs name the old EID)."""
-    created = created or now()
+    created = created or now_seconds()
     d = {k: v for k, v in prev.items() if k not in ("proof", "aliases")}
     return {**d, "eid": nxt.did, "created": created, "updated": created, "seq": 1,
-            "keys": [{"id": verification_method(nxt.did), "type": "Multikey", "publicKeyMultibase": nxt.did.removeprefix("did:key:")}],
+            "keys": [{"id": verification_method_id(nxt.did), "type": "Multikey", "publicKeyMultibase": nxt.did.removeprefix("did:key:")}],
             "continuity": {**d.get("continuity", {}), "previous": prev["eid"]}}
 
 
 def build_rotation(previous: KeyPair, successor: KeyPair, document: dict, basis: str = "rotation",
                    created: str | None = None, nonce_: str | None = None) -> dict:
     """The body of POST /v1/continuity: a link signed by both keys, and the successor's document signed by it."""
-    created = created or now()
+    created = created or now_seconds()
     body = {"spec": SPEC, "type": "ContinuityLink", "previous": previous.did, "successor": successor.did,
-            "basis": basis, "created": created, "nonce": nonce_ or nonce()}
+            "basis": basis, "created": created, "nonce": nonce_ or random_nonce()}
     link = {**body, "proofs": [sign_proof(body, previous, created), sign_proof(body, successor, created)]}
     return {"link": link, "document": sign_object(document, successor, created)}
 
@@ -238,17 +259,17 @@ def recover_eip712(digest: bytes, sig_hex: str) -> str:
     """Checksummed address that signed `digest`."""
     sig = bytes.fromhex(sig_hex.removeprefix("0x"))
     if len(sig) != 65:
-        raise ValueError("signature must be 65 bytes")
+        raise InvalidInputError("signature must be 65 bytes")
     r, s_, v = int.from_bytes(sig[:32], "big"), int.from_bytes(sig[32:64], "big"), sig[64] - 27 if sig[64] >= 27 else sig[64]
     if v > 1 or not (0 < r < _N and 0 < s_ < _N):
-        raise ValueError("invalid signature")
+        raise InvalidInputError("invalid signature")
     y = pow((r ** 3 + 7) % _P, (_P + 1) // 4, _P)
     if y % 2 != v:
         y = _P - y
     e = int.from_bytes(digest, "big")
     q = _mul(pow(r, -1, _N), _add(_mul(s_, (r, y)), _mul((-e) % _N, _G)))
     if q is None:
-        raise ValueError("invalid signature")
+        raise InvalidInputError("invalid signature")
     addr = _keccak(q[0].to_bytes(32, "big") + q[1].to_bytes(32, "big"))[12:].hex()
     h = _keccak(addr).hex()
     return "0x" + "".join(c.upper() if int(h[i], 16) >= 8 else c for i, c in enumerate(addr))
@@ -257,11 +278,11 @@ def recover_eip712(digest: bytes, sig_hex: str) -> str:
 def default_resolver(did: str) -> dict:
     """Offline resolution: did:key and did:pkh. Pass a resolver for did:web and other methods."""
     if did.startswith("did:key:"):
-        return {"ed25519": [public_from_did_key(did)]}
+        return {"ed25519": [public_key_from_did_key(did)]}
     m = re.fullmatch(r"did:pkh:eip155:\d+:(0x[0-9a-fA-F]{40})", did)
     if m:
         return {"address": m.group(1)}
-    raise ValueError(f"cannot resolve {':'.join(did.split(':')[:2])} offline; pass a resolver")
+    raise InvalidInputError(f"cannot resolve {':'.join(did.split(':')[:2])} offline; pass a resolver")
 
 
 def verify_object(obj: dict, resolver=default_resolver) -> tuple[bool, str]:
@@ -275,7 +296,7 @@ def verify_object(obj: dict, resolver=default_resolver) -> tuple[bool, str]:
         if proof.get("type") == "DataIntegrityProof":
             if proof.get("cryptosuite") != "eddsa-jcs-2022" or not proof["proofValue"].startswith("z"):
                 return False, "unsupported proof"
-            sig, msg = b58decode(proof["proofValue"][1:]), _signing_input(obj, proof)
+            sig, msg = base58btc_decode(proof["proofValue"][1:]), _signing_input(obj, proof)
             for pk in keys.get("ed25519", []):
                 try:
                     Ed25519PublicKey.from_public_bytes(pk).verify(sig, msg)
@@ -303,7 +324,7 @@ def _ts(s: str) -> datetime:
 
 
 def build_presentation(kp: KeyPair, audience: str, nonce_: str, attestations: list | None = None) -> dict:
-    created = now()
+    created = now_seconds()
     obj = {"spec": SPEC, "type": "Presentation", "eid": kp.did, "audience": audience, "nonce": nonce_, "created": created}
     return sign_object({**obj, "attestations": attestations} if attestations else obj, kp, created)
 
@@ -354,9 +375,9 @@ def _zero_bits(h: bytes) -> int:
 
 def mint_stamp(bits: int, eid: str, created: str | None = None) -> str:
     # Random start so two stamps for the same EID in the same second differ (registries reject reuse).
-    created, i = created or now(), int.from_bytes(os.urandom(4), "big")
+    created, i = created or now_seconds(), int.from_bytes(os.urandom(4), "big")
     while True:
-        header = f"1:{bits}:{created}:{eid}:{b58encode(i.to_bytes(8, 'big'))}"
+        header = f"1:{bits}:{created}:{eid}:{base58btc_encode(i.to_bytes(8, 'big'))}"
         if _zero_bits(sha256(header)) >= bits:
             return header
         i += 1
@@ -449,3 +470,42 @@ def verify_note(note: str, origin: str, public: bytes) -> bool:
 
 def log_leaf(type_: str, eid: str, object_sha256: str, received_at: str) -> dict:
     return {"type": type_, "eid": eid, "object_sha256": object_sha256, "received_at": received_at}
+
+
+def record_entry_hash(entry: dict) -> str:
+    """sha256 hex of the canonical entry INCLUDING its proof: the next entry's `prev` (spec 7.4)."""
+    return canonical_hash(entry).hex()
+
+
+def normalize_eid(eid: str) -> str:
+    """Spec 3.3: the `eid:base:0x...` shorthand is the did:pkh on Base."""
+    return "did:pkh:eip155:8453:" + eid.removeprefix("eid:base:") if eid.startswith("eid:base:") else eid
+
+
+def check_timestamp(created: str, at: datetime | None = None) -> str | None:
+    """Spec 4.4: None if `created` is a valid timestamp no more than 10 minutes ahead and 24 hours behind `at` (now)."""
+    try:
+        t = _ts(created)
+    except ValueError:
+        return "created must be RFC 3339 UTC with second precision and a Z suffix"
+    at = at or datetime.now(timezone.utc)
+    if t > at + timedelta(minutes=10):
+        return "created is more than 10 minutes in the future"
+    if t < at - timedelta(hours=24):
+        return "created is more than 24 hours in the past"
+    return None
+
+
+def generate_key_pair() -> KeyPair:
+    return KeyPair()
+
+
+def key_pair_from_seed(seed: bytes) -> KeyPair:
+    if len(seed) != 32:
+        raise InvalidInputError("seed must be 32 bytes")
+    return KeyPair(seed)
+
+
+# Deprecated 0.5 names, kept until 1.0. The canonical names match the TypeScript SDK (snake_case for camelCase).
+b58encode, b58decode, did_key, public_from_did_key = base58btc_encode, base58btc_decode, did_key_from_public_key, public_key_from_did_key
+verification_method, now, nonce = verification_method_id, now_seconds, random_nonce

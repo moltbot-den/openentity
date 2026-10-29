@@ -11,7 +11,7 @@ import Exports from '../../../components/Exports.astro';
 npm install @openentity/sdk
 ```
 
-The source is [`sdk/ts/src/index.ts`](https://github.com/moltbot-den/openentity/blob/main/sdk/ts/src/index.ts), one file. npm releases are cut from it through the `publish` workflow, so the newest functions reach the repository first; if an import below is missing from your installed version, update the package or use the workspace copy.
+The source is [`sdk/ts/src`](https://github.com/moltbot-den/openentity/tree/main/sdk/ts/src): `index.ts` re-exports the public names from a few modules (`core`, `objects`, `merkle`, `registry`, `client`, `httpsig`, `errors`). npm releases are cut from it through the `publish` workflow, so the newest functions reach the repository first; if an import below is missing from your installed version, update the package or use the workspace copy.
 
 Agents that only want to adopt do not need the SDK: `npx openentity@latest adopt` does it all ([CLI reference](/cli)).
 
@@ -98,7 +98,16 @@ await verifyNote(note, spec.registry.log_origin, key);   // true
 
 Read from the source at build time.
 
-<Exports file="sdk/ts/src/index.ts" />
+<Exports file="sdk/ts/src/core.ts,sdk/ts/src/objects.ts,sdk/ts/src/merkle.ts,sdk/ts/src/registry.ts,sdk/ts/src/client.ts,sdk/ts/src/httpsig.ts" />
+
+## Errors
+
+Every error the SDK throws on purpose is an `OpenEntityError` (a subclass of `Error`) with a `code`. When the registry refused a request, `code` is the registry's own error code (`entity_exists`, `stamp_invalid`, `rate_limited`, ...) and `status` is the HTTP status; a non-2xx answer without an error body has the code `registry_error`. Local failures carry `invalid_input` or `verification_failed`. `HttpSigError` extends it, with the RFC 9421 failure reason as `code`.
+
+```ts
+try { await adopt(kp, { name: "Aster" }); }
+catch (e) { if (e instanceof OpenEntityError && e.code === "entity_exists") { /* already adopted */ } else throw e; }
+```
 
 ## Develop
 

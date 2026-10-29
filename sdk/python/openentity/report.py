@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from urllib.parse import unquote
 
 from . import client, core
+from .errors import InvalidInputError, VerificationError
 
 MOLTBOTDEN, CLAWGRC = "did:web:moltbotden.com", "did:web:api.clawgrc.com"
 SMA = ("did:web:securemyagent.ai", "did:pkh:eip155:8453:0x62fef02E2859726EC1c0B534853Ad2cdd5FdDE1a")
@@ -36,11 +37,11 @@ def did_web_resolver(fetch=client._request):
         host, *path = [unquote(p) for p in did[8:].split(":")]
         doc = fetch(f"https://{host}/{'/'.join(path) if path else '.well-known'}/did.json")
         if doc.get("id") != did:
-            raise ValueError(f"{did} document names {doc.get('id')}")
+            raise VerificationError(f"{did} document names {doc.get('id')}")
         keys = []
         for vm in doc.get("verificationMethod", []):
             try:
-                keys.append(core.public_from_did_key("did:key:" + vm["publicKeyMultibase"]))
+                keys.append(core.public_key_from_did_key("did:key:" + vm["publicKeyMultibase"]))
             except (KeyError, ValueError):
                 continue  # not an Ed25519 Multikey
         return {"ed25519": keys}
@@ -63,10 +64,10 @@ def trust(eid: str, registry: str = client.DEFAULT_REGISTRY, *, now: datetime | 
 
 def _read(eid, base, now, fetch, resolver) -> TrustReport:
     if not eid.startswith("did:"):
-        raise ValueError("eid must be a DID")
+        raise InvalidInputError("eid must be a DID")
     ent = fetch(f"{base}/v1/entities/{eid}")
     if ent["eid"] != eid:
-        raise ValueError(f"registry answered for {ent['eid']}")
+        raise VerificationError(f"registry answered for {ent['eid']}")
     rows = fetch(f"{base}/v1/entities/{eid}/attestations")["attestations"]
     tiers, posture, violations, revocations = {}, None, [], []
     for r in sorted(rows, key=lambda r: r["attestation"]["created"], reverse=True):
@@ -77,18 +78,18 @@ def _read(eid, base, now, fetch, resolver) -> TrustReport:
             continue  # a rotation does not carry positive claims; a strike follows the entity
         sha, ended = r["sha256"], core._ts(a["expires"]) <= now
         if a["subject"] != (r.get("inherited_from") or eid) or core.canonical_hash(a).hex() != sha:
-            raise ValueError(f"attestation {sha} does not match what the registry served")
+            raise VerificationError(f"attestation {sha} does not match what the registry served")
         ok, signer = core.verify_object(a, resolver)
         if not ok or signer != a["issuer"]:
-            raise ValueError(f"attestation {sha}: {signer}")
+            raise VerificationError(f"attestation {sha}: {signer}")
         rv = r.get("revocation")
         if rv:
             ok, signer = core.verify_object(rv, resolver)
             if not ok or signer != a["issuer"] or rv["attestation_sha256"] != sha:
-                raise ValueError(f"revocation of {sha}: {signer}")
+                raise VerificationError(f"revocation of {sha}: {signer}")
             revocations.append({"sha256": sha, "claim_type": ct, "issuer": a["issuer"], "reason": rv.get("reason"), "at": rv["created"]})
         elif r.get("revoked_at"):
-            raise ValueError(f"registry reports a revocation of {sha} it does not carry")
+            raise VerificationError(f"registry reports a revocation of {sha} it does not carry")
         if ended or rv:
             continue
         c = a["claim"]
@@ -99,3 +100,7 @@ def _read(eid, base, now, fetch, resolver) -> TrustReport:
         else:
             violations.append({"issuer": a["issuer"], "severity": c["severity"], "policy": c["policy"], "observed_at": c["observed_at"], "sha256": sha})
     return TrustReport(eid, True, None, ent["level"], bool(ent.get("withdrawn")), tiers, posture, violations, revocations)
+
+
+def clear_trust_cache() -> None:
+    _cache.clear()
