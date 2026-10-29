@@ -35,6 +35,13 @@ if [ -d integrations/adk/python ]; then
   (cd integrations/adk/python && uv run --quiet pytest -q) || fail=1
 fi
 
+# CrewAI and OpenAI Agents SDK tools (Python only). Mocked registry; no network.
+for d in integrations/crewai/python integrations/openai-agents/python; do
+  if [ -d $d ]; then
+    (cd $d && uv run --quiet pytest -q) || fail=1
+  fi
+done
+
 # goose recipe and deeplinks stay in step.
 if [ -d integrations/goose ]; then
   uv run --quiet --with pyyaml --with pytest pytest -q integrations/goose || fail=1
