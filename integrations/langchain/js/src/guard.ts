@@ -11,6 +11,12 @@ const HALT_FLAG = "openentity_halt";
 // error ToolMessages by default, and a tool may catch its own; neither can hide a violation from wrapToolCall.
 const calls = new AsyncLocalStorage<{ violation?: OpenEntitySchemaViolation }>();
 
+const MAX_BODY = 10_000_000;
+// Fetch is patched once per process; every guard that called guardHttp() checks each response, and
+// uninstalling one leaves the others.
+const active = new Set<RuthlessSchemaGuard>();
+let uninstallFetch: (() => void) | undefined;
+
 export interface GuardOptions {
   schemas?: Record<string, unknown>;
   mode?: "raise" | "halt";
@@ -39,7 +45,6 @@ export class RuthlessSchemaGuard {
   private readonly scope: "tools" | "all";
   // ponytail: one failure counter per guard; call reset() between unrelated runs.
   private failures = new Map<string, number>();
-  private restore?: () => void;
   /** Pass this to `createAgent({ middleware: [guard.middleware] })`, first in the list (outermost). */
   readonly middleware: AnyAgentMiddleware;
 
@@ -102,30 +107,40 @@ export class RuthlessSchemaGuard {
   }
 
   // ---- transport ----
-  /** Wrap global fetch. Returns the uninstaller. Streaming bodies (SSE, ndjson) are never read. */
+  /** Wrap global fetch (once per process, shared by every guard). Returns the uninstaller. Streaming bodies (SSE, ndjson) are never read. */
   guardHttp(): () => void {
-    if (this.restore) return this.restore;
-    const orig = globalThis.fetch;
-    globalThis.fetch = async (input: any, init?: any) => {
-      const res = await orig(input, init);
-      const req = input instanceof Request ? input : undefined;
-      const method = init?.method ?? req?.method ?? "GET";
-      const accept = new Headers(init?.headers ?? req?.headers).get("accept") ?? "";
-      const url = res.url || (req?.url ?? String(input instanceof URL ? input.href : input));
-      const ct = res.headers.get("content-type") ?? "";
-      if (this.wants(method, url, res.status, ct, accept))
-        this.check(method, url, res.status, ct, accept, new TextDecoder("utf-8", { ignoreBOM: true }).decode(await res.clone().arrayBuffer()));
-      return res;
+    active.add(this);
+    if (!uninstallFetch) {
+      const orig = globalThis.fetch;
+      const patched = (globalThis.fetch = async (input: any, init?: any) => {
+        const res = await orig(input, init);
+        const req = input instanceof Request ? input : undefined;
+        const method = init?.method ?? req?.method ?? "GET";
+        const accept = new Headers(init?.headers ?? req?.headers).get("accept") ?? "";
+        const url = res.url || (req?.url ?? String(input instanceof URL ? input.href : input));
+        const ct = res.headers.get("content-type") ?? "";
+        if (Number(res.headers.get("content-length")) > MAX_BODY) return res; // never buffered just to be checked
+        let body: string | undefined;
+        for (const g of [...active])
+          if (g.wants(method, url, res.status, ct, accept)) {
+            body ??= new TextDecoder("utf-8", { ignoreBOM: true }).decode(await res.clone().arrayBuffer());
+            g.check(method, url, res.status, ct, accept, body);
+          }
+        return res;
+      });
+      uninstallFetch = () => {
+        if (globalThis.fetch === patched) globalThis.fetch = orig;
+        uninstallFetch = undefined;
+      };
+    }
+    return () => {
+      active.delete(this);
+      if (!active.size) uninstallFetch?.();
     };
-    const patched = globalThis.fetch;
-    this.restore = () => {
-      if (globalThis.fetch === patched) globalThis.fetch = orig;
-      this.restore = undefined;
-    };
-    return this.restore;
   }
 
-  private wants(method: string, url: string, status: number, ct: string, accept: string): boolean {
+  /** @internal */
+  wants(method: string, url: string, status: number, ct: string, accept: string): boolean {
     if (method.toUpperCase() === "HEAD" || status === 206 || (this.scope === "tools" && !calls.getStore())) return false;
     const hit = this.routes.match(method, url);
     if (this.onlyRegistered && !hit) return false;
@@ -184,11 +199,15 @@ export class RuthlessSchemaGuard {
       result = await calls.run(call, () => handler(request));
       if (call.violation) throw call.violation;
       const schema = this.toolSchemas.get(name);
-      if (schema && isToolMessage(result) && (result as any).status !== "error") {
-        const text = textOf(result.content);
-        const errs = inspectResponse(200, "application/json", text, { schema, ignore: this.ignore });
-        if (errs.length) throw new OpenEntitySchemaViolation(name, errs, text);
-      }
+      // A tool may answer with Command({ update: { messages: [ToolMessage] } }); check that message.
+      const msgs = isToolMessage(result) ? [result] : ((result as any)?.update?.messages ?? []).filter((m: any) => m?.tool_call_id === request.toolCall.id);
+      if (schema)
+        for (const m of msgs) {
+          if (!isToolMessage(m) || (m as any).status === "error") continue;
+          const text = textOf(m.content);
+          const errs = inspectResponse(200, "application/json", text, { schema, ignore: this.ignore });
+          if (errs.length) throw new OpenEntitySchemaViolation(name, errs, text);
+        }
     } catch (e) {
       if (e instanceof OpenEntitySchemaViolation || e instanceof OpenEntityLoopDetected) return this.exit(request, this.count(name, key) ?? e);
       if ((e as any)?.is_bubble_up === true) throw e; // interrupt() and Command jumps are control flow, not failures

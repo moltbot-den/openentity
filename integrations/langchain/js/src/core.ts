@@ -112,13 +112,37 @@ function declaredKeys(s: Record<string, any>): Set<string> {
 
 const loc = (p: string) => p.replace(/^#\/?/, "") || "$";
 
-const TYPES = new Set(["string", "number", "integer", "boolean", "object", "array", "null"]);
-// ponytail: checks `type` keywords only (the common typo); Python runs the full metaschema check.
-function assertTypes(node: any): void {
-  if (Array.isArray(node)) return node.forEach(assertTypes);
-  if (!node || typeof node !== "object") return;
-  for (const t of [node.type].flat()) if (typeof t === "string" && !TYPES.has(t)) throw new Error(`invalid JSON Schema: unknown type ${JSON.stringify(t)}`);
-  Object.values(node).forEach(assertTypes);
+// A compact metaschema (keyword value types), checked with the same validator that checks responses.
+const SCHEMA = { $ref: "#" };
+const SCHEMAS_OBJ = { type: "object", additionalProperties: SCHEMA };
+const SCHEMA_LIST = { type: "array", minItems: 1, items: SCHEMA };
+const NONNEG = { type: "integer", minimum: 0 };
+const META: any = {
+  type: ["object", "boolean"],
+  properties: {
+    type: { anyOf: [{ enum: ["string", "number", "integer", "boolean", "object", "array", "null"] },
+      { type: "array", items: { enum: ["string", "number", "integer", "boolean", "object", "array", "null"] } }] },
+    enum: { type: "array" }, required: { type: "array", items: { type: "string" } },
+    properties: SCHEMAS_OBJ, patternProperties: SCHEMAS_OBJ, $defs: SCHEMAS_OBJ, definitions: SCHEMAS_OBJ, dependentSchemas: SCHEMAS_OBJ,
+    items: SCHEMA, additionalProperties: SCHEMA, not: SCHEMA, if: SCHEMA, then: SCHEMA, else: SCHEMA, contains: SCHEMA, propertyNames: SCHEMA,
+    unevaluatedItems: SCHEMA, unevaluatedProperties: SCHEMA, prefixItems: SCHEMA_LIST, allOf: SCHEMA_LIST, anyOf: SCHEMA_LIST, oneOf: SCHEMA_LIST,
+    minimum: { type: "number" }, maximum: { type: "number" }, exclusiveMinimum: { type: "number" }, exclusiveMaximum: { type: "number" },
+    multipleOf: { type: "number", exclusiveMinimum: 0 },
+    minLength: NONNEG, maxLength: NONNEG, minItems: NONNEG, maxItems: NONNEG, minProperties: NONNEG, maxProperties: NONNEG,
+    pattern: { type: "string" }, format: { type: "string" }, $ref: { type: "string" },
+  },
+};
+const META_VALIDATOR = new Validator(META, "2020-12", false);
+function assertSchema(js: any): void {
+  const bad = META_VALIDATOR.validate(js);
+  if (!bad.valid) throw new Error(`invalid JSON Schema at ${loc(bad.errors.at(-1)!.instanceLocation)}: ${bad.errors.at(-1)!.error}`);
+  const walk = (n: any): void => {
+    if (Array.isArray(n)) return n.forEach(walk);
+    if (!n || typeof n !== "object") return;
+    if (typeof n.pattern === "string") new RegExp(n.pattern, "u"); // throws on a bad regex
+    Object.values(n).forEach(walk);
+  };
+  try { walk(js); } catch (e) { throw new Error(`invalid JSON Schema: ${(e as Error).message}`); }
 }
 
 /** A JSON Schema object, or a zod v4 schema (anything with `safeParse` and `toJSONSchema`). */
@@ -134,8 +158,9 @@ export function compileSchema(obj: any): Schema {
     };
   }
   const js = nullable(obj);
+  assertSchema(js); // fail at register(), not inside the user's fetch
   const v = new Validator(js, "2020-12", false);
-  assertTypes(js); // fail at register(), not inside the user's fetch
+  v.validate({}); // surfaces an unresolvable $ref now
   return {
     jsonSchema: js, hash: sha256Hex(stableJson(js)), declared: declaredKeys(js),
     validate(parsed) {

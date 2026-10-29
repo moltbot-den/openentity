@@ -20,7 +20,16 @@ BY_ID = {c["id"]: c for c in MALFORMED + VALID}
 
 
 class _Handler(BaseHTTPRequestHandler):
-    def do_GET(self):  # /s/<schema|none>/<case id>
+    def do_GET(self):  # /s/<schema|none>/<case id>, or /chunked
+        if self.path == "/chunked":
+            self.send_response(200)
+            self.send_header("content-type", "application/json")
+            self.send_header("transfer-encoding", "chunked")
+            self.end_headers()
+            for part in (b'{"a"', b": 1}"):
+                self.wfile.write(b"%x\r\n%s\r\n" % (len(part), part))
+            self.wfile.write(b"0\r\n\r\n")
+            return
         case = BY_ID[unquote(self.path.split("?")[0].rsplit("/", 1)[1])]
         body = case["body"].encode()
         self.send_response(case["status"])

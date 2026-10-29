@@ -11,6 +11,7 @@ from urllib.parse import urlsplit
 from langchain.agents.middleware import AgentMiddleware, hook_config
 from langchain_core.messages import ToolMessage
 from langgraph.errors import GraphBubbleUp
+from langgraph.types import Command
 
 from . import http as _http
 from .core import (
@@ -175,14 +176,18 @@ class RuthlessSchemaGuard(AgentMiddleware):
         self._failures[key] = n = self._failures.get(key, 0) + 1
         return OpenEntityLoopDetected(name, key[1], n) if n >= self.max_failures else None
 
-    def _validate(self, name: str, result: Any) -> None:
+    def _validate(self, name: str, result: Any, call_id: str = "") -> None:
         schema = self.tool_schemas.get(name)
-        if schema is None or not isinstance(result, ToolMessage) or result.status == "error":
+        if schema is None:
             return
-        text = _text(result.content)
-        errs = inspect_response(200, "application/json", text, schema, "", self.ignore)
-        if errs:
-            raise OpenEntitySchemaViolation(name, errs, text)
+        # A tool may answer with Command(update={"messages": [ToolMessage(...)]}); check that message.
+        msgs = [m for m in (result.update or {}).get("messages", []) if getattr(m, "tool_call_id", None) == call_id] \
+            if isinstance(result, Command) and isinstance(result.update, dict) else [result]
+        for m in msgs:
+            if isinstance(m, ToolMessage) and m.status != "error":
+                text = _text(m.content)
+                if errs := inspect_response(200, "application/json", text, schema, "", self.ignore):
+                    raise OpenEntitySchemaViolation(name, errs, text)
 
     def _halted(self, request: Any, exc: BaseException) -> ToolMessage:
         errs = getattr(exc, "errors", None) or [str(exc)]
@@ -196,7 +201,7 @@ class RuthlessSchemaGuard(AgentMiddleware):
             result = run()
             if seen:
                 raise seen[0]
-            self._validate(name, result)
+            self._validate(name, result, request.tool_call.get("id", ""))
         except (OpenEntitySchemaViolation, OpenEntityLoopDetected) as e:
             return self._exit(request, self._count(name, key) or e)
         except GraphBubbleUp:  # interrupt() and Command jumps are control flow, not failures

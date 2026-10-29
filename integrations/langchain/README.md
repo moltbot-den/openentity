@@ -94,7 +94,7 @@ On a 2xx response (and on tool output for registered tools) where JSON is expect
 | `error_envelope` | a 2xx body with a truthy `error` or `errors`, or `success: false` or `ok: false`, unless the schema declares that field |
 | `schema` | the registered schema fails, including type drift on required fields |
 
-HEAD requests and 206 partial responses are never checked. Streaming responses (`stream=True`, SSE, ndjson) are never read. `guard_http()` checks only calls made inside a running tool, so an LLM provider call or a tracing thread can never raise; pass `scope="all"` (`scope: "all"` in JS) to check every call in the process. Pass `ignore=("error_envelope",)` for an API whose 200s legitimately carry `errors` (GraphQL partial results), and `only_registered=True` to skip routes without a schema.
+HEAD requests and 206 partial responses are never checked. Streaming responses (`stream=True`, SSE, ndjson) are never read. Chunked aiohttp responses and bodies over 10 MB are not buffered, so they are not checked. Several guards can call `guard_http()` at once; each uninstalls on its own. A tool that returns a `Command` with a `ToolMessage` in its `update` is validated like a plain `ToolMessage`. `guard_http()` checks only calls made inside a running tool, so an LLM provider call or a tracing thread can never raise; pass `scope="all"` (`scope: "all"` in JS) to check every call in the process. Pass `ignore=("error_envelope",)` for an API whose 200s legitimately carry `errors` (GraphQL partial results), and `only_registered=True` to skip routes without a schema.
 
 ## Other features
 
