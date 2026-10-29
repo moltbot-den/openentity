@@ -15,10 +15,12 @@ export interface GuardOptions {
   schemas?: Record<string, unknown>;
   mode?: "raise" | "halt";
   maxFailures?: number;
-  /** A reporter, a URL, false to turn it off; default reads OPENENTITY_LEDGER_URL. */
-  ledger?: LedgerReporter | string | false;
+  /** A reporter, a URL, true for the default URL, false to turn it off; default reads OPENENTITY_LEDGER_URL. */
+  ledger?: LedgerReporter | string | boolean;
   ignore?: string[];
   onlyRegistered?: boolean;
+  /** "tools" (default): guardHttp() checks only fetches made inside a tool call; "all": every fetch in the process. */
+  scope?: "tools" | "all";
 }
 
 const isToolMessage = (x: any): x is ToolMessage => x != null && typeof x === "object" && (x.type === "tool" || x._getType?.() === "tool");
@@ -34,6 +36,7 @@ export class RuthlessSchemaGuard {
   private readonly maxFailures: number;
   private readonly ignore: Set<string>;
   private readonly onlyRegistered: boolean;
+  private readonly scope: "tools" | "all";
   // ponytail: one failure counter per guard; call reset() between unrelated runs.
   private failures = new Map<string, number>();
   private restore?: () => void;
@@ -45,8 +48,9 @@ export class RuthlessSchemaGuard {
     this.maxFailures = o.maxFailures ?? 3;
     this.ignore = new Set(o.ignore);
     this.onlyRegistered = o.onlyRegistered ?? false;
+    this.scope = o.scope ?? "tools";
     this.ledger = o.ledger instanceof LedgerReporter ? o.ledger
-      : new LedgerReporter({ url: typeof o.ledger === "string" ? o.ledger : undefined, enabled: o.ledger === false ? false : undefined });
+      : new LedgerReporter({ url: o.ledger === true ? "1" : typeof o.ledger === "string" ? o.ledger : undefined, enabled: o.ledger === false ? false : undefined });
     for (const [k, v] of Object.entries(o.schemas ?? {})) this.register(k, v);
     this.middleware = createMiddleware({
       name: "RuthlessSchemaGuard",
@@ -71,7 +75,15 @@ export class RuthlessSchemaGuard {
 
   /** Register every 2xx application/json response of an OpenAPI 3 document (object, URL or JSON string). */
   async fromOpenapi(spec: Record<string, any> | string, baseUrl?: string): Promise<this> {
-    if (typeof spec === "string") spec = spec.trimStart().startsWith("{") ? JSON.parse(spec) : await (await fetch(spec)).json();
+    if (typeof spec === "string") {
+      if (spec.trimStart().startsWith("{")) spec = JSON.parse(spec);
+      else {
+        if (!/^https?:\/\//i.test(spec)) throw new Error("fromOpenapi fetches http(s) URLs only; pass an object or JSON string otherwise");
+        const r = await fetch(spec, { signal: AbortSignal.timeout(15_000) });
+        if (!r.ok) throw new Error(`fromOpenapi: ${spec} answered ${r.status}`);
+        spec = await r.json();
+      }
+    }
     const doc = spec as Record<string, any>;
     const base = (baseUrl ?? doc.servers?.[0]?.url ?? "").replace(/\/+$/, "");
     if (!base.includes("://")) throw new Error("fromOpenapi needs baseUrl when the document has no absolute servers[0].url");
@@ -85,6 +97,7 @@ export class RuthlessSchemaGuard {
           if (media) this.register(`${method.toUpperCase()} ${base}${path}`, { ...components, ...media[1].schema });
         }
       }
+    if (!this.routes.routes.length) throw new Error("fromOpenapi found no 2xx application/json response schemas in the document");
     return this;
   }
 
@@ -113,6 +126,7 @@ export class RuthlessSchemaGuard {
   }
 
   private wants(method: string, url: string, status: number, ct: string, accept: string): boolean {
+    if (method.toUpperCase() === "HEAD" || status === 206 || (this.scope === "tools" && !calls.getStore())) return false;
     const hit = this.routes.match(method, url);
     if (this.onlyRegistered && !hit) return false;
     return status >= 200 && status < 300 && expectsJson(ct, accept, hit !== undefined);
@@ -125,11 +139,12 @@ export class RuthlessSchemaGuard {
     const errs = inspectResponse(status, ct, body, { schema: hit?.schema, accept, ignore: this.ignore });
     if (!errs.length) return;
     const u = new URL(url);
-    this.ledger.report({
-      host: u.hostname, method: method.toUpperCase(), path_template: hit?.path ?? pathTemplate(url),
-      expected_schema_hash: hit?.schema.hash ?? "", status, content_type: ct,
-      body_sha256: sha256Hex(body), sample: scrub(body).slice(0, SAMPLE),
-    });
+    if (this.ledger.enabled)
+      this.ledger.report({
+        host: u.hostname, method: method.toUpperCase(), path_template: hit?.path ?? pathTemplate(url),
+        expected_schema_hash: hit?.schema.hash ?? "", status, content_type: ct,
+        body_sha256: sha256Hex(body), sample: scrub(body.slice(0, 4 * SAMPLE)).slice(0, SAMPLE),
+      });
     const err = new OpenEntitySchemaViolation(`${method.toUpperCase()} ${u.origin}${u.pathname}`, errs, body);
     const call = calls.getStore();
     if (call) call.violation ??= err;
@@ -176,6 +191,7 @@ export class RuthlessSchemaGuard {
       }
     } catch (e) {
       if (e instanceof OpenEntitySchemaViolation || e instanceof OpenEntityLoopDetected) return this.exit(request, this.count(name, key) ?? e);
+      if ((e as any)?.is_bubble_up === true) throw e; // interrupt() and Command jumps are control flow, not failures
       const loop = this.count(name, key);
       if (!loop) throw e;
       return this.exit(request, loop);

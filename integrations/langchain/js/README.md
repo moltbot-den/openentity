@@ -7,12 +7,19 @@ npm install @openentity/langchain
 ```
 
 ```ts
+import { createAgent, tool } from "langchain";
 import { RuthlessSchemaGuard } from "@openentity/langchain";
+import { z } from "zod";
+
+const getPulls = tool(
+  async ({ repo }) => (await fetch(`https://api.github.com/repos/${repo}/pulls`, { headers: { accept: "application/json" } })).text(),
+  { name: "get_pulls", description: "List open pull requests of a GitHub repo.", schema: z.object({ repo: z.string() }) },
+);
 
 const guard = new RuthlessSchemaGuard();
-guard.register("get_pulls", pullsSchema); // zod or JSON Schema
+guard.register("get_pulls", z.array(z.object({ number: z.number().int(), title: z.string() }))); // zod or JSON Schema
 guard.guardHttp();
-const agent = createAgent({ model, tools: [getPulls], middleware: [guard.middleware] });
+const agent = createAgent({ model: "anthropic:claude-sonnet-4-6", tools: [getPulls], middleware: [guard.middleware] });
 ```
 
 LangChain.js wraps errors thrown by middleware in a `MiddlewareError`; `unwrap(error)` returns the `OpenEntitySchemaViolation` or `OpenEntityLoopDetected` inside it.

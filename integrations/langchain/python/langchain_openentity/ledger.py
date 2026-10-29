@@ -2,8 +2,8 @@
 
 Off unless `OPENENTITY_LEDGER_URL` (or the `ledger=` argument) is set. Reports are signed with the
 reporter's Ed25519 key through the `openentity` SDK (`openentity.core.sign_object`, eddsa-jcs-2022).
-The key is the `keypair=` argument, else a 32-byte hex seed in `OPENENTITY_SEED_HEX`, else the machine's
-Open Entity identity (`openentity.identity.Identity.load_or_create`, keychain or ~/.openentity/identity.key).
+The key is the `keypair=` argument, else a 32-byte hex seed in `OPENENTITY_SEED_HEX`. Without one the batch is
+dropped with a warning; no identity is ever created implicitly.
 """
 
 from __future__ import annotations
@@ -59,12 +59,9 @@ class LedgerReporter:
             from openentity.core import KeyPair  # optional extra: pip install langchain-openentity[ledger]
 
             seed = os.environ.get("OPENENTITY_SEED_HEX")
-            if seed:
-                self.keypair = KeyPair(bytes.fromhex(seed))
-            else:
-                from openentity.identity import Identity
-
-                self.keypair = Identity.load_or_create().kp
+            if not seed:  # never create or read a machine identity as a side effect of reporting
+                raise RuntimeError("set keypair= or OPENENTITY_SEED_HEX to sign ledger reports")
+            self.keypair = KeyPair(bytes.fromhex(seed))
         return self.keypair
 
     def report(self, fields: dict) -> None:
@@ -89,7 +86,10 @@ class LedgerReporter:
                     items.append(self._q.get(timeout=self._interval))
             except queue.Empty:
                 pass
-            self._send(items)
+            try:
+                self._send(items)
+            except Exception as e:  # noqa: BLE001 - the worker must outlive any one bad batch
+                log.debug("ledger batch failed: %s", e)
             for _ in items:
                 self._q.task_done()
 

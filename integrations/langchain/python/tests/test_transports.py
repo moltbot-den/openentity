@@ -15,7 +15,7 @@ CASES = [(c, True) for c in MALFORMED] + [(c, False) for c in VALID]
 
 @pytest.fixture
 def guarded(server):
-    g = RuthlessSchemaGuard()
+    g = RuthlessSchemaGuard(scope="all")
     for name, schema in SCHEMAS.items():
         g.register(f"GET {server}/s/{name}/*", schema)
     g.guard_http()
@@ -93,7 +93,7 @@ def test_streaming_is_never_read(server, guarded):
 
 
 def test_uninstall_restores(server):
-    g = RuthlessSchemaGuard()
+    g = RuthlessSchemaGuard(scope="all")
     off = g.guard_http()
     off()
     c = next(c for c in MALFORMED if c["id"] == "m-html-0-ctjson")

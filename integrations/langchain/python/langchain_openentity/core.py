@@ -51,10 +51,18 @@ _FULL = [re.compile(p) for p in (
     r"SG\.[A-Za-z0-9_-]{22}\.[A-Za-z0-9_-]{43}",
     r"[Bb]earer\s+[A-Za-z0-9._~+/=-]{16,}",
     r"https?://[^/\s:@]+:[^/\s@]+@[^\s/\"']+",
+    r"sk-[A-Za-z0-9_-]{20,}",
+    r"AIza[0-9A-Za-z_-]{35}",
+    r"hf_[A-Za-z0-9]{30,}",
+    r"npm_[A-Za-z0-9]{36}",
+    r"glpat-[A-Za-z0-9_-]{20,}",
+    r"AccountKey=[A-Za-z0-9+/=]{20,}",
+    r"SK[0-9a-f]{32}",
+    r"[Bb]asic\s+[A-Za-z0-9+/=]{16,}",
 )]
 _KV = re.compile(
     r"(\"?(?:api[_-]?key|api[_-]?secret|api[_-]?token|auth[_-]?token|access[_-]?token|refresh[_-]?token"
-    r"|secret[_-]?key|client[_-]?secret|password|passwd|token|secret)\"?\s*[=:]\s*\"?)[^\s\"',}&]{6,}",
+    r"|secret[_-]?key|client[_-]?secret|private[_-]?key|x-api-key|authorization|set-cookie|cookie|session[_-]?(?:id|token)|password|passwd|token|secret)\"?\s*[=:]\s*\"?)[^\s\"',}&]{4,}",
     re.I,
 )
 
@@ -67,7 +75,7 @@ def scrub(text: str) -> str:
 
 # ---- schemas ----
 def stable_json(v: Any) -> str:
-    return json.dumps(v, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return json.dumps(v, sort_keys=True, separators=(",", ":"), ensure_ascii=False, default=str)
 
 
 @dataclass
@@ -117,7 +125,8 @@ def compile_schema(obj: Any) -> Schema:
         return obj
     if isinstance(obj, dict):
         js = _nullable(obj)
-        v = Draft202012Validator(js)
+        Draft202012Validator.check_schema(js)  # fail at register(), not inside the user's HTTP call
+        v = Draft202012Validator(js, format_checker=Draft202012Validator.FORMAT_CHECKER)
 
         def check(parsed: Any, _raw: str) -> list[str]:
             errs = sorted(v.iter_errors(parsed), key=lambda e: list(map(str, e.absolute_path)))
@@ -137,11 +146,22 @@ def compile_schema(obj: Any) -> Schema:
 
 
 # ---- routes ----
+_PORTS = {"http": ":80", "https": ":443"}
+
+
+def _netloc(sp: Any) -> str:
+    """Lower-cased host[:port] without userinfo or a default port, so https://h:443/x equals https://h/x."""
+    n = sp.netloc.rpartition("@")[2].lower()
+    return n.removesuffix(_PORTS.get(sp.scheme.lower(), "\0"))
+
+
 def _pattern(url: str) -> re.Pattern:
     sp = urlsplit(url)
     path = sp.path.rstrip("/")
+    if path.split("/").count("**") > 1:
+        raise ValueError("a route may contain at most one '**' segment")
     esc = lambda s: re.escape(s).replace(r"\*", "[^/]+")  # noqa: E731
-    host = esc(sp.netloc.lower())
+    host = esc(_netloc(sp))
     segs = []
     for seg in path.split("/"):
         if seg == "**":
@@ -165,7 +185,7 @@ class Routes:
 
     def match(self, method: str, url: str) -> tuple[Schema, str] | None:
         sp = urlsplit(url)
-        bare = f"{sp.scheme}://{sp.netloc}{sp.path}"
+        bare = f"{sp.scheme.lower()}://{_netloc(sp)}{sp.path}"
         for m, rx, path, schema in self._routes:
             if m in ("*", method.upper()) and rx.fullmatch(bare):
                 return schema, path
@@ -227,7 +247,7 @@ def inspect_response(
     ignore: frozenset[str] | set[str] = frozenset(),
 ) -> list[str]:
     """Return the violations ("rule: detail") of a response; empty when it is fine or not checked."""
-    if not 200 <= status < 300 or status in (204, 205):
+    if not 200 <= status < 300 or status in (204, 205, 206):
         return []
     if not expects_json(content_type, accept, schema is not None):
         return []

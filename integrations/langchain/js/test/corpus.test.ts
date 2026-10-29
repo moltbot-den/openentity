@@ -6,7 +6,7 @@ import { MALFORMED, SCHEMAS, VALID, VECTORS, serve, type Case } from "./fixtures
 
 const compiled = Object.fromEntries(Object.entries(SCHEMAS).map(([k, v]) => [k, compileSchema(v)]));
 const guard = () => {
-  const g = new RuthlessSchemaGuard({ ledger: false });
+  const g = new RuthlessSchemaGuard({ ledger: false, scope: "all" });
   for (const [n, s] of Object.entries(SCHEMAS)) g.register(`GET https://corpus.test/${n}`, s);
   return g;
 };
@@ -47,7 +47,7 @@ describe("global fetch", () => {
     const s = await serve();
     base = s.base;
     close = () => s.server.close();
-    const g = new RuthlessSchemaGuard({ ledger: false });
+    const g = new RuthlessSchemaGuard({ ledger: false, scope: "all" });
     for (const [n, sc] of Object.entries(SCHEMAS)) g.register(`GET ${base}/s/${n}/*`, sc);
     off = g.guardHttp();
   });

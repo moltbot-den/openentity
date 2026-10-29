@@ -1,7 +1,7 @@
 // Async, batched, non-blocking reporter for schema-violation reports. Off unless OPENENTITY_LEDGER_URL
 // (or the `ledger` option) is set. Reports are signed with `@openentity/sdk` (signObject, eddsa-jcs-2022).
-// the `keypair` option, else a 32-byte hex seed in OPENENTITY_SEED_HEX, else the machine's Open Entity
-// identity (`Identity.loadOrCreate` from `@openentity/sdk/node`: keychain or ~/.openentity/identity.key).
+// the `keypair` option, else a 32-byte hex seed in OPENENTITY_SEED_HEX. Without one the batch is dropped;
+// no identity is ever created implicitly.
 export const DEFAULT_URL = "https://api.clawgrc.com/v1/ledger/schema-violations";
 
 // Captured at import so guardHttp() never sees the reporter's own requests.
@@ -45,6 +45,7 @@ export class LedgerReporter {
     this.intervalMs = o.intervalMs ?? 5000;
     this.post = o.post ?? (async (u, body) => { (await nativeFetch(u, { method: "POST", headers: { "content-type": "application/json" }, body })).body?.cancel(); });
     this.enabled = !!url && !optedOut() && o.enabled !== false;
+    if (this.enabled) process.once("beforeExit", () => void this.flush());
   }
 
   /** Queue one report; never blocks, drops when the queue is full. */
@@ -68,9 +69,7 @@ export class LedgerReporter {
     try {
       const sdk = await import("@openentity/sdk"); // optional peer dependency
       if (!this.keypair)
-        this.keypair = this.seed
-          ? await sdk.keyPairFromSeed(Uint8Array.from(Buffer.from(this.seed, "hex")))
-          : (await (await import("@openentity/sdk/node")).Identity.loadOrCreate()).kp;
+        this.keypair = await sdk.keyPairFromSeed(Uint8Array.from(Buffer.from(this.seed ?? "", "hex")));
       const seen = new Set<string>();
       for (const r of items) {
         const k = [r.host, r.method, r.path_template, r.body_sha256].join("\0");

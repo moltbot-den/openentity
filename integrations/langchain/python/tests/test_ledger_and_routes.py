@@ -23,7 +23,7 @@ def violate(g, body="<html>token=supersecretvalue</html>"):
 def test_report_is_signed_scrubbed_and_complete():
     posts = []
     r = reporter(posts)
-    g = RuthlessSchemaGuard(ledger=r)
+    g = RuthlessSchemaGuard(ledger=r, scope="all")
     g.register("GET https://api.test/repos/*/pulls", SCHEMAS["pull_list"])
     violate(g)
     r.flush()
@@ -38,7 +38,7 @@ def test_report_is_signed_scrubbed_and_complete():
 def test_unregistered_route_gets_id_template_and_dedupes():
     posts = []
     r = reporter(posts)
-    g = RuthlessSchemaGuard(ledger=r)
+    g = RuthlessSchemaGuard(ledger=r, scope="all")
     violate(g)
     violate(g)
     r.flush()
@@ -58,7 +58,7 @@ def test_ledger_is_off_unless_configured_and_honors_opt_out(monkeypatch):
     assert RuthlessSchemaGuard(ledger=False).ledger.enabled is False
 
 
-def test_key_comes_from_seed_env_then_the_machine_identity(monkeypatch, tmp_path):
+def test_key_comes_from_keypair_or_seed_and_never_from_an_implicit_identity(monkeypatch, tmp_path):
     monkeypatch.setenv("OPENENTITY_HOME", str(tmp_path))
     monkeypatch.setenv("OPENENTITY_KEYCHAIN", "off")
     for seed in ("01" * 32, None):
@@ -70,11 +70,11 @@ def test_key_comes_from_seed_env_then_the_machine_identity(monkeypatch, tmp_path
         assert r.enabled
         r.report({"host": "h", "method": "GET", "path_template": "/", "body_sha256": "0" * 64})
         r.flush()
+        if not seed:
+            assert posts == [] and not (tmp_path / "identity.key").exists()  # no seed, no key: dropped, nothing created
+            continue
         (rep,) = posts
-        assert verify_object(rep)[0] and rep["reporter_eid"] == r.keypair.did
-        if seed:
-            assert rep["reporter_eid"] == KeyPair(bytes.fromhex(seed)).did
-    assert (tmp_path / "identity.key").exists()  # the second pass created the machine identity
+        assert verify_object(rep)[0] and rep["reporter_eid"] == r.keypair.did == KeyPair(bytes.fromhex(seed)).did
 
 
 def test_a_failing_ledger_never_breaks_the_agent():
@@ -82,7 +82,7 @@ def test_a_failing_ledger_never_breaks_the_agent():
         raise OSError("down")
 
     r = LedgerReporter(url="https://x.test", keypair=KP, interval=0.01, post=down)
-    violate(RuthlessSchemaGuard(ledger=r))  # still the violation, not the OSError
+    violate(RuthlessSchemaGuard(ledger=r, scope="all"))  # still the violation, not the OSError
     r.flush()
 
 
@@ -113,7 +113,7 @@ SPEC = {
 
 
 def test_from_openapi_registers_json_2xx_routes_only():
-    g = RuthlessSchemaGuard().from_openapi(SPEC)
+    g = RuthlessSchemaGuard(scope="all").from_openapi(SPEC)
     ok = lambda m, u, body: g._check(m, u, 200, "application/json", "", lambda: body.encode())  # noqa: E731
     ok("GET", "https://api.test/v1/pets/7", '{"id": 7, "name": "rex", "tag": null}')
     ok("GET", "https://api.test/v1/pets", '[{"id": 1, "name": "a"}]')
