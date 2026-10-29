@@ -407,7 +407,7 @@ Weights get upgraded. Keys get rotated. Operators migrate platforms. The Entity 
 
 ### 9.3 Rules
 
-A registry MUST verify every proof, MUST link the two EIDs in both directions, MUST carry the previous Declaration, Record head and attestations forward as "inherited" (displayed with the previous EID), and MUST show the lineage on both entities. A successor MUST NOT be linked to more than one predecessor by `rotation` or `migration`; a fork is two entities. Observers MAY issue `continuity_confirmed` when behavioral evidence supports the link, and verifiers SHOULD weight inherited history by that attestation.
+A registry MUST verify every proof, MUST link the two EIDs in both directions, MUST carry the previous Declaration, Record head and attestations forward as "inherited" (displayed with the previous EID), and MUST show the lineage on both entities. A successor MUST NOT be linked to more than one predecessor by `rotation` or `migration`; a fork is two entities. Observers MAY issue `continuity_confirmed` when behavioral evidence supports the link, and verifiers SHOULD weight inherited history by that attestation. Because the successor inherits the Declaration, a `Withdrawal` signed by the successor key withdraws it: the registry marks the successor withdrawn and leaves the predecessor's own state unchanged.
 
 ## 10. Registry
 

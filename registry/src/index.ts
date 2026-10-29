@@ -695,13 +695,19 @@ app.post("/withdraw", async (c) => {
   schema("Withdrawal", w);
   window(w.created, "withdrawal");
   await signedBy(w, eid, "withdrawal");
-  const d = await db.first("SELECT withdrawn_at FROM declarations WHERE eid = $1 AND version = $2", [eid, w.declaration_version]);
+  const chain = await lineage(db, eid);
+  const d = await db.first(`SELECT eid, withdrawn_at FROM declarations WHERE eid IN (${IN(chain, 2)}) AND version = $1 ORDER BY received_at DESC LIMIT 1`, [w.declaration_version, ...chain]);
   if (!d) fail(404, "declaration_not_found", `no Declaration ${w.declaration_version} for ${eid}`);
-  if (d.withdrawn_at) fail(409, "already_withdrawn", "already withdrawn");
+  // Spec 9.3: a successor inherits its predecessor's Declaration, so its key may withdraw it. The predecessor's own row and state stay as they are.
+  const inherited = d.eid !== eid;
+  const self = await entity(db, eid);
+  if (inherited ? self?.withdrawn_at : d.withdrawn_at) fail(409, "already_withdrawn", "already withdrawn");
   const now = nowIso(), s = await sha(w);
   const l = await leafFor("Withdrawal", eid, s, now);
   const idx = await sequenced(db, [l], [
-    ["UPDATE declarations SET withdrawn_at = $1, withdrawal_json = $2 WHERE eid = $3 AND version = $4", [now, JSON.stringify(w), eid, w.declaration_version]],
+    inherited
+      ? ["UPDATE entities SET withdrawal_json = $1 WHERE eid = $2", [JSON.stringify(w), eid]]
+      : ["UPDATE declarations SET withdrawn_at = $1, withdrawal_json = $2 WHERE eid = $3 AND version = $4", [now, JSON.stringify(w), eid, w.declaration_version]],
     ["UPDATE entities SET withdrawn_at = $1, level = NULL, level_label = NULL, updated = $1 WHERE eid = $2", [now, eid]],
   ]);
   return c.json({ eid, withdrawn: true, ...receipt(c, idx, l) }, 201);

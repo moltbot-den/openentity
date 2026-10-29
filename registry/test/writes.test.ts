@@ -109,6 +109,30 @@ describe("continuity (spec 9)", () => {
     expect(r.body.error).toBe("successor_has_predecessor");
   });
 
+  it("a successor withdraws the inherited Declaration; the predecessor keeps its state (spec 9.3)", async () => {
+    const a = await adopted("Old");
+    const succ = await generateKeyPair();
+    const { document } = await signed(succ, "New");
+    expect((await write("POST", "/continuity", succ.did, { link: await link(a.kp, succ, "rotation", [a.kp, succ]), document })).status).toBe(201);
+    const w = (eid: string, k: KeyPair) => signObject({ spec: "openentity/1.0", type: "Withdrawal", eid, declaration_version: "1.0", name: "New", created: nowSeconds(), nonce: randomNonce() }, k);
+    const stranger = await generateKeyPair();
+    expect((await write("POST", "/withdraw", succ.did, await w(succ.did, stranger))).status).not.toBe(201);
+    const r = await write("POST", "/withdraw", succ.did, await w(succ.did, succ));
+    expect(r.status).toBe(201);
+    expect((await call("GET", `/entities/${succ.did}`)).body).toMatchObject({ withdrawn: true, level: null });
+    const prev = (await call("GET", `/entities/${a.kp.did}`)).body;
+    expect(prev.withdrawn).toBe(false);
+    expect(prev.declaration).not.toBeNull();
+    const again = await write("POST", "/withdraw", succ.did, await w(succ.did, succ));
+    expect(again.body.error).toBe("already_withdrawn");
+  });
+
+  it("an entity with no Declaration in its lineage cannot withdraw", async () => {
+    const lone = await generateKeyPair();
+    const w = await signObject({ spec: "openentity/1.0", type: "Withdrawal", eid: lone.did, declaration_version: "1.0", name: "X", created: nowSeconds(), nonce: randomNonce() }, lone);
+    expect((await write("POST", "/withdraw", lone.did, w)).status).toBe(404);
+  });
+
   it("recovery requires a proof by a verified alias of the previous EID", async () => {
     const a = await adopted();
     const succ = await generateKeyPair(), domainKey = await generateKeyPair();

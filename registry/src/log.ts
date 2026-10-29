@@ -225,6 +225,7 @@ export async function exportObjects(env: Env, date: string): Promise<boolean> {
     for (const t of ["documents", "declarations", "record_entries", "attestations", "continuity_links", "disputes"]) await json(`SELECT json FROM ${t} WHERE ${S}`, shas);
     // Objects stored inside another row: withdrawals, revocations, the redaction in a placeholder, an alias's proof.
     await json(`SELECT withdrawal_json AS json FROM declarations WHERE withdrawal_json IS NOT NULL AND eid ${E}`, eids);
+    await json(`SELECT withdrawal_json AS json FROM entities WHERE withdrawal_json IS NOT NULL AND eid ${E}`, eids);
     await json(`SELECT revocation_json AS json FROM attestations WHERE revocation_json IS NOT NULL AND subject ${E}`, eids);
     await json(`SELECT json FROM record_entries WHERE json LIKE '%"redacted":true%' AND eid ${E}`, eids);
     for (const r of await env.db.all<{ eid: string; type: string; value: string; proof_json: string | null }>(`SELECT eid, type, value, proof_json FROM aliases WHERE eid ${E}`, [eids]))

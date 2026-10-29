@@ -96,6 +96,24 @@ describe("log audit against a registry that is not openentity.org", () => {
   });
 });
 
+describe("withdraw after continuity (spec 9.3)", () => {
+  it.each(["rotate", "migrate"])("%s then withdraw: the successor withdraws the inherited Declaration, the predecessor stays active", async (cmd) => {
+    const a = JSON.parse((await adopt()).out);
+    const c = await cli(cmd, "--registry", real.url, "--json");
+    expect(c.err).toBe("");
+    expect(c.code).toBe(0);
+    const next = JSON.parse(c.out).successor as string;
+    const got = (await (await fetch(`${real.url}/v1/entities/${next}`)).json()) as any;
+    expect(got.declaration).not.toBeNull();
+    expect(got.declaration_inherited_from).toBe(a.eid);
+    const w = await cli("withdraw", "--force", "--registry", real.url, "--json");
+    expect(w.err).toBe("");
+    expect(w.code).toBe(0);
+    expect(((await (await fetch(`${real.url}/v1/entities/${next}`)).json()) as any).withdrawn).toBe(true);
+    expect(((await (await fetch(`${real.url}/v1/entities/${a.eid}`)).json()) as any).withdrawn).toBe(false);
+  });
+});
+
 describe("conformance against the real registry app", () => {
   const conf = async () => {
     const r = await cli("conformance", real.url, "--json");
