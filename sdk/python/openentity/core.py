@@ -79,6 +79,27 @@ def _num(x) -> str:
     return ("-" if x < 0 else "") + r
 
 
+def parse_json(text: str):
+    """Spec 4.3: JSON with no duplicate keys (json.loads keeps the last one silently)."""
+    def pairs(items):
+        keys = [k for k, _ in items]
+        if len(keys) != len(set(keys)):
+            raise ValueError(f"duplicate key {next(k for k in keys if keys.count(k) > 1)!r}")
+        return dict(items)
+    return json.loads(text, object_pairs_hook=pairs)
+
+
+def bad_number(v):
+    """Spec 4.3: integers or decimal fractions with at most 6 decimal places. The first offender, else None."""
+    if isinstance(v, float):
+        return None if math.isfinite(v) and float(f"{v:.6f}") == v else v
+    if isinstance(v, dict):
+        v = v.values()
+    if isinstance(v, (list, tuple, type({}.values()))):
+        return next((b for b in map(bad_number, v) if b is not None), None)
+    return None
+
+
 def canonicalize(v) -> str:
     if v is None or isinstance(v, bool):
         return json.dumps(v)

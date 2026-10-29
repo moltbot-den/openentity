@@ -64,7 +64,7 @@ describe("aliases (spec 3.4, 3.5)", () => {
   });
 
   it("domain: binds when the well-known file names this EID, rejects another EID", async () => {
-    const a = await adopted(), b = await adopted();
+    const a = await adopted("A", { aliases: [{ type: "domain", value: "did:web:a.example" }] }), b = await adopted();
     mockFetch({ "a.example/.well-known/openentity.json": () => ({ eid: a.kp.did }) });
     const bad = await write("POST", `/entities/${b.kp.did}/aliases`, b.kp.did, { type: "domain", value: "did:web:a.example" });
     expect([bad.status, bad.body.error]).toEqual([422, "alias_proof_invalid"]);
@@ -144,8 +144,8 @@ describe("aliases (spec 3.4, 3.5)", () => {
   });
 
   it("platform: needs both the entity's signature and the platform's binding file for this EID", async () => {
-    const a = await adopted(), b = await adopted();
     const value = "den:eleanor";
+    const a = await adopted("A", { aliases: [{ type: "platform", value }] }), b = await adopted();
     let named = b.kp.did;
     mockFetch({ "den.com/.well-known/openentity/bindings/eleanor.json": () => ({ eid: named }) });
     expect((await write("POST", `/entities/${a.kp.did}/aliases`, a.kp.did, { type: "platform", value, proof: await platformProof(a.kp, value) })).body.error).toBe("alias_proof_invalid");

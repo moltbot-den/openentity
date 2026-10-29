@@ -269,3 +269,18 @@ def test_rotation_vector_is_reproduced_byte_for_byte():
     link = want["link"]
     assert [core.verify_object({**link, "proof": p})[1] for p in link["proofs"]] == [a.did, b.did]
     assert core.verify_object(want["document"]) == (True, b.did)
+
+
+# ---- spec 4.3: no duplicate keys, at most 6 decimal places ----
+def test_parse_json_rejects_duplicate_keys():
+    assert core.parse_json('{"a":1,"b":{"a":2},"c":[{"a":1},{"a":2}]}')["b"] == {"a": 2}
+    for bad in ('{"a":1,"a":2}', '{"x":{"k":1,"\\u006b":2}}', '[{"a":1,"b":{"c":1,"c":1}}]'):
+        with pytest.raises(ValueError, match="duplicate key"):
+            core.parse_json(bad)
+
+
+def test_validate_rejects_more_than_six_decimal_places():
+    from openentity import schema
+    att = json.loads((VECTORS / "attestation.json").read_text())["object"]
+    assert not any("decimal" in e for e in schema.validate("Attestation", {**att, "confidence": 0.123456}))
+    assert any("6 decimal places" in e for e in schema.validate("Attestation", {**att, "confidence": 0.1234567}))

@@ -116,8 +116,10 @@ def test_alias_domain_platform_and_erc8004(url, home, capsys):
     for bad in (("platform", "nocolon"), ("erc8004", "x"), ("bogus", "x")):
         assert run(capsys, "alias", "add", *bad, *reg)[0] == 1
     assert run(capsys, "alias", "bogus", "domain", "x", *reg)[0] == 1
-    draft = json.loads((home / KP.did / "draft.json").read_text())
-    assert [x["type"] for x in draft["aliases"]] == ["domain", "platform", "erc8004"]
+    # Spec 3.4: each alias is published in the signed document at once, since an unlisted alias counts for nothing.
+    doc = json.loads((home / KP.did / "entity.json").read_text())
+    assert [x["type"] for x in doc["aliases"]] == ["domain", "platform", "erc8004"] and doc["seq"] == 4
+    assert not (home / KP.did / "draft.json").exists()
     assert len(posts(f"/v1/entities/{KP.did}/aliases")) == 3
 
 
@@ -144,6 +146,16 @@ def test_verify_reports_a_schema_check_like_the_npm_cli(capsys, tmp_path):
     bad.write_text(json.dumps(core.sign_object({"spec": core.SPEC, "eid": KP.did, "name": "T", "layers": {}, "keys": []}, KP)))
     code, out = j(capsys, "verify", str(bad))
     assert code == 3 and out["checks"][0]["name"] == "EntityDocument schema" and not out["checks"][0]["ok"]
+
+
+def test_verify_refuses_a_file_with_a_duplicate_key(capsys, tmp_path):
+    """Spec 4.3: json.loads would keep the last duplicate and verify a different object than the one signed."""
+    f = tmp_path / "dup.json"
+    f.write_text('{"spec": "openentity/1.0", "name": "A", "name": "B"}')
+    code, _, err = run(capsys, "verify", str(f))
+    assert code == 1 and "duplicate key" in err
+    code, _, err = run(capsys, "verify-presentation", str(f), "--audience", "a", "--nonce", "n")
+    assert code == 1 and "duplicate key" in err
 
 
 def test_log_audit_checks_the_registry_document_with_the_key_its_spec_publishes(url, capsys):

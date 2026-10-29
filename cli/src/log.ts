@@ -4,6 +4,7 @@ import {
   canonicalize,
   DECLARATION_SHA256,
   leafHash,
+  parseJson,
   recordEntryHash,
   validate,
   verifyInclusion,
@@ -194,7 +195,7 @@ export async function verifyCmd({ args, v }: Ctx): Promise<Result> {
     if (/^https?:\/\//.test(target)) obj = await fetchJson(target);
     else {
       try {
-        obj = JSON.parse(await readFile(target, "utf8"));
+        obj = parseJson(await readFile(target, "utf8")) as Obj;
       } catch (e: any) {
         throw new CliError(EXIT.USAGE, `cannot read ${target}: ${e.message}`);
       }

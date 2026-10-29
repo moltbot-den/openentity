@@ -695,7 +695,7 @@ wheels = [
 
 [[package]]
 name = "openentity"
-version = "0.5.3"
+version = "0.5.4"
 source = { directory = "../../../sdk/python" }
 dependencies = [
     { name = "cryptography" },

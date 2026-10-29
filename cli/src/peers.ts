@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { nowSeconds, randomNonce, signObject, SPEC, validate, verifyPresentation } from "@openentity/sdk";
+import { nowSeconds, parseJson, randomNonce, signObject, SPEC, validate, verifyPresentation } from "@openentity/sdk";
 import { resolver } from "./did";
 import { EXIT, usage } from "./errors";
 import { Registry } from "./http";
@@ -28,7 +28,7 @@ export async function verifyPresentationCmd({ args, v }: Ctx): Promise<Result> {
   if (!args[0] || !v.audience || !v.nonce) throw usage("verify-presentation <file> --audience <this verifier's origin or DID> --nonce <the nonce you issued>");
   let p: any;
   try {
-    p = JSON.parse(await readFile(args[0], "utf8"));
+    p = parseJson(await readFile(args[0], "utf8"));
   } catch (e: any) {
     throw usage(`cannot read ${args[0]}: ${e.message}`);
   }

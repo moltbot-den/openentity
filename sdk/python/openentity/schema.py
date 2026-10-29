@@ -24,5 +24,7 @@ def validate(type_: str, obj) -> list[str]:
         return [str(e)]
     if n > _MAX.get(type_, 64 * 1024):
         return [f"{type_} is {n} bytes, max {_MAX.get(type_, 64 * 1024)}"]
+    if (n := core.bad_number(obj)) is not None:
+        return [f"number {n} has more than 6 decimal places"]
     v = Draft202012Validator({"$ref": f"{BUNDLE_ID}#/$defs/{type_}"}, registry=_REGISTRY)
     return [f"/{'/'.join(map(str, e.absolute_path))}: {e.message}" for e in v.iter_errors(obj)]

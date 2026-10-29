@@ -179,6 +179,15 @@ describe("objects and validation", () => {
     expect(oe.validate("RecordEntry", { ...v, kind: "custom:acme:thing", payload: {} }).ok).toBe(true);
     expect(oe.validate("RecordEntry", { ...v, kind: "made_up" }).ok).toBe(false);
   });
+  it("spec 4.3: no duplicate keys, numbers with at most 6 decimal places", () => {
+    expect(oe.parseJson('{"a":1,"b":{"a":2},"c":[{"a":1},{"a":2}],"d":"a\\":1"}')).toMatchObject({ a: 1 });
+    expect(() => oe.parseJson('{"a":1,"a":2}')).toThrow(/duplicate key/);
+    expect(() => oe.parseJson('{"x":{"k":1,"\\u006b":2}}')).toThrow(/duplicate key/);
+    expect(() => oe.parseJson('[{"a":1,"b":{"c":1,"c":1}}]')).toThrow(/duplicate key/);
+    const att = JSON.parse(read("test-vectors/attestation.json").toString()).object;
+    expect(oe.validate("Attestation", { ...att, confidence: 0.123456 }).errors.join()).not.toMatch(/decimal/);
+    expect(oe.validate("Attestation", { ...att, confidence: 0.1234567 }).errors.join()).toMatch(/6 decimal places/);
+  });
   it("every vector validates against its schema; malformed objects do not", () => {
     const types: Record<string, Parameters<typeof oe.validate>[0]> = {
       declaration: "Declaration",
