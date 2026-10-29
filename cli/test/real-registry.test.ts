@@ -1,0 +1,123 @@
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { run } from "../src/main";
+import { resolveSigner } from "../src/wallet";
+import { startReal, type Real } from "./real-registry";
+
+// Published throwaway wallet key: it controls nothing and exists only for these tests.
+const KEY = "0x" + "11".repeat(32);
+const STRANGER = "0x" + "22".repeat(20);
+const REGISTRY_8004 = "0x8004a169fb4a3325136eb29fa0ceb6d2e539a432";
+
+let real: Real;
+let home: string;
+beforeAll(async () => {
+  real = await startReal();
+});
+afterAll(() => real.close());
+beforeEach(async () => {
+  home = await mkdtemp(join(tmpdir(), "oe-real-"));
+  process.env.OPENENTITY_HOME = home;
+  delete process.env.OPENENTITY_WALLET_KEY;
+  real.tamper.request = real.tamper.response = undefined;
+  real.owner.address = (await resolveSigner(KEY))!.address;
+});
+afterEach(() => rm(home, { recursive: true, force: true }));
+
+async function cli(...args: string[]) {
+  let out = "";
+  let err = "";
+  const code = await run(args, { out: (s) => void (out += s), err: (s) => void (err += s) });
+  return { code, out, err };
+}
+const adopt = (...extra: string[]) => cli("adopt", "--name", "Wallet Test", "--agree", "--registry", real.url, "--json", ...extra);
+const level = async (eid: string) => (await (await fetch(`${real.url}/v1/entities/${eid}`)).json() as any).level;
+
+describe("adopt --wallet --erc8004 lands at L1 in one command (PRD 7.2)", () => {
+  it("a hex key proves the wallet and the ERC-8004 agent against a mocked Base RPC", async () => {
+    const r = await adopt("--wallet", KEY, "--erc8004", `eip155:8453:${REGISTRY_8004}:42`);
+    expect(r.err).toBe("");
+    expect(r.code).toBe(0);
+    const out = JSON.parse(r.out);
+    expect(out.level).toBe("L1");
+    expect(await level(out.eid)).toBe("L1");
+    const aliases = (await (await fetch(`${real.url}/v1/entities/${out.eid}`)).json() as any).aliases;
+    expect(aliases.map((a: any) => a.type).sort()).toEqual(["erc8004", "wallet"]);
+  });
+
+  it("a key file and OPENENTITY_WALLET_KEY work the same", async () => {
+    const file = join(home, "wallet.key");
+    await writeFile(file, KEY + "\n", { mode: 0o600 });
+    const a = JSON.parse((await adopt("--wallet", file)).out);
+    expect(a.level).toBe("L1");
+    process.env.OPENENTITY_WALLET_KEY = KEY;
+    const b = JSON.parse((await adopt("--erc8004", `eip155:8453:${REGISTRY_8004}:7`)).out);
+    expect(b.level).toBe("L1");
+  });
+
+  it("fails loud when the wallet is not the ERC-8004 owner, and says what to retry", async () => {
+    real.owner.address = STRANGER;
+    const r = await adopt("--wallet", KEY, "--erc8004", `eip155:8453:${REGISTRY_8004}:9`);
+    expect(r.code).not.toBe(0);
+    expect(r.err).toMatch(/erc8004 proof failed/);
+  });
+
+  it("a bare address is declared only: the entity stays L0 (guard: the proof step is what raises the level)", async () => {
+    const r = await adopt("--wallet", "0x" + "33".repeat(20));
+    expect(JSON.parse(r.out).level).toBe("L0");
+  });
+
+  it("alias add wallet|erc8004 --wallet signs locally", async () => {
+    const eid = JSON.parse((await adopt()).out).eid;
+    expect(await level(eid)).toBe("L0");
+    expect((await cli("alias", "add", "wallet", "--wallet", KEY, "--registry", real.url)).code).toBe(0);
+    expect(await level(eid)).toBe("L1");
+    expect((await cli("alias", "add", "erc8004", `eip155:8453:${REGISTRY_8004}:5`, "--wallet", KEY, "--registry", real.url)).code).toBe(0);
+  });
+
+  it("rejects a value that is neither a key, an address nor a readable file", async () => {
+    expect((await adopt("--wallet", join(home, "missing"))).code).not.toBe(0);
+  });
+});
+
+describe("conformance against the real registry app", () => {
+  const conf = async () => {
+    const r = await cli("conformance", real.url, "--json");
+    return { code: r.code, failed: (JSON.parse(r.out).checks as any[]).filter((c) => !c.ok).map((c) => c.name as string) };
+  };
+  beforeEach(async () => {
+    // A few entities so the log has leaves to prove.
+    for (let i = 0; i < 3; i++) await adopt();
+    await new Promise((r) => setTimeout(r, 700));
+  });
+
+  it("passes the unbroken registry", async () => {
+    expect(await conf()).toEqual({ code: 0, failed: [] });
+  });
+
+  it("fails when the stamp guard is removed (stampless writes reach the handler)", async () => {
+    real.tamper.request = (req) => {
+      if (req.method !== "POST" || req.headers.has("x-oe-stamp")) return req;
+      const h = new Headers(req.headers);
+      h.set("x-oe-stamp", "x");
+      return new Request(req.url, { method: "POST", headers: h, body: "{}" });
+    };
+    const r = await conf();
+    expect(r.code).toBe(3);
+    expect(r.failed).toContain("no Turnstile on agent endpoints");
+  });
+
+  it("fails when the log tiles stop matching the leaves", async () => {
+    real.tamper.response = async (req, res) => {
+      if (!new URL(req.url).pathname.includes("/log/tile/0/")) return res;
+      const b = Buffer.from(await res.arrayBuffer());
+      b[0] ^= 1;
+      return new Response(b, { status: res.status, headers: res.headers });
+    };
+    const r = await conf();
+    expect(r.code).toBe(3);
+    expect(r.failed).toContain("tiles match leaves");
+  });
+});
