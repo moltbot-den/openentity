@@ -30,7 +30,6 @@ export interface Fake {
 const BITS = 8;
 const LOG_ORIGIN = "fake.test/log";
 const hex = (b: Uint8Array) => Buffer.from(b).toString("hex");
-const unhex = (h: string) => new Uint8Array(Buffer.from(h, "hex"));
 const LEAVES = 5;
 
 const body = (req: IncomingMessage) =>

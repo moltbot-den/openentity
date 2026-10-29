@@ -206,7 +206,7 @@ class RuthlessSchemaGuard(AgentMiddleware):
             return self._exit(request, self._count(name, key) or e)
         except GraphBubbleUp:  # interrupt() and Command jumps are control flow, not failures
             raise
-        except Exception as e:  # noqa: BLE001 - counted; re-raised unchanged until the limit
+        except Exception:  # noqa: BLE001 - counted; re-raised unchanged until the limit
             loop = self._count(name, key)
             if loop is None:
                 raise

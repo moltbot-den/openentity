@@ -1,7 +1,4 @@
 import { OpenEntityError } from "./errors.ts";
-import { ts } from "./objects.ts";
-import { split } from "./merkle.ts";
-import { adopt } from "./registry.ts";
 // Reference TypeScript SDK for the Open Entity Identity Standard (OEIS-1).
 // Runs unchanged in Node 22.13+ and Cloudflare Workers: WebCrypto Ed25519 for signing,
 // @noble for hashing, verification and secp256k1. No node: imports.
@@ -10,8 +7,6 @@ import { ed25519 } from "@noble/curves/ed25519.js";
 import { secp256k1 } from "@noble/curves/secp256k1.js";
 import { sha256 as nobleSha256 } from "@noble/hashes/sha2.js";
 import { keccak_256 } from "@noble/hashes/sha3.js";
-import { Validator, type Schema } from "@cfworker/json-schema";
-import bundle from "../../../spec/schemas/openentity-1.0.json" with { type: "json" };
 
 export const SPEC = "openentity/1.0";
 export const DECLARATION_VERSION = "1.0";

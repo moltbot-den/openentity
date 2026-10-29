@@ -1,8 +1,6 @@
 import { OpenEntityError, registryError } from "./errors.ts";
-import { ed25519 } from "@noble/curves/ed25519.js";
-import { SPEC, DECLARATION_VERSION, DECLARATION_SHA256, canonicalize, sha256, sha256Hex, nowSeconds, type KeyPair, generateKeyPair, publicKeyFromDidKey, type Resolver, defaultResolver, signObject, verifyObject } from "./core.ts";
+import { SPEC, DECLARATION_VERSION, DECLARATION_SHA256, canonicalize, sha256Hex, nowSeconds, type KeyPair, generateKeyPair, publicKeyFromDidKey, type Resolver, defaultResolver, signObject, verifyObject } from "./core.ts";
 import { buildDocument, buildDeclaration, successorDocument, buildRotation, mintStamp } from "./objects.ts";
-import { split, path } from "./merkle.ts";
 /**
  * Rotate `previous` to a new key in one call: fetch the current document, build and sign the link, mint the stamp for the
  * successor and submit. Nothing is persisted: on success the caller saves `successor` (its `privateJwk`) and only then retires

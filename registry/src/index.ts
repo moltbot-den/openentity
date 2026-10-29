@@ -176,7 +176,7 @@ async function listedAliases(db: Db, eid: string, types?: string[]): Promise<str
 /** Placeholders $from.. for an IN list (the Data API takes no array parameters). */
 const IN = (xs: string[], from = 1) => xs.map((_, i) => `$${from + i}`).join(",");
 
-export async function computeLevel(db: Db, eid: string): Promise<{ level: number | null; label: string | null; supporting: any[] }> {
+async function computeLevel(db: Db, eid: string): Promise<{ level: number | null; label: string | null; supporting: any[] }> {
   const e = await entity(db, eid);
   const chain = await lineage(db, eid);
   const decl = await db.first(`SELECT 1 FROM declarations WHERE eid IN (${IN(chain)}) AND withdrawn_at IS NULL LIMIT 1`, chain);
