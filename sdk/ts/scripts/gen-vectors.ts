@@ -8,6 +8,7 @@ import {
   buildDocument,
   buildDeclaration,
   signObject,
+  signRequest,
   signProof,
   buildRotation,
   successorDocument,
@@ -165,6 +166,29 @@ export async function buildVectors(): Promise<Record<string, object>> {
   for (const [name, claim_type, claim, expires] of claims)
     out[name] = await vector(`${claim_type} attestation by the second throwaway key about the entity (spec/claim-types.md)`,
       await signObject({ spec: SPEC, type: "Attestation", issuer: b.did, subject: a.did, claim_type, claim, created: T1, expires }, b, T1));
+
+  // RFC 9421 profile (ADR 0005): both SDKs must sign these inputs to these exact headers and reject the tampered ones with these codes.
+  const CREATED = 1792868400;
+  const sigCase = async (name: string, method: string, url: string, body: string, nonce_: string) => ({
+    name, method, url, body, created: CREATED, expires_in: 60, nonce: nonce_,
+    headers: await signRequest({ method, url, body: new TextEncoder().encode(body), privateKey: SEEDS.entity, did: a.did, created: CREATED, nonce: nonce_ }),
+  });
+  const post = await sigCase("post-with-body", "POST", "https://gateway.example.com/v1/tools/call?x=1", '{"hello":"world"}', "AAECAwQFBgcICQoLDA0ODw");
+  const get = await sigCase("get-empty-body", "GET", "https://gateway.example.com/v1/ping", "", "EBESExQVFhcYGRobHB0eHw");
+  const bad = (name: string, code: string, o: Record<string, unknown>) => ({ name, code, ...o });
+  out["http-signature"] = {
+    description: "RFC 9421 HTTP message signature vectors (spec 11.2 Web Bot Auth row, ADR 0005). Signed with the entity throwaway seed from keys.json. `now` is a unix time; `valid` must be signed to exactly `headers` and verify; each `invalid` must fail with `code`.",
+    did: a.did,
+    now: CREATED + 10,
+    valid: [post, get],
+    invalid: [
+      bad("tampered-body", "digest_mismatch", { ...post, body: '{"hello":"WORLD"}' }),
+      bad("tampered-url", "bad_signature", { ...post, url: "https://gateway.example.com/v1/tools/call?x=2" }),
+      bad("tampered-method", "bad_signature", { ...get, method: "POST" }),
+      bad("too-late", "expired", { ...post, now: CREATED + 61 }),
+      bad("created-in-future", "created_in_future", { ...post, now: CREATED - 6 }),
+    ],
+  };
 
   const leafHashes: Uint8Array[] = [];
   for (const [i, [name, description, obj, eid]] of objects.entries()) {
