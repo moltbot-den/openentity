@@ -30,6 +30,6 @@ const { text } = await generateText({
 });
 ```
 
-The key is in the OS keychain, else `~/.openentity/identity.key` (mode 0600), shared with the CLI and every other Open Entity integration on the machine. Set `OPENENTITY_HOME` and `OPENENTITY_KEYCHAIN=off` to give an app its own. Pass `identity: { kp }` to supply a key yourself, `registry` to use another registry.
+The key is in the OS keychain, else `~/.openentity/identity.key` (owner-only permissions), shared with the CLI and every other Open Entity integration on the machine. Set `OPENENTITY_HOME` and `OPENENTITY_KEYCHAIN=off` to give an app its own. Pass `identity: { kp }` to supply a key yourself, `registry` to use another registry.
 
 `createCore("vercel-ai", options)` is exported for use without the tool wrappers. Tests run against an in-memory registry: `pnpm test`.
