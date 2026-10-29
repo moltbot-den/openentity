@@ -3,7 +3,7 @@ import { Hono, type Context } from "hono";
 import { cors } from "hono/cors";
 import {
   DECLARATION_SHA256, DECLARATION_VERSION, SPEC, buildDeclaration, buildDocument, canonicalize, checkStamp, checkTimestamp,
-  generateKeyPair, normalizeEid, noteVkey, recordEntryHash, sha256Hex, signObject, validate, verifyObject, verifyPresentation, verifyProof, type Proof, type Resolver,
+  generateKeyPair, normalizeEid, noteVkey, parseJson, recordEntryHash, sha256Hex, signObject, validate, verifyObject, verifyPresentation, verifyProof, type Proof, type Resolver,
 } from "./sdk.ts";
 import { type Env, REGISTRY_DID, LOG_ORIGIN, b64, nowIso } from "./env.ts";
 import { type Stmt, chain, consistencyProof, exportObjects, inclusionProof, incorporate, latestSize, leafFor, leafJson, registryKey, sequenced, snapshot, tileIndex, treeRoot, type LeafRow } from "./log.ts";
@@ -47,7 +47,7 @@ async function readJson(c: C, stamped = true): Promise<any> {
   if (stamped && !c.req.header("x-oe-stamp")) fail(400, "stamp_required", STAMP_REQUIRED);
   const text = await c.req.text();
   if (text.length > 2_000_000) fail(413, "too_large", "request body exceeds 2 MB");
-  try { return JSON.parse(text); } catch { return fail(400, "bad_json", "body is not valid JSON"); }
+  try { return parseJson(text); } catch (e) { return fail(400, "bad_json", `body is not valid JSON: ${(e as Error).message}`); } // spec 4.3: no duplicate keys
 }
 const salted = (env: Env, s: string) => sha256Hex(`${env.HASH_SALT ?? "openentity-dev-salt"}:${s}`);
 const IP_SHARDS = 8;
@@ -387,6 +387,7 @@ app.get("/entities/:eid", async (c) => {
   const attestations = (await db.first(`SELECT COUNT(*) AS n FROM attestations WHERE subject IN (${IN(chain)}) AND revoked_at IS NULL`, chain))?.n;
   // Spec 10.7: derived at read time from the newest verified record entry or liveness attestation; the registry never stores or accepts it.
   const last_active = (await db.first<{ t: string | null }>(`SELECT ${lastActive("$1")} AS t`, [eid]))?.t ?? null;
+  const inheritedHead = e.predecessor_eid ? await db.first("SELECT record_seq, record_head_hash FROM entities WHERE eid = $1 AND record_head_hash IS NOT NULL", [e.predecessor_eid]) : null;
   return c.json({
     eid, name: e.name, last_active, document: doc ? JSON.parse(doc) : null,
     declaration: decl ? JSON.parse(decl.json) : null, declaration_note: DECLARATION_NOTE,
@@ -395,6 +396,8 @@ app.get("/entities/:eid", async (c) => {
     lineage: { previous: e.predecessor_eid, successor: e.successor_eid, chain, previous_link: await linkOf("successor"), successor_link: await linkOf("previous") },
     counts: { record_entries: e.record_seq, attestations, document_versions: e.latest_seq },
     record_head: e.record_head_hash ? { seq: e.record_seq, hash: e.record_head_hash } : null,
+    // Spec 9.3: the predecessor's Record head rides along as inherited, shown with the previous EID.
+    inherited_record_head: inheritedHead ? { eid: e.predecessor_eid, seq: inheritedHead.record_seq, hash: inheritedHead.record_head_hash } : null,
     withdrawn: !!e.withdrawn_at, withdrawn_at: e.withdrawn_at, suppressed: !!e.suppressed, founding: !!e.founding,
     dormant: Date.parse(e.updated) < Date.now() - 365 * 86400_000, custody: e.custody, created: e.created, updated: e.updated,
   });

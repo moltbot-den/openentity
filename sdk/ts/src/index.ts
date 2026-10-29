@@ -56,6 +56,38 @@ export function canonicalize(obj: unknown): string {
   return s;
 }
 
+/** Spec 4.3: parse JSON text that has no duplicate keys. JSON.parse keeps the last duplicate silently, so two implementations could read different objects. */
+export function parseJson(text: string): unknown {
+  const v = JSON.parse(text);
+  const scopes: Set<string>[] = [];
+  const str = /"(?:[^"\\]|\\.)*"/y;
+  for (let i = 0; i < text.length; ) {
+    const ch = text[i];
+    if (ch === '"') {
+      str.lastIndex = i;
+      const m = str.exec(text)![0];
+      i += m.length;
+      if (scopes.length && /^\s*:/.test(text.slice(i, i + 64))) {
+        const key: string = JSON.parse(m);
+        if (scopes[scopes.length - 1].has(key)) throw new Error(`duplicate key ${m}`);
+        scopes[scopes.length - 1].add(key);
+      }
+      continue;
+    }
+    if (ch === "{" || ch === "[") scopes.push(new Set());
+    else if (ch === "}" || ch === "]") scopes.pop();
+    i++;
+  }
+  return v;
+}
+
+/** Spec 4.3: numbers are integers or decimal fractions with at most 6 decimal places. */
+function badNumber(v: unknown): string | null {
+  if (typeof v === "number") return Number.isFinite(v) && Number(v.toFixed(6)) === v ? null : `number ${v} has more than 6 decimal places`;
+  if (v && typeof v === "object") for (const x of Object.values(v)) { const e = badNumber(x); if (e) return e; }
+  return null;
+}
+
 const sha256Sync = (data: string | Uint8Array): Uint8Array => nobleSha256(utf8(data));
 export async function sha256(data: string | Uint8Array): Promise<Uint8Array> {
   return sha256Sync(data);
@@ -400,6 +432,8 @@ export function validate(type: ObjectType, obj: unknown): { ok: boolean; errors:
   }
   const max = MAX_BYTES[type] ?? 64 * 1024;
   if (bytes > max) return { ok: false, errors: [`${type} is ${bytes} bytes, max ${max}`] };
+  const num = badNumber(obj);
+  if (num) return { ok: false, errors: [num] };
   let v = validators.get(type);
   if (!v) {
     v = new Validator({ $ref: `${BUNDLE_ID}#/$defs/${type}` }, "2020-12", false);

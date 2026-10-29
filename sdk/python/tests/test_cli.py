@@ -146,6 +146,16 @@ def test_verify_reports_a_schema_check_like_the_npm_cli(capsys, tmp_path):
     assert code == 3 and out["checks"][0]["name"] == "EntityDocument schema" and not out["checks"][0]["ok"]
 
 
+def test_verify_refuses_a_file_with_a_duplicate_key(capsys, tmp_path):
+    """Spec 4.3: json.loads would keep the last duplicate and verify a different object than the one signed."""
+    f = tmp_path / "dup.json"
+    f.write_text('{"spec": "openentity/1.0", "name": "A", "name": "B"}')
+    code, _, err = run(capsys, "verify", str(f))
+    assert code == 1 and "duplicate key" in err
+    code, _, err = run(capsys, "verify-presentation", str(f), "--audience", "a", "--nonce", "n")
+    assert code == 1 and "duplicate key" in err
+
+
 def test_log_audit_checks_the_registry_document_with_the_key_its_spec_publishes(url, capsys):
     """The registry's DID names openentity.org, but a registry elsewhere signs with its /v1/spec key (guard: no lookup of did:web:openentity.org)."""
     Stub.leaves = [{"type": "Declaration", "eid": "did:web:openentity.org", "object_sha256": "00" * 32, "received_at": core.now()}]

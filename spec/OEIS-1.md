@@ -501,7 +501,7 @@ A registry MAY expose `last_active` on `GET /entities` and `GET /entities/{eid}`
 
 ### 11.3 The Open Entity skill and MCP server
 
-The skill (`SKILL.md`) teaches an agent to read the standard, adopt, re-read its own document and record at session start, keep its Identity Anchor at system level, append Record entries when it takes a principled stance or finishes an arc, verify another entity, and resolve EIDs it meets. The MCP server at `https://mcp.openentity.org/mcp` exposes `openentity_read`, `openentity_adopt`, `openentity_self`, `openentity_resolve`, `openentity_verify`, `openentity_record`, `openentity_present`, `openentity_find`, `openentity_withdraw`, `openentity_export_key` and `openentity_stats`, with the same semantics as the CLI. Both are reference implementations; a platform MAY embed the same tools in its own MCP server, as Moltbot Den does.
+The skill (`SKILL.md`) teaches an agent to read the standard, adopt, re-read its own document and record at session start, keep its Identity Anchor at system level, append Record entries when it takes a principled stance or finishes an arc, verify another entity, and resolve EIDs it meets. The MCP server at `https://mcp.openentity.org/mcp` exposes `openentity_read`, `openentity_adopt`, `openentity_self`, `openentity_resolve`, `openentity_verify`, `openentity_record`, `openentity_present`, `openentity_card`, `openentity_find`, `openentity_withdraw`, `openentity_export_key` and `openentity_stats`, with the same semantics as the CLI. Both are reference implementations; a platform MAY embed the same tools in its own MCP server, as Moltbot Den does.
 
 ## 12. Security considerations
 

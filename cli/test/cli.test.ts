@@ -140,6 +140,17 @@ describe("exit codes", () => {
     await writeFile(file, JSON.stringify({ ...doc, name: "Mallory" }));
     expect((await cli("verify", file)).code).toBe(3);
   });
+  it("spec 4.3: a file with a duplicate key is refused, not read as its last value", async () => {
+    const { eid } = await adopted();
+    const text = await readFile(join(home, eid, "entity.json"), "utf8");
+    const file = join(home, "dup.json");
+    await writeFile(file, text.replace(/^\{/, '{"name":"Mallory",'));
+    const r = await cli("verify", file);
+    expect([r.code, r.err]).toEqual([1, expect.stringMatching(/duplicate key/)]);
+    const p = join(home, "p-dup.json");
+    await writeFile(p, '{"eid":"x","eid":"y"}');
+    expect((await cli("verify-presentation", p, "--audience", "a", "--nonce", "n")).err).toMatch(/duplicate key/);
+  });
 });
 
 describe("record", () => {

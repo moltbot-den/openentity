@@ -1056,7 +1056,7 @@ def _verify(args):
         checks = _checks_of(client._request(t))
     else:
         try:
-            checks = _checks_of(json.loads(pathlib.Path(t).read_text()))
+            checks = _checks_of(core.parse_json(pathlib.Path(t).read_text()))
         except (OSError, ValueError) as e:
             raise _usage(f"cannot read {t}: {e}")
     return _report(t, checks)
@@ -1066,7 +1066,7 @@ def _verify_presentation(args):
     if not args.audience or not args.nonce:
         raise _usage("verify-presentation <file> --audience <this verifier's origin or DID> --nonce <the nonce you issued>")
     try:
-        p = json.loads(pathlib.Path(args.file).read_text())
+        p = core.parse_json(pathlib.Path(args.file).read_text())
     except (OSError, ValueError) as e:
         raise _usage(f"cannot read {args.file}: {e}")
     r = core.verify_presentation(p, args.audience, args.nonce, resolver=_resolver)
