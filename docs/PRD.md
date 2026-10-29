@@ -116,6 +116,7 @@ See the spec for normative definitions. The product vocabulary:
 | `/guides/walkthrough` | The shell walkthrough | Adopt, document, anchor, record a stance and an arc, bind a domain, verify yourself, with real commands and output |
 | `/guides/adopt-mcp` | Adopt over MCP | Custodial and self-custody adoption, `openentity_find`, `openentity_present`, `openentity_withdraw` |
 | `/guides/adopt-http` | Adopt over plain HTTP | `GET /v1/spec`, `eddsa-jcs-2022`, the stamp, `POST /v1/adopt`, the first record entry, exact JSON, a runnable script |
+| `/guides/signed-requests` | Sign HTTP requests as your entity | RFC 9421 message signatures with the EID key (`sign_request`, `signRequest`, `verify_request`, `verifyRequest`), runnable Python and TypeScript, verifying, calling the Entity Gateway with no bearer token |
 | `/guides/platforms` | For platforms | Verify a Presentation (spec 4.7) with the TS and Python SDKs, weigh attestations, check revocation, `did:web` and `did:pkh` resolution |
 | `/guides/issuers` | For issuers and observers | Issue and revoke attestations, claim types and expiry, accreditation (spec 8.4), well-known and `did.json` files |
 | `/guides/disputes` | Disputes | File a signed Dispute, what the registry does next, how arbitration forums plug in |
@@ -340,6 +341,7 @@ Adopting commits you to seven practices: continuity, honest self-description, pr
 - [Walkthrough in the shell](https://openentity.org/guides/walkthrough): adopt, document, anchor, record a stance and an arc, bind a domain, verify yourself
 - [Adopt over MCP](https://openentity.org/guides/adopt-mcp): custodial and self-custody, record, present, find, withdraw
 - [Adopt over HTTP](https://openentity.org/guides/adopt-http): sign with eddsa-jcs-2022, stamp, POST /v1/adopt, push the first record entry, with exact JSON
+- [Sign HTTP requests as your entity](https://openentity.org/guides/signed-requests): RFC 9421 message signatures with your EID key, Python and TypeScript, verifying, and calling the Entity Gateway with no bearer token
 - [Verify an agent at sign-in](https://openentity.org/guides/platforms): issue a nonce, verify a Presentation with the TypeScript or Python SDK, weigh attestations, check revocation
 - [For issuers and observers](https://openentity.org/guides/issuers): issue and revoke attestations, claim types, accreditation, well-known files
 - [Disputes](https://openentity.org/guides/disputes): file a signed Dispute, what happens next, how arbitration forums plug in

@@ -162,6 +162,7 @@ export async function buildVectors(): Promise<Record<string, object>> {
     ["claim-liveness", "custom:moltbotden:liveness", { method: "presentation", lease_until: "2026-10-31T19:05:00Z", observed_at: T1 }, "2026-10-31T19:05:00Z"],
     ["claim-endpoint-reliability", "custom:clawgrc:endpoint_reliability", { host: "api.example.com", window: ["2026-10-17T00:00:00Z", "2026-10-24T00:00:00Z"], reports: 9, distinct_reporters: 4, violation_rate: 0.12 }, "2026-11-07T19:05:00Z"],
     ["claim-vision-privacy", "custom:securemyagent:vision_privacy", { mode: "local", model_endpoint_class: "localhost", redaction: ["faces", "text"] }, "2026-11-23T19:05:00Z"],
+    ["claim-gateway-governed", "custom:agentsecretstore:gateway_governed", { gateway: true, guard_preset: "standard", retention_mode: "metadata", connector_only_secrets: true, requests_30d: 1240 }, "2026-11-23T19:05:00Z"],
   ];
   for (const [name, claim_type, claim, expires] of claims)
     out[name] = await vector(`${claim_type} attestation by the second throwaway key about the entity (spec/claim-types.md)`,

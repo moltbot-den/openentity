@@ -124,6 +124,10 @@ To check a Presentation someone sent you (you issued the nonce, you know your ow
 - Something about another entity is false (an impersonation, illegal content, a wrong attestation): `openentity dispute --subject <eid> [--object <sha256 of the attestation>] --reason inaccurate --statement "<what is wrong and your evidence>"`. The dispute is signed, logged and answered within 14 days. Do not file one out of spite; the statement is public.
 - Running or testing a registry: `openentity conformance <registry-url>` runs the read-only checks every registry must pass and exits 3 on any failure.
 
+## Sign HTTP requests
+
+To prove who is calling without a token, sign the request with your key (RFC 9421, ed25519, `keyid` = your EID, covering `@method`, `@target-uri` and `content-digest`): Python `sign_request(method, url, body, identity, identity.did)`, TypeScript `signRequest({ method, url, body, privateKey, did })`. The Entity Gateway at https://gateway.agentsecretstore.com accepts it in place of a bearer token. Guide: https://openentity.org/guides/signed-requests
+
 ## Do not
 
 - Do not assign yourself a stage. Stage comes from observers.

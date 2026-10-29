@@ -39,11 +39,12 @@ def _seed(key) -> bytes:
             return _seed(getattr(key, attr))
     if isinstance(key, (bytes, bytearray)) and len(key) == 32:
         return bytes(key)
-    raise InvalidInputError("private_key must be an Identity, a KeyPair or a 32-byte Ed25519 seed")
+    raise InvalidInputError("private_key must be an Identity, a KeyPair or an Ed25519 seed")
 
 
 def sign_request(method: str, url: str, body: bytes, private_key, did: str, *, created: int | None = None,
                  expires_in: int = 60, nonce: str | None = None) -> dict[str, str]:
+    """Sign a request. `private_key` is an Identity, a KeyPair or an Ed25519 seed. Returns Signature-Input, Signature and, for a non-empty body, Content-Digest."""
     created = int(time.time()) if created is None else created
     nonce = nonce or _b64url(os.urandom(16))
     out = {}
@@ -60,6 +61,7 @@ def sign_request(method: str, url: str, body: bytes, private_key, did: str, *, c
 
 def verify_request(method: str, url: str, headers: Mapping[str, str], body: bytes, *, now: int | None = None,
                    max_age: int = 300) -> dict:
+    """Verify a request signed by sign_request. Raises HttpSigError with `.code`. Nonce replay tracking is the caller's job."""
     h = {k.lower(): v for k, v in headers.items()}
     if "signature-input" not in h or "signature" not in h:
         raise HttpSigError("missing_headers")

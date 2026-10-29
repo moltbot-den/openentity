@@ -13,7 +13,7 @@ export function httpSigBase(method: string, url: string, components: string[], d
   return utf8([...components.map((c) => `"${c}": ${value[c]}`), `"@signature-params": ${params}`].join("\n"));
 }
 
-/** Sign a request. `privateKey` is a KeyPair or a 32-byte Ed25519 seed. Returns Signature-Input, Signature and, for a non-empty body, Content-Digest. */
+/** Sign a request. `privateKey` is a KeyPair or an Ed25519 seed. Returns Signature-Input, Signature and, for a non-empty body, Content-Digest. */
 export async function signRequest(o: {
   method: string; url: string; body?: Uint8Array; privateKey: KeyPair | Uint8Array; did: string;
   created?: number; expiresIn?: number; nonce?: string;

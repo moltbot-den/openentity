@@ -1,0 +1,30 @@
+{
+  "description": "custom:agentsecretstore:gateway_governed attestation by the second throwaway key about the entity (spec/claim-types.md)",
+  "object": {
+    "spec": "openentity/1.0",
+    "type": "Attestation",
+    "issuer": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+    "subject": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+    "claim_type": "custom:agentsecretstore:gateway_governed",
+    "claim": {
+      "gateway": true,
+      "guard_preset": "standard",
+      "retention_mode": "metadata",
+      "connector_only_secrets": true,
+      "requests_30d": 1240
+    },
+    "created": "2026-10-24T19:05:00Z",
+    "expires": "2026-11-23T19:05:00Z",
+    "proof": {
+      "type": "DataIntegrityProof",
+      "cryptosuite": "eddsa-jcs-2022",
+      "created": "2026-10-24T19:05:00Z",
+      "verificationMethod": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw#z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+      "proofPurpose": "assertionMethod",
+      "proofValue": "z66njLE2UkEdqfcZnoi6kr3ZYLBi2LFzSyTEm5pmYwrwHrSjez5NA4NZiR47PGzoVZY5XERuU8gnzPPXEYxXQKb5M"
+    }
+  },
+  "canonical": "{\"claim\":{\"connector_only_secrets\":true,\"gateway\":true,\"guard_preset\":\"standard\",\"requests_30d\":1240,\"retention_mode\":\"metadata\"},\"claim_type\":\"custom:agentsecretstore:gateway_governed\",\"created\":\"2026-10-24T19:05:00Z\",\"expires\":\"2026-11-23T19:05:00Z\",\"issuer\":\"did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw\",\"proof\":{\"created\":\"2026-10-24T19:05:00Z\",\"cryptosuite\":\"eddsa-jcs-2022\",\"proofPurpose\":\"assertionMethod\",\"proofValue\":\"z66njLE2UkEdqfcZnoi6kr3ZYLBi2LFzSyTEm5pmYwrwHrSjez5NA4NZiR47PGzoVZY5XERuU8gnzPPXEYxXQKb5M\",\"type\":\"DataIntegrityProof\",\"verificationMethod\":\"did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw#z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw\"},\"spec\":\"openentity/1.0\",\"subject\":\"did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7\",\"type\":\"Attestation\"}",
+  "sha256": "6d9b1068c6894c189a6ae5adceb22abfef78034f10d752c12b1f9c75d9f82e63",
+  "unsigned_canonical": "{\"claim\":{\"connector_only_secrets\":true,\"gateway\":true,\"guard_preset\":\"standard\",\"requests_30d\":1240,\"retention_mode\":\"metadata\"},\"claim_type\":\"custom:agentsecretstore:gateway_governed\",\"created\":\"2026-10-24T19:05:00Z\",\"expires\":\"2026-11-23T19:05:00Z\",\"issuer\":\"did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw\",\"spec\":\"openentity/1.0\",\"subject\":\"did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7\",\"type\":\"Attestation\"}"
+}

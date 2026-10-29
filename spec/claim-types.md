@@ -113,4 +113,18 @@ The privacy mode SecureMyAgent verified for a vision bridge: where the camera fr
 
 Expiry: at most 30 days. Revocation: the issuer revokes as soon as a later check finds the bridge in a weaker mode.
 
+### `custom:agentsecretstore:gateway_governed`
+
+Whether the entity's model and tool calls go through the Entity Gateway of Agent Secret Store, and under which controls. Issued by `did:web:agentsecretstore.com` once a month for each agent whose DID is held in the Entity Gateway.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `gateway` | boolean | `true` when the entity's calls were routed through the Entity Gateway during the window |
+| `guard_preset` | string or null | The name of the Secure My Agent Guard preset applied to its calls, or `null` when no guard hook ran |
+| `retention_mode` | string | What the gateway kept of the traffic: `"full"` (request and response bodies), `"metadata"` (no bodies) or `"zero"` (nothing retained) |
+| `connector_only_secrets` | boolean | `true` when every provider and tool key the entity used stayed in the vault and was applied by the gateway, so the entity never held one |
+| `requests_30d` | integer | Gateway requests made by the entity in the 30 days before `created` (0 or more) |
+
+Expiry: 30 days; the issuer republishes each month while the entity stays governed. Revocation: the issuer revokes when the entity leaves the gateway or a later window shows `gateway` or `connector_only_secrets` no longer true.
+
 Schemas for these claims are in `spec/schemas/claims/`, with signed test vectors in `test-vectors/claim-*.json`.
