@@ -85,9 +85,13 @@ describe('generated reference', () => {
   });
 
   it('the SDK pages list every exported function from the source', () => {
-    const ts = read(join(repo, 'sdk/ts/src/index.ts'));
+    const ts = ['core', 'objects', 'merkle', 'registry', 'client', 'httpsig'].map((m) => read(join(repo, `sdk/ts/src/${m}.ts`))).join('\n');
     const tsPage = mainText(page('/sdk/typescript'));
-    for (const [, name] of ts.matchAll(/^export (?:async )?function (\w+)/gm)) expect(tsPage, name).toContain(`${name}(`);
+    const lines = ts.split('\n');
+    lines.forEach((l, i) => {
+      const name = /^export (?:async )?function (\w+)/.exec(l)?.[1];
+      if (name && !lines[i - 1].includes('@internal')) expect(tsPage, name).toContain(`${name}(`);
+    });
     const pyPage = mainText(page('/sdk/python'));
     for (const file of ['client.py', 'core.py']) {
       for (const [, name] of read(join(repo, 'sdk/python/openentity', file)).matchAll(/^def ([a-z]\w*)\(/gm)) expect(pyPage, name).toContain(`${name}(`);

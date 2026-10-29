@@ -5,15 +5,14 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 interface Props {
-  /** Repository-relative source file, such as sdk/ts/src/index.ts. */
+  /** Repository-relative source file, such as sdk/ts/src/core.ts; several files may be given, comma-separated. */
   file: string;
 }
 const { file } = Astro.props;
-const src = readFileSync(join(process.cwd(), '..', file), 'utf8');
 const squash = (s: string) => s.replace(/\s+/g, ' ').replace(/\( /g, '(').replace(/,? \)/g, ')').trim();
 
 /** Text from an opening parenthesis at `i` to its match. */
-function parens(s: string, i: number): string {
+function parens(s: string, i: number, file: string): string {
   for (let d = 0, j = i; j < s.length; j++) {
     if (s[j] === '(') d++;
     else if (s[j] === ')' && --d === 0) return s.slice(i, j + 1);
@@ -22,18 +21,22 @@ function parens(s: string, i: number): string {
 }
 
 const rows: { sig: string; doc: string }[] = [];
-if (file.endsWith('.ts')) {
+for (const f of file.split(',').map((x) => x.trim())) {
+const src = readFileSync(join(process.cwd(), '..', f), 'utf8');
+if (f.endsWith('.ts')) {
   for (const m of src.matchAll(/(?:\/\*\*((?:(?!\*\/)[\s\S])*)\*\/\s*)?export (?:async )?function (\w+)(?:<[^(]*>)?\(/g)) {
     const doc = (m[1] ?? '').replace(/^\s*\* ?/gm, '').trim();
-    rows.push({ sig: m[2] + squash(parens(src, m.index! + m[0].length - 1)), doc: squash(doc) });
+    if (doc.includes('@internal')) continue;
+    rows.push({ sig: m[2] + squash(parens(src, m.index! + m[0].length - 1, f)), doc: squash(doc) });
   }
 } else {
   for (const m of src.matchAll(/^def ([a-z]\w*)\(/gm)) {
-    const params = parens(src, m.index! + m[0].length - 1);
+    const params = parens(src, m.index! + m[0].length - 1, f);
     const after = src.slice(m.index! + m[0].length - 1 + params.length);
     const doc = after.match(/^[^\n]*:\n\s+"""([\s\S]*?)"""/)?.[1] ?? '';
     rows.push({ sig: m[1] + squash(params), doc: squash(doc) });
   }
+}
 }
 if (!rows.length) throw new Error(`Exports: no public functions found in ${file}`);
 ---

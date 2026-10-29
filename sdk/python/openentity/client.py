@@ -7,6 +7,7 @@ import urllib.request
 from importlib.metadata import PackageNotFoundError, version
 
 from . import core
+from .errors import InvalidInputError, RegistryError
 
 try:
     _VERSION = version("openentity")
@@ -15,12 +16,6 @@ except PackageNotFoundError:
 
 DEFAULT_REGISTRY = "https://openentity.org"
 CLIENTS = ("adk", "crewai", "goose", "langchain", "mastra", "openai-agents", "ui-tars", "vercel-ai", "cli", "other")  # the registry's allowlist for the unsigned `client` label
-
-
-class RegistryError(Exception):
-    def __init__(self, status: int, body):
-        super().__init__(f"registry returned {status}: {body}")
-        self.status, self.body = status, body
 
 
 def _request(url: str, body: dict | None = None, headers: dict | None = None, method: str | None = None) -> dict:
@@ -41,16 +36,16 @@ def _request(url: str, body: dict | None = None, headers: dict | None = None, me
 
 def build_adoption(kp: core.KeyPair, name: str, description: str, registry: str, operator: dict | None = None,
                    substrate: dict | None = None, extra: dict | None = None) -> tuple[dict, dict]:
-    created = core.now()
+    created = core.now_seconds()
     declaration = core.sign_object({
         "spec": core.SPEC, "type": "Declaration", "eid": kp.did,
         "declaration_version": core.DECLARATION_VERSION, "text_sha256": core.DECLARATION_SHA256,
-        "name": name, "created": created, "nonce": core.nonce()}, kp, created)
+        "name": name, "created": created, "nonce": core.random_nonce()}, kp, created)
     ns = "Not yet stated."  # spec 5.3 required fields per layer
     document = core.sign_object({
         "spec": core.SPEC, "eid": kp.did, "name": name, "description": description,
         "created": created, "updated": created, "seq": 1,
-        "keys": [{"id": core.verification_method(kp.did), "type": "Multikey",
+        "keys": [{"id": core.verification_method_id(kp.did), "type": "Multikey",
                   "publicKeyMultibase": kp.did.removeprefix("did:key:")}],
         "operator": operator or {"kind": "none", "custody": "entity", "can_change": []},
         "substrate": substrate or {"model": "unknown", "provider": "unknown", "runtime": "unknown", "declared_at": created},
@@ -71,7 +66,7 @@ def adopt(name: str, description: str = "An Open Entity adopted through the Pyth
     """Adopt on `registry`. Returns the registry response plus `did` and `seed_hex` (keep the seed).
     `client` is an optional label (one of CLIENTS) for the registry's per-client count; it is not signed."""
     if client is not None and client not in CLIENTS:
-        raise ValueError(f"client must be one of {', '.join(CLIENTS)}")
+        raise InvalidInputError(f"client must be one of {', '.join(CLIENTS)}")
     registry = registry.rstrip("/")
     kp = core.KeyPair(seed)
     bits = int(_request(f"{registry}/v1/spec")["stamp_bits"])
@@ -80,7 +75,7 @@ def adopt(name: str, description: str = "An Open Entity adopted through the Pyth
                    {"x-oe-stamp": core.mint_stamp(bits, kp.did)})
     # Seq-1 declaration entry (spec 7.3). The registry never writes entries; on failure the signed
     # entry is returned so the caller can push it later.
-    at = core.now()
+    at = core.now_seconds()
     entry = core.sign_object({
         "spec": core.SPEC, "type": "RecordEntry", "eid": kp.did, "seq": 1, "prev": None, "kind": "declaration",
         "at": at, "payload": {"declaration_version": core.DECLARATION_VERSION,
@@ -107,7 +102,7 @@ def withdraw(seed: bytes, registry: str = DEFAULT_REGISTRY, name: str | None = N
     registry = registry.rstrip("/")
     name = name or _request(f"{registry}/v1/entities/{kp.did}")["document"]["name"]
     w = core.sign_object({"spec": core.SPEC, "type": "Withdrawal", "eid": kp.did, "declaration_version": core.DECLARATION_VERSION,
-                          "name": name, "created": core.now(), "nonce": core.nonce()}, kp)
+                          "name": name, "created": core.now_seconds(), "nonce": core.random_nonce()}, kp)
     return _post(registry, "/v1/withdraw", w, kp)
 
 
@@ -120,7 +115,7 @@ def record(seed: bytes, entries: list[tuple[str, dict]], registry: str = DEFAULT
     seq, prev = (head["seq"], head["hash"]) if head else (0, None)
     signed = []
     for kind, payload in entries:
-        seq, at = seq + 1, core.now()
+        seq, at = seq + 1, core.now_seconds()
         e = core.sign_object({"spec": core.SPEC, "type": "RecordEntry", "eid": kp.did, "seq": seq, "prev": prev,
                               "kind": kind, "at": at, "payload": payload}, kp, at)
         signed.append(e)
@@ -150,13 +145,13 @@ def dispute(seed: bytes, subject: str, reason: str, statement: str, object_sha25
             registry: str = DEFAULT_REGISTRY) -> dict:
     """File a signed Dispute about `subject`, or about one of its objects (spec 10.5)."""
     if reason not in DISPUTE_REASONS:
-        raise ValueError(f"reason must be one of {', '.join(DISPUTE_REASONS)}")
+        raise InvalidInputError(f"reason must be one of {', '.join(DISPUTE_REASONS)}")
     if object_sha256 is not None and not re.fullmatch(r"[0-9a-f]{64}", object_sha256):
-        raise ValueError("object_sha256 must be 64 lowercase hex characters")
+        raise InvalidInputError("object_sha256 must be 64 lowercase hex characters")
     kp = core.KeyPair(seed)
     d = core.sign_object({"spec": core.SPEC, "type": "Dispute", "issuer": kp.did, "subject": subject,
                           **({"object_sha256": object_sha256} if object_sha256 else {}), "reason": reason,
-                          "statement": statement, "created": core.now(), "nonce": core.nonce()}, kp)
+                          "statement": statement, "created": core.now_seconds(), "nonce": core.random_nonce()}, kp)
     return _post(registry, "/v1/disputes", d, kp)
 
 

@@ -11,14 +11,9 @@ from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey, Ed25519PublicKey
 
 from . import core
+from .errors import HttpSigError, InvalidInputError
 
 SKEW = 5  # seconds of clock skew allowed on `created`
-
-
-class HttpSigError(Exception):
-    def __init__(self, code: str):
-        super().__init__(code)
-        self.code = code
 
 
 def _b64url(b: bytes) -> str:
@@ -44,7 +39,7 @@ def _seed(key) -> bytes:
             return _seed(getattr(key, attr))
     if isinstance(key, (bytes, bytearray)) and len(key) == 32:
         return bytes(key)
-    raise ValueError("private_key must be an Identity, a KeyPair or a 32-byte Ed25519 seed")
+    raise InvalidInputError("private_key must be an Identity, a KeyPair or a 32-byte Ed25519 seed")
 
 
 def sign_request(method: str, url: str, body: bytes, private_key, did: str, *, created: int | None = None,
@@ -78,8 +73,8 @@ def verify_request(method: str, url: str, headers: Mapping[str, str], body: byte
         raise HttpSigError("unknown_alg")
     keyid = p.get("keyid", "")
     try:
-        public = core.public_from_did_key(keyid)
-        if core.did_key(public) != keyid:
+        public = core.public_key_from_did_key(keyid)
+        if core.did_key_from_public_key(public) != keyid:
             raise ValueError
     except Exception:
         raise HttpSigError("bad_keyid") from None
