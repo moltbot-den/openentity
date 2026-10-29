@@ -844,12 +844,13 @@ wheels = [
 
 [[package]]
 name = "langchain-openentity"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "." }
 dependencies = [
     { name = "httpx" },
     { name = "jsonschema" },
     { name = "langchain" },
+    { name = "langgraph" },
     { name = "pydantic" },
 ]
 
@@ -879,6 +880,7 @@ requires-dist = [
     { name = "httpx" },
     { name = "jsonschema", specifier = ">=4.18" },
     { name = "langchain", specifier = ">=1.4" },
+    { name = "langgraph", specifier = ">=1" },
     { name = "openentity", marker = "extra == 'ledger'", directory = "../../../sdk/python" },
     { name = "pydantic", specifier = ">=2" },
     { name = "requests", marker = "extra == 'requests'" },

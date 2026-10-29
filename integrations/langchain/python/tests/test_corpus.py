@@ -10,7 +10,7 @@ COMPILED = {k: compile_schema(v) for k, v in SCHEMAS.items()}
 
 
 def guard():
-    g = RuthlessSchemaGuard()
+    g = RuthlessSchemaGuard(scope="all")
     for name, schema in SCHEMAS.items():
         g.register(f"GET https://corpus.test/{name}", schema)
     return g

@@ -60,7 +60,10 @@ def install(guard: Any) -> Callable[[], None]:
             async def _request(self, method, str_or_url, **kw):
                 resp = await orig(self, method, str_or_url, **kw)
                 ct = resp.headers.get("content-type", "")
-                accept = (kw.get("headers") or {}).get("Accept", "")
+                try:  # headers may be a dict, a list of pairs or a CIMultiDict
+                    accept = resp.request_info.headers.get("Accept", "")
+                except Exception:  # noqa: BLE001
+                    accept = ""
                 if guard._wants(method, str(resp.url), resp.status, ct, accept):
                     body = await resp.read()
                     guard._check(method, str(resp.url), resp.status, ct, accept, lambda: body)

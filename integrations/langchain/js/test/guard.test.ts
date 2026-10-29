@@ -5,7 +5,7 @@ import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { LedgerReporter, OpenEntityLoopDetected, OpenEntitySchemaViolation, RuthlessSchemaGuard, unwrap } from "../src/index.ts";
-import { Routes, compileSchema, pathTemplate } from "../src/core.ts";
+import { Routes, compileSchema, pathTemplate, scrub } from "../src/core.ts";
 import { MALFORMED, SCHEMAS, serve } from "./fixtures.ts";
 import { keyPairFromSeed, verifyObject } from "@openentity/sdk";
 
@@ -47,7 +47,7 @@ describe("middleware", () => {
 
   test("an HTTP violation inside a tool cannot be swallowed", async () => {
     const s = await serve();
-    const g = new RuthlessSchemaGuard({ ledger: false });
+    const g = new RuthlessSchemaGuard({ ledger: false, scope: "all" });
     const off = g.guardHttp();
     try {
       const c = MALFORMED.find((x) => x.id === "m-html-0-ctjson")!;
@@ -112,7 +112,7 @@ describe("ledger", () => {
     const posts: any[] = [];
     const keypair = await keyPairFromSeed(KP_SEED);
     const r = new LedgerReporter({ url: "https://ledger.test/v1", keypair, intervalMs: 5, post: async (u, b) => { posts.push([u, JSON.parse(b)]); } });
-    const g = new RuthlessSchemaGuard({ ledger: r });
+    const g = new RuthlessSchemaGuard({ ledger: r, scope: "all" });
     g.register("GET https://api.test/repos/*/pulls", SCHEMAS.pull_list);
     violate(g);
     await r.flush();
@@ -129,13 +129,13 @@ describe("ledger", () => {
   test("unregistered route gets an id template; duplicates collapse", async () => {
     const posts: any[] = [];
     const r = new LedgerReporter({ url: "https://x.test", keypair: await keyPairFromSeed(KP_SEED), post: async (_u, b) => { posts.push(JSON.parse(b)); } });
-    const g = new RuthlessSchemaGuard({ ledger: r });
+    const g = new RuthlessSchemaGuard({ ledger: r, scope: "all" });
     violate(g); violate(g);
     await r.flush();
     expect(posts.map((p) => p.path_template)).toEqual(["/repos/{id}/pulls"]);
   });
 
-  test("key comes from the seed env, then the machine identity", async () => {
+  test("key comes from the keypair or the seed env, never from an implicit identity", async () => {
     const env = { ...process.env };
     const home = mkdtempSync(join(tmpdir(), "oe-ledger-"));
     try {
@@ -146,11 +146,11 @@ describe("ledger", () => {
         const r = new LedgerReporter({ url: "https://x.test", post: async (_u, b) => { posts.push(JSON.parse(b)); } });
         r.report({ host: "h", method: "GET", path_template: "/", body_sha256: "0".repeat(64) });
         await r.flush();
+        if (!seed) { expect(posts).toHaveLength(0); expect(existsSync(join(home, "identity.key"))).toBe(false); continue; }
         expect(posts).toHaveLength(1);
         expect((await verifyObject(posts[0])).ok).toBe(true);
         if (seed) expect(posts[0].reporter_eid).toBe((await keyPairFromSeed(Uint8Array.from(Buffer.from(seed, "hex")))).did);
       }
-      expect(existsSync(join(home, "identity.key"))).toBe(true);
     } finally {
       process.env = env;
       rmSync(home, { recursive: true, force: true });
@@ -172,7 +172,7 @@ describe("ledger", () => {
       expect(new RuthlessSchemaGuard({ ledger: false }).ledger.enabled).toBe(false);
       expect(new LedgerReporter({ url: "https://x.test" }).enabled).toBe(true);
       const down = new LedgerReporter({ url: "https://x.test", keypair: kp, post: async () => { throw new Error("down"); } });
-      violate(new RuthlessSchemaGuard({ ledger: down }));
+      violate(new RuthlessSchemaGuard({ ledger: down, scope: "all" }));
       await down.flush();
     } finally {
       process.env = env;
@@ -204,7 +204,7 @@ describe("routes and OpenAPI", () => {
   };
 
   test("fromOpenapi registers json 2xx routes only", async () => {
-    const g = await new RuthlessSchemaGuard({ ledger: false }).fromOpenapi(SPEC);
+    const g = await new RuthlessSchemaGuard({ ledger: false, scope: "all" }).fromOpenapi(SPEC);
     const ok = (m: string, u: string, body: string) => g.check(m, u, 200, "application/json", "", body);
     ok("GET", "https://api.test/v1/pets/7", '{"id": 7, "name": "rex", "tag": null}');
     ok("GET", "https://api.test/v1/pets", '[{"id": 1, "name": "a"}]');
@@ -212,5 +212,46 @@ describe("routes and OpenAPI", () => {
       expect(() => ok("GET", `https://api.test/v1/${u}`, body)).toThrow(OpenEntitySchemaViolation);
     expect(g.routes.routes).toHaveLength(2);
     await expect(new RuthlessSchemaGuard({ ledger: false }).fromOpenapi({ paths: {} })).rejects.toThrow();
+  });
+});
+
+describe("0.2.0 hardening", () => {
+  const html = "<html>";
+  const gate = (g: RuthlessSchemaGuard, m: string, status: number, body: string, url = "https://h.test/x") => g.check(m, url, status, "application/json", "", body);
+
+  test("scrub covers LLM and cloud keys", () => {
+    for (const secret of ["sk-proj-" + "a1B2".repeat(8), "AIza" + "a".repeat(35), "hf_" + "a".repeat(34), "npm_" + "a".repeat(36), "glpat-" + "a".repeat(20), "SK" + "0".repeat(32), "Basic dXNlcjpwYXNzd29yZDEyMw=="])
+      expect(scrub(`x ${secret} y`)).toContain("[REDACTED]");
+    for (const b of ['{"password":"abc12"}', '{"authorization":"abcdefgh"}', "Set-Cookie: session=abcdef123; Path=/"]) expect(scrub(b)).toContain("[REDACTED]");
+  });
+  test("HEAD and 206 are not violations; an empty 200 is", () => {
+    const g = new RuthlessSchemaGuard({ ledger: false, scope: "all" });
+    gate(g, "HEAD", 200, ""); gate(g, "GET", 206, '{"a":');
+    expect(() => gate(g, "GET", 200, "")).toThrow(OpenEntitySchemaViolation);
+  });
+  test("default scope ignores calls made outside a tool", () => {
+    gate(new RuthlessSchemaGuard({ ledger: false }), "GET", 200, html);
+  });
+  test("message never carries url credentials", () => {
+    const g = new RuthlessSchemaGuard({ ledger: false, scope: "all" });
+    expect(() => gate(g, "GET", 200, html, "https://user:hunter2@h.test:8443/x")).toThrow(/h\.test:8443\/x/);
+    try { gate(g, "GET", 200, html, "https://user:hunter2@h.test/x"); } catch (e) { expect(String(e)).not.toContain("hunter2"); }
+  });
+  test("interrupt-style bubble-ups are not counted as failures", async () => {
+    const g = new RuthlessSchemaGuard({ ledger: false, maxFailures: 2 });
+    const bubble = Object.assign(new Error("interrupt"), { is_bubble_up: true });
+    for (let i = 0; i < 3; i++) await expect(call(g, req(), async () => { throw bubble; })).rejects.toBe(bubble);
+  });
+  test("default ports match; repeated ** is rejected; bad schema fails at register", () => {
+    const g = new RuthlessSchemaGuard({ ledger: false });
+    g.register("GET https://h.test/x", { type: "object" });
+    expect(g.routes.match("GET", "https://h.test:443/x")).toBeDefined();
+    expect(() => g.register("GET https://h.test/**/a/**/b", { type: "object" })).toThrow();
+    expect(() => g.register("t", { type: "nope" })).toThrow();
+  });
+  test("ledger true is the default url, default is off, fromOpenapi refuses file urls", async () => {
+    expect(new RuthlessSchemaGuard({ ledger: true }).ledger.url).toContain("api.clawgrc.com");
+    expect(new RuthlessSchemaGuard().ledger.enabled).toBe(false);
+    await expect(new RuthlessSchemaGuard().fromOpenapi("file:///etc/hosts")).rejects.toThrow();
   });
 });

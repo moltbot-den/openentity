@@ -52,9 +52,17 @@ const FULL = [
   /SG\.[A-Za-z0-9_-]{22}\.[A-Za-z0-9_-]{43}/g,
   /[Bb]earer\s+[A-Za-z0-9._~+/=-]{16,}/g,
   /https?:\/\/[^/\s:@]+:[^/\s@]+@[^\s/"']+/g,
+  /sk-[A-Za-z0-9_-]{20,}/g,
+  /AIza[0-9A-Za-z_-]{35}/g,
+  /hf_[A-Za-z0-9]{30,}/g,
+  /npm_[A-Za-z0-9]{36}/g,
+  /glpat-[A-Za-z0-9_-]{20,}/g,
+  /AccountKey=[A-Za-z0-9+/=]{20,}/g,
+  /SK[0-9a-f]{32}/g,
+  /[Bb]asic\s+[A-Za-z0-9+/=]{16,}/g,
 ];
 const KV =
-  /("?(?:api[_-]?key|api[_-]?secret|api[_-]?token|auth[_-]?token|access[_-]?token|refresh[_-]?token|secret[_-]?key|client[_-]?secret|password|passwd|token|secret)"?\s*[=:]\s*"?)[^\s"',}&]{6,}/gi;
+  /("?(?:api[_-]?key|api[_-]?secret|api[_-]?token|auth[_-]?token|access[_-]?token|refresh[_-]?token|secret[_-]?key|client[_-]?secret|private[_-]?key|x-api-key|authorization|set-cookie|cookie|session[_-]?(?:id|token)|password|passwd|token|secret)"?\s*[=:]\s*"?)[^\s"',}&]{4,}/gi;
 
 export function scrub(text: string): string {
   for (const rx of FULL) text = text.replace(rx, "[REDACTED]");
@@ -64,6 +72,7 @@ export function scrub(text: string): string {
 // ---- schemas ----
 type Json = unknown;
 export function stableJson(v: Json): string {
+  if (typeof v === "bigint") return v.toString();
   if (Array.isArray(v)) return `[${v.map(stableJson).join(",")}]`;
   if (v && typeof v === "object")
     return `{${Object.keys(v).sort().map((k) => `${JSON.stringify(k)}:${stableJson((v as Record<string, Json>)[k])}`).join(",")}}`;
@@ -103,6 +112,15 @@ function declaredKeys(s: Record<string, any>): Set<string> {
 
 const loc = (p: string) => p.replace(/^#\/?/, "") || "$";
 
+const TYPES = new Set(["string", "number", "integer", "boolean", "object", "array", "null"]);
+// ponytail: checks `type` keywords only (the common typo); Python runs the full metaschema check.
+function assertTypes(node: any): void {
+  if (Array.isArray(node)) return node.forEach(assertTypes);
+  if (!node || typeof node !== "object") return;
+  for (const t of [node.type].flat()) if (typeof t === "string" && !TYPES.has(t)) throw new Error(`invalid JSON Schema: unknown type ${JSON.stringify(t)}`);
+  Object.values(node).forEach(assertTypes);
+}
+
 /** A JSON Schema object, or a zod v4 schema (anything with `safeParse` and `toJSONSchema`). */
 export function compileSchema(obj: any): Schema {
   if (obj && typeof obj.safeParse === "function") {
@@ -117,6 +135,7 @@ export function compileSchema(obj: any): Schema {
   }
   const js = nullable(obj);
   const v = new Validator(js, "2020-12", false);
+  assertTypes(js); // fail at register(), not inside the user's fetch
   return {
     jsonSchema: js, hash: sha256Hex(stableJson(js)), declared: declaredKeys(js),
     validate(parsed) {
@@ -134,10 +153,18 @@ const split = (url: string) => {
   return { scheme: m[1].toLowerCase(), host: m[2], path: m[3] };
 };
 
+const PORTS: Record<string, string> = { http: ":80", https: ":443" };
+// Lower-cased host[:port] without userinfo or a default port, so https://h:443/x equals https://h/x.
+const netloc = (scheme: string, host: string) => {
+  const h = host.slice(host.lastIndexOf("@") + 1).toLowerCase();
+  return h.endsWith(PORTS[scheme] ?? "\0") ? h.slice(0, -PORTS[scheme].length) : h;
+};
+
 function pattern(url: string): RegExp {
   const { scheme, host, path } = split(url);
+  if (path.split("/").filter((s) => s === "**").length > 1) throw new Error("a route may contain at most one '**' segment");
   const segs = path.replace(/\/+$/, "").split("/").map((seg) => (seg === "**" ? ".*" : seg === "*" || /^\{[^}]*\}$/.test(seg) ? "[^/]+" : esc(seg)));
-  return new RegExp(`^${scheme}://${esc(host.toLowerCase())}${segs.join("/")}/?$`, "i");
+  return new RegExp(`^${scheme}://${esc(netloc(scheme, host))}${segs.join("/")}/?$`, "i");
 }
 
 export class Routes {
@@ -150,7 +177,7 @@ export class Routes {
   }
   match(method: string, url: string): { schema: Schema; path: string } | undefined {
     const { scheme, host, path } = split(url);
-    const bare = `${scheme}://${host.toLowerCase()}${path}`;
+    const bare = `${scheme}://${netloc(scheme, host)}${path}`;
     const m = method.toUpperCase();
     const r = this.routes.find((x) => (x.method === "*" || x.method === m) && x.rx.test(bare));
     return r && { schema: r.schema, path: r.path };
@@ -195,7 +222,7 @@ export interface InspectOptions { schema?: Schema; accept?: string; ignore?: Rea
 /** Violations ("rule: detail") of a response; empty when it is fine or not checked. */
 export function inspectResponse(status: number, contentType: string, text: string, o: InspectOptions = {}): string[] {
   const { schema, accept = "", ignore = new Set<string>() } = o;
-  if (status < 200 || status >= 300 || status === 204 || status === 205) return [];
+  if (status < 200 || status >= 300 || status === 204 || status === 205 || status === 206) return [];
   if (!expectsJson(contentType, accept, schema !== undefined)) return [];
   if (text.startsWith("﻿")) return ["bom: body starts with a byte order mark"];
   const t = lstrip(text);

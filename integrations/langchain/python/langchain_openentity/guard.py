@@ -10,6 +10,7 @@ from urllib.parse import urlsplit
 
 from langchain.agents.middleware import AgentMiddleware, hook_config
 from langchain_core.messages import ToolMessage
+from langgraph.errors import GraphBubbleUp
 
 from . import http as _http
 from .core import (
@@ -57,16 +58,18 @@ class RuthlessSchemaGuard(AgentMiddleware):
         ledger: LedgerReporter | str | bool | None = None,
         ignore: tuple[str, ...] = (),
         only_registered: bool = False,
+        scope: Literal["tools", "all"] = "tools",
     ) -> None:
         super().__init__()
         self.mode, self.max_failures, self.ignore, self.only_registered = mode, max_failures, frozenset(ignore), only_registered
+        self.scope = scope  # "tools": guard_http() checks only calls made inside a tool; "all": every call in the process
         self.routes = Routes()
         self.tool_schemas: dict[str, Schema] = {}
         # ponytail: one failure counter per guard; call reset() between unrelated runs.
         self._failures: dict[tuple[str, str], int] = {}
         self.last_report: str | None = None
         self.ledger = ledger if isinstance(ledger, LedgerReporter) else LedgerReporter(
-            url=ledger if isinstance(ledger, str) else None, enabled=False if ledger is False else None)
+            url="1" if ledger is True else ledger if isinstance(ledger, str) else None, enabled=False if ledger is False else None)
         self._uninstall: Callable[[], None] | None = None
         for k, v in (schemas or {}).items():
             self.register(k, v)
@@ -87,8 +90,10 @@ class RuthlessSchemaGuard(AgentMiddleware):
             if spec.lstrip().startswith("{"):
                 spec = json.loads(spec)
             else:
+                if not spec.lower().startswith(("http://", "https://")):
+                    raise ValueError("from_openapi fetches http(s) URLs only; pass a dict or JSON string otherwise")
                 with urllib.request.urlopen(spec, timeout=15) as r:
-                    spec = json.load(r)
+                    spec = json.loads(r.read(5_000_000))
         servers = spec.get("servers") or [{}]
         base = (base_url or servers[0].get("url") or "").rstrip("/")
         if "://" not in base:
@@ -105,6 +110,8 @@ class RuthlessSchemaGuard(AgentMiddleware):
                         if "json" in ct and "schema" in media:
                             self.register(f"{method.upper()} {base}{path}", {**comps, **media["schema"]})
                             break
+        if not self.routes:
+            raise ValueError("from_openapi found no 2xx application/json response schemas in the document")
         return self
 
     # ---- transport ----
@@ -120,6 +127,8 @@ class RuthlessSchemaGuard(AgentMiddleware):
             self._uninstall = None
 
     def _wants(self, method: str, url: str, status: int, ct: str, accept: str) -> bool:
+        if method.upper() == "HEAD" or status == 206 or (self.scope == "tools" and _CALL.get() is None):
+            return False
         schema = self.routes.match(method, url)
         if self.only_registered and not schema:
             return False
@@ -136,15 +145,17 @@ class RuthlessSchemaGuard(AgentMiddleware):
             return
         sp = urlsplit(url)
         text = body.decode("utf-8", "replace") if isinstance(body, bytes) else body
-        self.ledger.report({
-            "host": sp.hostname or "", "method": method.upper(),
-            "path_template": hit[1] if hit else path_template(url),
-            "expected_schema_hash": schema.hash if schema else "",
-            "status": status, "content_type": ct,
-            "body_sha256": hashlib.sha256(body if isinstance(body, bytes) else body.encode()).hexdigest(),
-            "sample": scrub(text)[:SAMPLE],
-        })
-        exc = OpenEntitySchemaViolation(f"{method.upper()} {sp.scheme}://{sp.netloc}{sp.path}", errs, text)
+        if self.ledger.enabled:
+            self.ledger.report({
+                "host": sp.hostname or "", "method": method.upper(),
+                "path_template": hit[1] if hit else path_template(url),
+                "expected_schema_hash": schema.hash if schema else "",
+                "status": status, "content_type": ct,
+                "body_sha256": hashlib.sha256(body if isinstance(body, bytes) else body.encode()).hexdigest(),
+                "sample": scrub(text[:4 * SAMPLE])[:SAMPLE],
+            })
+        port = f":{sp.port}" if sp.port else ""  # never userinfo: the message reaches logs and traces
+        exc = OpenEntitySchemaViolation(f"{method.upper()} {sp.scheme}://{sp.hostname}{port}{sp.path}", errs, text)
         if (seen := _CALL.get()) is not None:
             seen.append(exc)
         raise exc
@@ -188,6 +199,8 @@ class RuthlessSchemaGuard(AgentMiddleware):
             self._validate(name, result)
         except (OpenEntitySchemaViolation, OpenEntityLoopDetected) as e:
             return self._exit(request, self._count(name, key) or e)
+        except GraphBubbleUp:  # interrupt() and Command jumps are control flow, not failures
+            raise
         except Exception as e:  # noqa: BLE001 - counted; re-raised unchanged until the limit
             loop = self._count(name, key)
             if loop is None:
@@ -220,6 +233,8 @@ class RuthlessSchemaGuard(AgentMiddleware):
         try:
             result = await handler(request)
         except Exception as e:  # noqa: BLE001
+            if isinstance(e, GraphBubbleUp):
+                raise
             def fail() -> Any:
                 raise e
             return self._outcome(request, fail, seen)

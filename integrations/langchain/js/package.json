@@ -1,6 +1,6 @@
 {
   "name": "@openentity/langchain",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "RuthlessSchemaGuard for LangChain.js: middleware and fetch guard that throw on malformed API and tool responses, with an optional signed ledger reporter.",
   "license": "MIT",
   "type": "module",
@@ -38,7 +38,8 @@
   },
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "repository": {
     "type": "git",
