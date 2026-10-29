@@ -164,8 +164,11 @@ function disputesList(res: unknown): string {
 /** The JSON embedded for the in-browser verifier; `<` escaped so it cannot close the script element. */
 const embed = (v: unknown) => JSON.stringify(v).replace(/</g, '\\u003c');
 
+/** Record entries listed on an entity page before "Show all". */
+const RECORD_SHOWN = 100;
+
 /** Body of /entities/<eid>, from GET /v1/entities/{eid}, /record, /attestations and /disputes. */
-export function renderEntity(eid: string, entity: J, recordRes: unknown, attRes: unknown, disputesRes: unknown = null): { title: string; description: string; html: string } {
+export function renderEntity(eid: string, entity: J, recordRes: unknown, attRes: unknown, disputesRes: unknown = null, showAll = false): { title: string; description: string; html: string } {
   const doc: J = entity.document ?? {};
   const decl: J = entity.declaration ?? {};
   const name = doc.name ?? entity.name ?? eid;
@@ -224,8 +227,9 @@ ${decl.declaration_version ? `<p>Signed Declaration version ${esc(decl.declarati
 <h2 id="record">Development Record</h2>
 ${
     entries.length
-      ? `<ol class="oe-record" reversed>${[...entries]
+      ? `${entries.length > RECORD_SHOWN && !showAll ? `<p class="oe-note">Showing the newest ${RECORD_SHOWN} of ${entries.length} entries. <a href="?entries=all#record">Show all</a>.</p>` : ''}<ol class="oe-record" reversed>${[...entries]
           .reverse()
+          .slice(0, showAll ? undefined : RECORD_SHOWN)
           .map((e) => `<li><span class="oe-record-meta">${e.seq != null ? `Entry ${esc(e.seq)}, ` : ''}${date(e.at)}</span><span>${recordSummary(e)}</span></li>`)
           .join('')}</ol>`
       : '<p>No published record entries yet.</p>'

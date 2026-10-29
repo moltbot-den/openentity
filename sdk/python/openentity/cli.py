@@ -118,6 +118,14 @@ def _assert_eid(eid: str) -> str:
     return eid
 
 
+def _record_entries(reg, eid: str) -> list:
+    """Every Record entry, paging with ?after=<last seq> until an empty page (the registry caps a page at 1000)."""
+    entries = []
+    while page := reg.get(f"/v1/entities/{eid}/record?after={entries[-1]['seq'] if entries else 0}").get("entries"):
+        entries += page
+    return entries
+
+
 def _migrate_legacy(args):
     """0.4 kept <home>/keys/<id>.json ({did, seed_hex, registry}). Write the 0.5 layout beside it from the registry, read the new key back,
     and leave the old file where it is. Only entities without a 0.5 directory are touched; one that cannot be fetched is skipped unless nothing else is usable."""
@@ -130,9 +138,7 @@ def _migrate_legacy(args):
                 continue
             reg = Reg(k.get("registry") or _registry_url(args))
             ent = reg.get(f"/v1/entities/{kp.did}")
-            entries = []
-            while page := reg.get(f"/v1/entities/{kp.did}/record?after={entries[-1]['seq'] if entries else 0}").get("entries"):
-                entries += page
+            entries = _record_entries(reg, kp.did)
             d = _create_dir(kp, ent["document"], {"registry": reg.base, "docSeq": ent["document"].get("seq", 1), "recordPushed": len(entries),
                                                   **({"level": ent["level"]} if ent.get("level") else {})}, ent.get("declaration"))
             (d / "record.jsonl").write_text("".join(json.dumps(x) + "\n" for x in entries))
@@ -1059,9 +1065,7 @@ def _verify(args):
         eid = ent.get("document", {}).get("eid", t)
         checks = _checks_of(ent["document"])
         checks += _checks_of(ent["declaration"]) if ent.get("declaration") else [{"name": "declaration", "ok": False, "detail": "registry returned no Declaration"}]
-        entries = []
-        while page := reg.get(f"/v1/entities/{eid}/record?after={entries[-1]['seq'] if entries else 0}")["entries"]:
-            entries += page
+        entries = _record_entries(reg, eid)
         checks += _chain_checks(entries, eid)
         checks += _log_checks(reg, ent.get("log_index", ent.get("declaration_log_index")))
     elif t.startswith(("http://", "https://")):
