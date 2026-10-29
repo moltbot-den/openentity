@@ -129,14 +129,16 @@ this instead of the tool's result:
   "error": "open_entity_denied",
   "denied": true,
   "reason": "tier_too_low",
-  "detail": "trust_tier 0 from did:web:api.clawgrc.com is below 2.",
+  "detail": "The other agent was checked: trust_tier 0 from did:web:api.clawgrc.com is below 2.",
   "eid": "did:pkh:eip155:8453:0xfe8D...",
   "required": {"min_tier": 2, "require_sma": true, "deny_on_violation": "high", "tier_issuer": "did:web:api.clawgrc.com"},
-  "observed": {"trust_tier": 0}
+  "observed": {"trust_tier": 0},
+  "subject": "counterparty"
 }
 ```
 
-The `reason` field is one of `tier_too_low`, `sma_posture_missing`,
+The `subject` field says whose record failed (`counterparty` or `self`). The
+`reason` field is one of `tier_too_low`, `sma_posture_missing`,
 `violation`, `withdrawn`, `counterparty_missing`, `no_identity` or
 `trust_unavailable`. The gate fails closed: if the registry cannot be reached
 or a signature does not verify, the tool does not run.

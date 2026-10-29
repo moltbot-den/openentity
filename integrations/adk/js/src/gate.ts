@@ -19,7 +19,9 @@ export interface Bar {
 }
 export const DEFAULT_BAR: Bar = { minTier: 2, requireSma: true, denyOnViolation: "high", tierIssuer: CLAWGRC };
 type TrustFn = (eid: string) => Promise<TrustReport>;
-export type Denial = { error: "open_entity_denied"; denied: true; reason: string; detail: string; eid: string | null; required: Partial<Bar>; observed: object };
+export type Denial = { error: "open_entity_denied"; denied: true; reason: string; detail: string; eid: string | null; required: Partial<Bar>; observed: object;
+  /** whose record failed: the counterparty in the tool args, or this agent */
+  subject?: "counterparty" | "self" };
 /** A DID, a function that returns one, or undefined for this machine's existing identity. */
 export type EidSource = string | (() => string | Promise<string>) | undefined;
 export type GateOptions = Partial<Bar> & {
@@ -61,8 +63,16 @@ export async function evaluate(eid: string, bar: Partial<Bar> = {}, trust: Trust
   return undefined;
 }
 
-/** Whose trust to check: the counterparty in `args`, else `eid`, else this machine's existing identity (never created). */
+/** Run the bar on the subject; a denial names whose record failed, so the model does not blame itself for the payee. */
 async function check(o: GateOptions, args: Record<string, unknown> | undefined): Promise<Denial | undefined> {
+  const d = await checkSubject(o, args);
+  if (!d) return undefined;
+  const counterparty = Boolean(o.counterpartyArg);
+  return { ...d, subject: counterparty ? "counterparty" : "self", detail: `${counterparty ? "The other agent" : "This agent"} was checked: ${d.detail}` };
+}
+
+/** Whose trust to check: the counterparty in `args`, else `eid`, else this machine's existing identity (never created). */
+async function checkSubject(o: GateOptions, args: Record<string, unknown> | undefined): Promise<Denial | undefined> {
   const { counterpartyArg, eid, trust, ...bar } = o;
   let who: string | null | undefined;
   if (counterpartyArg) {
