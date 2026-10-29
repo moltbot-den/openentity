@@ -1,16 +1,19 @@
 # Open Entity: build plan
 
-## Status (2026-10-27)
+## Status (2026-10-29)
 
 Live:
 - openentity.org (site, `/v1` registry, transparency log, guides), redesigned on `site/DESIGN.md`; Lighthouse 100 on accessibility, best practices, SEO, agentic browsing
 - mcp.openentity.org/mcp: remote MCP, official MCP registry `org.openentity/openentity` 0.2.0 (adds `openentity_card`); DNS proof key now in GCP secret `openentity-mcp-registry-dns-key`
 - oeis.dev: developer hub (`site-dev/`)
-- npm live: `openentity` 0.5.0, `@openentity/sdk` 0.3.0. PyPI live: `openentity` 0.3.0 (CLI parity plus `rotate()`)
+- npm live: `openentity` 0.5.0, `@openentity/sdk` 0.3.0; staged for 2FA approval at https://www.npmjs.com/settings/willcybertron/staged-packages: `@openentity/sdk` 0.4.1 (0.4.0 burned by a rejected stage, #87) and `openentity` 0.5.2 (sends `client: "cli"`, #90; reject the stale 0.5.1). PyPI live: `openentity` 0.4.0
 - ClawHub: `openentity@1.0.0` moderation CLEAN, waiting on ClawHub's `pending.publication`
 - Founding Entities: OptimusWill and Incredibot at L2 first-party; observer `did:web:moltbotden.com` accredited as bootstrap
-- Load: 100 adopts/s for 60 s, 6000/6000 accepted, p95 1.2 s (group commit, `log_sequence`); prod Lambda reserves 200 concurrency
-- Health 2026-10-26: CloudWatch alarms OK, spend $0 of the $150 budget
+- Load: 100 adopts/s for 60 s on OpenEntityLoad (destroyed): warm p50 159 ms, p95 212 ms, p99 276 ms after the rate guard moved into the park statement (#92); Aurora max stays 8 ACU (6 hit 100% writer CPU); prod Lambda reserves 200 concurrency
+- Zero-human adoption (#89, transcripts in `docs/adoption/`): Den Writer via the Moltbot Den bridge (log 58), Den Research via remote MCP (log 63), Den Coder via the CLI (log 66); keys in GCP `openentity-key-den-research`, `openentity-key-den-coder`
+- Interop at L1 by alias: ERC-8004 agent 1141901 on Base bound to Den Writer (log 69); `did:web:research.moltbotden.com` bound to Den Research by `_openentity` TXT (log 70, DoH fix #88); `did:pkh` securemyagent.ai
+- Base anchoring: first anchor for 2026-10-28, tx 0xae7261561ad77c6d6230c26ee8d8a3fac8fa649cfa46ac501b8df4e4b8912ec5 (status 1, block 0x32c1995), 3 leaves
+- Health 2026-10-28: CloudWatch alarms OK, October gross $3.82 (Aurora $3.55), net $0 after credits, of the $150 budget; Aurora daily max 4 ACU, average 0.5
 
 Ecosystem tie-ins (all key agents by the EID):
 - Moltbot Den: bridge on (`entity_adopt_openentity`, `POST /entity/openentity/adopt`), observer submitting `layer_scores`, `stage`, `identity`, `consistency` and `custom:moltbotden:transaction_review`; ERC-8004 adopt prompts, WHATS_NEW, learn article
@@ -24,16 +27,17 @@ Open (agents do every item; nothing here waits on Will):
 - [x] Signup form live end to end (#58, #60, #61, #62): Turnstile, double opt-in, `/check-inbox` and `/subscribed` with the ecosystem rows; one real confirmed subscriber
 - [x] DNS rebind window on alias fetches closed by pinning the resolved address (#56)
 - [x] identity@openentity.org mailbox (#66, #71): SES inbound, apex MX `inbound-smtp.us-east-1.amazonaws.com` (was Google Workspace), catch-all rule for the whole domain to S3 `inbound/identity/` plus forwarding to `OPERATOR_EMAIL`; read with `docs/MAILBOX.md`. SES outbound stays in sandbox (production request denied, case 179315664200715), so outbound goes through Customer.io transactional from identity@. No mcpservers.org mail yet (anything sent before the MX existed is lost)
-- [x] Weekly digest (#68): broadcast 3 to segment 17, Monday 14:00 UTC from the cron, once per slot (claim in `rate_events`); first send delivered 2026-10-28 to the one confirmed subscriber; next 2026-11-02
+- [x] Weekly digest (#68): broadcast 3 to segment 17, Monday 14:00 UTC from the cron, once per slot (claim in `rate_events`); first send delivered 2026-10-28 to the one confirmed subscriber (trigger 3-1, 1 delivered, 0 bounced); next 2026-11-02, schedule ENABLED
 - [x] Social accounts deferred by the owner on 2026-10-28 (not wanted now); the herald posts to the Moltbot Den Philosophy den only and picks up Bluesky or Mastodon if their secrets ever exist. X pay-per-use (docs.x.com/x-api/getting-started/pricing, 2026-10-27): post $0.015, post with a URL $0.200, post read $0.005, user read $0.010, owned read $0.001, no monthly minimum, credits bought upfront
-- [ ] W3C Agent Identity CG membership: owner requested a W3C account 2026-10-28; once Chrome is signed in to w3.org, an agent joins at https://www.w3.org/groups/cg/agent-identity/ and accepts the CG contributor agreement
+- [ ] W3C Agent Identity CG membership: owner requested a W3C account 2026-10-28; 2026-10-29 Chrome still not signed in to w3.org (#86); once Chrome is signed in to w3.org, an agent joins at https://www.w3.org/groups/cg/agent-identity/ and accepts the CG contributor agreement
 - [x] Herald loop (moltbot-den/moltbotden #873, #879): `loops/domains/openentity-herald/`, hourly Cloud Scheduler `openentity-herald`; first L1 run 2026-10-28T04:07Z drafted for all three channels and posted nothing; L2 from 2026-11-04 with a 3 per channel per day cap in code. Den posts as house agent `den-writer` (`openentity-herald-den-api-key`); Bluesky and Mastodon go live when their secrets exist
 - [x] A2A outreach in the herald: one message per ERC-8004 agent with an A2A endpoint, dedupe and opt-out (`POST /openentity/outreach/opt-out`) enforced in code with tests; first run found 5 targets, sends start at L2
+- [x] Mail follow-up 2026-10-29 (#86): no replies to the IANA, WIMSE or W3C posts yet, so nothing answered and no IANA registration; Open Entity already listed on mcpservers.org/remote-mcp-servers; SES production access re-requested, ConflictException on case 179315664200715 (outbound stays on Customer.io)
 - [x] Outreach sends (#72, `docs/outreach/SENT.md`): IANA well-known review request to wellknown-uri-review@ietf.org, WIMSE list post (identity@ subscribed), W3C Agent Identity CG list post; launch posts queued for the herald; AAIF draft prepared, not submitted. Formal CG membership needs a W3C account, a human signup at https://www.w3.org/accounts/request
 - [x] Base anchoring (One-Frequency/securemyagent#56): issuer funded with 0.0005 ETH from the Moltbot Den NFT treasury (tx 0xff31103933379d1ff807a382489d798074e8c53ee65c70df154144ab823d5286), `BASE_ANCHOR` on, daily job at 00:15 UTC anchors the previous day; first anchor on the first day with attestations
-- [x] Listings (#65): awesome-agent-trust merged; awesome-remote-mcp-servers and awesome-erc8004 open, no requests; ClawHub still `pending.publication` (CLEAN); awesome-claude-code scheduled as a one-time routine for 2026-11-07 15:00 UTC (https://claude.ai/code/routines/trig_01DvoiLEnC85JMt4hNK9WTA9)
-- [x] PRD 12 audit (#67, #69, #70, #79; `docs/SUCCESS-CRITERIA.md`): verifier 128 lines; time to adopt measured from `GET /llms.txt` (`time_to_adopt` in `/v1/stats`, null until external adoptions); load p95 303 ms at 100 adopts/s after Aurora max 8 ACU; first observer met; interop and zero-human runtimes wait on real external adopters, not code
-- [ ] Moltbot Den observer leaves `bootstrap` after 10 observed entities it does not operate (automatic in `accreditObservers`); 2026-10-28: 0 of 10 (it has attested only its own two)
+- [x] Listings (#65): awesome-agent-trust merged; awesome-remote-mcp-servers and awesome-erc8004 open, no requests; ClawHub still `pending.publication` (CLEAN, rechecked 2026-10-29); awesome-claude-code scheduled as a one-time routine for 2026-11-07 15:00 UTC (https://claude.ai/code/routines/trig_01DvoiLEnC85JMt4hNK9WTA9)
+- [x] PRD 12 audit (#67, #69, #70, #79; `docs/SUCCESS-CRITERIA.md`): verifier 128 lines; time to adopt measured from `GET /llms.txt` (`time_to_adopt` in `/v1/stats`, null until external adoptions); load p95 212 ms (#92); first observer met; zero-human runtimes and interop met 2026-10-29 (#89); time to adopt waits on external adopters
+- [ ] Moltbot Den observer leaves `bootstrap` after 10 observed entities it does not operate (automatic in `accreditObservers`, which now excludes operated subjects, #84); 2026-10-29: 0 of 10. Every live entity but the securemyagent.ai issuer is Moltbot Den's own; the observer now attests `identity` for any non-Moltbot-Den entity with a verified ERC-8004 alias in its index, at most 3 per hourly tick (moltbotden #886), so the count grows as outsiders adopt
 - [x] PRD 7.3 `operator` attribute dropped from the PRD and `/v1/subscribe` (#65)
 
 Done 2026-10-26:
@@ -117,5 +121,5 @@ Verification
 - [x] `trust(eid)`, `Identity.load_or_create()`, `adopt(client=...)` in both SDKs (#74); `openentity` 0.4.0 and `@openentity/sdk` 0.4.0 bumped, NOT published
 - [x] Registry: unsigned `client` label on `POST /v1/adopt`, `by_client` in `GET /v1/stats`, `last_active` also reads accredited observers' unrevoked `custom:moltbotden:liveness` attestations; spec 10.2 and 10.7 updated
 - [x] Claim types `custom:moltbotden:liveness`, `custom:clawgrc:endpoint_reliability`, `custom:securemyagent:vision_privacy` with schemas (`spec/schemas/claims/`) and signed vectors (`test-vectors/claim-*.json`)
-- [ ] Release step (separate): publish `openentity` 0.4.0 to PyPI and `@openentity/sdk` 0.4.0 to npm (staged, 2FA approval); the CLI package `openentity` also sends `client: "cli"` now and needs its own bump when released
-- [ ] After the registry deploy: `GET /v1/stats` shows `by_client`; the products (ClawGRC, Secure My Agent, Agent Secret Store) delete their OEIS copies in favor of the 0.4.0 packages (ADR 0003)
+- [ ] Release step: PyPI `openentity` 0.4.0 live 2026-10-28; npm `@openentity/sdk` 0.4.1 and CLI `openentity` 0.5.2 staged by `publish.yml`, live on the owner's 2FA tap at https://www.npmjs.com/settings/willcybertron/staged-packages
+- [ ] After the registry deploy: `GET /v1/stats` shows `by_client` (done; MCP adoptions labelled `mcp`, #91); ClawGRC (#233, PyPI 0.4.0, 424 tests) and Agent Secret Store (PyPI 0.4.0, 292 tests) done; Secure My Agent branch `chore/use-openentity-sdk` green, merges when npm 0.4.1 is live (KMS did:pkh signer and builders stay, the SDK has none); the products (ClawGRC, Secure My Agent, Agent Secret Store) delete their OEIS copies in favor of the 0.4.0 packages (ADR 0003)

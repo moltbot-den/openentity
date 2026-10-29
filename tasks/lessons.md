@@ -33,3 +33,8 @@ Rule: before changing MX or any shared record, list what it serves today and kee
 
 ## 2026-10-28: Account signups are a human step
 Agents may not create accounts or enter passwords on third-party sites, even with the owner's authorization. Plan signups as one human step with the exact URL, and have the agent do everything after it in the signed-in session.
+
+## 2026-10-29: Never idle behind an approval
+The lead parked work while waiting on two npm 2FA approvals. Will: "I have no idea why you would ever just be setting there not working on something".
+Rule: an owner approval blocks only the step that needs it. Start every dependent task right away on the unreleased version (local tarball or workspace) and merge the moment the release lands.
+- Fuzz entities (`%n`, `name`, `0`) were adopted on openentity.org again on 2026-10-28 09:03Z, after the 2026-10-28 lesson. They are suppressed. Probes go to `pnpm --filter @openentity/registry local` only.
