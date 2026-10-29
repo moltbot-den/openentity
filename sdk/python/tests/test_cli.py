@@ -116,8 +116,10 @@ def test_alias_domain_platform_and_erc8004(url, home, capsys):
     for bad in (("platform", "nocolon"), ("erc8004", "x"), ("bogus", "x")):
         assert run(capsys, "alias", "add", *bad, *reg)[0] == 1
     assert run(capsys, "alias", "bogus", "domain", "x", *reg)[0] == 1
-    draft = json.loads((home / KP.did / "draft.json").read_text())
-    assert [x["type"] for x in draft["aliases"]] == ["domain", "platform", "erc8004"]
+    # Spec 3.4: each alias is published in the signed document at once, since an unlisted alias counts for nothing.
+    doc = json.loads((home / KP.did / "entity.json").read_text())
+    assert [x["type"] for x in doc["aliases"]] == ["domain", "platform", "erc8004"] and doc["seq"] == 4
+    assert not (home / KP.did / "draft.json").exists()
     assert len(posts(f"/v1/entities/{KP.did}/aliases")) == 3
 
 

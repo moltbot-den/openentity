@@ -8,13 +8,13 @@ const attest = (issuer: KeyPair, subject: string, claim_type: string) =>
 
 describe("GET /entities sort and row columns (spec 10.2)", () => {
   it("sort=attested orders by unrevoked attestation count, ties newest; rows carry aliases, attestations and observers", async () => {
-    const a = await adopted("A"), b = await adopted("B"), c = await adopted("C");
+    const a = await adopted("A", { aliases: [{ type: "domain", value: "did:web:a.example" }] }), b = await adopted("B"), c = await adopted("C");
     await E.db.run("UPDATE entities SET created = $1 WHERE eid = $2", ["2026-01-01T00:00:00Z", a.kp.did]);
     await E.db.run("UPDATE entities SET created = $1 WHERE eid = $2", ["2026-01-02T00:00:00Z", b.kp.did]);
     await E.db.run("UPDATE entities SET created = $1 WHERE eid = $2", ["2026-01-03T00:00:00Z", c.kp.did]);
     const o1 = await generateKeyPair(), o2 = await generateKeyPair(), stranger = await generateKeyPair();
     for (const o of [o1, o2]) await E.db.run("INSERT INTO observers (did, name, accredited_at, bootstrap) VALUES ($1, 'Obs', $2, 1)", [o.did, nowSeconds()]);
-    await E.db.run("INSERT INTO aliases (eid, type, value, status, verified_at, log_index) VALUES ($1, 'domain', 'a.example', 'verified', $2, 1), ($1, 'wallet', 'w', 'pending', NULL, NULL)", [a.kp.did, nowSeconds()]);
+    await E.db.run("INSERT INTO aliases (eid, type, value, status, verified_at, log_index) VALUES ($1, 'domain', 'did:web:a.example', 'verified', $2, 1), ($1, 'wallet', 'w', 'pending', NULL, NULL)", [a.kp.did, nowSeconds()]);
 
     // A: two observers plus one stranger (an attestation, not an observer). B: one, revoked. C: none.
     for (const o of [o1, o2, stranger]) expect((await write("POST", "/attestations", o.did, await attest(o, a.kp.did, "consistency"))).status).toBe(201);

@@ -199,6 +199,18 @@ describe("levels (spec 2.2, 8.4)", () => {
   });
 });
 
+describe("first-party by a URL contact (spec 8.4)", () => {
+  it("an operator contact that is a URL names the operator's domain", async () => {
+    const { kp } = await adopted("Url", { operator: { kind: "organization", name: "Den", contact: "https://url.example/about", custody: "operator", can_change: [] } });
+    const obs = await generateKeyPair();
+    mockFetch({ "url.example/.well-known/did.json": () => didWebDoc("url.example", obs) });
+    await E.db.run("INSERT INTO observers (did, name, accredited_at, bootstrap) VALUES ('did:web:url.example', 'Url', $1, 1)", [nowSeconds()]);
+    const unsigned = { spec: "openentity/1.0", type: "Attestation", issuer: "did:web:url.example", subject: kp.did, claim_type: "identity", claim: { name: "Url", aliases_verified: [] }, created: nowSeconds(), expires: later(86400) };
+    expect((await write("POST", "/attestations", "did:web:url.example", { ...unsigned, proof: await signAs(unsigned, obs, "did:web:url.example#k") })).status).toBe(201);
+    expect((await call("GET", `/entities/${kp.did}`)).body).toMatchObject({ level: "L2", level_label: "first-party" });
+  });
+});
+
 describe("capabilities (spec 5.2)", () => {
   it("indexes declared capabilities, follows document updates, and rejects malformed ones", async () => {
     const { kp, document } = await adopted("Defi Dana", { capabilities: ["defi-smart-contracts", "code-review"] });

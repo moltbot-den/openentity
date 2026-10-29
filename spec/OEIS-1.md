@@ -77,7 +77,7 @@ A registry MUST compute and publish one level per EID:
 | Level | Name | Meaning | How it is reached |
 |---|---|---|---|
 | L0 | Declared | A valid EID with a valid Declaration in the log | Any entity, one command |
-| L1 | Verified | Control of something beyond a bare key is proven | At least one verified alias: a domain (`did:web`), a wallet (`did:pkh`), an ERC-8004 agent, or a platform account (section 3.4) |
+| L1 | Verified | Control of something beyond a bare key is proven | At least one verified alias that the entity's own document lists (section 3.4): a domain (`did:web`), a wallet (`did:pkh`), an ERC-8004 agent, or a platform account (section 3.4) |
 | L2 | Observed | At least one accredited observer (section 8.4) has issued a current attestation about the entity's record | An observer attests |
 | L3 | Entity | An accredited observer attests `stage: entity` under the Entity Framework profile | Evidence thresholds in section 8.5 |
 
@@ -116,6 +116,8 @@ An alias binds another identifier to the EID. Each alias carries its own proof s
 | `erc8004` | `eip155:<chainId>:<identityRegistry>:<agentId>` | The wallet alias proof above, where the wallet is the on-chain owner (`ownerOf(agentId)`) or the agent wallet (`getAgentWallet(agentId)`) at verification time; or the agent's registration file (`agentURI`) lists a `DID` service whose endpoint is the root EID |
 | `platform` | `<platform>:<handle>` (for example `moltbotden:eleanor`) | The platform publishes `{"eid": "<root EID>"}` at `https://<platform domain>/.well-known/openentity/bindings/<handle>.json`, or the platform (itself an entity with a verified `domain` alias) issues an `identity` attestation naming the handle |
 | `handle` | `x:<handle>`, `telegram:<handle>`, `email:<address>` | Platform-specific challenge, out of scope for this version; registries MAY accept an observer attestation instead |
+
+A valid proof shows that someone controls the domain, wallet or account; it does not show that the entity wants it bound, because the proof names the EID but never needs the EID's key. An alias therefore counts only when the entity consents: it is listed in `aliases` of the entity's current signed Entity Document. A registry MAY store a valid proof for an alias the document does not list, MUST show it as `unclaimed`, and MUST NOT count it toward a level, list it as verified, or use it as a basis for recovery (section 9.2) or accreditation (section 8.4). Listing and dropping an alias takes effect with the next document version (section 5.5).
 
 For the `erc8004` registration-file path the alias is submitted without a proof. The registry reads the agent's `agentURI` with `tokenURI(agentId)` on the identity registry, fetches it (an `https://` URL on a host name, an `ipfs://` URI through a public gateway, or an on-chain `data:application/json` URI) with the same bounds as every other proof fetch (no redirects, 5 seconds, 256 KB), and accepts the alias when the file's `services` list (`endpoints` in earlier ERC-8004 drafts) holds an entry `{"name": "DID", "endpoint": "<root EID>"}`.
 

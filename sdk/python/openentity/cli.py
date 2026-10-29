@@ -718,6 +718,11 @@ def _document(args):
         return {"draft": True}, "draft saved. Publish with: openentity document push"
     if sub != "push":
         raise _usage("document edit|set <field> <value>|push")
+    return _push_draft(e)
+
+
+def _push_draft(e):
+    """Sign the draft as seq+1 and PUT it."""
     d = _draft(e)
     if d == _strip(e.doc):
         return {"pushed": False}, "nothing to push"
@@ -850,7 +855,14 @@ def _alias(args):
     d = _draft(e)  # keep the next document version consistent with what the registry now verifies
     d["aliases"] = [x for x in d.get("aliases", []) if x.get("value") != a["value"]] + [a]
     _write_json(e.dir / "draft.json", d)
-    return {"alias": a, "result": res}, f"alias {a['value']} accepted{' (not yet verified)' if (res or {}).get('verified') is False else ''}. Add it to your signed document with: openentity document push"
+    # Spec 3.4: an alias counts only once the entity's signed document lists it, so publish the document now. The registry
+    # rate-limits document versions to one a minute; when that refuses, the alias stays unclaimed until `document push`.
+    accepted = f"alias {a['value']} accepted{' (not yet verified)' if (res or {}).get('verified') is False else ''}"
+    try:
+        pushed, text = _push_draft(e)
+    except (CliError, client.RegistryError, urllib.error.URLError, TimeoutError) as err:
+        return {"alias": a, "result": res, "document": None}, f"{accepted}, but it counts only once your signed document lists it: {err}. Retry with: openentity document push"
+    return {"alias": a, "result": res, "document": pushed}, f"{accepted}; {text}"
 
 
 # ---- record ----

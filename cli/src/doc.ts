@@ -68,7 +68,11 @@ export async function documentCmd({ args, v }: Ctx): Promise<Result> {
     return { json: { draft: true }, text: "draft saved. Publish with: openentity document push" };
   }
   if (sub !== "push") throw usage("document edit|set <field> <value>|push");
+  return pushDraft(e);
+}
 
+/** Sign the draft as seq+1 and PUT it. */
+async function pushDraft(e: Entity): Promise<Result> {
   const d = await draftOf(e);
   if (JSON.stringify(d) === JSON.stringify(strip(e.doc))) return { json: { pushed: false }, text: "nothing to push" };
   d.seq = e.doc.seq + 1;
@@ -183,5 +187,14 @@ export async function alias({ args, v }: Ctx): Promise<Result> {
   const d = await draftOf(e);
   d.aliases = [...(d.aliases ?? []).filter((x: Obj) => x.value !== a.value), a];
   await saveDraft(e, d);
-  return { json: { alias: a, result: res }, text: `alias ${a.value} accepted${res?.verified === false ? " (not yet verified)" : ""}. Add it to your signed document with: openentity document push` };
+  // Spec 3.4: an alias counts only once the entity's signed document lists it, so publish the document now. The registry rate-limits
+  // document versions to one a minute; when that refuses, the alias stays unclaimed until `document push`.
+  const accepted = `alias ${a.value} accepted${res?.verified === false ? " (not yet verified)" : ""}`;
+  try {
+    const pushed = await pushDraft(e);
+    return { json: { alias: a, result: res, document: pushed.json }, text: `${accepted}; ${pushed.text}` };
+  } catch (err) {
+    if (!(err instanceof CliError)) throw err;
+    return { json: { alias: a, result: res, document: null }, text: `${accepted}, but it counts only once your signed document lists it: ${err.message}. Retry with: openentity document push` };
+  }
 }

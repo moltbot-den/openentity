@@ -1,6 +1,7 @@
 // Guards of spec/OEIS-1.md that no other test pins down; docs/CONFORMANCE-MATRIX.md lists each with its test.
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildDeclaration, buildDocument, generateKeyPair, nowSeconds, randomNonce, recordEntryHash, signObject, signProof, type KeyPair } from "../src/sdk.ts";
+import { scheduled } from "../src/index.ts";
 import { E, adopted, call, didWebDoc, later, mockFetch, signed, write } from "./helpers.ts";
 
 afterEach(() => vi.restoreAllMocks());
@@ -209,6 +210,38 @@ describe("aliases and directory (spec 3.4, 10.2, 10.4, 10.5)", () => {
     const bind = () => write("POST", `/entities/${a.kp.did}/aliases`, a.kp.did, { type: "domain", value: "did:web:dup.example" });
     expect((await bind()).status).toBe(201);
     expect((await bind()).body.error).toBe("alias_exists");
+  });
+
+  it("an alias counts toward the level and shows as verified only when the entity's own document lists it (spec 3.4)", async () => {
+    const { kp, document } = await adopted("Victim");
+    const key = await generateKeyPair();
+    // The attacker controls evil.example and its file names the victim's EID: the proof is valid, the entity never consented.
+    mockFetch({ "evil.example/.well-known/openentity.json": () => ({ eid: kp.did }), "evil.example/.well-known/did.json": () => didWebDoc("evil.example", key) });
+    const bound = await write("POST", `/entities/${kp.did}/aliases`, kp.did, { type: "domain", value: "did:web:evil.example" });
+    expect([bound.status, bound.body.level, bound.body.alias.status]).toEqual([201, "L0", "unclaimed"]);
+    const view = async () => (await call("GET", `/entities/${kp.did}`)).body;
+    const row = async () => (await call("GET", "/entities?level=0&alias_type=domain&q=Victim")).body.entities;
+    expect([(await view()).level, (await view()).aliases[0].status, await row()]).toEqual(["L0", "unclaimed", []]);
+    expect((await call("GET", "/entities?level=0&q=Victim")).body.entities[0].aliases).toEqual([]);
+    // The entity lists it in a new signed document: now it counts.
+    const { proof: _p, ...base } = document as any;
+    const listed = await signObject({ ...base, seq: 2, updated: later(60), aliases: [{ type: "domain", value: "did:web:evil.example" }] }, kp);
+    expect((await write("PUT", `/entities/${kp.did}/document`, kp.did, listed)).status).toBe(200);
+    expect([(await view()).level, (await view()).aliases[0].status]).toEqual(["L1", "verified"]);
+    expect((await row())[0]).toMatchObject({ level: "L1", aliases: ["domain"] });
+    // Dropping it from the next document takes the level away again.
+    const dropped = await signObject({ ...base, seq: 3, updated: later(180) }, kp);
+    await E.db.run("DELETE FROM rate_events WHERE key LIKE 'doc:%'");
+    expect((await write("PUT", `/entities/${kp.did}/document`, kp.did, dropped)).status).toBe(200);
+    expect([(await view()).level, (await view()).aliases[0].status]).toEqual(["L0", "unclaimed"]);
+  });
+
+  it("the scheduled run puts a stored level written before the rule right", async () => {
+    const { kp } = await adopted("Stale");
+    await E.db.run("INSERT INTO aliases (eid, type, value, status, verified_at, log_index) VALUES ($1, 'domain', 'did:web:stale.example', 'verified', $2, 1)", [kp.did, nowSeconds()]);
+    await E.db.run("UPDATE entities SET level = 1 WHERE eid = $1", [kp.did]);
+    await scheduled(E);
+    expect((await call("GET", `/entities/${kp.did}`)).body.level).toBe("L0");
   });
 
   it("answers any sort other than newest or attested with 422", async () => {

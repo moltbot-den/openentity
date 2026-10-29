@@ -23,6 +23,8 @@ export const LIMITS = {
   log_entries_per_call: 1000, stamp_max_age_seconds: 600,
 };
 const DECLARATION_NOTE = "The Declaration is a statement of the practices the entity commits to. It is not a warranty, a contract or a claim about the entity's capabilities.";
+/** SQL: alias row `a` is listed in its entity's latest signed Entity Document (spec 3.4). Mirrors `listedAliases`. */
+const LISTED = "EXISTS (SELECT 1 FROM json_array_elements(CAST((SELECT d.json FROM documents d WHERE d.eid = a.eid ORDER BY d.seq DESC LIMIT 1) AS json) -> 'aliases') x WHERE x ->> 'type' = a.type AND lower(x ->> 'value') = lower(a.value))";
 const LEVEL = (n: number | null) => (n === null ? null : `L${n}`);
 const today = () => nowIso().slice(0, 10);
 
@@ -164,10 +166,10 @@ async function lineage(db: Db, eid: string): Promise<string[]> {
  * (a domain file, a wallet message) names the EID but never needs the EID's key, so anyone can bind their own domain or
  * wallet to someone else's EID. Only a binding the key holder listed in a signed document shows consent.
  */
-async function listedAliases(db: Db, eid: string, types: string[]): Promise<string[]> {
+async function listedAliases(db: Db, eid: string, types?: string[]): Promise<string[]> {
   const json = (await db.first<{ json: string }>("SELECT json FROM documents WHERE eid = $1 ORDER BY seq DESC LIMIT 1", [eid]))?.json;
   const listed = new Set<string>((json ? JSON.parse(json).aliases ?? [] : []).map((a: any) => `${a?.type}\n${String(a?.value).toLowerCase()}`));
-  const rows = await db.all<{ type: string; value: string }>(`SELECT type, value FROM aliases WHERE eid = $1 AND status = 'verified' AND type IN (${IN(types, 2)})`, [eid, ...types]);
+  const rows = await db.all<{ type: string; value: string }>(`SELECT type, value FROM aliases WHERE eid = $1 AND status = 'verified'${types ? ` AND type IN (${IN(types, 2)})` : ""}`, [eid, ...(types ?? [])]);
   return rows.filter((r) => listed.has(`${r.type}\n${r.value.toLowerCase()}`)).map((r) => r.value);
 }
 
@@ -179,7 +181,8 @@ export async function computeLevel(db: Db, eid: string): Promise<{ level: number
   const chain = await lineage(db, eid);
   const decl = await db.first(`SELECT 1 FROM declarations WHERE eid IN (${IN(chain)}) AND withdrawn_at IS NULL LIMIT 1`, chain);
   if (!e || e.withdrawn_at || !decl) return { level: null, label: null, supporting: [] };
-  let level = (await db.first("SELECT 1 FROM aliases WHERE eid = $1 AND status = 'verified' LIMIT 1", [eid])) ? 1 : 0;
+  // Spec 3.4: only an alias the entity's own signed document lists counts toward L1.
+  let level = (await listedAliases(db, eid)).length ? 1 : 0;
   const atts = await db.all(`SELECT a.issuer, a.claim_type, a.json FROM attestations a JOIN observers o ON o.did = a.issuer WHERE a.subject IN (${IN(chain, 2)}) AND a.revoked_at IS NULL AND a.expires > $1`, [nowIso(), ...chain]);
   if (!atts.length) return { level, label: null, supporting: [] };
   const stageEntity = atts.filter((a) => { const j = JSON.parse(a.json); return a.claim_type === "stage" && j.claim?.stage === "entity" && String(j.claim?.profile ?? "").startsWith("entity-framework/"); });
@@ -193,8 +196,10 @@ async function firstPartyIssuers(db: Db, eid: string): Promise<(issuer: string) 
   const doc = (await db.first("SELECT json FROM documents WHERE eid = $1 ORDER BY seq DESC LIMIT 1", [eid]))?.json;
   const domains = new Set<string>();
   const contact = doc ? String(JSON.parse(doc).operator?.contact ?? "") : "";
+  // The operator's contact is an address or a URL; either names its domain, and the entity signed it.
   if (contact.includes("@")) domains.add(contact.split("@")[1].toLowerCase());
-  for (const a of await db.all<{ value: string }>("SELECT value FROM aliases WHERE eid = $1 AND type = 'platform' AND status = 'verified'", [eid])) domains.add(platformDomain(a.value));
+  else { const host = /^https:\/\/([^/?#:@]+)/i.exec(contact)?.[1]; if (host) domains.add(host.toLowerCase()); }
+  for (const v of await listedAliases(db, eid, ["platform"])) domains.add(platformDomain(v));
   return (issuer) => issuer === eid || (issuer.startsWith("did:web:") && domains.has(issuer.slice(8).split(":")[0]));
 }
 async function refreshLevel(db: Db, eid: string) {
@@ -355,13 +360,13 @@ app.get("/entities", async (c) => {
   }
   if (q.since) where.push(`created >= ${$(q.since)}`);
   if (q.capability) where.push(`EXISTS (SELECT 1 FROM entity_capabilities k WHERE k.eid = entities.eid AND k.capability = ${$(q.capability)})`);
-  if (q.alias_type) where.push(`EXISTS (SELECT 1 FROM aliases a WHERE a.eid = entities.eid AND a.type = ${$(q.alias_type)} AND a.status = 'verified')`);
+  if (q.alias_type) where.push(`EXISTS (SELECT 1 FROM aliases a WHERE a.eid = entities.eid AND a.type = ${$(q.alias_type)} AND a.status = 'verified' AND ${LISTED})`);
   const page = Math.max(0, Number(q.page ?? 0) | 0);
   if (q.sort && q.sort !== "newest" && q.sort !== "attested") fail(422, "bad_sort", "sort is newest or attested");
   // One query: verified alias types, unrevoked attestation count and distinct accredited observers ride along as correlated subqueries on indexed columns.
   const order = q.sort === "attested" ? "attestation_count DESC, created DESC, eid" : "created DESC, eid";
   const rows = await c.env.db.all(`SELECT eid, name, level, level_label, created, adopted_log_index, withdrawn_at, ${lastActive("entities.eid")} AS last_active,
-    (SELECT string_agg(DISTINCT a.type, ',' ORDER BY a.type) FROM aliases a WHERE a.eid = entities.eid AND a.status = 'verified') AS alias_types,
+    (SELECT string_agg(DISTINCT a.type, ',' ORDER BY a.type) FROM aliases a WHERE a.eid = entities.eid AND a.status = 'verified' AND ${LISTED}) AS alias_types,
     (SELECT COUNT(*) FROM attestations t WHERE t.subject = entities.eid AND t.revoked_at IS NULL) AS attestation_count,
     (SELECT COUNT(DISTINCT t.issuer) FROM attestations t JOIN observers o ON o.did = t.issuer WHERE t.subject = entities.eid AND t.revoked_at IS NULL) AS observer_count
     FROM entities WHERE ${where.join(" AND ")} ORDER BY ${order} LIMIT 51 OFFSET ${$(page * 50)}`, args);
@@ -378,7 +383,10 @@ app.get("/entities/:eid", async (c) => {
   const doc = (await db.first("SELECT json FROM documents WHERE eid = $1 ORDER BY seq DESC LIMIT 1", [eid]))?.json;
   const chain = await lineage(db, eid);
   const decl = await db.first(`SELECT eid, json, log_index, withdrawn_at FROM declarations WHERE eid IN (${IN(chain)}) ORDER BY received_at DESC LIMIT 1`, chain);
-  const aliases = await db.all("SELECT type, value, status, verified_at, log_index FROM aliases WHERE eid = $1", [eid]);
+  // Spec 3.4: a proof the entity did not list in its signed document is shown as "unclaimed", never as verified.
+  const listed = new Set((await listedAliases(db, eid)).map((v) => v.toLowerCase()));
+  const aliases = (await db.all("SELECT type, value, status, verified_at, log_index FROM aliases WHERE eid = $1", [eid]))
+    .map((a) => (a.status === "verified" && !listed.has(String(a.value).toLowerCase()) ? { ...a, status: "unclaimed" } : a));
   // Spec 9: show the signed Continuity Link and its basis (rotation, migration, recovery) on both entities.
   const linkOf = async (col: "successor" | "previous") => {
     const r = await db.first(`SELECT basis, json FROM continuity_links WHERE ${col === "successor" ? "successor" : "previous"} = $1`, [eid]);
@@ -500,6 +508,7 @@ app.put("/entities/:eid/document", async (c) => {
     ["UPDATE entities SET name = $1, latest_seq = $2, updated = $3, custody = $4 WHERE eid = $5", [doc.name, doc.seq, now, doc.operator?.custody ?? null, eid]],
     ...capabilityStmts(eid, doc),
   ]);
+  await refreshLevel(db, eid); // the new document may list (or drop) aliases, which decide L1 (spec 3.4)
   return c.json({ eid, seq: doc.seq, ...receipt(c, idx, l) });
 });
 
@@ -520,7 +529,8 @@ app.post("/entities/:eid/aliases", async (c) => {
     ["UPDATE entities SET updated = $1 WHERE eid = $2", [now, eid]],
   ]);
   const lv = await refreshLevel(db, eid);
-  return c.json({ eid, alias: { type: body.type, value: body.value, status: "verified" }, level: LEVEL(lv.level), ...receipt(c, idx, l) }, 201);
+  const claimed = (await listedAliases(db, eid, [body.type])).some((v) => v.toLowerCase() === body.value.toLowerCase());
+  return c.json({ eid, alias: { type: body.type, value: body.value, status: claimed ? "verified" : "unclaimed" }, level: LEVEL(lv.level), ...receipt(c, idx, l) }, 201);
 });
 
 app.post("/entities/:eid/record", async (c) => {
@@ -967,6 +977,9 @@ export async function scheduled(env: Env) {
   await snapshot(env, yesterday);
   await exportObjects(env, yesterday);
   await accreditObservers(env);
+  // Stored levels follow the aliases an entity lists (spec 3.4); this puts rows written before that rule right.
+  // ponytail: first 500 entities with a verified alias per run; page by eid if there are ever more.
+  for (const r of await env.db.all<{ eid: string }>("SELECT DISTINCT eid FROM aliases WHERE status = 'verified' ORDER BY eid LIMIT 500")) await refreshLevel(env.db, r.eid);
   await sendDigest(env, s).catch((e) => console.error("digest", e));
   // IP and stamp counters live 7 days, email hashes 24 hours, per-minute counters 1 hour (PRD 8, 7.3).
   const ago = (ms: number, len: number) => new Date(Date.now() - ms).toISOString().slice(0, len);
