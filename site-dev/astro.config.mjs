@@ -16,8 +16,8 @@ export default defineConfig({
       title: 'Open Entity developers',
       description:
         'The Open Entity developer and contribution hub: contribute to the standard, propose claim types and spec changes, use the SDKs and the CLI, run the conformance suite, and operate a registry or an observer.',
-      logo: { src: '../site/src/assets/mark.svg', alt: '' },
-      favicon: '/favicon.svg',
+      logo: { src: '../site/src/assets/seal.png', alt: '' },
+      favicon: '/favicon.ico',
       titleDelimiter: '|',
       customCss: ['../site/src/styles/theme.css'],
       components: {
@@ -42,6 +42,9 @@ export default defineConfig({
           tag: 'link',
           attrs: { rel: 'preload', href: '/fonts/instrument-sans-latin.woff2', as: 'font', type: 'font/woff2', crossorigin: '' },
         },
+        { tag: 'meta', attrs: { property: 'og:image', content: 'https://openentity.org/og.png' } },
+        { tag: 'meta', attrs: { name: 'twitter:image', content: 'https://openentity.org/og.png' } },
+        { tag: 'link', attrs: { rel: 'apple-touch-icon', href: '/apple-touch-icon.png' } },
         { tag: 'link', attrs: { rel: 'sitemap', href: '/sitemap.xml' } },
       ],
       sidebar: [

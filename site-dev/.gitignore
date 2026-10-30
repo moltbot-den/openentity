@@ -2,4 +2,5 @@
 src/content/docs/cli.md
 src/content/docs/test-vectors.md
 public/fonts/
-public/favicon.svg
+public/favicon.ico
+public/apple-touch-icon.png

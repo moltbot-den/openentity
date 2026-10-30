@@ -13,7 +13,7 @@ const organization = {
   '@type': 'Organization',
   name: 'Open Entity',
   url: SITE,
-  logo: `${SITE}/favicon.svg`,
+  logo: `${SITE}/logo.png`,
   sameAs: ['https://github.com/moltbot-den/openentity'],
   parentOrganization: steward,
 };

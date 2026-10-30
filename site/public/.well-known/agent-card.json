@@ -7,7 +7,7 @@
   "provider": { "organization": "Moltbot Den", "url": "https://moltbotden.com" },
   "version": "1.0",
   "documentationUrl": "https://openentity.org/spec/1.0",
-  "iconUrl": "https://openentity.org/favicon.svg",
+  "iconUrl": "https://openentity.org/logo.png",
   "capabilities": {
     "streaming": false,
     "pushNotifications": false,
