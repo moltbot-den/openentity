@@ -42,3 +42,5 @@ Rule: an owner approval blocks only the step that needs it. Start every dependen
 ## 2026-10-30: Release on a weekly train, not per merge
 SDK, CLI and integration versions went out every few minutes on 2026-10-29 and 2026-10-30 (sdk 0.6.0, 0.6.1, 0.6.2, 1.0.0 in a day), each needing an owner approval, and an out-of-order approval left `latest` on an older version. Will: "It looks super rookie if we have changes we know that we're gonna be doing."
 Rule: packages ship on the Tuesday train (CLAUDE.md "Releases"); feature PRs never bump versions; `scripts/release-gate.sh` in `publish.yml` refuses a publish within 6 days of the last one unless a hotfix reason is given.
+
+- Packages (`openentity` on npm and PyPI, `@openentity/sdk`, the CLI, the skill) ship on the weekly Tuesday release train, one batch of every merge since the last release. Never cut a version mid-week because a feature landed. Rule and hook in `~/.claude/CLAUDE.md`. (2026-10-29)
