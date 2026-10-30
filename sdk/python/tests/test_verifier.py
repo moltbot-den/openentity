@@ -30,7 +30,7 @@ def _registry(n=37, tamper_root=False, tamper_object=False, seed=b"\7" * 32):
         if tamper_object and i % 5 == 0:
             doc["name"] = "forged"
         ents[kp.did] = {"document": doc, "declaration": decl}
-        leaves.append(core.log_leaf("Declaration", kp.did, core.canonical_hash(decl).hex(), core.now()))
+        leaves.append(core.log_leaf("Declaration", kp.did, core.canonical_hash(decl).hex(), core.now_seconds()))
     hashes = [core.leaf_hash(core.canonicalize(lf).encode()) for lf in leaves]
     root = b"\0" * 32 if tamper_root else core.merkle_root(hashes)
     body = f"{ORIGIN}\n{n}\n{base64.b64encode(root).decode()}\n"

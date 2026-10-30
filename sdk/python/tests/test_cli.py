@@ -111,7 +111,7 @@ def test_alias_domain_platform_and_erc8004(url, home, capsys):
     a = out["alias"]
     assert code == 0 and a["proof"]["type"] == "Ed25519BindingSignature"
     text = f"Open Entity alias binding\neid: {KP.did}\nalias: moltbotden:bot\nissued: {a['proof']['issued']}".encode()
-    KP.private.public_key().verify(core.b58decode(a["proof"]["proofValue"][1:]), text)
+    KP.private.public_key().verify(core.base58btc_decode(a["proof"]["proofValue"][1:]), text)
     assert run(capsys, "alias", "add", "erc8004", f"eip155:8453:0x{'cd' * 20}:1", *reg)[0] == 0
     for bad in (("platform", "nocolon"), ("erc8004", "x"), ("bogus", "x")):
         assert run(capsys, "alias", "add", *bad, *reg)[0] == 1
@@ -160,7 +160,7 @@ def test_verify_refuses_a_file_with_a_duplicate_key(capsys, tmp_path):
 
 def test_log_audit_checks_the_registry_document_with_the_key_its_spec_publishes(url, capsys):
     """The registry's DID names openentity.org, but a registry elsewhere signs with its /v1/spec key (guard: no lookup of did:web:openentity.org)."""
-    Stub.leaves = [{"type": "Declaration", "eid": "did:web:openentity.org", "object_sha256": "00" * 32, "received_at": core.now()}]
+    Stub.leaves = [{"type": "Declaration", "eid": "did:web:openentity.org", "object_sha256": "00" * 32, "received_at": core.now_seconds()}]
     Stub.document = core.sign_object({"spec": core.SPEC, "eid": "did:web:openentity.org", "name": "registry"}, LOG_KEY, method="did:web:openentity.org#key-1")
     code, out = j(capsys, "log", "audit", "1", "--registry", url)
     assert code == 0 and {"name": "signature did:web:openentity.org", "ok": True, "detail": "document signature valid"} in out["checks"]
@@ -192,7 +192,7 @@ def test_resolve_did_key_pkh_and_unsupported(capsys):
 
 
 def test_log_checkpoint_proof_and_audit(url, capsys):
-    Stub.leaves = [{"type": "Declaration", "eid": f"did:key:z{i}", "object_sha256": "00" * 32, "received_at": core.now()} for i in range(6)]
+    Stub.leaves = [{"type": "Declaration", "eid": f"did:key:z{i}", "object_sha256": "00" * 32, "received_at": core.now_seconds()} for i in range(6)]
     reg = ["--registry", url]
     code, out = j(capsys, "log", "checkpoint", *reg)
     assert code == 0 and out["verified"] and out["tree_size"] == 6

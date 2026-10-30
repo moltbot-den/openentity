@@ -43,7 +43,7 @@ def test_a_04_key_is_migrated_and_keeps_working(url, tmp_path, monkeypatch, caps
 
 def test_migration_carries_the_registry_record_so_the_chain_continues(url, tmp_path, monkeypatch, capsys):
     legacy_home(tmp_path, monkeypatch, url)
-    first = core.sign_object({"spec": core.SPEC, "type": "RecordEntry", "eid": KP.did, "seq": 1, "prev": None, "kind": "arc_opened", "at": core.now(),
+    first = core.sign_object({"spec": core.SPEC, "type": "RecordEntry", "eid": KP.did, "seq": 1, "prev": None, "kind": "arc_opened", "at": core.now_seconds(),
                               "payload": {"arc_id": "a", "title": "A"}}, KP)
     Stub.chain.append(first)
     code, out = j(capsys, "record", "arc", "close", "--id", "a", "--title", "A", "--registry", url)
