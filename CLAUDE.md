@@ -33,6 +33,14 @@ Read first: `docs/PRD.md` (product scope), `spec/OEIS-1.md` (normative), `docs/R
 - Secrets live in the AWS Secrets Manager secret `openentity/app` (registry signing key, custody key, Customer.io credentials, Turnstile secret, origin header), never in code, tests, fixtures or committed env files. Test vectors use a published throwaway seed and say so.
 - The registry is a mirror of signed objects, never their source of truth. Verifiers verify locally.
 
+## Releases: weekly train
+
+- Packages (npm and PyPI: SDKs, CLI, integrations) ship on one weekly train, Tuesday, every changed package together in one release PR. A package publishes at most once in 6 days.
+- Feature and fix PRs never bump a package version. Version bumps happen only in the train PR, which also lists what each package ships.
+- The registry, site, oeis.dev and the remote MCP server deploy on every merge to `main`, as before; the train covers only published packages.
+- Out of train only for a security fix or a broken install, with the reason in the `hotfix` input of `publish.yml`. `scripts/release-gate.sh` enforces the 6 days in the workflow.
+- Know a change is coming for a package? Hold its release for the train instead of publishing now and again later.
+
 ## Layout
 
 pnpm workspaces: `spec/` (OEIS-1.md, schemas, declaration text and hash, claim-types.md), `site/` (Astro with Starlight; `server/` renders the dynamic pages), `site-dev/` (the oeis.dev hub, same design system, reference pages generated from the code), `registry/` (Hono on Node, PostgreSQL through the RDS Data API, S3; `schema.sql`), `infra/` (CDK: CloudFront, the one app Lambda, Aurora Serverless v2, S3, the per-minute cron), `cli/` (npm `openentity`), `mcp/` (remote MCP server at mcp.openentity.org, `server.json`), `skill/openentity/` (Agent Skills format), `sdk/ts/`, `sdk/python/` (PyPI `openentity`), `test-vectors/`, `scripts/` (`verify.sh`, load test, independent Python verifier), `docs/` (PRD, research, outreach drafts), `tasks/` (`todo.md`, `lessons.md`).
