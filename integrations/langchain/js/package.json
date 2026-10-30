@@ -18,7 +18,7 @@
     "@cfworker/json-schema": "^4.1.1"
   },
   "peerDependencies": {
-    "@openentity/sdk": "^0.6.0",
+    "@openentity/sdk": "^1.0.0",
     "langchain": ">=1.6.0"
   },
   "peerDependenciesMeta": {

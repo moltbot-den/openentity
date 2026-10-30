@@ -63,12 +63,10 @@ def test_errors_form_one_hierarchy():
     assert raised.value.code == "invalid_input"
 
 
-def test_the_0_5_names_still_work():
-    assert core.b58encode is core.base58btc_encode and core.now is core.now_seconds and core.nonce is core.random_nonce
-    assert core.did_key is core.did_key_from_public_key and core.public_from_did_key is core.public_key_from_did_key
-    assert core.verification_method is core.verification_method_id
-    assert issuer.attestation is issuer.sign_attestation and issuer.revocation is issuer.sign_revocation
-    assert issuer.did_document is issuer.build_did_document and issuer.openentity_json is issuer.build_openentity_json
+def test_the_0_5_names_are_gone():
+    for mod, names in ((core, "b58encode b58decode did_key public_from_did_key verification_method now nonce"), (issuer, "attestation revocation did_document openentity_json")):
+        for n in names.split():
+            assert not hasattr(mod, n), n
     assert openentity.RegistryError is openentity.client.RegistryError and openentity.HttpSigError is openentity.httpsig.HttpSigError
 
 

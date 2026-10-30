@@ -621,7 +621,3 @@ def key_pair_from_seed(seed: bytes) -> KeyPair:
         raise InvalidInputError("seed must be 32 bytes")
     return KeyPair(seed)
 
-
-# Deprecated 0.5 names, kept until 1.0. The canonical names match the TypeScript SDK (snake_case for camelCase).
-b58encode, b58decode, did_key, public_from_did_key = base58btc_encode, base58btc_decode, did_key_from_public_key, public_key_from_did_key
-verification_method, now, nonce = verification_method_id, now_seconds, random_nonce

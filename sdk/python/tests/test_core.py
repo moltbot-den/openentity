@@ -45,17 +45,17 @@ def test_jcs_rejects_nan():
 # ---- base58 and did:key ----
 def test_base58_round_trip_with_leading_zeros():
     for raw in (b"", b"\0", b"\0\0abc", bytes(range(40))):
-        assert core.b58decode(core.b58encode(raw)) == raw
-    assert core.b58encode(b"\0\0\x01") == "112"
+        assert core.base58btc_decode(core.base58btc_encode(raw)) == raw
+    assert core.base58btc_encode(b"\0\0\x01") == "112"
 
 
 def test_did_key_known_vector_and_round_trip():
     kp = core.KeyPair(SEED)
     assert kp.did == "did:key:z6MktwupdmLXVVqTzCw4i46r4uGyosGXRnR3XjN4Zq7oMMsw"
-    assert core.public_from_did_key(kp.did) == kp.public
-    assert core.verification_method(kp.did).endswith("#" + kp.did[8:])
+    assert core.public_key_from_did_key(kp.did) == kp.public
+    assert core.verification_method_id(kp.did).endswith("#" + kp.did[8:])
     with pytest.raises(ValueError):
-        core.public_from_did_key("did:web:openentity.org")
+        core.public_key_from_did_key("did:web:openentity.org")
 
 
 # ---- sign / verify / tamper ----
@@ -67,7 +67,7 @@ def test_sign_verify_tamper():
     assert not core.verify_object({**signed, "name": "y"})[0]
     assert not core.verify_object({**signed, "proof": {**signed["proof"], "created": "2026-10-24T19:00:01Z"}})[0]
     other = core.KeyPair(b"\1" * 32)
-    forged = {**signed, "proof": {**signed["proof"], "verificationMethod": core.verification_method(other.did)}}
+    forged = {**signed, "proof": {**signed["proof"], "verificationMethod": core.verification_method_id(other.did)}}
     assert not core.verify_object(forged)[0]
     assert not core.verify_object({"name": "unsigned"})[0]
 
@@ -214,15 +214,15 @@ def test_presentation_challenge_and_carried_attestations():
     kp, issuer, other = core.KeyPair(SEED), core.KeyPair(), core.KeyPair()
     att = lambda subj, exp: core.sign_object({"spec": core.SPEC, "type": "Attestation", "issuer": issuer.did, "subject": subj,
                                               "claim_type": "trust_tier", "claim": {"tier": 2, "platform": "x"},
-                                              "created": core.now(), "expires": exp}, issuer)
-    nonce, aud = core.nonce(), "https://moltbotden.com"
+                                              "created": core.now_seconds(), "expires": exp}, issuer)
+    nonce, aud = core.random_nonce(), "https://moltbotden.com"
     p = core.build_presentation(kp, aud, nonce, [att(kp.did, "2099-01-01T00:00:00Z"), att(kp.did, "2020-01-01T00:00:00Z"),
                                                  att(other.did, "2099-01-01T00:00:00Z")])
     r = core.verify_presentation(p, aud, nonce)
     assert r["ok"] and [a["ok"] for a in r["attestations"]] == [True, False, False]
     assert "expired" in r["attestations"][1]["error"] and "subject" in r["attestations"][2]["error"]
     assert not core.verify_presentation(p, "https://evil.example", nonce)["ok"]
-    assert not core.verify_presentation(p, aud, core.nonce())["ok"]
+    assert not core.verify_presentation(p, aud, core.random_nonce())["ok"]
     later = datetime.now(timezone.utc) + timedelta(minutes=10)
     assert not core.verify_presentation(p, aud, nonce, now=later)["ok"]
     forged = core.sign_object({k: v for k, v in p.items() if k != "proof"}, other)
@@ -251,7 +251,7 @@ def test_did_web_needs_a_resolver_and_uses_it():
     obj["proof"]["verificationMethod"] = f"{web}#key-1"
     # re-sign with the did:web verification method in the proof config
     proof = {k: v for k, v in obj["proof"].items() if k != "proofValue"}
-    obj["proof"]["proofValue"] = "z" + core.b58encode(kp.private.sign(core._signing_input(obj, proof)))
+    obj["proof"]["proofValue"] = "z" + core.base58btc_encode(kp.private.sign(core._signing_input(obj, proof)))
     assert core.verify_object(obj)[0] is False
     assert core.verify_object(obj, resolver=lambda did: {"ed25519": [kp.public]}) == (True, web)
 

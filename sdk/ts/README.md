@@ -13,3 +13,7 @@ Shared core: `adopt(kp, {name, client})`, `trust(eid)` (a `TrustReport` from reg
 HTTP message signatures (RFC 9421, Web Bot Auth profile): `signRequest({method, url, body, privateKey, did})` returns `Signature-Input`, `Signature` and, for a non-empty body, `Content-Digest` (ed25519, `keyid` = the signer's did:key, covers `@method`, `@target-uri`, `content-digest`; `created`, `expires`, `nonce`). `verifyRequest({method, url, headers, body})` returns `{did, keyid, created, expires, nonce}` or throws `HttpSigError` with a `.code` (`missing_headers`, `unknown_alg`, `bad_keyid`, `digest_mismatch`, `created_in_future`, `created_too_old`, `expired`, `lifetime_too_long`, `missing_nonce`, `bad_signature`). Nonce replay tracking is yours. Shared vectors: `test-vectors/http-signature.json`.
 
 MIT licensed. Source: https://github.com/moltbot-den/openentity
+
+## Stability
+
+From 1.0 this package follows semantic versioning. The names exported from `@openentity/sdk` and `@openentity/sdk/node`, their argument order, return shapes and error codes (`OpenEntityError.code`, `HttpSigError.code`) are the public API. Breaking means removing or renaming an export, changing an argument or a return shape, or changing an error code; that needs a major version. New exports, new optional arguments and new error codes ship in minor releases. Anything not exported from the package entry points is private. `test/api.test.ts` pins the surface, and the Python SDK keeps the same names in snake_case.

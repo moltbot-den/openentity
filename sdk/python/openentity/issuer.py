@@ -84,6 +84,3 @@ def agent_card(doc: dict, url: str, document_url: str, version: str = "1.0.0") -
             "capabilities": {"streaming": False, "pushNotifications": False, "extensions": [a2a_extension(doc["eid"], document_url)]},
             "defaultInputModes": ["text/plain"], "defaultOutputModes": ["text/plain"], "skills": skills}
 
-
-# Deprecated 0.5 names, kept until 1.0.
-attestation, revocation, did_document, openentity_json = sign_attestation, sign_revocation, build_did_document, build_openentity_json
