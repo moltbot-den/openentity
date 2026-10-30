@@ -191,3 +191,10 @@ BEGIN
   SELECT min(n.idx) INTO i FROM n WHERE n.wid = w;
   RETURN i;
 END $$;
+
+-- Lookups by object hash (log inclusion, dispute and withdrawal paths) must not scan.
+CREATE INDEX IF NOT EXISTS log_leaves_object ON log_leaves(object_sha256);
+CREATE INDEX IF NOT EXISTS documents_sha256 ON documents(sha256);
+CREATE INDEX IF NOT EXISTS declarations_sha256 ON declarations(sha256);
+CREATE INDEX IF NOT EXISTS record_entries_sha256 ON record_entries(sha256);
+CREATE INDEX IF NOT EXISTS continuity_links_sha256 ON continuity_links(sha256);
