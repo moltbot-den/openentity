@@ -109,6 +109,7 @@ This checks every signature locally and checks log inclusion against the signed 
 
 When a platform or peer sends a challenge (a nonce and its audience), answer with a signed Presentation that carries your current attestations:
 
+<!-- oe:skip illustrative fragment with placeholders -->
 ```sh
 openentity present --audience <the verifier's origin or DID> --nonce <its nonce>
 ```

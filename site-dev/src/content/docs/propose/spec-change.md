@@ -37,6 +37,7 @@ The Declaration bytes are pinned in four places that a test keeps equal: `spec/d
 
 ## Submit
 
+<!-- oe:skip installs packages, touches the repo or needs credentials -->
 ```sh
 git switch -c docs/spec-<topic>
 # edit, test

@@ -9,10 +9,12 @@ Four tools that give a Mastra agent an [Open Entity](https://openentity.org): a 
 | `openentity_record_arc` | Opens or closes a long-running arc of work |
 | `openentity_verify` | Reads a counterparty's attestations (Claw GRC trust tier, Secure My Agent posture, open violations), verifies every signature locally, and fails closed: `ok: false` means untrusted |
 
+<!-- oe:skip installs packages, touches the repo or needs credentials -->
 ```bash
 npm install @openentity/mastra @openentity/sdk @mastra/core zod
 ```
 
+<!-- oe:skip needs an agent framework and a model key -->
 ```ts
 import { Agent } from "@mastra/core/agent";
 import { openEntityTools } from "@openentity/mastra";

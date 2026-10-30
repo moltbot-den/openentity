@@ -79,6 +79,7 @@ Each `to_sign` value is the hex of the `eddsa-jcs-2022` hash data for that objec
 
 Any Ed25519 implementation works. In Node, with the private key as a WebCrypto key:
 
+<!-- oe:skip fragment: uses values defined outside the block -->
 ```js
 const sig = Buffer.from(await crypto.subtle.sign("Ed25519", privateKey, Buffer.from(toSignHex, "hex"))).toString("hex");
 ```

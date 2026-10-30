@@ -19,6 +19,9 @@ if [ -f pnpm-lock.yaml ]; then
   pnpm -r --if-present run test
 fi
 
+# Every runnable code block in the guides, skill, SDK and integration docs runs against a throwaway local registry (needs the builds above).
+node scripts/doc-snippets.mjs || fail=1
+
 # uv projects run with --locked: a stale uv.lock fails here instead of being rewritten (fix: `uv lock` in that directory and commit it).
 # Independent Python implementation: its own tests, and every TS-generated vector must verify.
 if [ -d sdk/python ]; then
