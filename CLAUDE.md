@@ -33,13 +33,11 @@ Read first: `docs/PRD.md` (product scope), `spec/OEIS-1.md` (normative), `docs/R
 - Secrets live in the AWS Secrets Manager secret `openentity/app` (registry signing key, custody key, Customer.io credentials, Turnstile secret, origin header), never in code, tests, fixtures or committed env files. Test vectors use a published throwaway seed and say so.
 - The registry is a mirror of signed objects, never their source of truth. Verifiers verify locally.
 
-## Releases: weekly train
+## Releases
 
-- Packages (npm and PyPI: SDKs, CLI, integrations) ship on one weekly train, Tuesday, every changed package together in one release PR. A package publishes at most once in 6 days.
-- Feature and fix PRs never bump a package version. Version bumps happen only in the train PR, which also lists what each package ships.
-- The registry, site, oeis.dev and the remote MCP server deploy on every merge to `main`, as before; the train covers only published packages.
-- Out of train only for a security fix or a broken install, with the reason in the `hotfix` input of `publish.yml`. `scripts/release-gate.sh` enforces the 6 days in the workflow.
-- Know a change is coming for a package? Hold its release for the train instead of publishing now and again later.
+A package release is a planned event, never a side effect of a merge. Feature and fix PRs leave package versions alone. Cut a version when a coherent batch is ready and nothing else for that package is about to land: usually at most once a day, often less, any day of the week. A security fix or broken install ships right away. Each staged version costs Will a 2FA approval: check https://www.npmjs.com/settings/willcybertron/staged-packages first and never stage over an unapproved version.
+
+The registry, site, oeis.dev and the remote MCP server deploy on every merge to `main`; this section covers only published packages (npm and PyPI).
 
 ## Layout
 

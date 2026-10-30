@@ -39,8 +39,8 @@ The lead parked work while waiting on two npm 2FA approvals. Will: "I have no id
 Rule: an owner approval blocks only the step that needs it. Start every dependent task right away on the unreleased version (local tarball or workspace) and merge the moment the release lands.
 - Fuzz entities (`%n`, `name`, `0`) were adopted on openentity.org again on 2026-10-28 09:03Z, after the 2026-10-28 lesson. They are suppressed. Probes go to `pnpm --filter @openentity/registry local` only.
 
-## 2026-10-30: Release on a weekly train, not per merge
+## 2026-10-30: Release as a planned batch, not per merge
 SDK, CLI and integration versions went out every few minutes on 2026-10-29 and 2026-10-30 (sdk 0.6.0, 0.6.1, 0.6.2, 1.0.0 in a day), each needing an owner approval, and an out-of-order approval left `latest` on an older version. Will: "It looks super rookie if we have changes we know that we're gonna be doing."
-Rule: packages ship on the Tuesday train (CLAUDE.md "Releases"); feature PRs never bump versions; `scripts/release-gate.sh` in `publish.yml` refuses a publish within 6 days of the last one unless a hotfix reason is given.
+Rule: a release is a planned batch on any day, judged not gated (CLAUDE.md "Releases"); feature PRs never bump versions. Will rejected hard calendar gates.
 
-- Packages (`openentity` on npm and PyPI, `@openentity/sdk`, the CLI, the skill) ship on the weekly Tuesday release train, one batch of every merge since the last release. Never cut a version mid-week because a feature landed. Rule and hook in `~/.claude/CLAUDE.md`. (2026-10-29)
+- Packages (`openentity` on npm and PyPI, `@openentity/sdk`, the CLI, the skill) ship as a planned batch, never as a side effect of a merge (CLAUDE.md "Releases"). (2026-10-29)
