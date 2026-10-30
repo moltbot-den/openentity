@@ -6,7 +6,7 @@ Live:
 - openentity.org (site, `/v1` registry, transparency log, guides), redesigned on `site/DESIGN.md`; Lighthouse 100 on accessibility, best practices, SEO, agentic browsing
 - mcp.openentity.org/mcp: remote MCP, official MCP registry `org.openentity/openentity` 0.2.0 (adds `openentity_card`); DNS proof key now in GCP secret `openentity-mcp-registry-dns-key`
 - oeis.dev: developer hub (`site-dev/`)
-- npm live: `openentity` 0.5.2, `@openentity/sdk` 0.5.1; staged for the owner's 2FA tap at https://www.npmjs.com/settings/willcybertron/staged-packages: `@openentity/sdk` 0.6.2 then CLI `openentity` 0.5.8 (reject every older staged version of both); `@openentity/vercel-ai` and `@openentity/mastra` need a first publish from a logged-in npm CLI. PyPI live: `openentity` 0.6.3 (round 3 claim validation, record paging, round 4 error codes); `openentity-crewai` and `openentity-openai-agents` need a PyPI pending trusted publisher (owner password confirm at https://pypi.org/manage/account/publishing/)
+- npm live: `openentity` 0.5.2, `@openentity/sdk` 0.5.1; staged for the owner's 2FA tap at https://www.npmjs.com/settings/willcybertron/staged-packages: `@openentity/sdk` 1.0.0 (approving it also moves `latest` off 0.6.1, which an old stage approval set), then CLI 0.6.0 and the npm integrations are staged against it. PyPI live: `openentity` 1.0.0; `openentity-crewai` and `openentity-openai-agents` need a PyPI pending trusted publisher (owner password confirm at https://pypi.org/manage/account/publishing/)
 - ClawHub: `openentity@1.0.0` moderation CLEAN, waiting on ClawHub's `pending.publication`
 - Founding Entities (8, all L2 first-party, moltbotden #890): OptimusWill, Incredibot, Den Writer, Den Coder, Den Research, Den Vision, Den Illustrator, the demo email agent; Eleanor has no agent and Will's OpenClaw agent cannot be identified, so both are skipped; observer `did:web:moltbotden.com` accredited as bootstrap, issues `continuity_confirmed` (moltbotden #890)
 - Load: 100 adopts/s for 60 s on OpenEntityLoad (destroyed): warm p50 159 ms, p95 212 ms, p99 276 ms after the rate guard moved into the park statement (#92); Aurora max stays 8 ACU (6 hit 100% writer CPU); prod Lambda reserves 200 concurrency
@@ -70,6 +70,11 @@ Engineering 2026-10-29, round 3 (PRD and success-criteria gap audit, all merged 
 - [x] Round 4 security review (#131): alias re-check bounded to 12 s, DoH SERVFAIL never demotes, `eth_call` 5 s timeout, attestation `offset` capped, webvh parsing hardened, 6to4 refused, trailing-dot prod guard
 - [x] Round 4 end-to-end drive of every door against a local registry (#132): local `/mcp` and `REGISTRY_SCHEME`, skill `adopt.sh` declaration entry and hash path, SKILL.md fixes, verifier base64 `+` crash, docs drift; every live doc link 200
 - [x] Release bump: `@openentity/sdk` 0.6.2, CLI `openentity` 0.5.8, PyPI `openentity` 0.6.3
+
+Engineering 2026-10-30, round 5 (all merged and deployed):
+- [x] SDK 1.0.0 (#136): stable API with a Stability section in both READMEs; Python 0.5 aliases and unused issuer helpers removed (no users in the repo or other local repos); dependents on ^1.0.0 / >=1.0.0,<2 (#137); PyPI `openentity` 1.0.0, `openentity-adk` 0.3.0, `langchain-openentity` 0.3.0 live
+- [x] Doc snippets as tests (#139, #140): `scripts/doc-snippets.mjs` in `verify.sh` runs 57 of 86 doc code blocks against a local registry, each skip carries its own reason; local registry honours `WRITE_PER_MINUTE`
+- [x] npm: `@openentity/vercel-ai` 0.1.0 and `@openentity/mastra` 0.1.0 live (first publish from the CLI)
 
 Done 2026-10-26:
 - [x] Python CLI parity: `whoami`, `self`, `record`, `present`, `verify`, `withdraw`, `--json`, npm exit codes (#45)
