@@ -25,7 +25,7 @@ The tells of a generated page, and why each is wrong here:
 
 - Purple or blue gradients, glass cards, glows. Identity infrastructure should look like a document you can audit, not a launch.
 - Three-up feature card grids with icons. The content is a table (objects, levels, tools); it is set as a table or a list.
-- Emoji and sparkle icons. There are no icons except the mark, GitHub and the theme switch.
+- Emoji and sparkle icons. There are no icons except the seal, GitHub and the theme switch.
 - Vague hero copy ("the future of agents"). The headline says what the page is about; the lede names the five objects.
 - Centered everything. Text is left-aligned on one grid; nothing is centered.
 - All-caps eyebrows above every heading, middle-dot meta strings, arrows appended to links.
@@ -49,6 +49,10 @@ One accent, seal green, the color of a valid signature and of banknote and passp
 | `--oe-warn` | `#a1430f` | `#f0a36b` | Status words that need attention: Disputed, Revoked, Withdrawn, Suppressed (always with the word, never color alone) |
 
 Every text pair meets WCAG AA; ink and seal on paper meet AAA for large text. Dark mode is a full token set, not an inversion, and follows the system unless the reader picks a theme.
+
+## Seal
+
+The Open Entity Identity Standard seal (`site/src/assets/seal.png`) is the logo. It appears in the header of openentity.org and oeis.dev, as the favicon and `/apple-touch-icon.png`, as `/logo.png` in the JSON-LD and the agent card, and in the corner of the link card `/og.png` that every page sets as `og:image`, so every shared link and every social post shows it. Social avatars and banners use the same seal on navy.
 
 ## Type
 

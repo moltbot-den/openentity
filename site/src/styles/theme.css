@@ -48,7 +48,6 @@
 
   --oe-panel: #151b19;
   --oe-warn: #f0a36b;
-  --oe-mark: #0a6b4c;
   --oe-ease: cubic-bezier(0.2, 0.7, 0.2, 1);
 }
 
@@ -128,7 +127,7 @@ pre {
   letter-spacing: -0.01em;
 }
 .site-title img {
-  height: 1.75rem;
+  height: 2.25rem;
 }
 .site-title:hover {
   color: var(--sl-color-white);

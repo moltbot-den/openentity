@@ -14,7 +14,7 @@ const docs = join(hub, 'src/content/docs');
 const SRC = 'https://github.com/moltbot-den/openentity/blob/main';
 
 await cp(join(repo, 'site/public/fonts'), join(hub, 'public/fonts'), { recursive: true });
-await cp(join(repo, 'site/src/assets/mark.svg'), join(hub, 'public/favicon.svg'));
+for (const f of ['favicon.ico', 'apple-touch-icon.png']) await cp(join(repo, 'site/public', f), join(hub, 'public', f));
 
 /** The part of a Markdown file from heading `from` up to (not including) heading `to`, headings demoted by `shift`. */
 function section(md, from, to) {

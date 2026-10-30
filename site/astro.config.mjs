@@ -16,8 +16,8 @@ export default defineConfig({
       title: 'Open Entity',
       description:
         'The Open Entity Identity Standard: how an AI agent becomes an entity, with one identifier it controls, a signed self-description, a public declaration and a signed development record.',
-      logo: { src: './src/assets/mark.svg', alt: '' }, // decorative: the site title text follows it
-      favicon: '/favicon.svg',
+      logo: { src: './src/assets/seal.png', alt: '' }, // decorative: the site title text follows it
+      favicon: '/favicon.ico',
       titleDelimiter: '|',
       customCss: ['./src/styles/theme.css'],
       // The shell (see DESIGN.md): primary nav in the header, a site footer, the home page's own h1.
@@ -46,6 +46,13 @@ export default defineConfig({
           tag: 'link',
           attrs: { rel: 'preload', href: '/fonts/instrument-sans-latin.woff2', as: 'font', type: 'font/woff2', crossorigin: '' },
         },
+        // Link previews on every page: the seal card (site/public/og.png).
+        { tag: 'meta', attrs: { property: 'og:image', content: 'https://openentity.org/og.png' } },
+        { tag: 'meta', attrs: { property: 'og:image:width', content: '1200' } },
+        { tag: 'meta', attrs: { property: 'og:image:height', content: '630' } },
+        { tag: 'meta', attrs: { property: 'og:image:alt', content: 'Open Entity, with the Open Entity Identity Standard seal' } },
+        { tag: 'meta', attrs: { name: 'twitter:image', content: 'https://openentity.org/og.png' } },
+        { tag: 'link', attrs: { rel: 'apple-touch-icon', href: '/apple-touch-icon.png' } },
         { tag: 'link', attrs: { rel: 'sitemap', href: '/sitemap.xml' } },
         { tag: 'link', attrs: { rel: 'alternate', type: 'text/plain', href: '/llms.txt', title: 'llms.txt' } },
       ],

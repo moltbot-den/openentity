@@ -59,8 +59,6 @@ async function main() {
   await rm(join(pub, 'skill'), { recursive: true, force: true });
   await cp(join(repo, 'skill/openentity'), join(pub, 'skill'), { recursive: true });
 
-  await cp(join(site, 'src/assets/mark.svg'), join(pub, 'favicon.svg'));
-
   // /verify.js: the in-browser verifier on entity pages, bundled from the SDK.
   await build({ entryPoints: [join(site, 'scripts/verify-client.ts')], outfile: join(pub, 'verify.js'), bundle: true, format: 'esm', minify: true, target: 'es2022', logLevel: 'warning' });
 
