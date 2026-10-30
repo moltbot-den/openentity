@@ -22,7 +22,7 @@ def test_file_fallback_is_0600_and_stable():
     assert (b.did, b.source) == (a.did, "file") and b.seed == a.seed
 
 
-def test_keychain_wins_and_holds_the_only_copy(monkeypatch):
+def test_keychain_wins_and_holds_the_only_copy(monkeypatch, home):
     store = {}
 
     def run(argv, stdin=None):
@@ -36,9 +36,22 @@ def test_keychain_wins_and_holds_the_only_copy(monkeypatch):
     monkeypatch.delenv("OPENENTITY_KEYCHAIN")
     monkeypatch.setattr(identity, "_run", run)
     monkeypatch.setattr(identity.sys, "platform", "darwin")
+    (home / "Library" / "Keychains").mkdir(parents=True)
+    monkeypatch.setenv("HOME", str(home))
     a = Identity.load_or_create()
     assert a.source == "keychain" and store["k"] == a.seed.hex() and not identity._file().exists()
     assert Identity.load_or_create().did == a.did
+
+
+def test_mac_without_a_keychain_dir_never_calls_security(monkeypatch, home):
+    """A fake HOME (sandbox, test run) has no keychain: `security add-generic-password` there pops a
+    "keychain cannot be found" dialog on the real desktop, so the SDK must not call it."""
+    calls = []
+    monkeypatch.delenv("OPENENTITY_KEYCHAIN")
+    monkeypatch.setattr(identity, "_run", lambda argv, stdin=None: calls.append(argv))
+    monkeypatch.setattr(identity.sys, "platform", "darwin")
+    monkeypatch.setenv("HOME", str(home))
+    assert Identity.load_or_create().source == "file" and calls == []
 
 
 def test_keychain_failure_falls_back_to_file(monkeypatch):
