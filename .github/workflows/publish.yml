@@ -10,6 +10,10 @@ on:
         description: Package directory to publish
         type: choice
         options: [cli, sdk/ts, sdk/python, integrations/langchain/js, integrations/langchain/python, integrations/adk/js, integrations/adk/python, integrations/crewai/python, integrations/openai-agents/python, integrations/vercel-ai, integrations/mastra]
+      hotfix:
+        description: Out-of-train release reason (security fix or broken install only); empty for the weekly train
+        type: string
+        default: ''
 permissions:
   id-token: write
   contents: read
@@ -28,6 +32,10 @@ jobs:
       - run: npm install -g npm@^11.5.1
       - run: pnpm install --frozen-lockfile
       - uses: astral-sh/setup-uv@v6
+      - run: bash scripts/release-gate.sh "$PKG" "$HOTFIX"
+        env:
+          PKG: ${{ inputs.package }}
+          HOTFIX: ${{ inputs.hotfix }}
       - run: bash scripts/verify.sh
       # pnpm pack applies publishConfig and rewrites workspace: ranges; npm stage publish does the OIDC exchange.
       - working-directory: ${{ inputs.package }}
@@ -45,6 +53,10 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - uses: astral-sh/setup-uv@v6
+      - run: bash scripts/release-gate.sh "$PKG" "$HOTFIX"
+        env:
+          PKG: ${{ inputs.package }}
+          HOTFIX: ${{ inputs.hotfix }}
       - run: bash scripts/verify.sh
       - working-directory: ${{ inputs.package }}
         run: uv build
