@@ -1,21 +1,43 @@
 name: publish
 # Trusted publishing (OIDC) for npm and PyPI: no token in the repo. npm: each package's trusted publisher
 # points at this repo and this workflow file, with direct publish off, so the job only stages the version
-# and it goes live when an owner approves it on npmjs.com with 2FA. PyPI: the trusted publisher for
-# `openentity` points at this workflow too, and publishes directly.
+# and it goes live when an owner approves it on npmjs.com with 2FA. PyPI: trusted publishers point at this
+# workflow too, and publish directly.
+# One run publishes a whole release batch. It runs only on main, which already passed scripts/verify.sh
+# (pre-push and test.yml), so it builds just the listed packages instead of re-running the full suite.
 on:
   workflow_dispatch:
     inputs:
-      package:
-        description: Package directory to publish
-        type: choice
-        options: [cli, sdk/ts, sdk/python, integrations/langchain/js, integrations/langchain/python, integrations/adk/js, integrations/adk/python, integrations/crewai/python, integrations/openai-agents/python, integrations/vercel-ai, integrations/mastra]
+      packages:
+        description: "Space-separated package directories, e.g. `cli sdk/ts integrations/crewai/python`"
+        type: string
+        required: true
 permissions:
   id-token: write
   contents: read
 jobs:
-  publish:
-    if: inputs.package != 'sdk/python' && inputs.package != 'integrations/langchain/python' && inputs.package != 'integrations/adk/python' && inputs.package != 'integrations/crewai/python' && inputs.package != 'integrations/openai-agents/python'
+  plan:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    outputs:
+      npm: ${{ steps.split.outputs.npm }}
+      pypi: ${{ steps.split.outputs.pypi }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: split
+        env:
+          PACKAGES: ${{ inputs.packages }}
+        run: |
+          npm=() pypi=()
+          for d in $PACKAGES; do
+            if [ -f "$d/package.json" ]; then npm+=("$d"); elif [ -f "$d/pyproject.toml" ]; then pypi+=("$d"); else echo "unknown package dir: $d"; exit 1; fi
+          done
+          echo "npm=${npm[*]}" >> "$GITHUB_OUTPUT"
+          echo "pypi=${pypi[*]}" >> "$GITHUB_OUTPUT"
+
+  npm:
+    needs: plan
+    if: needs.plan.outputs.npm != ''
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -27,27 +49,26 @@ jobs:
           registry-url: https://registry.npmjs.org
       - run: npm install -g npm@^11.5.1
       - run: pnpm install --frozen-lockfile
-      - uses: astral-sh/setup-uv@v6
-      - run: bash scripts/verify.sh
       # pnpm pack applies publishConfig and rewrites workspace: ranges; npm stage publish does the OIDC exchange.
-      - working-directory: ${{ inputs.package }}
-        run: pnpm pack --pack-destination "$RUNNER_TEMP" && npm stage publish "$RUNNER_TEMP"/*.tgz --access public
+      - env:
+          DIRS: ${{ needs.plan.outputs.npm }}
+        run: |
+          for d in $DIRS; do
+            pnpm --filter "./$d..." --if-present run build
+            out="$RUNNER_TEMP/$(echo "$d" | tr / -)"; mkdir -p "$out"
+            (cd "$d" && pnpm pack --pack-destination "$out" && npm stage publish "$out"/*.tgz --access public)
+          done
 
   pypi:
-    if: inputs.package == 'sdk/python' || inputs.package == 'integrations/langchain/python' || inputs.package == 'integrations/adk/python' || inputs.package == 'integrations/crewai/python' || inputs.package == 'integrations/openai-agents/python'
+    needs: plan
+    if: needs.plan.outputs.pypi != ''
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
       - uses: astral-sh/setup-uv@v6
-      - run: bash scripts/verify.sh
-      - working-directory: ${{ inputs.package }}
-        run: uv build
+      - env:
+          DIRS: ${{ needs.plan.outputs.pypi }}
+        run: for d in $DIRS; do uv build "$d" --out-dir dist; done
       - uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          packages-dir: ${{ inputs.package }}/dist
+          packages-dir: dist
