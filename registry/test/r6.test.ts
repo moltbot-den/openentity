@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { app, scheduled } from "../src/index.ts";
-import { E, adopted, call, mockFetch } from "./helpers.ts";
+import { generateKeyPair, signObject } from "../src/sdk.ts";
+import { E, adopted, call, mockFetch, nowSeconds, write } from "./helpers.ts";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -39,5 +40,16 @@ describe("GET /entities bounds", () => {
     expect((await call("GET", `/entities?q=${"a".repeat(101)}`)).body.error).toBe("bad_query");
     expect((await call("GET", "/entities?page=2001")).body.error).toBe("bad_offset");
     expect((await call("GET", "/entities?page=2000")).status).toBe(200);
+  });
+});
+
+describe("attestation without expires", () => {
+  it("is refused, never defaulted", async () => {
+    const { kp } = await adopted();
+    const obs = await generateKeyPair();
+    const a = await signObject({ spec: "openentity/1.0", type: "Attestation", issuer: obs.did, subject: kp.did, claim_type: "capability", claim: { capability: "x", evidence_ref: "y" }, created: nowSeconds() } as any, obs);
+    const r = await write("POST", "/attestations", obs.did, a);
+    expect(r.status).toBeGreaterThanOrEqual(400);
+    expect(await E.db.all("SELECT 1 FROM attestations WHERE subject = $1", [kp.did])).toHaveLength(0);
   });
 });
