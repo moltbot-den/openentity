@@ -348,8 +348,11 @@ app.post("/entities/:eid/custody/export", async (c) => {
 /** Spec 10.7: the newest of the entity's last Record entry and its newest unrevoked `custom:moltbotden:liveness` attestation from an accredited observer. */
 const lastActive = (eid: string) => `GREATEST((SELECT received_at FROM record_entries r WHERE r.eid = ${eid} ORDER BY seq DESC LIMIT 1), (SELECT MAX(a.created) FROM attestations a JOIN observers o ON o.did = a.issuer WHERE a.subject = ${eid} AND a.claim_type = 'custom:moltbotden:liveness' AND a.revoked_at IS NULL))`;
 
+// ponytail: plain OFFSET paging and per-row correlated counts, fine at tens of entities; keyset paging on (created, eid) past a few thousand.
+const MAX_PAGE = 2000;
 app.get("/entities", async (c) => {
   const q = c.req.query();
+  if ((q.q ?? "").length > 100) fail(400, "bad_query", "q is at most 100 characters");
   const minLevel = Number(/\d/.exec(q.level ?? "1")?.[0] ?? 1);
   const args: unknown[] = [minLevel], $ = (v: unknown) => `$${args.push(v)}`;
   const where = ["suppressed = 0", "level >= $1"];
@@ -362,6 +365,7 @@ app.get("/entities", async (c) => {
   if (q.capability) where.push(`EXISTS (SELECT 1 FROM entity_capabilities k WHERE k.eid = entities.eid AND k.capability = ${$(q.capability)})`);
   if (q.alias_type) where.push(`EXISTS (SELECT 1 FROM aliases a WHERE a.eid = entities.eid AND a.type = ${$(q.alias_type)} AND a.status = 'verified' AND ${LISTED})`);
   const page = Math.max(0, Number(q.page ?? 0) | 0);
+  if (page > MAX_PAGE) fail(400, "bad_page", `page is at most ${MAX_PAGE}; narrow with q, level, since or capability`);
   if (q.sort && q.sort !== "newest" && q.sort !== "attested") fail(422, "bad_sort", "sort is newest or attested");
   // One query: verified alias types, unrevoked attestation count and distinct accredited observers ride along as correlated subqueries on indexed columns.
   const order = q.sort === "attested" ? "attestation_count DESC, created DESC, eid" : "created DESC, eid";
@@ -890,6 +894,7 @@ const cioPut = (env: Env, email: string, attrs: Record<string, unknown>) => fetc
   method: "PUT",
   headers: { authorization: `Basic ${btoa(`${env.CIO_SITE_ID}:${env.CIO_API_KEY}`)}`, "content-type": "application/json" },
   body: JSON.stringify({ email, ...attrs }),
+  signal: AbortSignal.timeout(5000),
 });
 
 /** The browser form gets a page back, never JSON: success goes to /check-inbox, an error back to the form with its code. */
@@ -901,15 +906,19 @@ app.post("/subscribe", async (c) => {
     await subscribe(c);
     return c.redirect("https://openentity.org/check-inbox", 303);
   } catch (e) {
-    if (!(e instanceof HttpError)) throw e;
-    return c.redirect(`https://openentity.org${FORM_PAGES.includes(from) ? from : "/adopt"}?signup=${e.code}#updates`, 303);
+    if (!(e instanceof HttpError)) console.error("subscribe", e);
+    return c.redirect(`https://openentity.org${FORM_PAGES.includes(from) ? from : "/adopt"}?signup=${e instanceof HttpError ? e.code : "subscribe_failed"}#updates`, 303);
   }
 });
 async function subscribe(c: C) {
   const env = c.env;
   if (!env.TURNSTILE_SECRET || !env.CIO_SITE_ID || !env.CIO_API_KEY) fail(503, "subscribe_unavailable", "the signup form is not configured on this registry");
   const ct = c.req.header("content-type") ?? "";
-  const f: Record<string, unknown> = ct.includes("application/json") ? await readJson(c, false) : Object.fromEntries(await c.req.formData());
+  const isForm = /^(application\/x-www-form-urlencoded|multipart\/form-data)/.test(ct);
+  if (!isForm && !ct.includes("application/json")) fail(415, "bad_content_type", "send JSON or a form");
+  const body = isForm ? Object.fromEntries(await c.req.formData().catch(() => fail(400, "bad_form", "the form body could not be read"))) : await readJson(c, false);
+  if (!body || typeof body !== "object" || Array.isArray(body)) fail(400, "bad_body", "the body must be an object");
+  const f: Record<string, unknown> = body;
   const email = String(f.email ?? "").trim().toLowerCase();
   const token = String(f["cf-turnstile-response"] ?? f.turnstile_token ?? "");
   if (!/^[^\s@]{1,64}@[^\s@]{1,253}\.[^\s@]{2,}$/.test(email)) fail(400, "bad_email", "a valid email is required");
@@ -918,11 +927,11 @@ async function subscribe(c: C) {
   form.append("response", token);
   const ip = clientIp(c);
   if (ip !== "0.0.0.0") form.append("remoteip", ip);
-  const tv: any = await (await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", { method: "POST", body: form })).json().catch(() => ({}));
+  const tv: any = await (await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", { method: "POST", body: form, signal: AbortSignal.timeout(5000) }).catch(() => fail(502, "subscribe_failed", "Turnstile could not be reached"))).json().catch(() => ({}));
   if (!token || !tv.success) fail(403, "turnstile_failed", "Turnstile verification failed");
   if ((await bump(env.db, `sub:${await salted(env, email)}`, today())) > 3) fail(429, "rate_limited", "too many signups for this address today");
   // Never send `confirmed` here: a resubscribe must not unconfirm someone.
-  const res = await cioPut(env, email, { source: "openentity.org", consented_at: Math.floor(Date.now() / 1000), confirm_token: await confirmToken(env, email) });
+  const res = await cioPut(env, email, { source: "openentity.org", consented_at: Math.floor(Date.now() / 1000), confirm_token: await confirmToken(env, email) }).catch(() => fail(502, "subscribe_failed", "Customer.io could not be reached"));
   if (!res.ok) fail(502, "subscribe_failed", `Customer.io returned ${res.status}`);
   return c.json({ ok: true, message: "Check your inbox to confirm." }, 202);
 }
@@ -937,7 +946,7 @@ app.get("/subscribe/confirm", async (c) => {
   let diff = want.length ^ got.length;
   for (let i = 0; i < want.length; i++) diff |= want[i] ^ (got[i] ?? 0);
   if (!email || diff !== 0) fail(400, "bad_token", "the confirmation link is invalid");
-  const res = await cioPut(env, email, { confirmed: true, confirmed_at: Math.floor(Date.now() / 1000) });
+  const res = await cioPut(env, email, { confirmed: true, confirmed_at: Math.floor(Date.now() / 1000) }).catch(() => fail(502, "subscribe_failed", "Customer.io could not be reached"));
   if (!res.ok) fail(502, "subscribe_failed", `Customer.io returned ${res.status}`);
   return c.redirect("https://openentity.org/subscribed", 303);
 });
@@ -1024,9 +1033,10 @@ export async function scheduled(env: Env) {
   }
   await step("accreditObservers", () => accreditObservers(env));
   // Stored levels follow the aliases an entity lists (spec 3.4); this puts rows written before that rule right.
-  // ponytail: first 500 entities with a verified alias per run; page by eid if there are ever more.
+  // Also entities with attestations: an expired attestation drops the level with no write to trigger a refresh, and a crash between a write and its refreshLevel leaves it stale.
+  // ponytail: first 500 entities with a verified alias or an attestation per run; page by eid if there are ever more.
   await step("refreshLevel", async () => {
-    for (const r of await env.db.all<{ eid: string }>("SELECT DISTINCT eid FROM aliases WHERE status = 'verified' ORDER BY eid LIMIT 500")) await refreshLevel(env.db, r.eid);
+    for (const r of await env.db.all<{ eid: string }>("SELECT eid FROM (SELECT eid FROM aliases WHERE status = 'verified' UNION SELECT subject FROM attestations) u ORDER BY eid LIMIT 500")) await refreshLevel(env.db, r.eid);
   });
   await step("recheckAliases", () => recheckAliases(env));
   if (s) await sendDigest(env, s).catch((e) => console.error("digest", e));
