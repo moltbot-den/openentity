@@ -42,7 +42,7 @@ class Stub(BaseHTTPRequestHandler):
         u = urlparse(self.path)
         Stub.log.append(("GET", self.path, None, None))
         if u.path == "/v1/spec":
-            reg = {"log_origin": ORIGIN, "publicKeyMultibase": "z" + core.b58encode(b"\xed\x01" + LOG_KEY.public)}
+            reg = {"log_origin": ORIGIN, "publicKeyMultibase": "z" + core.base58btc_encode(b"\xed\x01" + LOG_KEY.public)}
             return self._send(200, {"spec": core.SPEC, "stamp_bits": BITS, "registry": reg, "declaration": {"sha256": core.DECLARATION_SHA256}})
         hs = [core.leaf_hash(core.canonicalize(lf).encode()) for lf in Stub.leaves]
         if u.path.startswith("/v1/log/tile/"):
@@ -208,12 +208,12 @@ def test_find_passes_the_filters(url):
 def test_present_carries_only_current_attestations(url):
     issuer = core.KeyPair()
     att = lambda exp: core.sign_object({"spec": core.SPEC, "type": "Attestation", "issuer": issuer.did, "subject": KP.did,
-                                        "claim_type": "trust_tier", "claim": {"tier": 2, "platform": "x"}, "created": core.now(), "expires": exp}, issuer)
+                                        "claim_type": "trust_tier", "claim": {"tier": 2, "platform": "x"}, "created": core.now_seconds(), "expires": exp}, issuer)
     live = att("2099-01-01T00:00:00Z")
     Stub.attestations = [{"attestation": live, "expired": False, "revoked_at": None, "inherited_from": None},
                          {"attestation": att("2020-01-01T00:00:00Z"), "expired": True, "revoked_at": None, "inherited_from": None},
                          {"attestation": att("2099-01-01T00:00:00Z"), "expired": False, "revoked_at": "2026-10-01T00:00:00Z", "inherited_from": None}]
-    nonce = core.nonce()
+    nonce = core.random_nonce()
     p = client.present(SEED, "https://v.example", nonce, registry=url)
     assert p["attestations"] == [live] and core.verify_presentation(p, "https://v.example", nonce)["ok"]
     bare = client.present(SEED, "https://v.example", nonce)  # no registry: no attestations
@@ -278,10 +278,10 @@ def test_cli_whoami_and_self(url, home, capsys):
 def test_cli_verify_entity_file_and_failures(url, home, capsys, tmp_path):
     reg = ["--registry", url]
     doc, decl = client.build_adoption(KP, "T", "d", "http://x")  # verify now checks the schemas too
-    Stub.leaves = [{"type": "Declaration", "eid": f"did:key:z{i}", "object_sha256": "00" * 32, "received_at": core.now()} for i in range(5)]
+    Stub.leaves = [{"type": "Declaration", "eid": f"did:key:z{i}", "object_sha256": "00" * 32, "received_at": core.now_seconds()} for i in range(5)]
     Stub.entity = {"document": doc, "declaration": decl, "log_index": 3}
     client.record(SEED, [("arc_opened", {"arc_id": "a", "title": "A"}), ("arc_opened", {"arc_id": "b", "title": "B"})], registry=url)
-    Stub.leaves += [{"type": "RecordEntry", "eid": KP.did, "object_sha256": core.record_entry_hash(e), "received_at": core.now()} for e in Stub.chain]
+    Stub.leaves += [{"type": "RecordEntry", "eid": KP.did, "object_sha256": core.record_entry_hash(e), "received_at": core.now_seconds()} for e in Stub.chain]
     code, out, _ = run(capsys, "verify", KP.did, "--json", *reg)
     res = json.loads(out)
     names = [c["name"] for c in res["checks"]]
@@ -386,9 +386,9 @@ def test_verify_note_rejects_a_wrong_key_origin_or_body():
 
 
 def test_chain_check_verifies_redaction_signatures():
-    e1 = core.sign_object({"spec": core.SPEC, "type": "RecordEntry", "eid": KP.did, "seq": 1, "prev": None, "kind": "arc_opened", "payload": {}, "created": core.now()}, KP)
+    e1 = core.sign_object({"spec": core.SPEC, "type": "RecordEntry", "eid": KP.did, "seq": 1, "prev": None, "kind": "arc_opened", "payload": {}, "created": core.now_seconds()}, KP)
     h = core.canonical_hash(e1).hex()
-    red = core.sign_object({"spec": core.SPEC, "type": "Redaction", "eid": KP.did, "seq": 1, "entry_sha256": h, "created": core.now()}, KP)
+    red = core.sign_object({"spec": core.SPEC, "type": "Redaction", "eid": KP.did, "seq": 1, "entry_sha256": h, "created": core.now_seconds()}, KP)
     ph = {"seq": 1, "prev": None, "redacted": True, "hash": h, "redaction": red}
     assert cli._chain_checks([ph], KP.did)[-1]["ok"]
     forged = core.sign_object({k: v for k, v in red.items() if k != "proof"}, core.KeyPair(b"\x05" * 32))

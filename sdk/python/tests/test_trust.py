@@ -12,7 +12,7 @@ NOW = datetime.now(timezone.utc)
 
 
 def att(did, ct, claim, **kw):
-    return issuer.attestation(KEYS[did], SUBJECT, ct, claim, issuer=did, now=kw.pop("now", NOW - timedelta(hours=1)), **kw)
+    return issuer.sign_attestation(KEYS[did], SUBJECT, ct, claim, issuer=did, now=kw.pop("now", NOW - timedelta(hours=1)), **kw)
 
 
 def row(a, rev=None, **kw):
@@ -28,7 +28,7 @@ class Registry:
         self.calls.append(url)
         if url.endswith("/did.json"):
             host = url.split("/")[2]
-            return issuer.did_document(f"did:web:{host}", KEYS[f"did:web:{host}"].public)
+            return issuer.build_did_document(f"did:web:{host}", KEYS[f"did:web:{host}"].public)
         return {"attestations": self.rows} if url.endswith("/attestations") else self.entity
 
 
@@ -44,7 +44,7 @@ def full():
     posture = att(SMA[0], POSTURE, {"score_band": "A", "checks_passed": [], "scanner_version": "1", "evidence_hash": "0" * 64})
     viol = att(CLAWGRC, VIOLATION, {"policy": "p", "severity": "high", "evidence_hash": "0" * 64, "observed_at": "2026-10-01T00:00:00Z"})
     old_viol = att(CLAWGRC, VIOLATION, {"policy": "q", "severity": "low", "evidence_hash": "0" * 64, "observed_at": "2026-09-01T00:00:00Z"})
-    rev = issuer.revocation(KEYS[CLAWGRC], old_viol, issuer=CLAWGRC, reason="dispute upheld", now=NOW)
+    rev = issuer.sign_revocation(KEYS[CLAWGRC], old_viol, issuer=CLAWGRC, reason="dispute upheld", now=NOW)
     return [row(a) for a in (tier_old, tier_new, grc, posture, viol)] + [row(old_viol, rev)], viol, old_viol
 
 
@@ -72,15 +72,15 @@ def test_cache_holds_five_minutes():
 def test_fails_closed():
     good = att(MOLTBOTDEN, TIER, {"tier": 4, "platform": "moltbotden"})
     forged = {**good, "claim": {"tier": 4, "platform": "evil"}}
-    other_key = issuer.attestation(KEYS["did:web:evil.example"], SUBJECT, TIER, {"tier": 4, "platform": "x"}, issuer=MOLTBOTDEN, now=NOW)
+    other_key = issuer.sign_attestation(KEYS["did:web:evil.example"], SUBJECT, TIER, {"tier": 4, "platform": "x"}, issuer=MOLTBOTDEN, now=NOW)
     viol = att(CLAWGRC, VIOLATION, {"policy": "p", "severity": "critical", "evidence_hash": "0" * 64, "observed_at": "2026-10-01T00:00:00Z"})
-    fake_rev = issuer.revocation(KEYS[MOLTBOTDEN], viol, issuer=CLAWGRC, now=NOW)  # signed by a key that is not the issuer's
+    fake_rev = issuer.sign_revocation(KEYS[MOLTBOTDEN], viol, issuer=CLAWGRC, now=NOW)  # signed by a key that is not the issuer's
     cases = {
         "forged claim": [{**row(good), "attestation": forged}],
         "signed by another key": [row(other_key)],
         "hidden strike (bad revocation)": [row(viol, fake_rev)],
         "revocation not carried": [{**row(viol), "revoked_at": "2026-10-02T00:00:00Z"}],
-        "wrong subject": [row(issuer.attestation(KEYS[MOLTBOTDEN], SUBJECT[:-1] + "x", TIER, {"tier": 4, "platform": "x"}, issuer=MOLTBOTDEN, now=NOW))],
+        "wrong subject": [row(issuer.sign_attestation(KEYS[MOLTBOTDEN], SUBJECT[:-1] + "x", TIER, {"tier": 4, "platform": "x"}, issuer=MOLTBOTDEN, now=NOW))],
     }
     for name, rows in cases.items():
         r = trust(SUBJECT, fetch=Registry(rows))
