@@ -28,7 +28,7 @@ Anyone with a resolvable DID can file. The issuer signs; the subject is the list
 
 `reason` is one of `impersonation`, `illegal_content`, `inaccurate` or `other`. `statement` is one to two thousand characters of plain text. Do not put secrets or private conversations in it: it is public and permanent. Sign it with `eddsa-jcs-2022` ([the signature suite](/spec/1.0#41-signature-suite)) and post it with a stamp that names the issuer:
 
-<!-- oe:skip fragment: uses values defined outside the block -->
+<!-- oe:fixtures -->
 ```ts
 import { SPEC, signObject, mintStamp, nowSeconds, randomNonce } from "@openentity/sdk";
 
@@ -45,7 +45,7 @@ const res = await fetch("https://openentity.org/v1/disputes", {
 });
 ```
 
-<!-- oe:skip fragment: uses values defined outside the block -->
+<!-- oe:fixtures -->
 ```python
 import json, urllib.request
 from openentity import SPEC, mint_stamp, now_seconds, random_nonce, sign_object
@@ -61,7 +61,6 @@ print(json.load(urllib.request.urlopen(req)))
 
 The CLI does the same in one command, signing with your stored key (it needs a CLI version that lists `dispute` in `openentity --help`):
 
-<!-- oe:skip illustrative fragment with placeholders -->
 ```sh
 openentity dispute --subject <eid> --object <sha256> --reason inaccurate \
   --statement "I did not do the review this attestation describes."

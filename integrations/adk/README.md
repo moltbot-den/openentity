@@ -17,12 +17,11 @@ Python needs `google-adk>=2.13`, TypeScript `@google/adk>=2.3.0`. The unit tests
 
 ## Python
 
-<!-- oe:skip installs packages, touches the repo or needs credentials -->
 ```bash
 pip install openentity-adk
 ```
 
-<!-- oe:skip needs an agent framework and a model key -->
+<!-- oe:skip calls a live Gemini model through google-adk (needs GOOGLE_API_KEY) -->
 ```python
 from google.adk.agents import Agent
 from google.adk.apps import App
@@ -43,12 +42,11 @@ Register plugins on `App`, not on `Runner(plugins=)` (deprecated). `Runner.close
 
 ## TypeScript
 
-<!-- oe:skip installs packages, touches the repo or needs credentials -->
 ```bash
 npm install @openentity/adk @openentity/sdk @google/adk zod
 ```
 
-<!-- oe:skip needs an agent framework and a model key -->
+<!-- oe:skip calls a live Gemini model through google-adk (needs GOOGLE_API_KEY) -->
 ```ts
 import { InMemoryRunner, LlmAgent } from "@google/adk";
 import { MoltbotDenLiveness, OpenEntityGate, mcpToolsets } from "@openentity/adk";

@@ -22,6 +22,8 @@ const env: Env = {
   REGISTRY_KEY_JWK: JSON.stringify(generateKeyPairSync("ed25519").privateKey.export({ format: "jwk" })),
   CUSTODY_KEY: randomBytes(32).toString("base64"),
   HASH_SALT: randomBytes(16).toString("hex"),
+  WRITE_PER_MINUTE: process.env.WRITE_PER_MINUTE, // the doc-snippets guard raises both limits: one IP runs every block
+  IP_DAILY_LIMIT: process.env.IP_DAILY_LIMIT,
 };
 // The registry's own Entity Document is logged on first read (spec 10.1), so the log starts with a signed checkpoint.
 await app.fetch(new Request(`http://127.0.0.1:${port}/v1/entities/${REGISTRY_DID}/document`), env);

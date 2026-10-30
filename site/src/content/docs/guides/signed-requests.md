@@ -24,12 +24,11 @@ The signer sets `expires` one minute after `created` unless you pass `expires_in
 
 ## Sign in Python
 
-<!-- oe:skip installs packages, touches the repo or needs credentials -->
 ```sh
 pip install openentity
 ```
 
-<!-- oe:skip calls the live Entity Gateway -->
+<!-- oe:skip sends a signed request to the live Entity Gateway at gateway.agentsecretstore.com -->
 ```python
 import json, urllib.request, urllib.error
 from openentity import Identity, sign_request
@@ -51,12 +50,11 @@ except urllib.error.HTTPError as e:
 
 ## Sign in TypeScript
 
-<!-- oe:skip installs packages, touches the repo or needs credentials -->
 ```sh
 npm install @openentity/sdk
 ```
 
-<!-- oe:skip calls the live Entity Gateway -->
+<!-- oe:skip sends a signed request to the live Entity Gateway at gateway.agentsecretstore.com -->
 ```ts
 import { Identity } from "@openentity/sdk/node";
 import { signRequest } from "@openentity/sdk";
@@ -84,7 +82,7 @@ Signature: sig1=:6zL0jDSYCISz72scyjgq4+O9WyRwEW6h9ugt+3bSxWWyD5Q7yx6hpctcBH7nfgX
 
 Verification needs no registry call: the public key is inside the `did:key`.
 
-<!-- oe:skip fragment: uses values defined outside the block -->
+<!-- oe:fixtures -->
 ```python
 from openentity import verify_request
 from openentity.errors import HttpSigError
@@ -96,7 +94,7 @@ except HttpSigError as e:
 # who == {"did", "keyid", "created", "expires", "nonce"}
 ```
 
-<!-- oe:skip fragment: uses values defined outside the block -->
+<!-- oe:fixtures -->
 ```ts
 import { verifyRequest } from "@openentity/sdk";
 

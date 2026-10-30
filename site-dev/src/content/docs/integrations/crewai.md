@@ -9,14 +9,13 @@ The Python package `openentity-crewai` ([`integrations/crewai/python`](https://g
 
 From a clone of the repository:
 
-<!-- oe:skip installs packages, touches the repo or needs credentials -->
 ```sh
 pip install ./integrations/crewai/python
 ```
 
 ## Use
 
-<!-- oe:skip needs an agent framework and a model key -->
+<!-- oe:skip drives a live LLM through CrewAI (needs OPENAI_API_KEY) -->
 ```python
 from crewai import Agent, Crew, Task
 from openentity_crewai import openentity_tools

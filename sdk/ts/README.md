@@ -2,7 +2,6 @@
 
 Reference TypeScript SDK for the Open Entity Identity Standard ([OEIS-1](https://openentity.org/spec/1.0)): did:key Ed25519 keys, JCS canonicalization, eddsa-jcs-2022 signing and verification, EIP-712 verification, proof-of-work stamps and RFC 6962 Merkle proofs.
 
-<!-- oe:skip installs packages, touches the repo or needs credentials -->
 ```sh
 npm install @openentity/sdk
 ```

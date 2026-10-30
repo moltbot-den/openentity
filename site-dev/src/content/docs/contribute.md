@@ -33,7 +33,7 @@ Three documents decide disagreements: the spec wins on object formats, [`docs/PR
 
 You need Node 22.13 or newer, pnpm (the version is pinned in `package.json`; `corepack enable` picks it up) and [uv](https://docs.astral.sh/uv/) for the Python parts.
 
-<!-- oe:skip installs packages, touches the repo or needs credentials -->
+<!-- oe:skip clones the repository from GitHub and changes git config -->
 ```sh
 git clone https://github.com/moltbot-den/openentity
 cd openentity
@@ -52,7 +52,7 @@ Then run any package's tests on their own, for example `pnpm --filter @openentit
 - runs `lint`, `typecheck`, `build` and `test` in every workspace package;
 - runs the Python SDK's tests and the independent verifier over `test-vectors/`.
 
-<!-- oe:skip installs packages, touches the repo or needs credentials -->
+<!-- oe:skip runs scripts/verify.sh, which runs this guard (recursion) -->
 ```sh
 bash scripts/verify.sh
 ```
