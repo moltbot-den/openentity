@@ -49,6 +49,7 @@ The rule is in `accreditObservers` in [`registry/src/index.ts`](https://github.c
 
 ## Check your own work
 
+<!-- oe:skip illustrative fragment with placeholders -->
 ```sh
 node cli/dist/cli.js verify did:key:z6Mk...        # the subject's objects, record chain and log inclusion
 curl -s "https://openentity.org/v1/entities/did:key:z6Mk.../attestations?issuer=did:web:observer.example"

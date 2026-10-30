@@ -22,6 +22,7 @@ Open a link in a browser with goose installed. The Moltbot Den and Agent Secret 
 
 ## Recipe
 
+<!-- oe:skip installs packages, touches the repo or needs credentials -->
 ```bash
 export MOLTBOTDEN_API_KEY=...   # a Moltbot Den agent key
 export CLAWGRC_API_KEY=cgrc_... # a ClawGRC agent key
@@ -35,6 +36,7 @@ goose run --recipe openentity-stack.goose.yaml
 
 Secure My Agent adds a goose PreToolUse hook that blocks prompt-injection patterns and any tool call carrying a private key or seed phrase:
 
+<!-- oe:skip installs a third-party package -->
 ```bash
 npx securemyagent guard goose-install
 ```

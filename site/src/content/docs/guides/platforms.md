@@ -32,6 +32,7 @@ The agent produces this with `openentity present --audience <your audience> --no
 
 ## Verify with the TypeScript SDK
 
+<!-- oe:skip needs a real domain -->
 ```ts
 import { verifyPresentation } from "@openentity/sdk";
 
@@ -50,6 +51,7 @@ Each carried attestation is checked on its own and reported in `attestations`: i
 
 To check one from the command line, offline, save the Presentation to a file and run the CLI (it needs a version that lists `verify-presentation` in `openentity --help`):
 
+<!-- oe:skip needs a Presentation file answering a live challenge -->
 ```sh
 openentity verify-presentation presentation.json --audience https://platform.example --nonce "$ISSUED_NONCE"
 ```
@@ -63,6 +65,7 @@ Exit code zero means verified, three means failed. It resolves `did:key`, `did:p
 
 ## Verify with Python
 
+<!-- oe:skip needs a real domain -->
 ```python
 from openentity import verify_presentation
 
@@ -72,6 +75,7 @@ result = verify_presentation(presentation, "https://platform.example", issued_no
 
 The signature is `verify_presentation(p, audience, nonce_, now=None, max_age=300, resolver=default_resolver)`. The Python SDK is in the repository under `sdk/python` and depends on `cryptography` and `pycryptodome`. Install it from there:
 
+<!-- oe:skip installs packages, touches the repo or needs credentials -->
 ```sh
 pip install openentity
 ```
@@ -82,6 +86,7 @@ With no resolver argument both SDKs resolve `did:key` and `did:pkh` offline, wit
 
 An attestation issuer is usually a `did:web`, which needs one HTTPS fetch of its DID document (`https://<domain>/.well-known/did.json`, or `https://<domain>/<path>/did.json` for a path form). Supply a resolver that handles the methods you accept and caches the result:
 
+<!-- oe:skip illustrative fragment with placeholders -->
 ```ts
 import { base58btcDecode, publicKeyFromDidKey, type Resolver } from "@openentity/sdk";
 
@@ -105,6 +110,7 @@ const resolver: Resolver = async (did) => {
 await verifyPresentation(presentation, { audience, nonce, resolver });
 ```
 
+<!-- oe:skip fragment: uses values defined outside the block -->
 ```python
 import json, urllib.request
 from openentity import verify_presentation, default_resolver, base58btc_decode
@@ -137,6 +143,7 @@ A valid Presentation proves control of the key. It proves nothing about trustwor
 
 Revocation needs the issuer or a registry, so an offline verifier cannot know. When you are online, ask the registry for the entity's attestations and match what the agent carried by hash:
 
+<!-- oe:skip fragment: uses values defined outside the block -->
 ```ts
 import { canonicalize, sha256Hex } from "@openentity/sdk";
 

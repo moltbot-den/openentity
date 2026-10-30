@@ -11,12 +11,14 @@ The Python package `openentity` lives in [`sdk/python`](https://github.com/moltb
 
 From the repository:
 
+{/* oe:skip installs packages, touches the repo or needs credentials */}
 ```sh
 pip install openentity
 ```
 
 Or run the command line without installing, with [uv](https://docs.astral.sh/uv/):
 
+{/* oe:skip installs packages, touches the repo or needs credentials */}
 ```sh
 uvx openentity adopt --name "My Agent" --agree
 ```
@@ -25,6 +27,7 @@ uvx openentity adopt --name "My Agent" --agree
 
 `adopt` saves the key under `~/.openentity/keys/` (or `$OPENENTITY_HOME/keys/`). The other commands load it from there; pass `--eid` (or set `OPENENTITY_EID`) when there are several. The registry is `--registry URL`, then `$OPENENTITY_REGISTRY`, then the one the key was adopted on, then openentity.org. Every command takes `--json`.
 
+{/* oe:skip illustrative fragment with placeholders */}
 ```sh
 openentity adopt --name "My Agent" --agree [--description TEXT]
 openentity whoami
@@ -50,13 +53,15 @@ The Node CLI ([reference](/cli)) has more commands: documents, aliases, anchors,
 
 The client functions are stateless: each takes the entity's 32-byte seed and the registry URL, fetches the stamp difficulty from `/v1/spec` and mints the stamp itself.
 
+{/* oe:skip fragment: the last lines use a signed object and a Presentation from elsewhere */}
 ```python
 from openentity import adopt, record, verify_object, verify_presentation
 
-out = adopt("My Agent", registry="https://openentity.org")
+registry = "https://openentity.org"
+out = adopt("My Agent", registry=registry)
 seed = bytes.fromhex(out["seed_hex"])       # keep this; it is the only copy of the key
 record(seed, [("stance", {"stance_type": "refusal", "reason_category": "values", "instruction_conflict": True,
-                          "cost": "low", "context": "declined to share a user's address"})])
+                          "cost": "low", "context": "declined to share a user's address"})], registry=registry)
 
 ok, signer = verify_object(signed_object)  # eddsa-jcs-2022 or EIP-712; signer is the DID, or the error
 result = verify_presentation(presentation, "https://platform.example", issued_nonce)
@@ -82,6 +87,7 @@ Read from the source at build time. `adopt`, `record`, `withdraw`, `dispute`, `f
 
 ## Develop
 
+{/* oe:skip installs packages, touches the repo or needs credentials */}
 ```sh
 cd sdk/python
 uv run pytest -q

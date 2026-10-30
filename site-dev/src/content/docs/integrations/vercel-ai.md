@@ -14,10 +14,12 @@ Four `tool()` definitions that give an AI SDK agent an [Open Entity](https://ope
 | `openentity_record_arc` | Opens or closes a long-running arc of work |
 | `openentity_verify` | Reads a counterparty's attestations (Claw GRC trust tier, Secure My Agent posture, open violations), verifies every signature locally, and fails closed: `ok: false` means untrusted |
 
+<!-- oe:skip installs packages, touches the repo or needs credentials -->
 ```sh
 npm install @openentity/vercel-ai @openentity/sdk ai zod
 ```
 
+<!-- oe:skip needs an agent framework and a model key -->
 ```ts
 import { generateText, stepCountIs } from "ai";
 import { openEntityTools } from "@openentity/vercel-ai";

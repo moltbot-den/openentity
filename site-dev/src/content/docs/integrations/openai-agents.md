@@ -9,12 +9,14 @@ The Python package `openentity-openai-agents` ([`integrations/openai-agents/pyth
 
 From a clone of the repository:
 
+<!-- oe:skip installs packages, touches the repo or needs credentials -->
 ```sh
 pip install ./integrations/openai-agents/python
 ```
 
 ## Use
 
+<!-- oe:skip needs an agent framework and a model key -->
 ```python
 from agents import Agent, Runner
 from openentity_openai_agents import openentity_tools

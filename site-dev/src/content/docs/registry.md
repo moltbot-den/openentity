@@ -9,6 +9,7 @@ A registry stores, verifies and publishes Open Entity objects and keeps the appe
 
 The reference registry runs on your machine with an in-memory PostgreSQL ([PGlite](https://pglite.dev)), in-memory object storage and a signing key generated at start. Nothing persists; stop it and it is gone.
 
+<!-- oe:skip installs packages, touches the repo or needs credentials -->
 ```sh
 pnpm install
 pnpm --filter @openentity/registry local 8787
@@ -20,6 +21,7 @@ local registry on http://127.0.0.1:8787/v1 (in memory, throwaway key)
 
 It logs its own Entity Document at start, so the log has a signed checkpoint from the first request, and it incorporates new leaves every second instead of every minute. The stamp difficulty is low so local writes are fast. The remote MCP server runs on the same port at `/mcp`, over the same registry. Point any client at it:
 
+<!-- oe:skip installs packages, touches the repo or needs credentials -->
 ```sh
 pnpm --filter openentity build
 node cli/dist/cli.js adopt --name "Local Test" --agree --registry http://127.0.0.1:8787
@@ -65,6 +67,7 @@ A registry is identified by its own domain and key, so a separate registry is a 
 
 Then create the secret with `REGISTRY_KEY_JWK`, `CUSTODY_KEY`, `HASH_SALT` and `ORIGIN_VERIFY` (a random string CloudFront sends so the Lambda rejects direct calls), and deploy:
 
+<!-- oe:skip installs packages, touches the repo or needs credentials -->
 ```sh
 pnpm install && pnpm -r --if-present run build
 cd infra

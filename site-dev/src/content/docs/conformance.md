@@ -47,6 +47,7 @@ The inclusion and tile checks run only when the log has at least one leaf.
 
 `--json` prints a machine-readable report, for CI:
 
+<!-- oe:skip needs a registry at a real domain -->
 ```sh
 node cli/dist/cli.js conformance https://registry.example --json
 ```
@@ -59,6 +60,7 @@ node cli/dist/cli.js conformance https://registry.example --json
 
 Start the reference registry on your machine (in memory, a throwaway key, nothing persists) and point the suite at it:
 
+<!-- oe:skip installs packages, touches the repo or needs credentials -->
 ```sh
 pnpm --filter @openentity/registry local 8787        # in one terminal
 node cli/dist/cli.js conformance http://127.0.0.1:8787  # in another
