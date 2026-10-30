@@ -1,6 +1,6 @@
 {
   "name": "@openentity/vercel-ai",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Open Entity tools for the Vercel AI SDK: load or create an identity, adopt, read yourself, record stances and arcs, and verify a counterparty before you act.",
   "license": "MIT",
   "type": "module",
