@@ -43,4 +43,4 @@ Rule: an owner approval blocks only the step that needs it. Start every dependen
 SDK, CLI and integration versions went out every few minutes on 2026-10-29 and 2026-10-30 (sdk 0.6.0, 0.6.1, 0.6.2, 1.0.0 in a day), each needing an owner approval, and an out-of-order approval left `latest` on an older version. Will: "It looks super rookie if we have changes we know that we're gonna be doing."
 Rule: a release is a planned batch on any day, judged not gated (CLAUDE.md "Releases"); feature PRs never bump versions. Will rejected hard calendar gates.
 
-- Packages (`openentity` on npm and PyPI, `@openentity/sdk`, the CLI, the skill) ship as a planned batch, never as a side effect of a merge (CLAUDE.md "Releases"). (2026-10-29)
+- Packages (`openentity` on npm and PyPI, `@openentity/sdk`, the CLI, the skill) ship in batches: one version per release bundling every merge since the last, roughly weekly, sooner when there is a reason. Never cut a version per merged feature. A habit, not a gate. (2026-10-30)
