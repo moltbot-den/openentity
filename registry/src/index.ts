@@ -629,8 +629,8 @@ app.post("/attestations", async (c) => {
   }
   const subject = normalizeEid(String(a.subject));
   await mustEntity(db, subject);
-  const expires: string = a.expires ?? new Date(Date.parse(a.created) + 90 * 86400_000).toISOString().replace(/\.\d+Z$/, "Z");
-  if (expires <= a.created || Date.parse(expires) > Date.parse(a.created) + 366 * 86400_000) fail(422, "expires_invalid", "expires must be after created and at most 1 year later");
+  const expires: string = a.expires;
+  if (typeof expires !== "string" || expires <= a.created || Date.parse(expires) > Date.parse(a.created) + 366 * 86400_000) fail(422, "expires_invalid", "expires must be after created and at most 1 year later");
   const l = await leafFor("Attestation", subject, s, now);
   const idx = await sequenced(db, [l], [
     ["INSERT INTO attestations (sha256, issuer, subject, claim_type, json, created, expires, log_index) VALUES ($1, $2, $3, $4, $5, $6, $7, $i)", [s, issuer, subject, a.claim_type, JSON.stringify(a), a.created, expires]],
