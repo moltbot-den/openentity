@@ -18,10 +18,15 @@ def _run(argv: list[str], stdin: str | None = None) -> str | None:
     return r.stdout.strip() if r.returncode == 0 else None
 
 
+def _mac_keychain() -> bool:
+    """A real macOS login keychain is reachable. Under a fake HOME `security` pops a "keychain cannot be found" dialog."""
+    return sys.platform == "darwin" and pathlib.Path("~/Library/Keychains").expanduser().is_dir()
+
+
 def _keychain_get() -> str | None:
     if os.environ.get("OPENENTITY_KEYCHAIN") == "off":
         return None
-    if sys.platform == "darwin":
+    if _mac_keychain():
         return _run(["security", "find-generic-password", "-s", SERVICE, "-a", ACCOUNT, "-w"])
     if sys.platform.startswith("linux"):
         return _run(["secret-tool", "lookup", "service", SERVICE, "account", ACCOUNT])
@@ -30,7 +35,7 @@ def _keychain_get() -> str | None:
 def _keychain_set(seed_hex: str) -> bool:
     if os.environ.get("OPENENTITY_KEYCHAIN") == "off":
         return False
-    if sys.platform == "darwin":  # ponytail: the seed is briefly on argv, visible to this user's processes only
+    if _mac_keychain():  # ponytail: the seed is briefly on argv, visible to this user's processes only
         return _run(["security", "add-generic-password", "-U", "-s", SERVICE, "-a", ACCOUNT, "-w", seed_hex]) is not None
     if sys.platform.startswith("linux"):
         return _run(["secret-tool", "store", "--label=Open Entity key", "service", SERVICE, "account", ACCOUNT], seed_hex) is not None

@@ -14,15 +14,17 @@ const run = (cmd: string, args: string[], input?: string): string | null => {
   }
 };
 const keychainOn = () => process.env.OPENENTITY_KEYCHAIN !== "off";
+// A real login keychain is reachable. Under a fake HOME `security` pops a "keychain cannot be found" dialog.
+const macKeychain = () => process.platform === "darwin" && existsSync(join(homedir(), "Library", "Keychains"));
 const keychainGet = () =>
   !keychainOn() ? null
-  : process.platform === "darwin" ? run("security", ["find-generic-password", "-s", SERVICE, "-a", ACCOUNT, "-w"])
+  : macKeychain() ? run("security", ["find-generic-password", "-s", SERVICE, "-a", ACCOUNT, "-w"])
   : process.platform === "linux" ? run("secret-tool", ["lookup", "service", SERVICE, "account", ACCOUNT])
   : null;
 const keychainSet = (seedHex: string) =>
   !keychainOn() ? false
   // ponytail: on macOS the seed is briefly on argv, visible to this user's processes only
-  : process.platform === "darwin" ? run("security", ["add-generic-password", "-U", "-s", SERVICE, "-a", ACCOUNT, "-w", seedHex]) !== null
+  : macKeychain() ? run("security", ["add-generic-password", "-U", "-s", SERVICE, "-a", ACCOUNT, "-w", seedHex]) !== null
   : process.platform === "linux" ? run("secret-tool", ["store", "--label=Open Entity key", "service", SERVICE, "account", ACCOUNT], seedHex) !== null
   : false;
 export const identityFile = () => join(process.env.OPENENTITY_HOME || join(homedir(), ".openentity"), "identity.key");
