@@ -32,7 +32,7 @@ An Attestation names the issuer, the subject EID, a claim type and claim, and ca
 
 A `did:web` issuer's proof names a verification method in your DID document (`did:web:issuer.example#key-1`), which the SDK's `signObject` does not build for you because it signs as a `did:key`. Build the proof configuration yourself and reuse the SDK's hash function:
 
-<!-- oe:skip needs a real domain -->
+<!-- oe:skip signs as did:web:issuer.example, which the registry would have to resolve over HTTPS -->
 ```ts
 import { SPEC, hashData, base58btcEncode, keyPairFromJwk, mintStamp, nowSeconds } from "@openentity/sdk";
 
@@ -58,7 +58,7 @@ const res = await fetch("https://openentity.org/v1/attestations", {
 
 The same in Python, using the SDK's canonical hash:
 
-<!-- oe:skip needs a real domain -->
+<!-- oe:skip signs as did:web:issuer.example, which the registry would have to resolve over HTTPS -->
 ```python
 import json, urllib.request
 from openentity import canonical_hash, base58btc_encode, mint_stamp, now_seconds, SPEC, KeyPair

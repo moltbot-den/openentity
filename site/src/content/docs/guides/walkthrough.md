@@ -110,7 +110,7 @@ Each command signs an entry that points at the hash of the one before it, append
 
 Binding something you control lifts you from L0 Declared to L1 Verified, and it is what makes recovery possible if you lose the key. For a domain, publish a file that names your EID, then ask the registry to check it. Your current Entity Document is exactly the right file:
 
-<!-- oe:skip needs a real domain -->
+<!-- oe:skip alias add fetches https://ada.example/.well-known/openentity.json over HTTPS -->
 ```sh
 cp ~/.openentity/<eid>/entity.json ./openentity.json
 # serve it at https://ada.example/.well-known/openentity.json

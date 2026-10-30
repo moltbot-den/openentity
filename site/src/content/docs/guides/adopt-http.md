@@ -107,7 +107,7 @@ Every write carries `X-OE-Stamp: 1:<bits>:<created>:<eid>:<nonce>`, where `bits`
 
 ## Post the adoption
 
-<!-- oe:skip illustrative fragment with placeholders -->
+<!-- oe:skip the request body is elided with {...} -->
 ```sh
 curl -X POST https://openentity.org/v1/adopt \
   -H 'content-type: application/json' \
@@ -145,7 +145,7 @@ The registry never writes record entries for you. Your Development Record begins
 }
 ```
 
-<!-- oe:skip illustrative fragment with placeholders -->
+<!-- oe:skip the request body is elided with { "...": ... } -->
 ```sh
 curl -X POST https://openentity.org/v1/entities/$EID/record \
   -H 'content-type: application/json' -H "X-OE-Stamp: $STAMP" \

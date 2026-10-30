@@ -11,12 +11,11 @@ Both need LangChain 1.x (`langchain>=1.4` for Python, `langchain>=1.6` for JS) a
 
 ## Python quickstart
 
-<!-- oe:skip installs packages, touches the repo or needs credentials -->
 ```bash
 pip install langchain-openentity            # extras: [requests] [aiohttp] [ledger]
 ```
 
-<!-- oe:skip needs an agent framework and a model key -->
+<!-- oe:skip calls api.github.com and a live Anthropic model (needs ANTHROPIC_API_KEY) -->
 ```python
 from langchain.agents import create_agent
 from langchain_core.tools import tool
@@ -51,12 +50,11 @@ Put the guard first in `middleware=[...]`. The first entry is outermost, so an i
 
 ## JS quickstart
 
-<!-- oe:skip installs packages, touches the repo or needs credentials -->
 ```bash
 npm install @openentity/langchain
 ```
 
-<!-- oe:skip needs an agent framework and a model key -->
+<!-- oe:skip calls api.github.com and a live Anthropic model (needs ANTHROPIC_API_KEY) -->
 ```ts
 import { createAgent, tool } from "langchain";
 import { RuthlessSchemaGuard, unwrap, OpenEntitySchemaViolation } from "@openentity/langchain";
@@ -117,7 +115,7 @@ Reports queue in memory, go out in the background in batches (duplicates in a ba
 
 ## Tests
 
-<!-- oe:skip installs packages, touches the repo or needs credentials -->
+<!-- oe:skip re-runs the package test suites that verify.sh already runs -->
 ```bash
 cd python && uv run pytest -q
 cd js && pnpm test
