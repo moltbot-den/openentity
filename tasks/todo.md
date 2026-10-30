@@ -75,6 +75,12 @@ Engineering 2026-10-30, round 5 (all merged and deployed):
 - [x] SDK 1.0.0 (#136): stable API with a Stability section in both READMEs; Python 0.5 aliases and unused issuer helpers removed (no users in the repo or other local repos); dependents on ^1.0.0 / >=1.0.0,<2 (#137); PyPI `openentity` 1.0.0, `openentity-adk` 0.3.0, `langchain-openentity` 0.3.0 live
 - [x] Doc snippets as tests (#139, #140): `scripts/doc-snippets.mjs` in `verify.sh` runs 57 of 86 doc code blocks against a local registry, each skip carries its own reason; local registry honours `WRITE_PER_MINUTE`
 - [x] npm: `@openentity/vercel-ai` 0.1.0 and `@openentity/mastra` 0.1.0 live (first publish from the CLI)
+- [x] Weekly release train (#142): packages ship Tuesdays together; `scripts/release-gate.sh` in `publish.yml` refuses a publish within 6 days without a hotfix reason
+
+Engineering 2026-10-30, round 6 (audit of failure modes, integrity, performance, test truth; all merged and deployed):
+- [x] Entity page (#143): registry outage returns uncached 503 not 404; failed sub-fetches show unavailable; verify button pages the record itself so the HTML no longer embeds it; suppressed entities render a noindex stub
+- [x] Guard tests that bite (#144): 64 mutations over about 45 matrix rows; 10 false rows corrected; 7 guards gained a real test
+- [x] Registry (#145, #146): nightly level refresh covers attestation-only levels; sha256 indexes on 5 tables live in prod; `/v1/subscribe` timeouts and typed 4xx/502; `q` and `page` caps on `/v1/entities`; dead 90-day expiry fallback removed
 
 Done 2026-10-26:
 - [x] Python CLI parity: `whoami`, `self`, `record`, `present`, `verify`, `withdraw`, `--json`, npm exit codes (#45)
