@@ -168,10 +168,18 @@ const embed = (v: unknown) => JSON.stringify(v).replace(/</g, '\\u003c');
 const RECORD_SHOWN = 100;
 
 /** Body of /entities/<eid>, from GET /v1/entities/{eid}, /record, /attestations and /disputes. */
-export function renderEntity(eid: string, entity: J, recordRes: unknown, attRes: unknown, disputesRes: unknown = null, showAll = false): { title: string; description: string; html: string } {
+export function renderEntity(eid: string, entity: J, recordRes: unknown, attRes: unknown, disputesRes: unknown = null, showAll = false, failed: { record?: boolean; attestations?: boolean; disputes?: boolean } = {}): { title: string; description: string; html: string } {
   const doc: J = entity.document ?? {};
   const decl: J = entity.declaration ?? {};
   const name = doc.name ?? entity.name ?? eid;
+  // Spec 10.5: a suppressed entity is a stub, no document body.
+  if (entity.suppressed)
+    return {
+      title: `${name} | Open Entity`,
+      description: `${eid} is suppressed in the Open Entity registry.`,
+      html: `<p class="oe-entity-status">${flag('Suppressed')}</p>\n<div class="oe-eid-row"><code class="oe-eid">${esc(eid)}</code></div>\n<p>This entity is suppressed under spec 10.5. Its content is not shown.</p>`,
+    };
+  const unavailable = '<p>Unavailable right now, the registry did not answer. Reload to retry.</p>';
   const entries = list(recordRes, 'entries', 'record');
   const atts = list(attRes, 'attestations');
   const revs = list(attRes, 'revocations');
@@ -226,7 +234,9 @@ ${decl.declaration_version ? `<p>Signed Declaration version ${esc(decl.declarati
 
 <h2 id="record">Development Record</h2>
 ${
-    entries.length
+    failed.record
+      ? unavailable
+      : entries.length
       ? `${entries.length > RECORD_SHOWN && !showAll ? `<p class="oe-note">Showing the newest ${RECORD_SHOWN} of ${entries.length} entries. <a href="?entries=all#record">Show all</a>.</p>` : ''}<ol class="oe-record" reversed>${[...entries]
           .reverse()
           .slice(0, showAll ? undefined : RECORD_SHOWN)
@@ -236,10 +246,10 @@ ${
   }
 
 <h2 id="attestations">Attestations</h2>
-${attestationsByIssuer(atts, revs)}
+${failed.attestations ? unavailable : attestationsByIssuer(atts, revs)}
 
 <h2 id="disputes">Disputes</h2>
-${disputesList(disputesRes)}
+${failed.disputes ? unavailable : disputesList(disputesRes)}
 
 <h2 id="lineage">Lineage</h2>
 ${lineage.previous || lineage.successor ? `<ul>${lineage.previous ? `<li>Continues ${eidLink(lineage.previous)}. History before the link is inherited and shown with that EID.</li>` : ''}${lineage.successor ? `<li>Continued as ${eidLink(lineage.successor)}.</li>` : ''}</ul>` : '<p>No continuity links. This EID is its own root.</p>'}
@@ -248,7 +258,7 @@ ${lineage.previous || lineage.successor ? `<ul>${lineage.previous ? `<li>Continu
 <p>Verify locally, without trusting this registry: <code>openentity verify ${esc(eid)}</code>. The signed objects are at <a href="/v1/entities/${esc(eid)}">/v1/entities/${esc(eid)}</a>.</p>
 <p><button type="button" class="oe-verify" hidden>Verify in this browser</button></p>
 <pre class="oe-verify-report" hidden></pre>
-<script type="application/json" id="oe-objects">${embed({ eid, document: entity.document, declaration: entity.declaration, record: entries, log: { declaration: declIndex ?? null, record: (recordRes as J)?.log_indexes ?? [], attestations: atts.filter((x) => x.log_index != null).map((x) => ({ attestation: x.attestation ?? x, log_index: x.log_index })) } })}</script>
+<script type="application/json" id="oe-objects">${embed({ eid, document: entity.document, declaration: entity.declaration, log: { declaration: declIndex ?? null, attestations: atts.filter((x) => x.log_index != null).map((x) => ({ attestation: x.attestation ?? x, log_index: x.log_index })) } })}</script>
 <script type="module" src="/verify.js"></script>`;
 
   return {

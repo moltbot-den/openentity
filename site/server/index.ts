@@ -123,11 +123,15 @@ const insertBefore = (html: string, marker: string, add: string) => {
 export function createSite({ registry: callRegistry, asset, vars }: SiteOptions): (req: Request) => Promise<Response> {
   /** GET a registry path; null when unreachable or not 2xx. */
   async function registry(path: string): Promise<any | null> {
+    return (await registryStatus(path)).data;
+  }
+  /** Like registry(), but keeps the status: 0 means the call threw, so callers can tell "absent" (404) from "down". */
+  async function registryStatus(path: string): Promise<{ status: number; data: any | null }> {
     try {
       const res = await callRegistry(new Request(SITE + path, { headers: { accept: 'application/json' } }));
-      return res.ok ? await res.json() : null;
+      return { status: res.status, data: res.ok ? await res.json() : null };
     } catch {
-      return null;
+      return { status: 0, data: null };
     }
   }
 
@@ -198,22 +202,36 @@ export function createSite({ registry: callRegistry, asset, vars }: SiteOptions)
 
   async function entityPage(url: URL, eid: string): Promise<Response> {
     const enc = encodeURIComponent(eid);
-    let [entity, record, atts, disputes] = await Promise.all([
-      registry(`/v1/entities/${enc}`),
-      registry(`/v1/entities/${enc}/record`),
-      registry(`/v1/entities/${enc}/attestations`),
-      registry(`/v1/entities/${enc}/disputes`),
+    const [entityRes, recordRes, attsRes, disputesRes] = await Promise.all([
+      registryStatus(`/v1/entities/${enc}`),
+      registryStatus(`/v1/entities/${enc}/record`),
+      registryStatus(`/v1/entities/${enc}/attestations`),
+      registryStatus(`/v1/entities/${enc}/disputes`),
     ]);
-    // ponytail: the registry pages the record at 1,000 entries; read at most 10 pages (10,000 entries) for the verify button, raise if an entity gets there.
+    const entity = entityRes.data;
+    let record = recordRes.data;
+    const failed = { record: !record, attestations: !attsRes.data, disputes: !disputesRes.data };
+    // ponytail: the registry pages the record at 1,000 entries; read at most 10 pages (10,000 entries) for the listing, raise if an entity gets there.
     for (let i = 1; record?.next != null && i < 10; i++) {
       const more = await registry(`/v1/entities/${enc}/record?after=${record.next}`);
-      if (!more) break;
+      if (!more) {
+        record = null; // a truncated record would pass for the whole one
+        failed.record = true;
+        break;
+      }
       record = { ...more, entries: [...record.entries, ...more.entries], log_indexes: [...record.log_indexes ?? [], ...more.log_indexes ?? []] };
     }
+    const down = !entity && entityRes.status !== 404;
     const shell = await asset('/entity.html');
     if (!shell) return new Response('Not found', { status: 404 });
     const page = entity
-      ? renderEntity(eid, entity, record, atts, disputes, url.searchParams.get('entries') === 'all')
+      ? renderEntity(eid, entity, record, attsRes.data, disputesRes.data, url.searchParams.get('entries') === 'all', failed)
+      : down
+      ? {
+          title: 'Registry unavailable | Open Entity',
+          description: 'The Open Entity registry could not be reached. Try again shortly.',
+          html: `<p>The registry is not answering right now, so this page cannot say whether <code>${esc(eid)}</code> exists. Try again in a minute.</p>`,
+        }
       : {
           title: 'Entity not found | Open Entity',
           description: 'No entity with this EID is in the Open Entity registry.',
@@ -228,10 +246,15 @@ export function createSite({ registry: callRegistry, asset, vars }: SiteOptions)
     html = setAttr(html, /<meta property="og:title"[^>]*>/, 'content', name);
     html = setAttr(html, /<meta property="og:url"[^>]*>/, 'content', canonical);
     html = setAttr(html, /<link rel="canonical"[^>]*>/, 'href', canonical);
-    if (entity) html = html.replace(/<meta name="robots"[^>]*>/, '');
+    if (entity && !entity.suppressed) html = html.replace(/<meta name="robots"[^>]*>/, '');
     html = html.replace(/(<h1 id="_top"[^>]*>)[^<]*/, (_m, open) => open + esc(name));
     html = await mapElements(html, 'data-entity', ({ open, tag }) => `${open}${page.html}</${tag}>`);
-    return htmlResponse(await decorate(html, url), entity ? 200 : 404, shell.headers);
+    const res = htmlResponse(await decorate(html, url), entity ? 200 : down ? 503 : 404, shell.headers);
+    if (down) {
+      res.headers.set('cache-control', 'no-store');
+      res.headers.set('retry-after', '30');
+    }
+    return res;
   }
 
   /** Static file for a request path: exact file, then `.html`, then `/index.html`, else the 404 page. */

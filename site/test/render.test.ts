@@ -85,14 +85,14 @@ describe('entity page', () => {
     expect(evil.html).toContain('&lt;img src=x onerror=alert(1)&gt;');
     expect(evil.html).not.toContain('<img');
   });
-  it('lists the newest 100 record entries with a link to all, and keeps every entry for the verifier', () => {
+  it('lists the newest 100 record entries with a link to all, and embeds none of them', () => {
     const record = { entries: Array.from({ length: 250 }, (_, i) => ({ seq: i + 1, kind: 'stance', at: 1700000000 })) };
     const p = renderEntity(eid, entity, record, []);
     expect(p.html.match(/<li><span class="oe-record-meta">/g)).toHaveLength(100);
     expect(p.html).toContain('Showing the newest 100 of 250 entries. <a href="?entries=all#record">');
     expect(p.html).toContain('Entry 250, ');
     expect(p.html).not.toContain('Entry 150, ');
-    expect(p.html.match(/"seq":/g)).toHaveLength(251); // 250 entries and the document
+    expect(p.html.match(/"seq":/g)).toHaveLength(1); // the document only, the verifier pages the record itself
     expect(renderEntity(eid, entity, record, [], null, true).html.match(/<li><span class="oe-record-meta">/g)).toHaveLength(250);
   });
   it('embeds the objects for the verifier without a way to close the script element', () => {
