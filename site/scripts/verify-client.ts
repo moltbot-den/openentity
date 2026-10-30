@@ -6,7 +6,24 @@ const button = document.querySelector<HTMLButtonElement>('.oe-verify');
 const report = document.querySelector<HTMLPreElement>('.oe-verify-report');
 const data = JSON.parse(document.getElementById('oe-objects')?.textContent || '{}');
 
+/** The whole Development Record, paged from the registry (same origin); any failed page throws rather than verifying a partial record. */
+async function loadRecord() {
+  const q = `/v1/entities/${encodeURIComponent(data.eid)}/record`;
+  const record: any[] = [];
+  const indexes: Array<number | null> = [];
+  let after: number | null = null;
+  do {
+    const page: any = await get(after == null ? q : `${q}?after=${after}`);
+    record.push(...(page.entries ?? []));
+    indexes.push(...(page.log_indexes ?? []));
+    after = page.next ?? null;
+  } while (after != null);
+  data.record = record;
+  data.log = { ...data.log, record: indexes };
+}
+
 async function run(): Promise<string[]> {
+  await loadRecord();
   const lines: string[] = [];
   const check = async (label: string, obj: any) => {
     if (!obj) return lines.push(`${label}: not present`);

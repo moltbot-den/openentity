@@ -47,10 +47,11 @@ async function logFixture(e: Awaited<ReturnType<typeof entity>>, tamper?: (r: Re
 }
 
 /** Render the page, then run the shipped script against it the way a browser would: find elements, wait for a click. */
-async function clickVerify(e: Awaited<ReturnType<typeof entity>>, log?: Awaited<ReturnType<typeof logFixture>>) {
+async function clickVerify(e: Awaited<ReturnType<typeof entity>>, log?: Awaited<ReturnType<typeof logFixture>>, failRecord = false) {
   const page = renderEntity(e.eid, { document: e.document, declaration: e.declaration, ...(log && { declaration_log_index: 0 }) }, { entries: e.record, ...(log && { log_indexes: [2] }) }, { attestations: log ? [{ attestation: log.att, log_index: 1 }] : [] });
   expect(page.html).toContain('class="oe-verify" hidden');
   expect(page.html).toContain('<script type="module" src="/verify.js"></script>');
+  expect(page.html).not.toContain('"record":'); // fetched by the script, never embedded
   const embedded = /<script type="application\/json" id="oe-objects">([\s\S]*?)<\/script>/.exec(page.html)![1];
   const button = { hidden: true, onclick: null as null | (() => Promise<void>), addEventListener(_: string, f: () => Promise<void>) { this.onclick = f; } };
   const report = { hidden: true, textContent: '' };
@@ -58,7 +59,16 @@ async function clickVerify(e: Awaited<ReturnType<typeof entity>>, log?: Awaited<
     querySelector: (s: string) => (s === '.oe-verify' ? button : s === '.oe-verify-report' ? report : null),
     getElementById: (id: string) => (id === 'oe-objects' ? { textContent: embedded } : null),
   };
-  if (log) (globalThis as any).fetch = log.fetch;
+  // The page no longer embeds the record; the script pages it from the registry, 2 entries per page here.
+  const recordFetch = async (u: string) => {
+    const m = /^\/v1\/entities\/[^/]+\/record(?:\?after=(\d+))?$/.exec(u);
+    if (!m) return log ? log.fetch(u) : { ok: false, status: 404, json: async () => ({}) };
+    const from = Number(m[1] ?? 0);
+    const entries = e.record.filter((x: any) => x.seq > from).slice(0, 2);
+    const last = entries[entries.length - 1];
+    return { ok: true, status: 200, json: async () => ({ entries, log_indexes: log ? [2] : [], next: last && last.seq < e.record.length ? last.seq : null }) };
+  };
+  (globalThis as any).fetch = failRecord ? async () => ({ ok: false, status: 500, json: async () => ({}) }) : recordFetch;
   try {
     new Function(script)();
     expect(button.hidden).toBe(false); // revealed only once the script runs, so no-JS readers never see a dead button
@@ -132,5 +142,25 @@ describe('in-browser verify button', () => {
     const text = await clickVerify(e, await logFixture(e, undefined, 'observer.example.net'));
     expect(text).toContain('Attestation identity: signature valid, signed by its issuer (issuer key read from the registry mirror');
     expect(text).not.toMatch(/FAILED|BROKEN|Verification error/);
+  });
+
+  it('pages the whole record from the registry when it has more than 100 entries, and chain-checks it', async () => {
+    const e = await entity();
+    const kp = await generateKeyPair();
+    const record: any[] = [];
+    let prev: string | null = null;
+    for (let seq = 1; seq <= 105; seq++) {
+      const x: any = await signObject({ spec: 'openentity/1.0', type: 'RecordEntry', eid: kp.did, seq, prev, kind: 'stance', at: nowSeconds(), payload: { stance_type: 'refusal', reason_category: 'values', instruction_conflict: true, cost: 'low', context: 'n' } }, kp);
+      record.push(x);
+      prev = await recordEntryHash(x);
+    }
+    const text = await clickVerify({ ...e, eid: kp.did, document: await signObject(buildDocument({ kp, name: 'Big', description: 'x' }), kp), declaration: await signObject(buildDeclaration({ eid: kp.did, name: 'Big' }), kp), record });
+    expect(text).toContain('Record 1: signature valid');
+    expect(text).toContain('Record 105: signature valid');
+    expect(text).not.toMatch(/FAILED|BROKEN|Verification error/);
+  });
+
+  it('refuses to verify when the record cannot be fetched', async () => {
+    expect(await clickVerify(await entity(), undefined, true)).toContain('Verification error');
   });
 });

@@ -128,4 +128,52 @@ describe('site server', () => {
     expect(missing.status).toBe(404);
     expect(await missing.text()).toContain('No entity with the EID');
   });
+
+  describe('entity page when the registry misbehaves', () => {
+    const EID = 'did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK';
+    const withRegistry = (f: (path: string, search: string) => Promise<Response> | Response | null) => {
+      const site = createSite({
+        registry: async (req) => (await f(decodeURIComponent(new URL(req.url).pathname), new URL(req.url).search)) ?? fakeRegistry(req),
+        asset: fsAssets(dist),
+        vars: {},
+      });
+      return site(new Request(`https://openentity.org/entities/${EID}`));
+    };
+
+    it('answers 503 uncached, not "No entity", when the entity fetch fails', async () => {
+      for (const f of [() => Response.json({}, { status: 500 }), () => Promise.reject(new Error('down'))]) {
+        const res = await withRegistry((p) => (p === `/v1/entities/${EID}` ? f() : null));
+        expect(res.status).toBe(503);
+        expect(res.headers.get('cache-control')).toBe('no-store');
+        expect(res.headers.get('retry-after')).toBeTruthy();
+        expect(await res.text()).not.toContain('No entity with the EID');
+      }
+    });
+
+    it('says unavailable, not "No ... yet", when a sub-fetch fails', async () => {
+      const html = await (await withRegistry((p) => (/\/(record|attestations|disputes)$/.test(p) ? new Response('x', { status: 500 }) : null))).text();
+      expect(html.match(/Unavailable right now/g)).toHaveLength(3);
+      expect(html).not.toContain('No published record entries yet');
+    });
+
+    it('does not truncate the record when a later page fails', async () => {
+      const html = await (
+        await withRegistry((p, q) =>
+          p === `/v1/entities/${EID}/record` ? (q ? new Response('x', { status: 502 }) : Response.json({ entries: [{ seq: 1, kind: 'declaration', at: '2026-10-27T15:00:00Z', payload: {} }], next: 1 })) : null,
+        )
+      ).text();
+      expect(html).toContain('Unavailable right now');
+      expect(html).not.toContain('Entry 1,');
+    });
+
+    it('renders a noindex stub for a suppressed entity', async () => {
+      const res = await withRegistry((p) => (p === `/v1/entities/${EID}` ? Response.json({ eid: EID, name: 'Eleanor', suppressed: true, document: { name: 'Eleanor', description: 'SECRET BODY' } }) : null));
+      const html = await res.text();
+      expect(res.status).toBe(200);
+      expect(html).toContain('noindex');
+      expect(html).toContain('suppressed under spec 10.5');
+      expect(html).not.toContain('SECRET BODY');
+      expect(html).not.toContain('oe-objects');
+    });
+  });
 });
