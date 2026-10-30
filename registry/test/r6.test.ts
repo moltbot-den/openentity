@@ -19,8 +19,8 @@ describe("subscribe failure modes", () => {
   const post = (body: string, ct: string) => app.request("/v1/subscribe", { method: "POST", headers: { "content-type": ct }, body }, env);
   it("a null body, a bad content type and a bad form answer 4xx, not 500", async () => {
     expect((await post("null", "application/json")).status).toBe(400);
-    expect((await post("hello", "text/plain")).headers.get("location")).toContain("signup=bad_content_type");
-    expect((await post("x", "multipart/form-data")).headers.get("location")).toContain("signup=bad_form");
+    expect((await post("hello", "text/plain")).headers.get("location")).toContain("signup=bad_json");
+    expect((await post("x", "multipart/form-data")).headers.get("location")).toContain("signup=bad_json");
   });
   it("Turnstile or Customer.io down answers 502 subscribe_failed, and the browser path redirects", async () => {
     mockFetch({ "challenges.cloudflare.com": () => { throw new Error("down"); } });
@@ -37,7 +37,7 @@ describe("subscribe failure modes", () => {
 describe("GET /entities bounds", () => {
   it("caps q and page", async () => {
     expect((await call("GET", `/entities?q=${"a".repeat(101)}`)).body.error).toBe("bad_query");
-    expect((await call("GET", "/entities?page=2001")).body.error).toBe("bad_page");
+    expect((await call("GET", "/entities?page=2001")).body.error).toBe("bad_offset");
     expect((await call("GET", "/entities?page=2000")).status).toBe(200);
   });
 });

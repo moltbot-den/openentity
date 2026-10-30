@@ -365,7 +365,7 @@ app.get("/entities", async (c) => {
   if (q.capability) where.push(`EXISTS (SELECT 1 FROM entity_capabilities k WHERE k.eid = entities.eid AND k.capability = ${$(q.capability)})`);
   if (q.alias_type) where.push(`EXISTS (SELECT 1 FROM aliases a WHERE a.eid = entities.eid AND a.type = ${$(q.alias_type)} AND a.status = 'verified' AND ${LISTED})`);
   const page = Math.max(0, Number(q.page ?? 0) | 0);
-  if (page > MAX_PAGE) fail(400, "bad_page", `page is at most ${MAX_PAGE}; narrow with q, level, since or capability`);
+  if (page > MAX_PAGE) fail(400, "bad_offset", `page is at most ${MAX_PAGE}; narrow with q, level, since or capability`);
   if (q.sort && q.sort !== "newest" && q.sort !== "attested") fail(422, "bad_sort", "sort is newest or attested");
   // One query: verified alias types, unrevoked attestation count and distinct accredited observers ride along as correlated subqueries on indexed columns.
   const order = q.sort === "attested" ? "attestation_count DESC, created DESC, eid" : "created DESC, eid";
@@ -915,9 +915,9 @@ async function subscribe(c: C) {
   if (!env.TURNSTILE_SECRET || !env.CIO_SITE_ID || !env.CIO_API_KEY) fail(503, "subscribe_unavailable", "the signup form is not configured on this registry");
   const ct = c.req.header("content-type") ?? "";
   const isForm = /^(application\/x-www-form-urlencoded|multipart\/form-data)/.test(ct);
-  if (!isForm && !ct.includes("application/json")) fail(415, "bad_content_type", "send JSON or a form");
-  const body = isForm ? Object.fromEntries(await c.req.formData().catch(() => fail(400, "bad_form", "the form body could not be read"))) : await readJson(c, false);
-  if (!body || typeof body !== "object" || Array.isArray(body)) fail(400, "bad_body", "the body must be an object");
+  if (!isForm && !ct.includes("application/json")) fail(415, "bad_json", "send JSON or a form");
+  const body = isForm ? Object.fromEntries(await c.req.formData().catch(() => fail(400, "bad_json", "the form body could not be read"))) : await readJson(c, false);
+  if (!body || typeof body !== "object" || Array.isArray(body)) fail(400, "bad_json", "the body must be an object");
   const f: Record<string, unknown> = body;
   const email = String(f.email ?? "").trim().toLowerCase();
   const token = String(f["cf-turnstile-response"] ?? f.turnstile_token ?? "");
