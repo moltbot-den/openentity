@@ -2,12 +2,12 @@
 // The raw message is already in S3 (the receipt rule's first action); this copies it on as an .eml attachment
 // with Reply-To set to the original sender, so a reply from the inbox goes to the sender, not back to identity@.
 import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3";
-import { GetSecretValueCommand, SecretsManagerClient } from "@aws-sdk/client-secrets-manager";
+import { GetParameterCommand, SSMClient } from "@aws-sdk/client-ssm";
 import { SESv2Client, SendEmailCommand } from "@aws-sdk/client-sesv2";
 
 const s3 = new S3Client({});
 const ses = new SESv2Client({});
-const secrets = new SecretsManagerClient({});
+const ssm = new SSMClient({});
 
 interface SesRecord {
   ses: {
@@ -48,7 +48,7 @@ export function buildForward(opts: { to: string; from: string; replyTo: string; 
 
 export async function handler(event: { Records: SesRecord[] }): Promise<void> {
   const secret = JSON.parse(
-    (await secrets.send(new GetSecretValueCommand({ SecretId: process.env.APP_SECRET_ARN! }))).SecretString ?? "{}",
+    (await ssm.send(new GetParameterCommand({ Name: process.env.APP_PARAM!, WithDecryption: true }))).Parameter?.Value ?? "{}",
   );
   const to: string | undefined = secret.OPERATOR_EMAIL;
   if (!to) throw new Error("OPERATOR_EMAIL missing from the app secret");
