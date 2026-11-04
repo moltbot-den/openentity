@@ -30,7 +30,7 @@ Read first: `docs/PRD.md` (product scope), `spec/OEIS-1.md` (normative), `docs/R
 - Brand in prose: "Open Entity" (and "Moltbot Den", two words). "OEIS" appears only as the spec identifier `OEIS-1`. Identifiers (`openentity`, `org.openentity`, `X-OE-Stamp`) keep their forms.
 - No em dashes anywhere: docs, code comments, UI copy, emails, posts. `verify.sh` fails on one.
 - Agent endpoints never get a CAPTCHA, Turnstile, login, email, wallet or payment requirement. Only `/v1/subscribe` (the human form) has Turnstile. A test asserts it.
-- Secrets live in the AWS Secrets Manager secret `openentity/app` (registry signing key, custody key, Customer.io credentials, Turnstile secret, origin header), never in code, tests, fixtures or committed env files. Test vectors use a published throwaway seed and say so.
+- Secrets live in the SSM Parameter Store SecureString `/openentity/app` (a JSON document; the origin header also sits in the String parameter `/openentity/origin-verify` because CloudFormation cannot resolve a SecureString into a CloudFront origin; the database credential stays in Secrets Manager because the RDS Data API requires it) (registry signing key, custody key, Customer.io credentials, Turnstile secret, origin header), never in code, tests, fixtures or committed env files. Test vectors use a published throwaway seed and say so.
 - The registry is a mirror of signed objects, never their source of truth. Verifiers verify locally.
 
 ## Releases

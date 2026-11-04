@@ -3,7 +3,6 @@ import {
   CfnOutput,
   Duration,
   RemovalPolicy,
-  SecretValue,
   Stack,
   type StackProps,
   aws_budgets as budgets,
@@ -21,7 +20,7 @@ import {
   aws_s3 as s3,
   aws_scheduler as scheduler,
   aws_scheduler_targets as targets,
-  aws_secretsmanager as sm,
+  aws_ssm as ssm,
   aws_ses as ses,
   aws_ses_actions as sesActions,
   aws_sns as sns,
@@ -34,8 +33,10 @@ export const MCP_DOMAIN = "mcp.openentity.org";
 export const HUB_DOMAIN = "oeis.dev";
 export const ALERT_EMAIL = "will+aws-openentity@onefrequency.ai";
 export const GITHUB_SUB = "repo:moltbot-den@263048018/openentity@1432633160:ref:refs/heads/main";
-// Created out of band from the GCP Secret Manager copies (moltbot-den project): REGISTRY_KEY_JWK, CUSTODY_KEY, HASH_SALT, TURNSTILE_SECRET, ORIGIN_VERIFY, optional CIO_*.
-export const APP_SECRET = "openentity/app";
+// SSM SecureString, created out of band from the GCP Secret Manager copies (moltbot-den project): REGISTRY_KEY_JWK, CUSTODY_KEY, HASH_SALT, TURNSTILE_SECRET, ORIGIN_VERIFY, optional CIO_*.
+export const APP_SECRET = "/openentity/app";
+// aws/ssm, the managed key behind SecureString: the roles may decrypt with it only for SSM.
+const SSM_KEY_ARN = "arn:aws:kms:us-east-1:099705791378:key/6076f65d-76f2-424d-8375-e74257cd5d07";
 export const MAIL_PREFIX = "inbound/identity/";
 
 // What the site's pages load: their own files, the Cloudflare Web Analytics beacon, and Turnstile on the
@@ -68,8 +69,21 @@ export class OpenEntityStack extends Stack {
     super(scope, id, props);
     const load = !!props.load;
     // The load stack signs with a throwaway key, so no second log ever carries the production registry key.
-    const secretName = load ? "openentity/load" : APP_SECRET;
-    const appSecret = sm.Secret.fromSecretNameV2(this, "AppSecret", secretName);
+    const secretName = load ? "/openentity/load" : APP_SECRET;
+    // SecureString parameters (free tier) hold the app secrets. CloudFormation cannot resolve a SecureString into a
+    // distribution's origin header, so the origin header alone is a plain String parameter (CloudFront shows it anyway).
+    const originVerify = ssm.StringParameter.valueForStringParameter(this, load ? "/openentity/load-origin-verify" : "/openentity/origin-verify");
+    const grantAppSecret = (fn: lambda.IFunction) => {
+      fn.addToRolePolicy(new iam.PolicyStatement({
+        actions: ["ssm:GetParameter"],
+        resources: [`arn:aws:ssm:${this.region}:${this.account}:parameter${secretName}`],
+      }));
+      fn.addToRolePolicy(new iam.PolicyStatement({
+        actions: ["kms:Decrypt"],
+        resources: [SSM_KEY_ARN],
+        conditions: { StringEquals: { "kms:ViaService": `ssm.${this.region}.amazonaws.com` } },
+      }));
+    };
 
     // ---- Data: Aurora Serverless v2 Postgres, reached only through the Data API (no VPC on the Lambda) ----
     const vpc = new ec2.Vpc(this, "Vpc", {
@@ -142,7 +156,8 @@ export class OpenEntityStack extends Stack {
         },
       },
       environment: {
-        APP_SECRET_ARN: appSecret.secretArn,
+        APP_PARAM: secretName,
+        ORIGIN_VERIFY: originVerify,
         DB_CLUSTER_ARN: db.clusterArn,
         DB_SECRET_ARN: db.secret!.secretArn,
         DB_NAME: "openentity",
@@ -159,7 +174,7 @@ export class OpenEntityStack extends Stack {
         NODE_OPTIONS: "--enable-source-maps",
       },
     });
-    appSecret.grantRead(fn);
+    grantAppSecret(fn);
     db.grantDataApiAccess(fn);
     // Read and put only: the log is append-only, so the app never needs to delete or overwrite history it cannot rebuild.
     logBucket.grantRead(fn);
@@ -183,7 +198,7 @@ export class OpenEntityStack extends Stack {
     });
     const origin = new origins.FunctionUrlOrigin(url, {
       // The Lambda rejects requests without this header, so the function URL is not a bypass around CloudFront.
-      customHeaders: { "x-origin-verify": SecretValue.secretsManager(secretName, { jsonField: "ORIGIN_VERIFY" }).unsafeUnwrap() },
+      customHeaders: { "x-origin-verify": originVerify },
     });
     const forward = new cf.OriginRequestPolicy(this, "Forward", {
       headerBehavior: cf.OriginRequestHeaderBehavior.allowList(
@@ -237,7 +252,7 @@ export class OpenEntityStack extends Stack {
     });
     const mcpOrigin = new origins.FunctionUrlOrigin(url, {
       customHeaders: {
-        "x-origin-verify": SecretValue.secretsManager(secretName, { jsonField: "ORIGIN_VERIFY" }).unsafeUnwrap(),
+        "x-origin-verify": originVerify,
         "x-oe-site": "mcp",
       },
     });
@@ -265,7 +280,7 @@ export class OpenEntityStack extends Stack {
     });
     const hubOrigin = new origins.FunctionUrlOrigin(url, {
       customHeaders: {
-        "x-origin-verify": SecretValue.secretsManager(secretName, { jsonField: "ORIGIN_VERIFY" }).unsafeUnwrap(),
+        "x-origin-verify": originVerify,
         "x-oe-site": "dev",
       },
     });
@@ -297,9 +312,9 @@ export class OpenEntityStack extends Stack {
       timeout: Duration.seconds(30),
       logGroup: new logs.LogGroup(this, "ForwardFnLogs", { retention: logs.RetentionDays.THREE_MONTHS }),
       bundling: { format: nodejs.OutputFormat.ESM, minify: true, target: "node22" },
-      environment: { APP_SECRET_ARN: appSecret.secretArn, MAIL_BUCKET: mailBucket.bucketName, MAIL_PREFIX: MAIL_PREFIX },
+      environment: { APP_PARAM: secretName, MAIL_BUCKET: mailBucket.bucketName, MAIL_PREFIX: MAIL_PREFIX },
     });
-    appSecret.grantRead(forwardFn);
+    grantAppSecret(forwardFn);
     mailBucket.grantRead(forwardFn, `${MAIL_PREFIX}*`);
     forwardFn.addToRolePolicy(new iam.PolicyStatement({
       actions: ["ses:SendEmail", "ses:SendRawEmail"],

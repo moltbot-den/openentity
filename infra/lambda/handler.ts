@@ -1,5 +1,5 @@
 // The one Lambda: HTTP from CloudFront (site plus /v1 registry) and the per-minute cron from EventBridge Scheduler.
-import { GetSecretValueCommand, SecretsManagerClient } from "@aws-sdk/client-secrets-manager";
+import { GetParameterCommand, SSMClient } from "@aws-sdk/client-ssm";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { Hono } from "hono";
 import { handle } from "hono/aws-lambda";
@@ -26,8 +26,8 @@ function timed(db: Db): Db {
   return { ...db, all: t("all"), first: t("first"), run: t("run") };
 }
 async function init(): Promise<Ready> {
-  const res = await new SecretsManagerClient({}).send(new GetSecretValueCommand({ SecretId: e.APP_SECRET_ARN }));
-  const s = JSON.parse(res.SecretString!);
+  const res = await new SSMClient({}).send(new GetParameterCommand({ Name: e.APP_PARAM, WithDecryption: true }));
+  const s = JSON.parse(res.Parameter!.Value!);
   const env: Env = {
     db: timed(dataApiDb({ resourceArn: e.DB_CLUSTER_ARN!, secretArn: e.DB_SECRET_ARN!, database: e.DB_NAME! })),
     log: s3Blobs(e.LOG_BUCKET!),
@@ -58,7 +58,7 @@ async function init(): Promise<Ready> {
   });
   // oeis.dev: the developer hub's static build, with no registry of its own (see hubRoute).
   const hub = createSite({ registry: () => Promise.resolve(new Response(null, { status: 404 })), asset: fsAssets(new URL("./dist-dev", import.meta.url).pathname), vars: {} });
-  return { env, site, mcp: createMcp({ registry: mcpReg, site }), hub, verify: s.ORIGIN_VERIFY };
+  return { env, site, mcp: createMcp({ registry: mcpReg, site }), hub, verify: e.ORIGIN_VERIFY! };
 }
 const boot = () => (ready ??= init().catch((err) => ((ready = undefined), Promise.reject(err))));
 

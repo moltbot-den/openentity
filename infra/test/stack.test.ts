@@ -99,8 +99,8 @@ test("CI can deploy only from main of the public repo", () => {
 
 test("the load copy never signs with the production key, has no Object Lock, no domain and no CI role, and is destroyable", () => {
   const json = JSON.stringify(l.toJSON());
-  expect(json).toContain("openentity/load");
-  expect(json).not.toMatch(/"openentity\/app"|secret:openentity\/app/);
+  expect(json).toContain("/openentity/load");
+  expect(json).not.toMatch(/openentity\/app/);
   expect(Object.keys(l.findResources("AWS::S3::Bucket", { Properties: { ObjectLockEnabled: true } }))).toEqual([]);
   expect(Object.keys(l.findResources("AWS::CertificateManager::Certificate"))).toEqual([]);
   expect(Object.keys(l.findResources("AWS::IAM::Role", { Properties: { RoleName: "openentity-github-deploy" } }))).toEqual([]);
@@ -136,4 +136,13 @@ test("the forward sets Reply-To to the sender and attaches the original", () => 
   const m = buildForward({ to: "op@example.com", from: "identity@openentity.org", replyTo: "A <a@x.org>\r\nBcc: z@z", subject: "hi", raw: new TextEncoder().encode("orig"), id: "1" });
   expect(m).toContain("Reply-To: A <a@x.org> Bcc: z@z\r\n");
   expect(m).toContain("b3JpZw==");
+});
+
+test("both Lambdas read the app parameter from SSM and decrypt only through SSM, with no Secrets Manager read of the app secret", () => {
+  const json = JSON.stringify(t.toJSON());
+  expect(json).not.toMatch(/resolve:secretsmanager:openentity|secret:openentity/);
+  expect(json).toContain("ssm:GetParameter");
+  t.hasResourceProperties("AWS::IAM::Policy", {
+    PolicyDocument: { Statement: Match.arrayWith([Match.objectLike({ Action: "kms:Decrypt", Condition: { StringEquals: { "kms:ViaService": "ssm.us-east-1.amazonaws.com" } } })]) },
+  });
 });
