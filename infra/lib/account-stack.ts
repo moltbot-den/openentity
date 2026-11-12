@@ -27,6 +27,8 @@ import {
 } from "aws-cdk-lib";
 import type { Construct } from "constructs";
 import { AnalyticsForwarder } from "../../account/analytics/forwarder/construct.ts";
+import { AccountServiceMonitoring } from "../../account/analytics/monitoring/aws.ts";
+import { ALERT_EMAIL } from "./stack.ts";
 
 export type AccountStage = "staging" | "production";
 export const ACCOUNT_HOST: Record<AccountStage, string> = { production: "account.openentity.org", staging: "staging.account.openentity.org" };
@@ -47,6 +49,7 @@ export interface AccountProps extends StackProps { stage: AccountStage }
 
 export class OpenEntityAccountStack extends Stack {
   readonly appReviewAlarm: cloudwatch.Alarm;
+  readonly monitoring: AccountServiceMonitoring;
 
   constructor(scope: Construct, id: string, props: AccountProps) {
     super(scope, id, props);
@@ -239,6 +242,20 @@ export class OpenEntityAccountStack extends Stack {
     const deployRole = iam.Role.fromRoleName(this, "DeployRole", DEPLOY_ROLE, { defaultPolicyName: `AccountCi${suffix}` });
     db.grantDataApiAccess(deployRole);
     deployRole.addToPrincipalPolicy(new iam.PolicyStatement({ actions: ["cloudformation:DescribeStacks"], resources: [this.stackId] }));
+
+    // ---- Alarms (the Monitoring lane's construct): errors and throttles on the app function and the forwarder, the app's
+    // p95 duration and error rate, 5xx at the edge, the forwarder's dead letters and App Review access left on. One topic;
+    // its relay Lambda mails the ops address through Customer.io, so no subscription waits for a confirmation click.
+    const edge5xx = new cloudwatch.Alarm(this, "Edge5xx", {
+      metric: dist.metric5xxErrorRate({ period: Duration.minutes(1) }), threshold: 1, evaluationPeriods: 5,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD, treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      alarmDescription: `${host}: 5xx above 1% for 5 minutes at CloudFront`,
+    });
+    this.monitoring = new AccountServiceMonitoring(this, "Monitoring", {
+      alertEmail: ALERT_EMAIL, stage, ssmKeyArn: SSM_KEY_ARN,
+      functions: [fn, analytics.fn],
+      alarms: [analytics.dlqAlarm, this.appReviewAlarm, edge5xx],
+    });
 
     // ---- Outputs (infra/scripts/cloudflare-dns.ts, migrate-account.ts and the deploy workflow read these) ----
     const out = (k: string, v: string) => new CfnOutput(this, k, { value: v });
