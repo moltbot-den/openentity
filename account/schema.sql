@@ -179,3 +179,18 @@ CREATE TABLE IF NOT EXISTS deletion_requests (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS deletion_requests_pending ON deletion_requests (account_id) WHERE state = 'pending';
 CREATE INDEX IF NOT EXISTS deletion_requests_due ON deletion_requests (effective_at) WHERE state = 'pending';
+
+-- A web email start without Turnstile sends a code only to an existing email sign-in; its verify must prove Turnstile.
+ALTER TABLE email_codes ADD COLUMN IF NOT EXISTS human boolean NOT NULL DEFAULT true;
+
+-- Single-use login codes from the Apple form_post return for Android (/app/auth?login_code=), redeemed at POST /v1/token
+-- (grant_type login_code) within 120 seconds. Only the SHA-256 of a code is stored.
+CREATE TABLE IF NOT EXISTS login_codes (
+  hash text PRIMARY KEY,
+  account_id text NOT NULL REFERENCES accounts (id),
+  install_id text NOT NULL,
+  amr text NOT NULL,
+  created_at bigint NOT NULL,
+  expires_at bigint NOT NULL,
+  used_at bigint
+);

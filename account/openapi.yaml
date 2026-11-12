@@ -2601,6 +2601,84 @@ paths:
           description: 'error: too_large'
         '429':
           $ref: '#/components/responses/RateLimited'
+  /:
+    get:
+      operationId: homePage
+      tags: [Sign-in]
+      summary: The web account page
+      description: |
+        Signed out: Sign in with Apple (flow apple_web), Google Identity Services, passkeys with conditional UI and the
+        email code, with Turnstile for sign-up. Signed in (the session cookie): the account, approvals (turn them on with
+        a passkey whose genesis entry it signs alone; add a passkey approver through the enrollment handshake), sessions
+        and deletion. The page carries its own Content-Security-Policy (inline script and style by hash only).
+      x-available: day-4
+      security: []
+      parameters:
+        - name: error
+          in: query
+          required: false
+          description: An error code from the Apple return (see POST /v1/auth/apple/callback).
+          schema: { type: string, maxLength: 32 }
+      responses:
+        '200':
+          description: The page.
+          content:
+            text/html:
+              schema: { type: string }
+  /app/auth:
+    get:
+      operationId: appAuthLanding
+      tags: [Sign-in]
+      summary: App Link target of the Apple return; a page when it opens in a browser
+      description: With the app installed this opens the app (AASA and assetlinks cover /app/*). In a browser it shows the error, or tells the owner to return to the app to redeem `login_code`.
+      x-available: day-4
+      security: []
+      parameters:
+        - { name: error, in: query, required: false, schema: { type: string, maxLength: 32 } }
+        - { name: login_code, in: query, required: false, schema: { type: string, maxLength: 64 } }
+      responses:
+        '200':
+          description: The page.
+          content:
+            text/html:
+              schema: { type: string }
+  /v1/auth/test-idp:
+    post:
+      operationId: stagingTestIdentityProvider
+      tags: [Sign-in]
+      summary: Staging only. Apple-shaped and Google-shaped tokens for automated sign-in tests (PLAN 2.3)
+      description: |
+        Exists only on staging.account.openentity.org; production has no such route (404, or 503 while sign-in is closed),
+        reads no test key, and refuses tokens signed by it (a production guard test). Returns an ID token with the
+        provider's issuer, the app's audience (`client_id` web: the Services ID), `sub` = "test-" + sub, and `nonce` =
+        SHA-256 hex of the raw nonce from POST /v1/auth/nonce. Sign in with it at POST /v1/auth/apple or /v1/auth/google
+        as with a real token; any authorization_code is accepted and not exchanged.
+      x-available: day-4
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [kind, nonce]
+              properties:
+                kind: { type: string, enum: [apple, google] }
+                nonce: { $ref: '#/components/schemas/RawNonce' }
+                sub: { type: string, pattern: '^[A-Za-z0-9._-]{1,64}$' }
+                email: { type: string, format: email }
+                client_id: { type: string, enum: [app, web] }
+      responses:
+        '200':
+          description: The token.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id_token, sub]
+                properties:
+                  id_token: { $ref: '#/components/schemas/CompactJws' }
+                  sub: { type: string }
   /approve:
     get:
       operationId: approvePage

@@ -109,3 +109,12 @@ test("the close key is never deleted: retained by CloudFormation in both stages,
     expect(deny.Principal).toEqual({ AWS: "*" });
   }
 });
+
+test("App Review: an alarm when APP_REVIEW_OPEN stays on for 21 days, per stage", () => {
+  for (const [t, stage] of [[prod, "production"], [staging, "staging"]] as const) {
+    t.hasResourceProperties("AWS::CloudWatch::Alarm", {
+      Namespace: "OpenEntity/Account", MetricName: "AppReviewOpenDays", Dimensions: [{ Name: "Stage", Value: stage }],
+      Threshold: 21, ComparisonOperator: "GreaterThanOrEqualToThreshold", Statistic: "Maximum", TreatMissingData: "notBreaching",
+    });
+  }
+});
