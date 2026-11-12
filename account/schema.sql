@@ -233,6 +233,22 @@ CREATE TABLE IF NOT EXISTS messages (
 );
 CREATE INDEX IF NOT EXISTS messages_agent ON messages (agent_did, seq);
 
+-- Message attachments (POST /v1/agent/uploads): the agent PUTs to a presigned S3 URL, then names the upload in one
+-- message; the owner downloads it through GET /v1/attachments/{id}.
+CREATE TABLE IF NOT EXISTS uploads (
+  id text PRIMARY KEY,
+  agent_did text NOT NULL,
+  account_id text NOT NULL REFERENCES accounts (id),
+  name text NOT NULL,
+  content_type text NOT NULL,
+  size bigint NOT NULL,
+  s3_key text NOT NULL,
+  created_at bigint NOT NULL,
+  expires_at bigint NOT NULL,                 -- the upload URL's end
+  message_id text                             -- set when a message carries it, once
+);
+CREATE INDEX IF NOT EXISTS uploads_message ON uploads (message_id);
+
 -- Approvals agents write (POST /v1/agent/approvals): the service is the verifier and no product accepts them.
 CREATE TABLE IF NOT EXISTS agent_approvals (
   id text PRIMARY KEY,
