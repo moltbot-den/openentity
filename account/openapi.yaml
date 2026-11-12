@@ -682,7 +682,8 @@ paths:
         rotated token revokes the whole session (401 token_reused), except an idempotent retry within 30 seconds whose
         successor was never used: that mints a fresh successor. Clients serialize refresh calls and ask for every
         audience they need in one call. Expiry: 90 days sliding (apps), 12 hours absolute (web). Binding: iOS sends
-        X-OE-App-Attest; Android sends X-OE-Device-Signature and X-OE-Play-Integrity; the web sends the session cookie
+        X-OE-App-Attest; Android sends X-OE-Device-Signature and X-OE-Play-Integrity, and `device_counter` in the
+        signed body, above the one its last refresh sent (401 binding_invalid otherwise); the web sends the session cookie
         with Origin equal to the base URL. grant_type `login_code` (or `urn:openentity:login_code`): redeems the
         Android Apple code from /v1/auth/apple/callback; send `client`, and `attestation` on the install's first
         sign-in. Each access token is a 15-minute ES256 JWT with exactly one audience (AccessTokenClaims). Product
@@ -1464,12 +1465,20 @@ paths:
       operationId: getPairing
       tags: [Pairing]
       summary: Pairing state; once claimed, the agent, the match string and the approval request
-      description: The app polls this while the code is on screen, at most every 2 seconds.
+      description: |
+        The app polls this while the code is on screen, at most every 2 seconds. Once the owner has picked the
+        permissions, the app reads it again with `permissions`: the `approval_request` then covers them
+        (`payload.permissions`, sorted and without duplicates), and confirm must send that same list.
       x-available: day-3
       security:
         - ownerBearer: []
       parameters:
         - $ref: '#/components/parameters/IdPath'
+        - name: permissions
+          in: query
+          required: false
+          description: The permissions the owner picked, comma-separated. Absent means none.
+          schema: { type: string, maxLength: 16384 }
       responses:
         '200':
           description: The pairing.
@@ -1508,7 +1517,9 @@ paths:
       summary: Confirm a claimed pairing with Face ID (approval/2.0 over the link)
       description: |
         The owner checks that the match string matches what the agent printed, picks permissions, and signs the
-        pairing's `approval_request` (action pairing.confirm). The service then sends agent.paired to every product
+        pairing's `approval_request` read with those permissions (action pairing.confirm; the signed payload names
+        them). The body's `permissions` must be the same list, or the approval does not verify (401
+        approval_invalid). The service then sends agent.paired to every product
         (POST /v1/oe/events), which enrolls the agent there. The agent's first product keys follow on its first
         confirmed read of GET /v1/pair/{pairing_id}.
       x-available: day-3
@@ -3582,6 +3593,7 @@ components:
           items: { $ref: '#/components/schemas/AudienceDid' }
         client: { $ref: '#/components/schemas/ClientInfo' }
         attestation: { $ref: '#/components/schemas/Attestation' }
+        device_counter: { type: integer, minimum: 1, maximum: 9007199254740991, description: 'Android refresh only: a counter the install keeps, above the last refresh''s, inside the body X-OE-Device-Signature signs.' }
       allOf:
         - if:
             properties:
@@ -4750,7 +4762,7 @@ components:
           then: { properties: { data: { $ref: '#/components/schemas/PlanChangedData' } } }
     AgentPairedData:
       type: object
-      required: [agent_did, owner_did, permissions, framework, seq]
+      required: [agent_did, owner_did, permissions, framework, seq, link_epoch]
       properties:
         agent_did: { $ref: '#/components/schemas/AgentDid' }
         owner_did: { $ref: '#/components/schemas/OwnerDid' }
@@ -4759,6 +4771,7 @@ components:
           items: { $ref: '#/components/schemas/Permission' }
         framework: { type: [string, 'null'], maxLength: 64, description: What the agent named at claim, e.g. openclaw. }
         seq: { type: integer, minimum: 1, description: 'The agent''s permissions counter, as on agent.permissions: apply these permissions only if newer than the ones held.' }
+        link_epoch: { type: integer, minimum: 1, description: 'This link of the agent to its owner: it rises with every confirmed pairing. Drop an agent.paired or agent.unlinked older than the link held.' }
     AgentPausedData:
       type: object
       required: [agent_did, owner_did, paused_at, seq]
@@ -4777,10 +4790,11 @@ components:
         seq: { type: integer, minimum: 1, description: The agent's pause-state counter. Apply only if newer than the one held. }
     AgentUnlinkedData:
       type: object
-      required: [agent_did, owner_did]
+      required: [agent_did, owner_did, link_epoch]
       properties:
         agent_did: { $ref: '#/components/schemas/AgentDid' }
         owner_did: { $ref: '#/components/schemas/OwnerDid' }
+        link_epoch: { type: integer, minimum: 1, description: The link this ends (agent.paired's link_epoch). Ignore it when a newer link is held. }
     AgentPermissionsData:
       type: object
       required: [agent_did, owner_did, permissions, seq]

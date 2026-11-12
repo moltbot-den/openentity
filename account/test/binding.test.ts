@@ -26,8 +26,8 @@ async function boundSession(d: Deps, platform: "ios" | "android", binding: strin
   const s = await openSession(d.db, { accountId: await account(d.db), platform, amr: "email", installId: randomUUID(), binding });
   return s.refreshToken;
 }
-const refresh = (d: Deps, token: string, headers: (body: string) => Record<string, string> = () => ({})) => {
-  const body = JSON.stringify({ grant_type: "refresh_token", refresh_token: token, audience: [`did:web:${d.host}`] });
+const refresh = (d: Deps, token: string, headers: (body: string) => Record<string, string> = () => ({}), extra: object = {}) => {
+  const body = JSON.stringify({ grant_type: "refresh_token", refresh_token: token, audience: [`did:web:${d.host}`], ...extra });
   return caller(createApp(d))("POST", "/v1/token", body, headers(body));
 };
 const sha = (s: string) => createHash("sha256").update(s).digest();
@@ -58,7 +58,12 @@ test("Android: Key Attestation over the nonce binds the Keystore key; refreshes 
   const token = await boundSession(staging, "android", binding);
   expect((await refresh(staging, token)).body.error).toBe("binding_required");
   expect((await refresh(staging, token, (body) => ({ "x-oe-device-signature": google.attest(Buffer.from(raw)).sign(body) }))).body.error).toBe("binding_invalid");
-  expect((await refresh(staging, token, (body) => ({ "x-oe-device-signature": k.sign(body) }))).status).toBe(200);
+  const sign = (body: string) => ({ "x-oe-device-signature": k.sign(body) });
+  expect((await refresh(staging, token, sign)).body.error).toBe("binding_invalid"); // gate hardening: no device_counter
+  const one = await refresh(staging, token, sign, { device_counter: 1 });
+  expect(one.status).toBe(200);
+  expect((await refresh(staging, one.body.refresh_token, sign, { device_counter: 1 })).body.error).toBe("binding_invalid"); // not above the last
+  expect((await refresh(staging, one.body.refresh_token, sign, { device_counter: 2 })).status).toBe(200);
 });
 
 test("Android Key Attestation guards: package, hardware level, generated key, revocation, the nonce, Google's chain", async () => {

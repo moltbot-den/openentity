@@ -28,7 +28,7 @@ async function pairedAgent(permissions = ["owner.message"], kp?: KeyPair) {
   const p = (await call("POST", "/v1/pairings", undefined, me.auth)).body;
   const body = JSON.stringify({ code: p.code, presentation: await buildPresentation(kp, { audience: SERVICE_DID, nonce: `pair:${p.code}` }), framework: "x", sdk: "x", sdk_version: "1" });
   await call("POST", "/v1/pair", body, await signRequest({ method: "POST", url: `https://${HOST}/v1/pair`, body: new TextEncoder().encode(body), privateKey: kp, did: kp.did }));
-  const req = (await call("GET", `/v1/pairings/${p.id}`, undefined, me.auth)).body.approval_request;
+  const req = (await call("GET", `/v1/pairings/${p.id}?permissions=${permissions.join(",")}`, undefined, me.auth)).body.approval_request;
   expect((await call("POST", `/v1/pairings/${p.id}/confirm`, { permissions }, { ...me.auth, ...approvalHeader(approval(approver, req)) })).status).toBe(200);
   return { ...me, kp };
 }

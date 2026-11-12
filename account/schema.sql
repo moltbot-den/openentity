@@ -319,6 +319,8 @@ CREATE INDEX IF NOT EXISTS deletion_requests_due ON deletion_requests (effective
 
 -- A web email start without Turnstile sends a code only to an existing email sign-in; its verify must prove Turnstile.
 ALTER TABLE email_codes ADD COLUMN IF NOT EXISTS human boolean NOT NULL DEFAULT true;
+-- Each confirmed pairing starts a new link: agent.paired and agent.unlinked carry it, so a product drops a stale one.
+ALTER TABLE agents ADD COLUMN IF NOT EXISTS link_epoch integer NOT NULL DEFAULT 0;
 
 -- Single-use login codes from the Apple form_post return for Android (/app/auth?login_code=), redeemed at POST /v1/token
 -- (grant_type login_code) within 120 seconds. Only the SHA-256 of a code is stored.
