@@ -6,6 +6,7 @@
 // Deleting revokes Apple's tokens, sends owner.deleted to every product, closes the key log with the service's close key
 // (the log stays readable, so old signatures still verify) and removes the account's personal data.
 import type { Hono } from "hono";
+import { unlinkAll } from "./agents.ts";
 import type { Deps } from "./app.ts";
 import { newId, now } from "./db.ts";
 import { bearer, fail } from "./http.ts";
@@ -50,6 +51,7 @@ export async function deleteAccount(d: Deps, accountId: string): Promise<number>
     await tx.run("DELETE FROM push_tokens WHERE account_id = $1", [accountId]);
     await tx.run("UPDATE deletion_requests SET state = 'done' WHERE account_id = $1 AND state = 'pending'", [accountId]);
   });
+  await unlinkAll(d, accountId); // their messages and attachments go too, and each agent may pair again
   // Products know the owner only by its DID; an account with no key log never had a product token.
   if (a.owner_did) await Promise.all(PRODUCT_DIDS.map((p) => sendEvent(d, p, "owner.deleted", { owner_did: a.owner_did, deleted_at: t })));
   return t;

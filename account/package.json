@@ -12,8 +12,10 @@
   "dependencies": {
     "@aws-sdk/client-apigatewaymanagementapi": "3.1162.0",
     "@aws-sdk/client-kms": "3.1162.0",
+    "@aws-sdk/client-s3": "3.1162.0",
     "@aws-sdk/client-sqs": "3.1162.0",
     "@aws-sdk/client-ssm": "3.1162.0",
+    "@aws-sdk/s3-request-presigner": "3.1162.0",
     "@openentity/sdk": "workspace:*",
     "@simplewebauthn/server": "14.0.3",
     "hono": "^4.13.13",

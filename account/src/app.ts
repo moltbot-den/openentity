@@ -26,6 +26,7 @@ import * as stepup from "./stepup.ts";
 import * as store from "./store.ts";
 import type { WebConfig } from "./web/config.ts";
 import type { WsClient } from "./ws.ts";
+import type { Blobs } from "./blobs.ts";
 import { PRODUCT_DIDS, aasa, assetlinks, didDocument, jwks, openidConfiguration } from "./wellknown.ts";
 
 export { PRODUCT_DIDS };
@@ -53,6 +54,8 @@ export interface Deps {
   fetch?: typeof fetch;
   /** Frames to agents' open sockets (ws.ts); unset, frames wait in the inbox. */
   ws?: WsClient;
+  /** Message attachments in S3 (blobs.ts); unset, uploads answer 503. */
+  blobs?: Blobs;
   /** Sends validated analytics events to the forwarder's queue (events.ts); unset, events are dropped with a warning. */
   queue?: (events: QueuedEvent[]) => Promise<void>;
   /** Tests only: stand-in attestation roots. Production pins Apple's and Google's roots (attest.ts). */

@@ -121,6 +121,18 @@ try {
   if (thread.length !== 2 || agentView.status?.summary !== "e2e") throw new Error("messages or status missing");
   step("messages both ways, status on the owner's view");
 
+  // An attachment through real S3: the presigned PUT carries the signed type and length, a message names the upload,
+  // and the owner's download is a 302 to a presigned GET.
+  const file = "e2e attachment";
+  const up = (await asAgent("POST", "/v1/agent/uploads", { name: "e2e.txt", content_type: "text/plain", size: Buffer.byteLength(file) })).body;
+  const put = await fetch(up.url, { method: up.method, headers: up.headers, body: file });
+  if (!put.ok) throw new Error(`S3 PUT -> ${put.status} ${(await put.text()).slice(0, 300)}`);
+  await asAgent("POST", "/v1/agent/messages", { text: "see attached", attachments: [up.upload_id] });
+  const dl = await fetch(`${BASE}/v1/attachments/${up.upload_id}`, { headers: auth, redirect: "manual" });
+  const fileUrl = dl.headers.get("location") ?? "";
+  if (dl.status !== 302 || (await (await fetch(fileUrl)).text()) !== file) throw new Error(`attachment download -> ${dl.status}`);
+  step("attachment: presigned PUT to S3, carried by a message, downloaded by the owner through a 302");
+
   // Pause: no approval; the socket hears the pause command and close_code 4001, then closes.
   await call("POST", `/v1/agents/${encodeURIComponent(kp.did)}/pause`, { source: "app" }, auth);
   await until(() => frames.some((f) => f.close_code === 4001), "4001 frame");
@@ -132,14 +144,16 @@ try {
   if ((await call("POST", `/v1/agents/${encodeURIComponent(kp.did)}/resume`, undefined, { ...auth, "x-oe-approval": sign(req) })).body.state !== "active") throw new Error("resume failed");
   step("resumed with an approval/2.0 step-up");
   await call("DELETE", `/v1/agents/${encodeURIComponent(kp.did)}`, undefined, auth);
-  step("unlinked");
+  if (await db.first("SELECT 1 FROM messages WHERE agent_did = $1 UNION ALL SELECT 1 FROM uploads WHERE agent_did = $1", [kp.did])) throw new Error("unlink left the thread or uploads");
+  if ((await fetch(fileUrl)).ok) throw new Error("unlink left the attachment in S3");
+  step("unlinked: thread, uploads and the S3 object gone");
 } catch (e) {
   console.error(`FAILED: ${(e as Error).message}`);
   process.exitCode = 1;
 } finally {
   // Leave nothing behind: every row this run created. One failed delete never stops the others.
   const del = (sql: string, p: unknown[]) => db.run(sql, p).catch((e) => console.error(`cleanup: ${sql.split(" WHERE")[0]}: ${(e as Error).message}`));
-  if (agentDid) for (const t of ["inbox", "messages", "agent_approvals", "pause_changes", "agent_products"]) await del(`DELETE FROM ${t} WHERE agent_did = $1`, [agentDid]);
+  if (agentDid) for (const t of ["inbox", "messages", "uploads", "agent_approvals", "pause_changes", "agent_products"]) await del(`DELETE FROM ${t} WHERE agent_did = $1`, [agentDid]);
   if (agentDid) await del("DELETE FROM agents WHERE did = $1", [agentDid]);
   if (accountId) {
     for (const t of ["pairings", "step_ups", "enrollments", "push_tokens"]) await del(`DELETE FROM ${t} WHERE account_id = $1`, [accountId]);

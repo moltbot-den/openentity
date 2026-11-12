@@ -4,7 +4,7 @@
 // pairing carries its product keys, fetched from the products then and never stored here.
 import { createHash, randomInt } from "node:crypto";
 import type { Hono } from "hono";
-import { normalizeEid, pairSas, payloadDigest, verifyPresentation } from "@openentity/sdk";
+import { normalizeEid, pairSas, payloadDigest, trust, verifyPresentation } from "@openentity/sdk";
 import { type AgentRow, agentView, productKeys } from "./agents.ts";
 import type { Deps } from "./app.ts";
 import { bump, newId, now } from "./db.ts";
@@ -35,6 +35,22 @@ export function sas(code: string, agentDid: string) {
   return { version: "pair-sas/1", indexes: [...h.subarray(0, 4)], names: pairSas(code, agentDid) };
 }
 
+/**
+ * The newest live Secure My Agent posture attestation about the agent, read from the registry and verified locally by
+ * the SDK's trust() (ADR 0002). Null when there is none, or the registry or a key does not answer within 2 seconds.
+ * checked_at is when this service read it.
+ */
+async function safetyOf(d: Deps, did: string): Promise<{ verdict: string; checked_at: number } | null> {
+  const fetchJson = async (url: string) => {
+    const r = await (d.fetch ?? fetch)(url, { signal: AbortSignal.timeout(2000), headers: { accept: "application/json" } });
+    if (!r.ok) throw new Error(`${url} answered ${r.status}`);
+    return r.json();
+  };
+  const report = await Promise.race([trust(did, { fetchJson }), new Promise<null>((ok) => setTimeout(() => ok(null), 2500).unref())]).catch(() => null);
+  const band = report?.ok ? report.securityPosture?.score_band : undefined;
+  return typeof band === "string" && band ? { verdict: band.slice(0, 32), checked_at: now() } : null;
+}
+
 /** Waiting and claimed pairings past their time read as expired. */
 const stateOf = (p: PairingRow) => (["waiting", "claimed"].includes(p.state) && Number(p.expires_at) <= now() ? "expired" : p.state);
 
@@ -49,7 +65,7 @@ function detail(d: Deps, p: PairingRow, ownerDid: string) {
   const payload = state === "claimed" ? confirmPayload(p) : null;
   return {
     id: p.id, code: p.code, url: `https://openentity.org/pair#${p.code}`, expires_at: Number(p.expires_at), state,
-    agent: agent && p.agent_did ? { did: p.agent_did, framework: agent.framework, host: agent.host, sdk: agent.sdk, sdk_version: agent.sdk_version, safety: null } : null,
+    agent: agent && p.agent_did ? { did: p.agent_did, framework: agent.framework, host: agent.host, sdk: agent.sdk, sdk_version: agent.sdk_version, safety: agent.safety ?? null } : null,
     sas: p.agent_did ? sas(p.code, p.agent_did) : null,
     approval_request: payload ? {
       verifier_did: `did:web:${d.host}`, owner_did: ownerDid, request_id: p.request_id, action: "pairing.confirm", payload,
@@ -161,7 +177,7 @@ export function routes(app: Hono, d: Deps) {
     const t = now();
     const won = await d.db.run(
       "UPDATE pairings SET state = 'claimed', agent_did = $2, agent = $3, request_id = $4, claimed_at = $5, expires_at = $6 WHERE id = $1 AND state = 'waiting' AND expires_at > $5",
-      [p.id, did, JSON.stringify(agent), newId("pc"), t, t + CONFIRM_TTL]);
+      [p.id, did, JSON.stringify({ ...agent, safety: await safetyOf(d, did) }), newId("pc"), t, t + CONFIRM_TTL]);
     if (!won.changes) fail(409, "code_used", "this code was already used");
     const owner = await d.db.first<{ owner_did: string | null }>("SELECT owner_did FROM accounts WHERE id = $1", [p.account_id]);
     await track(d, "pair_requested", { framework: agent.framework!, sdk: agent.sdk!, sdk_version: agent.sdk_version! }, { owner: owner?.owner_did, agent: did });

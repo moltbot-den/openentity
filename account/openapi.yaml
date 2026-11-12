@@ -1664,7 +1664,7 @@ paths:
       operationId: unlinkAgent
       tags: [Agents]
       summary: Unlink an agent
-      description: Revokes its product credentials, sends agent.unlinked to every product and closes its socket with 4003.
+      description: Revokes its product credentials, sends agent.unlinked to every product and closes its socket with 4003. The thread, the agent's undelivered items and its attachments are deleted, and the label and status are cleared, so a later owner never sees them. Deleting the account unlinks every agent the same way.
       x-available: day-3
       security:
         - ownerBearer: []
@@ -2259,6 +2259,11 @@ paths:
       operationId: createUpload
       tags: [Agent API]
       summary: Get a presigned URL for a message attachment
+      description: |
+        Needs owner.message. The PUT URL lasts 300 seconds and signs content-type and content-length, so the upload is
+        exactly `size` bytes of `content_type`; send `headers` as given. Name the upload in one POST /v1/agent/messages
+        once it is stored (400 upload_unknown before, or for another agent's upload, or a second time). 60 an hour per
+        agent. The owner downloads through GET /v1/attachments/{id}; files expire after 90 days.
       x-available: day-3
       security:
         - agentSignature: []

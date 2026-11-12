@@ -12,9 +12,11 @@ import { notifyOwner } from "./notify.ts";
 import { callProduct, reaches, sendEvent } from "./outbound.ts";
 import { agentSigned, productSigned } from "./rfc9421.ts";
 import { checkApproval, permissionList, requireApproval } from "./stepup.ts";
+import { URL_TTL } from "./blobs.ts";
 import { ack, closeSocket, deliver, unacked } from "./ws.ts";
 
 const MAX_TEXT = 4096, MESSAGES_PER_HOUR = 60, APPROVALS_PER_HOUR = 30, STATUS_PER_HOUR = 600, POLL_GAP = 15;
+const MAX_UPLOAD = 10 * 1024 * 1024, MAX_ATTACHMENTS = 10, UPLOADS_PER_HOUR = 60;
 const PAUSE_LOCK = 7_231_001; // pg advisory lock: pause_changes rows commit in id order
 
 export interface AgentRow {
@@ -41,6 +43,31 @@ const agentDidParam = (c: Context) => {
 /** One of the owner's linked agents, or 404. */
 export async function ownersAgent(d: Deps, accountId: string, did: string): Promise<AgentRow> {
   return (await d.db.first<AgentRow>("SELECT * FROM agents WHERE did = $1 AND account_id = $2 AND state <> 'unlinked'", [did, accountId])) ?? fail(404, "not_found", "no such agent");
+}
+
+/**
+ * Unlinks an agent. The thread, the inbox and the attachments go with the link, so an owner who pairs the agent later
+ * never sees an earlier owner's messages, label or status. Its socket closes (4003) and its products get agent.unlinked.
+ */
+async function unlink(d: Deps, a: AgentRow, message: string) {
+  const files = await d.db.tx(async (tx) => {
+    await tx.run("UPDATE agents SET state = 'unlinked', unlinked_at = $2, label = NULL, status = NULL WHERE did = $1", [a.did, now()]);
+    await tx.run("DELETE FROM messages WHERE agent_did = $1", [a.did]);
+    await tx.run("DELETE FROM inbox WHERE agent_did = $1", [a.did]);
+    return tx.all<{ s3_key: string }>("DELETE FROM uploads WHERE agent_did = $1 RETURNING s3_key", [a.did]);
+  });
+  // A failed removal leaves the objects to the bucket's 90-day expiry; nothing points at them any more.
+  if (files.length && d.blobs) await d.blobs.remove(files.map((f) => f.s3_key)).catch((e) => console.error(`removing ${a.did}'s attachments failed`, e));
+  await closeSocket(d, a.did, a.connection_id, 4003, "unlinked", message);
+  const data = { agent_did: a.did, owner_did: a.owner_did };
+  await Promise.all((await productsOf(d, a.did)).map((p) => sendEvent(d, p, "agent.unlinked", data)));
+}
+
+/** deletion.ts: every agent of a deleted account is unlinked, so it can pair with someone else. */
+export async function unlinkAll(d: Deps, accountId: string): Promise<void> {
+  for (const a of await d.db.all<AgentRow>("SELECT * FROM agents WHERE account_id = $1 AND state <> 'unlinked'", [accountId])) {
+    await unlink(d, a, "the owner deleted their account");
+  }
 }
 
 /** The paired agent behind a signed request: 401 for a bad signature, 403 not_paired otherwise. */
@@ -150,13 +177,44 @@ export function routes(app: Hono, d: Deps) {
     allowed(a, "owner.message");
     const b = await json(c);
     const text = utf8Text(b.text, "text");
-    if (Array.isArray(b.attachments) && b.attachments.length) fail(400, "upload_unknown", "attachments are not available yet");
+    const ids: string[] = b.attachments === undefined ? [] : b.attachments;
+    if (!Array.isArray(ids) || ids.length > MAX_ATTACHMENTS || ids.some((x) => typeof x !== "string" || !/^[A-Za-z0-9_-]{1,64}$/.test(x)) || new Set(ids).size !== ids.length) {
+      fail(400, "bad_request", `attachments are at most ${MAX_ATTACHMENTS} distinct upload ids`);
+    }
+    // Each upload must be this agent's, for this owner, unused, and stored at exactly its declared size.
+    for (const u of ids) {
+      const row = await d.db.first<{ s3_key: string; size: number }>("SELECT s3_key, size FROM uploads WHERE id = $1 AND agent_did = $2 AND account_id = $3 AND message_id IS NULL", [u, a.did, a.account_id]);
+      if (!row || !d.blobs || (await d.blobs.size(row.s3_key)) !== Number(row.size)) fail(400, "upload_unknown", `upload ${u} is not this agent's, is used, or was not uploaded`);
+    }
     await limit(d, `msg:${a.did}`, MESSAGES_PER_HOUR);
     const id = newId("msg");
-    await d.db.run("INSERT INTO messages (id, agent_did, sender, text, created_at) VALUES ($1, $2, 'agent', $3, $4)", [id, a.did, text, now()]);
+    await d.db.tx(async (tx) => {
+      await tx.run("INSERT INTO messages (id, agent_did, sender, text, created_at) VALUES ($1, $2, 'agent', $3, $4)", [id, a.did, text, now()]);
+      if (!ids.length) return;
+      const used = await tx.run("UPDATE uploads SET message_id = $2 WHERE id IN (SELECT jsonb_array_elements_text($1::jsonb)) AND message_id IS NULL", [JSON.stringify(ids), id]);
+      if (used.changes !== ids.length) fail(400, "upload_unknown", "an upload was used by another message");
+    });
     await notifyOwner(d, a.account_id, { type: "message", id, agent: a.did });
-    await track(d, "agent_message_sent", { has_attachment: false }, { owner: a.owner_did, agent: a.did });
+    await track(d, "agent_message_sent", { has_attachment: ids.length > 0 }, { owner: a.owner_did, agent: a.did });
     return c.json({ id }, 201);
+  });
+
+  app.post("/v1/agent/uploads", async (c) => {
+    const a = await pairedAgent(c, d);
+    notPaused(a);
+    allowed(a, "owner.message");
+    const b = await json(c);
+    if (typeof b.name !== "string" || !b.name || b.name.length > 255) fail(400, "bad_request", "name is 1 to 255 characters");
+    if (typeof b.content_type !== "string" || b.content_type.length > 127 || !/^[A-Za-z0-9!#$&^_.+-]+\/[A-Za-z0-9!#$&^_.+-]+$/.test(b.content_type)) fail(400, "bad_request", "content_type is a media type, type/subtype");
+    if (!Number.isSafeInteger(b.size) || b.size < 1) fail(400, "bad_request", "size is the byte count, 1 or more");
+    if (b.size > MAX_UPLOAD) fail(413, "too_large", `an attachment is at most ${MAX_UPLOAD} bytes`);
+    if (!d.blobs) fail(503, "unavailable", "attachments are not configured in this environment");
+    await limit(d, `upload:${a.did}`, UPLOADS_PER_HOUR);
+    const id = newId("upl"), t = now(), key = `uploads/${id}`;
+    const put = await d.blobs!.putUrl(key, b.content_type, b.size);
+    await d.db.run("INSERT INTO uploads (id, agent_did, account_id, name, content_type, size, s3_key, created_at, expires_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
+      [id, a.did, a.account_id, b.name, b.content_type, b.size, key, t, t + URL_TTL]);
+    return c.json({ upload_id: id, url: put.url, method: "PUT", headers: put.headers, expires_at: t + URL_TTL }, 201);
   });
 
   app.post("/v1/agent/messages/ack", async (c) => {
@@ -268,11 +326,7 @@ export function routes(app: Hono, d: Deps) {
 
   app.delete("/v1/agents/:agent_did", async (c) => {
     const o = await bearer(c, d);
-    const a = await ownersAgent(d, o.accountId, agentDidParam(c));
-    await d.db.run("UPDATE agents SET state = 'unlinked', unlinked_at = $2 WHERE did = $1", [a.did, now()]);
-    await closeSocket(d, a.did, a.connection_id, 4003, "unlinked", "the owner unlinked this agent");
-    const data = { agent_did: a.did, owner_did: a.owner_did };
-    await Promise.all((await productsOf(d, a.did)).map((p) => sendEvent(d, p, "agent.unlinked", data)));
+    await unlink(d, await ownersAgent(d, o.accountId, agentDidParam(c)), "the owner unlinked this agent");
     return c.body(null, 204);
   });
 
@@ -313,7 +367,18 @@ export function routes(app: Hono, d: Deps) {
     const rows = at
       ? await d.db.all<any>("SELECT * FROM messages WHERE agent_did = $1 AND seq < $2 ORDER BY seq DESC LIMIT $3", [a.did, at.seq, limitN])
       : await d.db.all<any>("SELECT * FROM messages WHERE agent_did = $1 ORDER BY seq DESC LIMIT $2", [a.did, limitN]);
-    return c.json({ messages: rows.map((m) => ({ id: m.id, from: m.sender, text: m.text, attachments: [], created_at: Number(m.created_at), ...(m.sender === "owner" ? { acked_at: m.acked_at === null ? null : Number(m.acked_at) } : {}) })) });
+    const files = rows.length ? await d.db.all<{ id: string; name: string; content_type: string; size: number; message_id: string }>(
+      "SELECT id, name, content_type, size, message_id FROM uploads WHERE message_id IN (SELECT jsonb_array_elements_text($1::jsonb)) ORDER BY created_at, id", [JSON.stringify(rows.map((m) => m.id))]) : [];
+    const of = (m: string) => files.filter((f) => f.message_id === m).map((f) => ({ id: f.id, name: f.name, content_type: f.content_type, size: Number(f.size) }));
+    return c.json({ messages: rows.map((m) => ({ id: m.id, from: m.sender, text: m.text, attachments: of(m.id), created_at: Number(m.created_at), ...(m.sender === "owner" ? { acked_at: m.acked_at === null ? null : Number(m.acked_at) } : {}) })) });
+  });
+
+  app.get("/v1/attachments/:id", async (c) => {
+    const o = await bearer(c, d);
+    // Only the owner of the message's agent, and only once a message carries the upload.
+    const f = await d.db.first<{ s3_key: string; name: string; content_type: string }>("SELECT s3_key, name, content_type FROM uploads WHERE id = $1 AND account_id = $2 AND message_id IS NOT NULL", [c.req.param("id"), o.accountId]);
+    if (!f || !d.blobs) fail(404, "not_found", "no such attachment");
+    return c.redirect(await d.blobs!.getUrl(f!.s3_key, f!.name, f!.content_type), 302);
   });
 
   app.post("/v1/agents/:agent_did/messages", async (c) => {

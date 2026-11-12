@@ -23,6 +23,7 @@ import {
   aws_lambda_nodejs as nodejs,
   aws_logs as logs,
   aws_rds as rds,
+  aws_s3 as s3,
   aws_ssm as ssm,
 } from "aws-cdk-lib";
 import type { Construct } from "constructs";
@@ -108,6 +109,13 @@ export class OpenEntityAccountStack extends Stack {
     const analytics = new AnalyticsForwarder(this, "Analytics", { environment: stage });
     const events = analytics.queue;
 
+    // ---- Message attachments: private, SSE-S3, TLS only; reached only through 5-minute presigned URLs (account/src/blobs.ts) ----
+    const attachments = new s3.Bucket(this, "Attachments", {
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL, encryption: s3.BucketEncryption.S3_MANAGED, enforceSSL: true,
+      objectOwnership: s3.ObjectOwnership.BUCKET_OWNER_ENFORCED, removalPolicy: RemovalPolicy.RETAIN,
+      lifecycleRules: [{ expiration: Duration.days(90), abortIncompleteMultipartUploadAfter: Duration.days(1) }],
+    });
+
     // ---- App: one function serves HTTP (through CloudFront) and the WebSocket routes ----
     const originVerify = ssm.StringParameter.valueForStringParameter(this, `${PARAM_PATH}origin_verify_${suffix}`);
     const fn = new nodejs.NodejsFunction(this, "AppFn", {
@@ -143,6 +151,7 @@ export class OpenEntityAccountStack extends Stack {
         CLOSE_KEY_ID: closeKey.keyArn,
         DATA_KEY_ID: dataKey.keyArn,
         EVENTS_QUEUE_URL: events.queueUrl,
+        ATTACHMENTS_BUCKET: attachments.bucketName,
         // Production sign-in stays closed until device binding and the Day 6 review gate (PLAN 3.6); staging is open.
         SIGNIN_OPEN: prod ? "0" : "1",
         NODE_OPTIONS: "--enable-source-maps",
@@ -154,6 +163,9 @@ export class OpenEntityAccountStack extends Stack {
     closeKey.grant(fn, "kms:Sign", "kms:GetPublicKey");
     dataKey.grant(fn, "kms:Encrypt", "kms:Decrypt");
     events.grantSendMessages(fn);
+    attachments.grantPut(fn, "uploads/*");
+    attachments.grantRead(fn, "uploads/*");
+    attachments.grantDelete(fn, "uploads/*"); // an unlinked agent's attachments
     // Its own parameters only: never /openentity/app (the registry's keys), never the other stage's values.
     fn.addToRolePolicy(new iam.PolicyStatement({ actions: ["ssm:GetParameters"], resources: [`arn:aws:ssm:${this.region}:${this.account}:parameter${PARAM_PATH}*`] }));
     fn.addToRolePolicy(new iam.PolicyStatement({ effect: iam.Effect.DENY, actions: ["ssm:GetParameter*"], resources: [`arn:aws:ssm:${this.region}:${this.account}:parameter${PARAM_PATH}*_${other}`] }));

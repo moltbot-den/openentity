@@ -7,6 +7,7 @@ import { GetParametersCommand, SSMClient } from "@aws-sdk/client-ssm";
 import { Hono } from "hono";
 import { handle } from "hono/aws-lambda";
 import { type Deps, createApp } from "./app.ts";
+import { s3Blobs } from "./blobs.ts";
 import { awake, dataApiDb } from "./db.ts";
 import type { QueuedEvent } from "./events.ts";
 import { customerIo } from "./email.ts";
@@ -61,6 +62,7 @@ async function init() {
     web: webConfig(s),
     ws: apiGatewayWs(e.WS_CALLBACK_URL!),
     queue: sqsQueue(e.EVENTS_QUEUE_URL!),
+    blobs: e.ATTACHMENTS_BUCKET ? s3Blobs(e.ATTACHMENTS_BUCKET) : undefined,
     // Product API hosts by DID. Production calls the products; staging calls none unless product_apis names stubs.
     products: s.product_apis ? JSON.parse(s.product_apis) : e.STAGE === "production" ? PRODUCT_APIS : {},
   };

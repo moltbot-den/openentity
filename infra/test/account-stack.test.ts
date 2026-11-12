@@ -116,6 +116,21 @@ test("jobs tick: every minute in production, every 6 hours in staging, no retrie
   staging.hasResourceProperties("AWS::Events::Rule", { ScheduleExpression: "rate(6 hours)" });
 });
 
+test("attachments: a private bucket (all public access blocked, SSE, TLS only, 90-day expiry), the app reads, writes and deletes uploads/ only", () => {
+  for (const t of [prod, staging]) {
+    t.hasResourceProperties("AWS::S3::Bucket", {
+      PublicAccessBlockConfiguration: { BlockPublicAcls: true, BlockPublicPolicy: true, IgnorePublicAcls: true, RestrictPublicBuckets: true },
+      BucketEncryption: Match.objectLike({ ServerSideEncryptionConfiguration: [Match.objectLike({ ServerSideEncryptionByDefault: { SSEAlgorithm: "AES256" } })] }),
+      LifecycleConfiguration: { Rules: Match.arrayWith([Match.objectLike({ ExpirationInDays: 90 })]) },
+    });
+    t.hasResourceProperties("AWS::S3::BucketPolicy", { PolicyDocument: { Statement: Match.arrayWith([Match.objectLike({ Effect: "Deny", Condition: { Bool: { "aws:SecureTransport": "false" } } })]) } });
+    const s3Grants = all(t, "AWS::IAM::Policy").flatMap((p) => p.Properties.PolicyDocument.Statement).filter((st: any) => JSON.stringify(st.Action).includes("s3:"));
+    expect(s3Grants.length).toBeGreaterThan(0);
+    for (const g of s3Grants) expect(JSON.stringify(g.Resource)).toContain("/uploads/*");
+    expect(appFn(t).Properties.Environment.Variables.ATTACHMENTS_BUCKET).toBeDefined();
+  }
+});
+
 test("the account stacks stand alone: nothing is imported from the registry stack", () => {
   for (const t of [prod, staging]) expect(JSON.stringify(t.toJSON())).not.toContain("Fn::ImportValue");
 });
