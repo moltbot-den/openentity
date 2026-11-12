@@ -98,3 +98,59 @@ CREATE TABLE IF NOT EXISTS rate_events (
   count integer NOT NULL,
   PRIMARY KEY (key, window_start)
 );
+
+-- ---------------------------------------------------------------- core lane: key logs, step-up, signatures, outbox
+
+-- Owner key logs (test-vectors/keylog-1). `line` is the exact JCS entry, stored and served byte for byte.
+CREATE TABLE IF NOT EXISTS keylog_entries (
+  owner_id text NOT NULL,                     -- base32 SHA-256 of the genesis line: the owner DID's last segment
+  seq integer NOT NULL,
+  line text NOT NULL,
+  hash text NOT NULL,                         -- lowercase hex SHA-256 of line: the next entry's prev
+  op text NOT NULL,
+  first_seen_at bigint NOT NULL,              -- this service's first sight; the delays it reports run from it
+  effective_at bigint NOT NULL,
+  PRIMARY KEY (owner_id, seq)
+);
+
+-- Step-up requests (POST /v1/step-up). Each is used once (used_at).
+CREATE TABLE IF NOT EXISTS step_ups (
+  request_id text PRIMARY KEY,
+  account_id text NOT NULL REFERENCES accounts (id),
+  owner_did text NOT NULL,
+  action text NOT NULL,
+  params text NOT NULL,                       -- JCS of the normalized params
+  payload_digest text NOT NULL,
+  created_at bigint NOT NULL,
+  expires_at bigint NOT NULL,
+  used_at bigint
+);
+CREATE INDEX IF NOT EXISTS step_ups_account ON step_ups (account_id);
+
+-- The highest WebAuthn signature counter seen per approver passkey (approval/2.0 counter_replayed).
+CREATE TABLE IF NOT EXISTS approver_counters (
+  owner_did text NOT NULL,
+  kid text NOT NULL,
+  counter bigint NOT NULL,
+  PRIMARY KEY (owner_did, kid)
+);
+
+-- RFC 9421 nonces already accepted: SHA-256 hex of keyid|nonce, kept until the signature expires.
+CREATE TABLE IF NOT EXISTS sig_nonces (
+  key text PRIMARY KEY,
+  expires_at bigint NOT NULL
+);
+
+-- Signed calls to products that failed and are retried (outbound.ts); `id` is the event id products dedupe on.
+CREATE TABLE IF NOT EXISTS outbox (
+  id text PRIMARY KEY,
+  product text NOT NULL,
+  path text NOT NULL,
+  body text NOT NULL,
+  attempts integer NOT NULL,
+  next_at bigint NOT NULL,
+  created_at bigint NOT NULL
+);
+CREATE INDEX IF NOT EXISTS outbox_due ON outbox (next_at);
+
+-- ---------------------------------------------------------------- web lane (appends below)

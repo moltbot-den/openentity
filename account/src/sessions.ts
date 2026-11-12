@@ -3,13 +3,50 @@
 // the same token again within RETRY_GRACE seconds, while its successor is still unused, replaces that successor.
 // That covers a response lost on a mobile network; theft inside the window is what device binding stops.
 import { createHash, randomBytes } from "node:crypto";
+import type { Deps } from "./app.ts";
 import { type Db, newId, now } from "./db.ts";
-import { HttpError } from "./http.ts";
+import { HttpError, fail } from "./http.ts";
+import { signJwt } from "./keys.ts";
+import { BUNDLE_ID } from "./wellknown.ts";
 
 export const APP_TTL = 90 * 86400; // sliding
 export const WEB_TTL = 12 * 3600; // absolute
 export const RETRY_GRACE = 30;
+export const ACCESS_TTL = 900;
+export const COOKIE = "__Host-oe_session";
 export type Platform = "ios" | "android" | "web";
+
+/** A 15-minute ES256 access token for one audience (PLAN 2.4). Product audiences need an owner DID (a key log). */
+export async function accessToken(d: Deps, accountId: string, aud: string, sid: string, platform: string, authTime: number, amr: string, t = now()) {
+  const a = await d.db.first<{ owner_did: string | null }>("SELECT owner_did FROM accounts WHERE id = $1", [accountId]);
+  if (aud !== `did:web:${d.host}` && !a?.owner_did) fail(403, "key_log_required", "product tokens need an owner DID; finish \"Turn on Face ID approvals\" first");
+  const token = await signJwt(d.keys.token, { typ: "at+jwt" }, {
+    iss: `https://${d.host}`, sub: a?.owner_did ?? accountId, aud, iat: t, exp: t + ACCESS_TTL, jti: newId("at"), sid,
+    client_id: platform === "web" ? "web" : BUNDLE_ID, auth_time: authTime, amr: [amr],
+  });
+  return { audience: aud, access_token: token, expires_at: t + ACCESS_TTL };
+}
+
+/** The Account object (openapi.yaml) for the signed-in owner. */
+export async function me(d: Deps, accountId: string) {
+  const a = await d.db.first<any>("SELECT * FROM accounts WHERE id = $1", [accountId]);
+  const methods = await d.db.all<any>("SELECT id, type, subject, email, created_at, last_used_at FROM methods WHERE account_id = $1 ORDER BY created_at", [accountId]);
+  return {
+    id: a.id, owner_did: a.owner_did ?? null, email: a.email ?? null, email_private: !!a.email_private, created_at: Number(a.created_at),
+    has_key_log: !!a.owner_did, backup_needed: !!a.owner_did, app_account_token: a.app_account_token,
+    methods: methods.map((m) => ({ id: m.id, type: m.type, label: m.type === "email" ? m.subject : m.email ?? m.type, created_at: Number(m.created_at), last_used_at: m.last_used_at === null ? null : Number(m.last_used_at) })),
+    deletion: null,
+  };
+}
+
+/**
+ * Device binding (PLAN 2.4): checks the `attestation` a sign-in or refresh sends (App Attest, or Android Key Attestation
+ * plus Play Integrity, bound to the raw nonce) and returns the JSON to keep in sessions.binding. The sign-in routes
+ * (signin.ts) call it on an install's first sign-in. Until the checks land it binds nothing and returns null.
+ */
+export async function deviceBinding(_d: Deps, _o: { platform: Platform; installId: string | null; attestation: unknown; nonce: string }): Promise<string | null> {
+  return null;
+}
 
 export interface Session {
   id: string; account_id: string; platform: Platform; install_id: string | null; binding: string | null;

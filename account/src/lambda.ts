@@ -1,20 +1,24 @@
-// The account service's one function: HTTP from CloudFront (function URL) and the agent WebSocket routes.
+// The account service's one function: HTTP from CloudFront (function URL), the agent WebSocket routes and the
+// scheduled jobs tick (EventBridge).
 import { createHash, timingSafeEqual } from "node:crypto";
 import { KMSClient } from "@aws-sdk/client-kms";
 import { GetParametersCommand, SSMClient } from "@aws-sdk/client-ssm";
 import { Hono } from "hono";
 import { handle } from "hono/aws-lambda";
-import { createApp } from "./app.ts";
+import { type Deps, createApp } from "./app.ts";
 import { awake, dataApiDb } from "./db.ts";
 import { customerIo } from "./email.ts";
 import { fail } from "./http.ts";
+import { runJobs } from "./jobs.ts";
 import { kmsEd25519, kmsEs256, kmsKey } from "./keys.ts";
 import { rpFor } from "./passkey.ts";
+import { WEB_PARAMS, webConfig } from "./web/config.ts";
 import { BUNDLE_ID } from "./wellknown.ts";
 
 const e = process.env;
 // Logical names read from SSM: <name> (both stages) and <name>_<prod|staging> (this stage wins). The role cannot read the other stage's values.
-const NAMES = ["code_pepper", "cio_app_api_key", "apple_siwa_services_id", "google_oauth_ios_client_id", "google_oauth_web_client_id", "android_cert_sha256"];
+// WEB_PARAMS are the web lane's names (account/src/web/config.ts).
+const NAMES = ["code_pepper", "cio_app_api_key", "apple_siwa_services_id", "google_oauth_ios_client_id", "google_oauth_web_client_id", "android_cert_sha256", ...WEB_PARAMS];
 
 async function params(): Promise<Record<string, string | undefined>> {
   const ssm = new SSMClient({});
@@ -33,10 +37,10 @@ async function init() {
   const s = await params();
   if (!s.code_pepper) throw new Error("code_pepper is not set in SSM");
   const kms = new KMSClient({});
-  // ponytail: the close key signs nothing until account deletion lands; its signer must then normalize s to low-S (keylog-1).
+  // The close key signs key log close entries only; keylog.ts closeKeyLog normalizes its s to low-S (keylog-1).
   const [token, did, close] = await Promise.all([kmsKey(kms, e.TOKEN_KEY_ID!, kmsEs256), kmsKey(kms, e.DID_KEY_ID!, kmsEd25519), kmsKey(kms, e.CLOSE_KEY_ID!, kmsEs256)]);
   const fingerprints = list(s.android_cert_sha256);
-  const app = createApp({
+  const deps: Deps = {
     stage: e.STAGE === "production" ? "production" : "staging",
     host: e.HOST!,
     db: awake(dataApiDb({ resourceArn: e.DB_CLUSTER_ARN!, secretArn: e.DB_SECRET_ARN!, database: e.DB_NAME! })),
@@ -50,8 +54,9 @@ async function init() {
     androidFingerprints: fingerprints,
     signinOpen: e.SIGNIN_OPEN === "1",
     version: e.AWS_LAMBDA_FUNCTION_VERSION,
-  });
-  return { app, verify: e.ORIGIN_VERIFY! };
+    web: webConfig(s),
+  };
+  return { deps, app: createApp(deps), verify: e.ORIGIN_VERIFY! };
 }
 let ready: ReturnType<typeof init> | undefined;
 const boot = () => (ready ??= init().catch((err) => ((ready = undefined), Promise.reject(err))));
@@ -74,6 +79,8 @@ const http = new Hono().all("*", async (c) => {
 const onHttp = handle(http);
 
 export const handler = async (event: any, context: any) => {
+  // EventBridge schedule (account-stack.ts): run the jobs. Only EventBridge can send this shape; HTTP events never carry it.
+  if (event?.source === "aws.events") return runJobs((await boot()).deps);
   const route = event?.requestContext?.routeKey;
   if (event?.requestContext?.connectionId && route) {
     // WebSocket (PLAN 8.2). Pairing lands on Day 3; until then no agent is paired, so every connection is refused.

@@ -86,6 +86,11 @@ test("events go to an encrypted queue with a dead-letter queue", () => {
   prod.hasResourceProperties("AWS::SQS::Queue", { RedrivePolicy: Match.objectLike({ maxReceiveCount: 5 }), SqsManagedSseEnabled: true });
 });
 
+test("jobs tick: every minute in production, every 6 hours in staging, no retries of a missed tick", () => {
+  prod.hasResourceProperties("AWS::Events::Rule", { ScheduleExpression: "rate(1 minute)", Targets: [Match.objectLike({ RetryPolicy: { MaximumRetryAttempts: 0, MaximumEventAgeInSeconds: 60 } })] });
+  staging.hasResourceProperties("AWS::Events::Rule", { ScheduleExpression: "rate(6 hours)" });
+});
+
 test("the account stacks stand alone: nothing is imported from the registry stack", () => {
   for (const t of [prod, staging]) expect(JSON.stringify(t.toJSON())).not.toContain("Fn::ImportValue");
 });

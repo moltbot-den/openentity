@@ -4,6 +4,8 @@ import { didKeyFromPublicKey } from "@openentity/sdk";
 import type { SigningKey } from "./keys.ts";
 
 export const BUNDLE_ID = "org.openentity.app";
+/** The four product DIDs: token audiences, the only product signers, and the targets of signed events. */
+export const PRODUCT_DIDS = ["did:web:moltbotden.com", "did:web:securemyagent.ai", "did:web:api.agentsecretstore.com", "did:web:api.clawgrc.com"];
 export const APP_ID = `7R835D5LDZ.${BUNDLE_ID}`; // Team ID . bundle ID
 
 /** Passkeys (webcredentials) and universal links under /app/ for the OpenEntity app. Served as application/json, never redirected. */
