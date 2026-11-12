@@ -1,7 +1,7 @@
 // Message attachments in S3 (POST /v1/agent/uploads, GET /v1/attachments/{id}). The bucket is private: an agent PUTs
 // through a 5-minute presigned URL whose content-type and content-length are signed, so the upload is exactly the
 // declared size; the owner GETs through a 5-minute presigned URL that downloads as a file.
-import { GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { DeleteObjectsCommand, GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 export const URL_TTL = 300;
@@ -13,6 +13,8 @@ export interface Blobs {
   size(key: string): Promise<number | null>;
   /** A presigned GET that downloads as `name`. */
   getUrl(key: string, name: string, contentType: string): Promise<string>;
+  /** Deletes the objects (an unlinked agent's attachments). */
+  remove(keys: string[]): Promise<void>;
 }
 
 export function s3Blobs(bucket: string): Blobs {
@@ -35,5 +37,11 @@ export function s3Blobs(bucket: string): Blobs {
     getUrl: (key, name, contentType) => getSignedUrl(s3, new GetObjectCommand({
       Bucket: bucket, Key: key, ResponseContentType: contentType, ResponseContentDisposition: `attachment; filename*=UTF-8''${encodeURIComponent(name)}`,
     }), { expiresIn: URL_TTL }),
+    async remove(keys) {
+      for (let i = 0; i < keys.length; i += 1000) { // DeleteObjects takes 1000 keys a call
+        const r = await s3.send(new DeleteObjectsCommand({ Bucket: bucket, Delete: { Objects: keys.slice(i, i + 1000).map((Key) => ({ Key })), Quiet: true } }));
+        if (r.Errors?.length) throw new Error(`${r.Errors.length} objects not deleted: ${r.Errors[0].Code}`);
+      }
+    },
   };
 }

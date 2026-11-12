@@ -116,7 +116,7 @@ test("jobs tick: every minute in production, every 6 hours in staging, no retrie
   staging.hasResourceProperties("AWS::Events::Rule", { ScheduleExpression: "rate(6 hours)" });
 });
 
-test("attachments: a private bucket (all public access blocked, SSE, TLS only, 90-day expiry), the app reads and writes uploads/ only", () => {
+test("attachments: a private bucket (all public access blocked, SSE, TLS only, 90-day expiry), the app reads, writes and deletes uploads/ only", () => {
   for (const t of [prod, staging]) {
     t.hasResourceProperties("AWS::S3::Bucket", {
       PublicAccessBlockConfiguration: { BlockPublicAcls: true, BlockPublicPolicy: true, IgnorePublicAcls: true, RestrictPublicBuckets: true },

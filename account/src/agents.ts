@@ -45,6 +45,31 @@ export async function ownersAgent(d: Deps, accountId: string, did: string): Prom
   return (await d.db.first<AgentRow>("SELECT * FROM agents WHERE did = $1 AND account_id = $2 AND state <> 'unlinked'", [did, accountId])) ?? fail(404, "not_found", "no such agent");
 }
 
+/**
+ * Unlinks an agent. The thread, the inbox and the attachments go with the link, so an owner who pairs the agent later
+ * never sees an earlier owner's messages, label or status. Its socket closes (4003) and its products get agent.unlinked.
+ */
+async function unlink(d: Deps, a: AgentRow, message: string) {
+  const files = await d.db.tx(async (tx) => {
+    await tx.run("UPDATE agents SET state = 'unlinked', unlinked_at = $2, label = NULL, status = NULL WHERE did = $1", [a.did, now()]);
+    await tx.run("DELETE FROM messages WHERE agent_did = $1", [a.did]);
+    await tx.run("DELETE FROM inbox WHERE agent_did = $1", [a.did]);
+    return tx.all<{ s3_key: string }>("DELETE FROM uploads WHERE agent_did = $1 RETURNING s3_key", [a.did]);
+  });
+  // A failed removal leaves the objects to the bucket's 90-day expiry; nothing points at them any more.
+  if (files.length && d.blobs) await d.blobs.remove(files.map((f) => f.s3_key)).catch((e) => console.error(`removing ${a.did}'s attachments failed`, e));
+  await closeSocket(d, a.did, a.connection_id, 4003, "unlinked", message);
+  const data = { agent_did: a.did, owner_did: a.owner_did };
+  await Promise.all((await productsOf(d, a.did)).map((p) => sendEvent(d, p, "agent.unlinked", data)));
+}
+
+/** deletion.ts: every agent of a deleted account is unlinked, so it can pair with someone else. */
+export async function unlinkAll(d: Deps, accountId: string): Promise<void> {
+  for (const a of await d.db.all<AgentRow>("SELECT * FROM agents WHERE account_id = $1 AND state <> 'unlinked'", [accountId])) {
+    await unlink(d, a, "the owner deleted their account");
+  }
+}
+
 /** The paired agent behind a signed request: 401 for a bad signature, 403 not_paired otherwise. */
 async function pairedAgent(c: Context, d: Deps): Promise<AgentRow> {
   const { did } = await agentSigned(c, d);
@@ -301,11 +326,7 @@ export function routes(app: Hono, d: Deps) {
 
   app.delete("/v1/agents/:agent_did", async (c) => {
     const o = await bearer(c, d);
-    const a = await ownersAgent(d, o.accountId, agentDidParam(c));
-    await d.db.run("UPDATE agents SET state = 'unlinked', unlinked_at = $2 WHERE did = $1", [a.did, now()]);
-    await closeSocket(d, a.did, a.connection_id, 4003, "unlinked", "the owner unlinked this agent");
-    const data = { agent_did: a.did, owner_did: a.owner_did };
-    await Promise.all((await productsOf(d, a.did)).map((p) => sendEvent(d, p, "agent.unlinked", data)));
+    await unlink(d, await ownersAgent(d, o.accountId, agentDidParam(c)), "the owner unlinked this agent");
     return c.body(null, 204);
   });
 

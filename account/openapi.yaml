@@ -1664,7 +1664,7 @@ paths:
       operationId: unlinkAgent
       tags: [Agents]
       summary: Unlink an agent
-      description: Revokes its product credentials, sends agent.unlinked to every product and closes its socket with 4003.
+      description: Revokes its product credentials, sends agent.unlinked to every product and closes its socket with 4003. The thread, the agent's undelivered items and its attachments are deleted, and the label and status are cleared, so a later owner never sees them. Deleting the account unlinks every agent the same way.
       x-available: day-3
       security:
         - ownerBearer: []

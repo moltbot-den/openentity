@@ -46,6 +46,8 @@ export async function testDeps(over: Partial<Deps> = {}): Promise<Deps & { codes
     },
     sendCode: async (_e, code) => { codes.push(code); },
     apple: { native: ["org.openentity.app"], web: [] }, google: [], androidFingerprints: [], signinOpen: true,
+    // Tests never reach the network: product calls, the registry and did:web lookups need a stand-in fetch.
+    fetch: (async (url: RequestInfo | URL) => { throw new Error(`no network in tests: ${String(url)}`); }) as typeof fetch,
     codes, ...over,
   };
 }

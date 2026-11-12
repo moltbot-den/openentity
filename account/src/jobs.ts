@@ -21,6 +21,8 @@ const JOBS: [string, (d: Deps) => Promise<unknown>][] = [
     await d.db.run("DELETE FROM pairings WHERE expires_at < $1 AND (state <> 'confirmed' OR confirmed_at < $1)", [t - 86_400]);
     await d.db.run("DELETE FROM step_ups WHERE expires_at < $1", [t - 86_400]);
     await d.db.run("DELETE FROM enrollments WHERE expires_at < $1 AND state IN ('pending', 'cancelled', 'completed')", [t - 8 * 86_400]);
+    // Uploads no message took, and uploads whose object the bucket's 90-day lifecycle has removed.
+    await d.db.run("DELETE FROM uploads WHERE (message_id IS NULL AND expires_at < $1) OR created_at < $2", [t - 86_400, t - 90 * 86_400]);
   }],
 ];
 

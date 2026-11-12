@@ -165,6 +165,7 @@ export class OpenEntityAccountStack extends Stack {
     events.grantSendMessages(fn);
     attachments.grantPut(fn, "uploads/*");
     attachments.grantRead(fn, "uploads/*");
+    attachments.grantDelete(fn, "uploads/*"); // an unlinked agent's attachments
     // Its own parameters only: never /openentity/app (the registry's keys), never the other stage's values.
     fn.addToRolePolicy(new iam.PolicyStatement({ actions: ["ssm:GetParameters"], resources: [`arn:aws:ssm:${this.region}:${this.account}:parameter${PARAM_PATH}*`] }));
     fn.addToRolePolicy(new iam.PolicyStatement({ effect: iam.Effect.DENY, actions: ["ssm:GetParameter*"], resources: [`arn:aws:ssm:${this.region}:${this.account}:parameter${PARAM_PATH}*_${other}`] }));
