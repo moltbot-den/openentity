@@ -63,6 +63,9 @@ export function testIdpOf(d: Deps) {
   return d.stage === "staging" ? d.web.testIdp : undefined;
 }
 
+/** The least time a web email start without Turnstile takes, whether it mails a code or not (Customer.io answers in less). */
+export const DECOY_FLOOR_MS = 1000;
+
 /** Redeems an Android login code (POST /v1/token grant_type login_code): single use, 120 seconds, same install. */
 export async function redeemLoginCode(d: Deps, code: string, installId: string | null): Promise<{ accountId: string; amr: string }> {
   // Never for a deleted account (deletion also removes its codes).
@@ -251,7 +254,8 @@ export function routes(app: Hono, d: Deps) {
     if (!m) return c.body(null, 200);
     // In order (gate hardening): an event acts only on what existed when Apple sent it, and an older event never
     // overrides a newer one, so a late consent-revoked cannot end a session or a token made after it.
-    const ms = Number(ev.event_time ?? Number(p!.iat) * 1000), at = Math.floor(ms / 1000);
+    // Apple's documented example gives event_time in seconds and live notices give milliseconds: take either.
+    const raw = Number(ev.event_time ?? p!.iat), ms = raw < 1e11 ? raw * 1000 : raw, at = Math.floor(ms / 1000);
     const data = JSON.parse(m.data || "{}");
     if (!Number.isFinite(ms) || ms < Number(data.apple_event_ms ?? 0)) return c.body(null, 200);
     if (["consent-revoked", "account-delete", "account-deleted"].includes(ev.type)) {
@@ -285,7 +289,10 @@ export function routes(app: Hono, d: Deps) {
     const mail = proven || !!(await d.db.first("SELECT 1 FROM methods m JOIN accounts a ON a.id = m.account_id WHERE m.type = 'email' AND m.subject = $1 AND a.deleted_at IS NULL", [email]));
     // The App Review demo address takes its fixed code (verify below), so nothing is mailed to it.
     const send = mail && email !== d.web.appReview?.email ? d.sendCode : async () => {};
+    // Mailing takes time, so without Turnstile the answer comes no sooner than DECOY_FLOOR_MS either way.
+    const floor = proven ? null : new Promise((r) => setTimeout(r, DECOY_FLOOR_MS));
     const r = await startEmail(d.db, { email, installId: cl.install_id, pepper: d.pepper, send, human: proven });
+    await floor;
     return c.json({ challenge_id: r.challengeId, expires_at: r.expiresAt }, 202);
   });
 

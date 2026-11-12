@@ -3,7 +3,7 @@ import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT } from "jose";
 import { describe, expect, test, vi } from "vitest";
 import { createApp } from "../src/app.ts";
 import { nonceHash } from "../src/idtoken.ts";
-import { appReviewWatch, redeemLoginCode, testIdpKey } from "../src/signin.ts";
+import { DECOY_FLOOR_MS, appReviewWatch, redeemLoginCode, testIdpKey } from "../src/signin.ts";
 import { webConfig } from "../src/web/config.ts";
 import { HOST, ORIGIN, call, webApp } from "./owner.ts";
 import { VIEWER } from "./helpers.ts";
@@ -252,7 +252,7 @@ describe("gate fixes (Day 6 review)", () => {
     await note({ type: "email-enabled", sub: "apple-order", event_time: (now() - 10) * 1000 });
     await note({ type: "email-disabled", sub: "apple-order", event_time: (now() - 60) * 1000 }); // older: ignored
     expect(JSON.parse((await d.db.first<{ data: string }>("SELECT data FROM methods WHERE subject = 'apple-order'"))!.data).email_disabled).toBe(false);
-    await note({ type: "consent-revoked", sub: "apple-order", event_time: (now() + 1) * 1000 });
+    await note({ type: "consent-revoked", sub: "apple-order", event_time: now() + 1 }); // seconds, as in Apple's documented example
     expect((await call(app, "GET", "/v1/me", undefined, auth)).status).toBe(401); // a current revocation still ends it
   });
 
@@ -287,14 +287,16 @@ describe("gate fixes (Day 6 review)", () => {
   test("lead: a web email start without Turnstile answers alike for an address with and without an account", async () => {
     await d.db.run("DELETE FROM rate_events"); // this file's calls share one address
     const pass = async (email: string) => {
+      const t0 = Date.now();
       const s = await call(app, "POST", "/v1/auth/email/start", { email, client: web }, fromUs);
+      const slow = Date.now() - t0 >= DECOY_FLOOR_MS; // mailing or not, the same least time
       const v1 = await call(app, "POST", "/v1/auth/email/verify", { challenge_id: s.body.challenge_id, code: "00000000", client: web }, fromUs);
       const v2 = await call(app, "POST", "/v1/auth/email/verify", { challenge_id: s.body.challenge_id, code: "00000000", client: web, turnstile_token: "ok" }, fromUs);
-      return [s.status, v1.status, v1.body.error, v2.status, v2.body.error];
+      return [s.status, slow, v1.status, v1.body.error, v2.status, v2.body.error];
     };
     const k = await call(app, "POST", "/v1/auth/email/start", { email: "known-web@example.com", client: web, turnstile_token: "ok" }, fromUs);
     await call(app, "POST", "/v1/auth/email/verify", { challenge_id: k.body.challenge_id, code: out.codes.at(-1), client: web }, fromUs);
     expect(await pass("known-web@example.com")).toEqual(await pass("unknown-web@example.com"));
-    expect(await pass("unknown-web-2@example.com")).toEqual([202, 403, "turnstile_required", 401, "code_invalid"]);
+    expect(await pass("unknown-web-2@example.com")).toEqual([202, true, 403, "turnstile_required", 401, "code_invalid"]);
   });
 });
