@@ -35,7 +35,7 @@ export function homeClient(cfg: { serviceDid: string; rpId: string; turnstile: s
     provider_error: "Apple could not finish the sign-in. Try again.", nonce_invalid: "That sign-in expired. Try again.",
     turnstile_required: "Complete the human check first.", turnstile_invalid: "The human check did not pass. Try again.",
     code_invalid: "Wrong code. Check the email and try again.", code_expired: "That code expired. Ask for a new one.", code_locked: "Too many wrong tries. Ask for a new code.",
-    reauth_required: "For safety, sign out, sign in again, then delete within 5 minutes.",
+    reauth_required: "For safety, sign out and sign in again, then try again within 5 minutes.",
   };
   const message = (e: any) => MESSAGES[e?.code] ?? (e?.name === "NotAllowedError" ? "The passkey prompt was closed or timed out." : e?.message ?? String(e));
 
