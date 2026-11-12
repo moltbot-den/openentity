@@ -1,4 +1,5 @@
-import { createHash, generateKeyPairSync, randomUUID, sign as nodeSign, type KeyObject } from "node:crypto";
+import { X509Certificate, createHash, generateKeyPairSync, randomUUID, sign as nodeSign, type KeyObject } from "node:crypto";
+import { isoCBOR } from "@simplewebauthn/server/helpers";
 import { readFile } from "node:fs/promises";
 import { canonicalize } from "@openentity/sdk";
 import { type Hono } from "hono";
@@ -79,6 +80,88 @@ export async function signIn(call: Call, d: { codes: string[] }, email = `${rand
   return { token: r.body.access_token as string, accountId: r.body.account.id as string, install: client.install_id, auth: { authorization: `Bearer ${r.body.access_token}` } };
 }
 
+// ---------------------------------------------------------------- a stand-in App Attest chain (throwaway keys, test root)
+
+const der = (tag: number, ...parts: Buffer[]) => {
+  const v = Buffer.concat(parts), n = v.length;
+  return Buffer.concat([Buffer.from([tag, ...(n < 128 ? [n] : n < 256 ? [0x81, n] : [0x82, n >> 8, n & 255])]), v]);
+};
+const hex = (h: string) => Buffer.from(h, "hex");
+const ECDSA_SHA256 = der(0x30, hex("06082a8648ce3d040302"));
+const cn = (name: string) => der(0x30, der(0x31, der(0x30, hex("0603550403"), der(0x0c, Buffer.from(name)))));
+const utc = (t: Date) => der(0x17, Buffer.from(`${t.toISOString().replace(/[-:T]/g, "").slice(2, 14)}Z`));
+
+/** An X.509 v3 certificate signed with ECDSA SHA-256 by `signer`. */
+export function testCert(o: { subject: string; issuer: string; key: KeyObject; signer: KeyObject; ca?: boolean; extensions?: Buffer[]; from?: Date; to?: Date }): Buffer {
+  const exts = [...(o.ca ? [der(0x30, hex("0603551d13"), hex("0101ff"), der(0x04, der(0x30, hex("0101ff"))))] : []), ...(o.extensions ?? [])];
+  const tbs = der(0x30,
+    der(0xa0, hex("020102")), hex("020101"), ECDSA_SHA256, cn(o.issuer),
+    der(0x30, utc(o.from ?? new Date(Date.now() - 3_600_000)), utc(o.to ?? new Date(Date.now() + 86_400_000))), cn(o.subject),
+    o.key.export({ type: "spki", format: "der" }), ...(exts.length ? [der(0xa3, der(0x30, ...exts))] : []));
+  return der(0x30, tbs, ECDSA_SHA256, der(0x03, Buffer.from([0]), nodeSign("sha256", tbs, o.signer)));
+}
+
+/** A root and an intermediate standing in for Apple's, and attestations of fresh App Attest keys under them. */
+export function fakeAppAttest() {
+  const root = generateKeyPairSync("ec", { namedCurve: "P-256" }), inter = generateKeyPairSync("ec", { namedCurve: "P-256" });
+  const rootDer = testCert({ subject: "Test App Attestation Root", issuer: "Test App Attestation Root", key: root.publicKey, signer: root.privateKey, ca: true });
+  const interDer = testCert({ subject: "Test App Attestation CA 1", issuer: "Test App Attestation Root", key: inter.publicKey, signer: root.privateKey, ca: true });
+  /** An attestation object for a new App Attest key over `clientDataHash`; `tweak` breaks one part for the guard tests. */
+  const attest = (clientDataHash: Uint8Array, tweak: { aaguid?: string; counter?: number; appId?: string; nonce?: Buffer; keyId?: Buffer } = {}) => {
+    const leaf = generateKeyPairSync("ec", { namedCurve: "P-256" });
+    const point = leaf.publicKey.export({ type: "spki", format: "der" }).subarray(-65);
+    const keyId = tweak.keyId ?? createHash("sha256").update(point).digest();
+    const counter = Buffer.alloc(4);
+    counter.writeUInt32BE(tweak.counter ?? 0);
+    const authData = Buffer.concat([
+      createHash("sha256").update(tweak.appId ?? "7R835D5LDZ.org.openentity.app").digest(), Buffer.from([0x40]), counter,
+      Buffer.from(tweak.aaguid ?? "appattestdevelop"), Buffer.from([0, keyId.length]), keyId, Buffer.from([0xa0]),
+    ]);
+    const nonce = tweak.nonce ?? createHash("sha256").update(authData).update(clientDataHash).digest();
+    const ext = der(0x30, hex("06092a864886f763640802"), der(0x04, der(0x30, der(0xa1, der(0x04, nonce)))));
+    const leafDer = testCert({ subject: "App Attest key", issuer: "Test App Attestation CA 1", key: leaf.publicKey, signer: inter.privateKey, extensions: [ext] });
+    const obj = isoCBOR.encode(new Map<string, any>([["fmt", "apple-appattest"], ["attStmt", new Map<string, any>([["x5c", [new Uint8Array(leafDer), new Uint8Array(interDer)]], ["receipt", new Uint8Array(4)]])], ["authData", new Uint8Array(authData)]]));
+    let uses = 0;
+    /** An assertion by this App Attest key over `clientDataHash` (what the app sends in X-OE-App-Attest). */
+    const assertion = (clientDataHash: Uint8Array, o: { counter?: number } = {}) => {
+      const c = Buffer.alloc(4);
+      c.writeUInt32BE(o.counter ?? ++uses);
+      const auth = Buffer.concat([createHash("sha256").update("7R835D5LDZ.org.openentity.app").digest(), Buffer.from([0x40]), c]);
+      const nonce = createHash("sha256").update(auth).update(clientDataHash).digest();
+      return Buffer.from(isoCBOR.encode(new Map<string, any>([["signature", new Uint8Array(nodeSign("sha256", nonce, leaf.privateKey))], ["authenticatorData", new Uint8Array(auth)]]))).toString("base64url");
+    };
+    return { key_id: Buffer.from(keyId).toString("base64"), attestation_object: Buffer.from(obj).toString("base64url"), assertion };
+  };
+  return { root: new X509Certificate(rootDer), attest };
+}
+
+/** context-specific EXPLICIT [n], with the multi-byte tag form from 31 up. */
+const ctx = (n: number, inner: Buffer) => {
+  const tag = n < 31 ? [0xa0 | n] : [0xbf, ...(n >= 128 ? [0x80 | (n >> 7)] : []), n & 0x7f];
+  const len = inner.length;
+  return Buffer.concat([Buffer.from([...tag, ...(len < 128 ? [len] : len < 256 ? [0x81, len] : [0x82, len >> 8, len & 255])]), inner]);
+};
+const int = (n: number) => der(0x02, n < 128 ? Buffer.from([n]) : Buffer.from([n >> 8, n & 255]));
+
+/** A root and an intermediate standing in for Google's, and Key Attestation chains of fresh Keystore keys under them. */
+export function fakeAndroidKey() {
+  const root = generateKeyPairSync("ec", { namedCurve: "P-256" }), inter = generateKeyPairSync("ec", { namedCurve: "P-256" });
+  const rootDer = testCert({ subject: "Test Key Attestation Root", issuer: "Test Key Attestation Root", key: root.publicKey, signer: root.privateKey, ca: true });
+  const interDer = testCert({ subject: "Test Key Attestation CA", issuer: "Test Key Attestation Root", key: inter.publicKey, signer: root.privateKey, ca: true });
+  /** A chain for a new P-256 key whose attestationChallenge is `challenge`; `o` changes one property for the guard tests. */
+  const attest = (challenge: Uint8Array, o: { level?: number; pkg?: string; origin?: number; biometric?: boolean; noAuth?: boolean } = {}) => {
+    const key = generateKeyPairSync("ec", { namedCurve: "P-256" });
+    const appId = der(0x30, der(0x31, der(0x30, der(0x04, Buffer.from(o.pkg ?? "org.openentity.app")), int(1))), der(0x31, der(0x04, Buffer.alloc(32, 9))));
+    const hw = der(0x30, ctx(702, int(o.origin ?? 0)), ...(o.biometric === false ? [] : [ctx(504, int(2))]), ...(o.noAuth ? [ctx(503, hex("0500"))] : []));
+    const desc = der(0x30, int(300), der(0x0a, Buffer.from([o.level ?? 1])), int(300), der(0x0a, Buffer.from([o.level ?? 1])), der(0x04, Buffer.from(challenge)), der(0x04, Buffer.alloc(0)), der(0x30, ctx(709, der(0x04, appId))), hw);
+    const ext = der(0x30, hex("060a2b06010401d679020111"), der(0x04, desc));
+    const leaf = testCert({ subject: "Android Keystore Key", issuer: "Test Key Attestation CA", key: key.publicKey, signer: inter.privateKey, extensions: [ext] });
+    const jwk = key.publicKey.export({ format: "jwk" }) as any;
+    return { chain: [leaf, interDer].map((c) => c.toString("base64")), jwk: { kty: "EC", crv: "P-256", x: jwk.x, y: jwk.y }, sign: (body: string | Uint8Array) => nodeSign("sha256", Buffer.from(body), key.privateKey).toString("base64url") };
+  };
+  return { root: new X509Certificate(rootDer), attest };
+}
+
 /** A throwaway P-256 key: its key log credential, and raw low-S r||s ECDSA over SHA-256 of the bytes given. */
 export function p256Key(o: { type?: "p256" | "webauthn"; label?: string } = {}) {
   const k = generateKeyPairSync("ec", { namedCurve: "P-256" });
@@ -121,10 +204,10 @@ export const ownerId = (genesis: string) => {
   return bits ? out + A[(value << (5 - bits)) & 31] : out;
 };
 
-/** Registers `root` as the account's root passkey (what POST /v1/auth/passkey/verify mode register stores). */
-export async function registerRoot(db: Db, accountId: string, root: Key) {
+/** Registers `root` as the account's passkey (what POST /v1/auth/passkey/verify mode register stores); `pending` after a key log exists. */
+export async function registerRoot(db: Db, accountId: string, root: Key, o: { pending?: boolean } = {}) {
   await db.run("INSERT INTO methods (id, account_id, type, subject, data, created_at) VALUES ($1, $2, 'passkey', $3, $4, 1)",
-    [`mth_${randomUUID().slice(0, 8)}`, accountId, root.credential.credential_id, JSON.stringify({ jwk: root.jwk, key_id: root.kid })]);
+    [`mth_${randomUUID().slice(0, 8)}`, accountId, root.credential.credential_id, JSON.stringify({ jwk: root.jwk, key_id: root.kid, ...(o.pending ? { pending: true } : {}) })]);
 }
 
 /** An approval/2.0 object signed in the p256 form. */

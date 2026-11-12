@@ -1,16 +1,20 @@
 // Owner key logs (PLAN 3, ADR 0007, test-vectors/keylog-1). The service stores each entry as its exact JCS line and
 // serves those bytes; every check runs through verifyKeyLog from @openentity/sdk, so the service accepts exactly
 // what every product's verifier accepts. The database alone never justifies a key: a stored log is re-verified on read.
-import { createHash } from "node:crypto";
+import { createHash, createPublicKey, randomInt } from "node:crypto";
 import type { Context, Hono } from "hono";
 import { compactVerify, importJWK } from "jose";
 import { type Credential, type KeyLogState, canonicalize, verifyKeyLog } from "@openentity/sdk";
 import type { Deps } from "./app.ts";
-import { now } from "./db.ts";
-import { bearer, fail, json } from "./http.ts";
+import { receipt, receiptClaims, verifyAndroidKey, verifyAppAttest } from "./attest.ts";
+import { integrity, revokedSerials } from "./binding.ts";
+import { bump, newId, now } from "./db.ts";
+import { bearer, fail, json, str } from "./http.ts";
+import { nonceHash } from "./idtoken.ts";
 import { notifyOwner } from "./notify.ts";
+import { BUNDLE_ID } from "./wellknown.ts";
 
-const DAY = 86_400;
+const DAY = 86_400, ENROLL_TTL = 600, PENDING_MAX = 3, ATTESTATIONS_PER_HOUR = 20;
 const ID = /^[a-z2-7]{52}$/;
 const N = 0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551n; // P-256 group order
 
@@ -133,7 +137,26 @@ async function append(d: Deps, id: string, line: string, o: { account?: string; 
       email: { subject: "A change to your OpenEntity approvers", text: `${what} your OpenEntity account.${when}\n\nIf this was not you, open the OpenEntity app now.` },
     });
   }
+  if (accountId) await settleEnrollments(d, accountId, id, entry, out, delayed);
   return out;
+}
+
+/** An appended entry completes the enrollment of the credential it carries, or cancels the one its target carried. */
+async function settleEnrollments(d: Deps, accountId: string, id: string, entry: any, out: Appended, delayed: boolean) {
+  const settled: string[] = [];
+  if (entry.op === "cancel") {
+    const target = await d.db.first<{ seq: number }>("SELECT seq FROM keylog_entries WHERE owner_id = $1 AND hash = $2", [id, entry.body.target]);
+    if (target) for (const r of await d.db.all<{ id: string }>("UPDATE enrollments SET state = 'cancelled' WHERE account_id = $1 AND seq = $2 AND state = 'waiting' RETURNING id", [accountId, target.seq])) settled.push(r.id);
+  } else {
+    const purpose = entry.op === "replace_root" ? "root" : "approver";
+    for (const c of credentialsIn(entry)) {
+      const rows = await d.db.all<{ id: string }>(
+        "UPDATE enrollments SET state = $4, seq = $5, effective_at = $6 WHERE account_id = $1 AND kid = $2 AND purpose = $3 AND state = 'pending' RETURNING id",
+        [accountId, c.kid, purpose, delayed ? "waiting" : "completed", out.seq, out.effective_at]);
+      settled.push(...rows.map((r) => r.id));
+    }
+  }
+  for (const e of settled) await notifyOwner(d, accountId, { type: "enrollment.completed", id: e });
 }
 
 /** Credentials an entry introduces. */
@@ -148,10 +171,29 @@ async function rootIsTheAccountsPasskey(d: Deps, accountId: string, root: any) {
   if (!jwk || jwk.x !== root?.jwk?.x || jwk.y !== root?.jwk?.y) fail(422, "invalid_entry", "the genesis root must be a passkey registered to this account");
 }
 
-/** A device key that claims a verified attestation must carry this service's receipt for it (POST /v1/keylog/attestations). */
-async function receiptHolds(d: Deps, c: any) {
-  if (c.type !== "p256" || c.attestation?.verified !== true) return;
-  const bad = (why: string): never => fail(422, "invalid_entry", `attestation: ${why}`);
+/** RFC 7638 thumbprint of a P-256 public JWK of exactly kty, crv, x and y with a point on the curve; null otherwise. */
+export function thumbprint(j: any): string | null {
+  if (!j || typeof j !== "object" || Object.keys(j).sort().join() !== "crv,kty,x,y" || j.kty !== "EC" || j.crv !== "P-256") return null;
+  if (![j.x, j.y].every((v) => typeof v === "string" && /^[A-Za-z0-9_-]{43}$/.test(v) && Buffer.from(v, "base64url").toString("base64url") === v)) return null;
+  try { createPublicKey({ key: j, format: "jwk" }); } catch { return null; }
+  return createHash("sha256").update(`{"crv":"P-256","kty":"EC","x":"${j.x}","y":"${j.y}"}`).digest("base64url");
+}
+
+/** Every kid any entry of the log introduced (a key enters a log once). */
+async function kidsIn(d: Deps, id: string): Promise<Set<string>> {
+  const kids = new Set<string>();
+  for (const e of await rows(d, id)) for (const c of credentialsIn(JSON.parse(e.line))) kids.add(c.kid);
+  return kids;
+}
+
+/**
+ * A device key that claims a verified attestation must carry this service's receipt for it (POST /v1/keylog/attestations).
+ * `required` (enrollments): every device key needs one, else 403 attestation_invalid.
+ */
+async function receiptHolds(d: Deps, c: any, required = false) {
+  if (c.type !== "p256" || (!required && c.attestation?.verified !== true)) return;
+  const bad = (why: string): never => required ? fail(403, "attestation_invalid", why) : fail(422, "invalid_entry", `attestation: ${why}`);
+  if (c.attestation?.verified !== true) bad("a device key needs a verified attestation from POST /v1/keylog/attestations");
   const jws = c.attestation.receipt;
   if (typeof jws !== "string") bad("verified needs the receipt from POST /v1/keylog/attestations");
   let claims: any;
@@ -165,7 +207,103 @@ async function receiptHolds(d: Deps, c: any) {
   if (JSON.stringify(claims.integrity ?? null) !== JSON.stringify(c.integrity ?? null)) bad("the integrity verdict does not match the receipt");
 }
 
+interface EnrollmentRow { id: string; account_id: string; purpose: string; kid: string; credential: string; code: string; state: string; seq: number | null; effective_at: number | null; created_at: number; expires_at: number }
+
+/** Enrollment (openapi.yaml): pending ones past 10 minutes read as expired, waiting ones past effective_at as completed. */
+function enrollmentView(e: EnrollmentRow) {
+  const t = now();
+  const state = e.state === "pending" && Number(e.expires_at) <= t ? "expired" : e.state === "waiting" && Number(e.effective_at) <= t ? "completed" : e.state;
+  return {
+    enrollment_id: e.id, purpose: e.purpose, code: e.code, credential: JSON.parse(e.credential), state,
+    seq: e.seq === null ? null : Number(e.seq), effective_at: e.effective_at === null ? null : Number(e.effective_at),
+    created_at: Number(e.created_at), expires_at: Number(e.expires_at),
+  };
+}
+
 export function routes(app: Hono, d: Deps) {
+  // ---------------------------------------------------------------- attestation receipts (PLAN 3.2, ADR 0007)
+  app.post("/v1/keylog/attestations", async (c) => {
+    const o = await bearer(c, d);
+    const b = await json(c);
+    const raw = str(b.nonce, "nonce", 64);
+    if (b.platform !== "ios" && b.platform !== "android") fail(400, "bad_request", "platform is ios or android");
+    const kid = thumbprint(b.jwk) ?? fail(400, "bad_request", "jwk must be a P-256 public key {kty, crv, x, y}");
+    if ((await bump(d.db, `attest:${o.accountId}`, String(Math.floor(now() / 3600)))) > ATTESTATIONS_PER_HOUR) fail(429, "rate_limited", "too many attestations this hour", { retry_after: 3600 });
+    // The nonce is single use and must have been issued to this install.
+    const t = now();
+    const n = await d.db.first<{ platform: string; install_id: string | null }>("UPDATE auth_nonces SET used_at = $2 WHERE hash = $1 AND used_at IS NULL AND expires_at > $2 RETURNING platform, install_id", [nonceHash(raw), t]);
+    const s = await d.db.first<{ install_id: string | null }>("SELECT install_id FROM sessions WHERE id = $1", [o.sid]);
+    if (!n || n.platform !== b.platform || !n.install_id || n.install_id !== s?.install_id) fail(401, "nonce_invalid", "the nonce is unknown, expired, used, or was issued to another install");
+    if (b.platform === "android") {
+      // The approver key's own attestation (biometric on every use), and Play Integrity with requestHash = kid.
+      const k = verifyAndroidKey({ chain: b.android?.certificate_chain, biometric: true, packageName: BUNDLE_ID, revoked: await revokedSerials(d), roots: d.attestRoots?.google });
+      if (k.jwk.x !== b.jwk.x || k.jwk.y !== b.jwk.y) fail(403, "attestation_invalid", "the attested key is not jwk");
+      if (!k.challenge.equals(Buffer.from(raw))) fail(403, "attestation_invalid", "the attestation challenge is not the nonce");
+      const verdict = (await integrity(d, b.android?.integrity_token, kid, "approver"))!;
+      const claims = receiptClaims(d, kid, "android", { type: "android_key", key_storage: k.keyStorage, integrity: verdict });
+      return c.json({ receipt: await receipt(d, claims), claims });
+    }
+    const aa = b.app_attest;
+    if (!aa || typeof aa.key_id !== "string" || aa.key_id.length > 128 || typeof aa.attestation_object !== "string") fail(400, "bad_request", "app_attest needs key_id and attestation_object");
+    verifyAppAttest({
+      attestationObject: Buffer.from(aa.attestation_object, "base64url"), keyId: aa.key_id,
+      clientDataHash: createHash("sha256").update(`${raw}|${kid}`).digest(), production: d.stage === "production", roots: d.attestRoots?.apple,
+    });
+    const claims = receiptClaims(d, kid, "ios", { type: "app_attest", key_storage: "secure_enclave", integrity: null });
+    return c.json({ receipt: await receipt(d, claims), claims });
+  });
+
+  // ---------------------------------------------------------------- enrollments (Add an approver, Add a backup, Replace root)
+  app.post("/v1/keylog/enrollments", async (c) => {
+    const o = await bearer(c, d);
+    if (!o.ownerDid) fail(403, "key_log_required", "this account has no key log yet");
+    const b = await json(c);
+    if (Object.keys(b).sort().join() !== "credential,purpose" || (b.purpose !== "approver" && b.purpose !== "root")) fail(400, "bad_request", "send exactly {purpose: approver or root, credential}");
+    const cred = b.credential;
+    if (!cred || typeof cred !== "object" || (cred.type !== "p256" && cred.type !== "webauthn") || thumbprint(cred.jwk) !== cred.kid) fail(400, "bad_request", "credential needs type p256 or webauthn, a P-256 jwk and kid = its RFC 7638 thumbprint");
+    if (b.purpose === "root" && cred.type !== "webauthn") fail(400, "bad_request", "a root is a passkey (type webauthn)");
+    if (cred.type === "webauthn") {
+      if (cred.rp_id !== d.rp.id || typeof cred.credential_id !== "string") fail(400, "bad_request", `a passkey needs credential_id and rp_id ${d.rp.id}`);
+      // A passkey registered after the key log is kept as pending (signin.ts): an approver or root key, not a sign-in method.
+      const m = await d.db.first<{ data: string }>("SELECT data FROM methods WHERE account_id = $1 AND type = 'passkey' AND subject = $2", [o.accountId, cred.credential_id]);
+      const data = m ? JSON.parse(m.data) : null;
+      if (!data?.pending || data.jwk?.x !== cred.jwk.x || data.jwk?.y !== cred.jwk.y) fail(400, "bad_request", "register the passkey with this account first (POST /v1/auth/passkey/verify, mode register)");
+    }
+    await receiptHolds(d, cred, true);
+    const id = idOf(d, o.ownerDid!)!;
+    if ((await kidsIn(d, id)).has(cred.kid)) fail(409, "key_reused", "this key is already in the key log; a key enters a log once");
+    const t = now();
+    const pending = await d.db.first<{ n: number }>("SELECT count(*) AS n FROM enrollments WHERE account_id = $1 AND state = 'pending' AND expires_at > $2", [o.accountId, t]);
+    if (Number(pending!.n) >= PENDING_MAX) fail(409, "too_many_pending", `at most ${PENDING_MAX} pending enrollments; finish or withdraw one`);
+    const row: EnrollmentRow = {
+      id: newId("enr"), account_id: o.accountId, purpose: b.purpose, kid: cred.kid, credential: JSON.stringify(cred),
+      code: String(randomInt(0, 1_000_000)).padStart(6, "0"), state: "pending", seq: null, effective_at: null, created_at: t, expires_at: t + ENROLL_TTL,
+    };
+    await d.db.run("INSERT INTO enrollments (id, account_id, purpose, kid, credential, code, state, created_at, expires_at) VALUES ($1, $2, $3, $4, $5, $6, 'pending', $7, $8)",
+      [row.id, row.account_id, row.purpose, row.kid, row.credential, row.code, row.created_at, row.expires_at]);
+    await notifyOwner(d, o.accountId, { type: "enrollment.pending", id: row.id });
+    return c.json(enrollmentView(row), 201);
+  });
+
+  app.get("/v1/keylog/enrollments", async (c) => {
+    const o = await bearer(c, d);
+    const list = await d.db.all<EnrollmentRow>("SELECT * FROM enrollments WHERE account_id = $1 AND created_at > $2 ORDER BY created_at DESC, id DESC LIMIT 50", [o.accountId, now() - DAY]);
+    return c.json({ enrollments: list.map(enrollmentView) });
+  });
+
+  const ownEnrollment = async (c: Context) => {
+    const o = await bearer(c, d);
+    return (await d.db.first<EnrollmentRow>("SELECT * FROM enrollments WHERE id = $1 AND account_id = $2", [c.req.param("id"), o.accountId])) ?? fail(404, "not_found", "no such enrollment");
+  };
+  app.get("/v1/keylog/enrollments/:id", async (c) => c.json(enrollmentView(await ownEnrollment(c))));
+  app.delete("/v1/keylog/enrollments/:id", async (c) => {
+    const e = await ownEnrollment(c);
+    const r = await d.db.run("UPDATE enrollments SET state = 'cancelled' WHERE id = $1 AND state = 'pending' AND expires_at > $2", [e.id, now()]);
+    if (!r.changes) fail(409, "not_pending", "only a pending enrollment can be withdrawn");
+    return c.body(null, 204);
+  });
+
+  // ---------------------------------------------------------------- the log
   const idParam = (c: Context) => {
     const id = c.req.param("id")!;
     return ID.test(id) ? id : fail(404, "not_found", "no such key log");
