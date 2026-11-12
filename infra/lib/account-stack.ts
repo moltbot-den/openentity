@@ -204,7 +204,8 @@ export class OpenEntityAccountStack extends Stack {
     new apigw.ApiMapping(this, "WsMapping", { api: ws, domainName: wsDomain, stage: wsStage });
 
     // ---- CI: the deploy role applies account/schema.sql through the Data API ----
-    const deployRole = iam.Role.fromRoleName(this, "DeployRole", DEPLOY_ROLE);
+    // Each stage attaches its own inline policy to the shared role; the default name would collide between the stages.
+    const deployRole = iam.Role.fromRoleName(this, "DeployRole", DEPLOY_ROLE, { defaultPolicyName: `AccountCi${suffix}` });
     db.grantDataApiAccess(deployRole);
     deployRole.addToPrincipalPolicy(new iam.PolicyStatement({ actions: ["cloudformation:DescribeStacks"], resources: [this.stackId] }));
 

@@ -89,3 +89,8 @@ test("events go to an encrypted queue with a dead-letter queue", () => {
 test("the account stacks stand alone: nothing is imported from the registry stack", () => {
   for (const t of [prod, staging]) expect(JSON.stringify(t.toJSON())).not.toContain("Fn::ImportValue");
 });
+
+test("each stage's policy on the shared CI role has its own name, so both stages can attach one", () => {
+  const name = (t: Template) => all(t, "AWS::IAM::Policy").find((p) => JSON.stringify(p.Properties.Roles) === '["openentity-github-deploy"]').Properties.PolicyName;
+  expect(name(prod)).not.toBe(name(staging));
+});
