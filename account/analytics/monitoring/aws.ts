@@ -1,18 +1,26 @@
 // Self-contained: the Account lane imports this into its stack.
-//   new AccountServiceMonitoring(this, "Monitoring", { alertEmail, functions: [apiFn], httpApiId: api.apiId, dlqs: [fwd.deadLetterQueue], alarms: [fwd.dlqAlarm] })
-// Cost: standard alarms and one SNS topic with an email subscription. No Synthetics canaries, no dashboards, no X-Ray.
-import { Duration } from "aws-cdk-lib";
+//   new AccountServiceMonitoring(this, "Monitoring", { alertEmail, stage: "production", functions: [apiFn], httpApiId: api.apiId, dlqs: [fwd.deadLetterQueue], alarms: [fwd.dlqAlarm] })
+// Cost: standard alarms, one SNS topic and a tiny relay Lambda (SNS -> Customer.io email; no confirmation click). No Synthetics canaries, no dashboards, no X-Ray.
+import { fileURLToPath } from "node:url";
+import { Duration, Stack } from "aws-cdk-lib";
+import * as iam from "aws-cdk-lib/aws-iam";
+import * as nodejs from "aws-cdk-lib/aws-lambda-nodejs";
+import * as lambdaLib from "aws-cdk-lib/aws-lambda";
 import * as cloudwatch from "aws-cdk-lib/aws-cloudwatch";
 import { SnsAction } from "aws-cdk-lib/aws-cloudwatch-actions";
 import type * as lambda from "aws-cdk-lib/aws-lambda";
 import * as sns from "aws-cdk-lib/aws-sns";
-import { EmailSubscription } from "aws-cdk-lib/aws-sns-subscriptions";
+import { LambdaSubscription } from "aws-cdk-lib/aws-sns-subscriptions";
 import type * as sqs from "aws-cdk-lib/aws-sqs";
 import { Construct } from "constructs";
+import { cioParamNames, PARAM_PATH } from "./relay.ts";
 
 export type AccountServiceMonitoringProps = {
-  /** The ops email. SNS sends a confirmation link to it once. */
+  /** The ops email. Alarms reach it through the relay Lambda (Customer.io), so no confirmation click is needed. */
   alertEmail: string;
+  /** Named in every subject line. */
+  stage: "production" | "staging";
+  ssmKeyArn?: string;
   /** Lambdas of the account service (Errors and Throttles alarms on each). */
   functions: lambda.IFunction[];
   /** HTTP API id (API Gateway v2). Without it, latency and 5xx fall back to the Lambda metrics. */
@@ -25,12 +33,37 @@ export type AccountServiceMonitoringProps = {
 
 export class AccountServiceMonitoring extends Construct {
   readonly topic: sns.Topic;
+  readonly relay: nodejs.NodejsFunction;
   readonly alarms: cloudwatch.Alarm[] = [];
 
   constructor(scope: Construct, id: string, props: AccountServiceMonitoringProps) {
     super(scope, id);
     this.topic = new sns.Topic(this, "Alerts", { enforceSSL: true });
-    this.topic.addSubscription(new EmailSubscription(props.alertEmail));
+    this.relay = new nodejs.NodejsFunction(this, "Relay", {
+      entry: fileURLToPath(new URL("./relay.ts", import.meta.url)),
+      runtime: lambdaLib.Runtime.NODEJS_22_X,
+      timeout: Duration.seconds(20),
+      memorySize: 128,
+      environment: { STAGE: props.stage, TOPIC_ARN: this.topic.topicArn, ALERT_EMAIL: props.alertEmail },
+      bundling: { format: nodejs.OutputFormat.ESM, minify: true, target: "node22", mainFields: ["module", "main"], banner: "import { createRequire } from 'module'; const require = createRequire(import.meta.url);" },
+    });
+    this.relay.addToRolePolicy(new iam.PolicyStatement({ actions: ["ssm:GetParameters"], resources: cioParamNames(props.stage).map((n) => Stack.of(this).formatArn({ service: "ssm", resource: "parameter", resourceName: PARAM_PATH.slice(1) + n })) }));
+    this.relay.addToRolePolicy(new iam.PolicyStatement({
+      actions: ["kms:Decrypt"],
+      resources: [props.ssmKeyArn ?? "arn:aws:kms:us-east-1:099705791378:key/6076f65d-76f2-424d-8375-e74257cd5d07"],
+      conditions: { StringEquals: { "kms:ViaService": `ssm.${Stack.of(this).region}.amazonaws.com` } },
+    }));
+    this.topic.addSubscription(new LambdaSubscription(this.relay)); // no confirmation step
+    // enforceSSL leaves a policy with only a Deny, so CloudWatch needs an explicit Allow (found by the staging proof: "not authorized to perform SNS:Publish").
+    this.topic.addToResourcePolicy(new iam.PolicyStatement({
+      actions: ["sns:Publish"],
+      principals: [new iam.ServicePrincipal("cloudwatch.amazonaws.com")],
+      resources: [this.topic.topicArn],
+      conditions: {
+        StringEquals: { "aws:SourceAccount": Stack.of(this).account },
+        ArnLike: { "aws:SourceArn": `arn:${Stack.of(this).partition}:cloudwatch:${Stack.of(this).region}:${Stack.of(this).account}:alarm:*` },
+      },
+    }));
     const action = new SnsAction(this.topic);
     const add = (alarmId: string, alarm: cloudwatch.Alarm) => {
       alarm.addAlarmAction(action);
