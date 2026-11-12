@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openentity.org/spec/1.0/schemas/claims/securemyagent-security_posture.json",
+  "title": "custom:securemyagent:security_posture",
+  "description": "The `claim` of an Attestation with claim_type custom:securemyagent:security_posture (spec/claim-types.md).",
+  "type": "object",
+  "required": [
+    "score_band",
+    "checks_passed",
+    "scanner_version",
+    "evidence_hash"
+  ],
+  "properties": {
+    "score_band": {
+      "type": "string",
+      "minLength": 1
+    },
+    "checks_passed": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "scanner_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "evidence_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    }
+  }
+}

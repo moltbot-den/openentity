@@ -1,0 +1,34 @@
+{
+  "description": "The line is valid JSON but not its RFC 8785 form (keys in insertion order). Keys: keys.json (published throwaway seeds).",
+  "did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+  "log": [
+    "{\"v\":1,\"seq\":1,\"prev\":null,\"op\":\"genesis\",\"ts\":1794009598,\"body\":{\"root\":{\"kid\":\"07PAo82hd2JrvWLKn1nsgQpzIWE27VR0vNUbngCBKjE\",\"type\":\"webauthn\",\"jwk\":{\"kty\":\"EC\",\"crv\":\"P-256\",\"x\":\"9AOyameX8cAM87PhFX4TMKaZ3_Roj8ilnpR_d2ATKo0\",\"y\":\"wNLijrbZEO2MVCH-Km94ZiosJyVwpc7oTgeNYYX68Ng\"},\"credential_id\":\"oyqZss9O8IhOEQPTLVCN0g\",\"rp_id\":\"account.openentity.org\",\"aaguid\":\"fbfc3007-154e-4ecc-8c0b-6e020557d7bd\",\"label\":\"Passkey\",\"platform\":\"ios\"},\"approver\":{\"kid\":\"tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU\",\"type\":\"p256\",\"jwk\":{\"kty\":\"EC\",\"crv\":\"P-256\",\"x\":\"I6qtUJaZ7ADAygJp9kdxRIoqiM5X1v5JwGbWyExwjcM\",\"y\":\"E8oX2arXfaoxhwmFzu7rBWSUGZ0ZjVaw4VHuCWUzfSM\"},\"label\":\"iPhone\",\"platform\":\"ios\",\"key_storage\":\"secure_enclave\",\"attestation\":{\"type\":\"app_attest\",\"verified\":true}}},\"auth\":{\"kid\":\"tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU\",\"form\":\"p256\",\"signature\":\"NjJzPZDhyVfeHZ-zqDEm_5AU2gMATujXqwSghEvuYtsKU8iKLZ4yjFh0MyuvnoKkZ813cZFIKMXVKia1tTBFog\"}}"
+  ],
+  "first_seen_at": [
+    1794009600
+  ],
+  "now": 1794009660,
+  "origins": [
+    "https://account.openentity.org",
+    "android:apk-key-hash:AXVh6-zFGB0QxD0cPn3sYa1YZcCsl0Kl3sbQg35wBSw"
+  ],
+  "service_keys": [
+    {
+      "kty": "EC",
+      "crv": "P-256",
+      "x": "zO9-ALge0GLr-7Z7jzMUvnNczTs2GN4XusWIeLb3FQE",
+      "y": "ea2bRUQB1nSBKjwjRCCvnQm8wUO5PTxVp5uYKzABOnI"
+    },
+    {
+      "kty": "EC",
+      "crv": "P-256",
+      "x": "4hrBjSYjPrg-bzQv2vABKW8Lqm3XoxGKUJGKSuMK3C8",
+      "y": "896A0UMta_FTzfMi8XvYHiyd-cwo12IFrF27NfIfFiw"
+    }
+  ],
+  "expect": {
+    "ok": false,
+    "error": "malformed",
+    "seq": 1
+  }
+}

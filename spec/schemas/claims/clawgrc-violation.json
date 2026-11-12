@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openentity.org/spec/1.0/schemas/claims/clawgrc-violation.json",
+  "title": "custom:clawgrc:violation",
+  "description": "The `claim` of an Attestation with claim_type custom:clawgrc:violation (spec/claim-types.md).",
+  "type": "object",
+  "required": [
+    "policy",
+    "severity",
+    "evidence_hash",
+    "observed_at"
+  ],
+  "properties": {
+    "policy": {
+      "type": "string",
+      "minLength": 1
+    },
+    "severity": {
+      "enum": [
+        "low",
+        "medium",
+        "high",
+        "critical"
+      ]
+    },
+    "evidence_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "observed_at": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    }
+  }
+}

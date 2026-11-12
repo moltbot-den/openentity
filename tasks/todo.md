@@ -165,3 +165,12 @@ Verification
 - [x] Claim types `custom:moltbotden:liveness`, `custom:clawgrc:endpoint_reliability`, `custom:securemyagent:vision_privacy` with schemas (`spec/schemas/claims/`) and signed vectors (`test-vectors/claim-*.json`)
 - [x] Release step: PyPI `openentity` 0.4.0 (2026-10-28), npm `@openentity/sdk` 0.4.1 and CLI `openentity` 0.5.2 (2026-10-29) via `publish.yml` (#87, #90)
 - [x] After the registry deploy: `GET /v1/stats` shows `by_client` (MCP adoptions labelled `mcp`, #91); OEIS copies removed in favor of the packages (ADR 0003): ClawGRC #233 (PyPI 0.4.0), Agent Secret Store (PyPI 0.4.0), Secure My Agent #66 and #69 (`@openentity/sdk` ^0.4.1, verified live; the KMS did:pkh signer and builders stay because the SDK is Ed25519 only)
+
+## OpenEntity app, SDK lane (2026-11-11, oneentity docs/mobile/PLAN.md sections 3, 6, 8)
+- [x] `test-vectors/approval-2.0/` (ADR 0008), `test-vectors/keylog-1/` (ADR 0007, one file per rule and failure case) and `test-vectors/pair-sas-1/` (pairing match string), from published throwaway keys
+- [x] `verifyKeyLog`, `verifyApproval`, `approvalDigest`, `payloadDigest`, `pairSas` in `@openentity/sdk` and the Python `openentity` package; both pass every vector
+- [x] Verify-only SDKs `sdk/swift` (`OpenEntityKit`) and `sdk/kotlin` (`org.openentity:sdk`) run the owner and OEIS vectors in `verify.sh`; the apps build them from a pinned checkout, nothing is published
+- [x] Claim type `custom:openentity:operated_by`; every registered custom claim type has a schema, with a conformance test
+- [ ] `openentity pair` (CLI) and `openentity_pair` (MCP) claim the code through `POST /v1/pair` and print the four items computed locally with `pairSas` (Day 3, once the account service serves `/v1/pair`)
+- [ ] Pin the OpenEntity Android app's `android:apk-key-hash:` origin in the four SDKs once `assetlinks.json` carries the Play app signing fingerprint
+- [ ] Day 5 release batch: `@openentity/sdk`, `openentity` (PyPI), CLI and MCP with `pair()` and the owner tools (PLAN 8.5)

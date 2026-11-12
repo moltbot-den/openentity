@@ -70,13 +70,15 @@ export function parseJson(text: string): unknown {
   const v = JSON.parse(text);
   const scopes: Set<string>[] = [];
   const str = /"(?:[^"\\]|\\.)*"/y;
+  const colon = /\s*:/y;
   for (let i = 0; i < text.length; ) {
     const ch = text[i];
     if (ch === '"') {
       str.lastIndex = i;
       const m = str.exec(text)![0];
       i += m.length;
-      if (scopes.length && /^\s*:/.test(text.slice(i, i + 64))) {
+      colon.lastIndex = i; // a key is a string followed by any whitespace and a colon, however long the whitespace
+      if (scopes.length && colon.test(text)) {
         const key: string = JSON.parse(m);
         if (scopes[scopes.length - 1].has(key)) throw new OpenEntityError("invalid_input", `duplicate key ${m}`);
         scopes[scopes.length - 1].add(key);
@@ -193,6 +195,11 @@ export function publicKeyFromDidKey(did: string): Uint8Array {
 export function verificationMethodId(did: string): string {
   if (!did.startsWith("did:key:")) throw new OpenEntityError("invalid_input", "verificationMethodId is defined for did:key only");
   return `${did}#${did.slice("did:key:".length)}`;
+}
+/** @internal The did.json URL of a did:web DID: /.well-known/did.json, or <path>/did.json for a DID with a path. */
+export function didWebUrl(did: string): string {
+  const [host, ...path] = did.slice("did:web:".length).split(":").map(decodeURIComponent);
+  return `https://${host}/${path.length ? path.join("/") : ".well-known"}/did.json`;
 }
 export function normalizeEid(id: string): string {
   return id.startsWith("eid:base:") ? "did:pkh:eip155:8453:" + id.slice("eid:base:".length) : id;

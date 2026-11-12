@@ -1,8 +1,45 @@
 import { HttpSigError } from "./errors.ts";
 import { ed25519 } from "@noble/curves/ed25519.js";
-import { utf8, b64, unb64, b64url, unb64url, sha256Sync, type KeyPair, didKeyFromPublicKey, publicKeyFromDidKey } from "./core.ts";
+import { utf8, b64, unb64, b64url, unb64url, sha256Sync, type KeyPair, didKeyFromPublicKey, publicKeyFromDidKey, didWebUrl } from "./core.ts";
 // ---------------------------------------------------------------- RFC 9421 HTTP message signatures
-// Profile: ed25519, keyid = the signer's did:key, covered ("@method" "@target-uri" "content-digest"), label sig1.
+// Profile: ed25519, keyid = the signer's did:key, or `did:web:<host>#<key>` for a did:web signer the verifier allows
+// (services such as the OpenEntity Account), covered ("@method" "@target-uri" "content-digest"), label sig1.
+
+/** @internal Ed25519 keys of allowed did:web signers by verification method id, per DID, from its did.json. */
+export const didWebKeys = new Map<string, { at: number; keys: Map<string, Uint8Array> }>();
+const DID_CACHE_MS = 600_000; // the account service serves did.json with max-age=600
+const DID_REFETCH_MS = 30_000; // an unknown key refetches, at most this often per DID
+
+async function didJson(url: string): Promise<unknown> {
+  const r = await fetch(url, { redirect: "error", signal: AbortSignal.timeout(5000), headers: { accept: "application/did+json, application/json" } });
+  if (!r.ok) throw new Error(`${url} answered ${r.status}`);
+  return r.json();
+}
+
+/** Ed25519 Multikey and JsonWebKey (OKP) methods of a DID document, by absolute id. */
+function ed25519Methods(did: string, doc: any): Map<string, Uint8Array> {
+  if (doc?.id !== did) throw new Error(`${did} document names ${doc?.id}`);
+  const keys = new Map<string, Uint8Array>();
+  for (const vm of Array.isArray(doc.verificationMethod) ? doc.verificationMethod : []) {
+    if (typeof vm?.id !== "string") continue;
+    try {
+      const jwk = vm.publicKeyJwk;
+      const key = vm.type === "Multikey" ? publicKeyFromDidKey("did:key:" + vm.publicKeyMultibase)
+        : vm.type === "JsonWebKey" && jwk?.kty === "OKP" && jwk.crv === "Ed25519" && b64url(unb64url(jwk.x)) === jwk.x ? unb64url(jwk.x) : undefined;
+      if (key?.length === 32) keys.set(vm.id.startsWith("#") ? did + vm.id : vm.id, key);
+    } catch { /* not an Ed25519 method */ }
+  }
+  return keys;
+}
+
+async function didWebKey(keyid: string, fetchJson: (url: string) => Promise<unknown>): Promise<Uint8Array | undefined> {
+  const did = keyid.split("#")[0];
+  const hit = didWebKeys.get(did), age = hit ? Date.now() - hit.at : Infinity;
+  if (hit && age < DID_CACHE_MS && (hit.keys.has(keyid) || age < DID_REFETCH_MS)) return hit.keys.get(keyid);
+  const keys = ed25519Methods(did, await fetchJson(didWebUrl(did)));
+  didWebKeys.set(did, { at: Date.now(), keys });
+  return keys.get(keyid);
+}
 
 /** @internal */
 export const HTTPSIG_SKEW = 5; // seconds of clock skew allowed on `created`
@@ -34,9 +71,14 @@ export async function signRequest(o: {
   return out;
 }
 
-/** Verify a request signed by signRequest. Throws HttpSigError with `.code`. Nonce replay tracking is the caller's job. */
+/**
+ * Verify a request signed by signRequest. Throws HttpSigError with `.code`. Nonce replay tracking is the caller's job.
+ * A did:key keyid verifies offline. A `did:web:<host>#<key>` keyid verifies only when its DID is in `allowDidWeb`: the key comes from
+ * the DID's did.json (Ed25519 Multikey or JsonWebKey), cached for ten minutes and refetched when it names an unknown key.
+ */
 export async function verifyRequest(o: {
   method: string; url: string; headers: Record<string, string>; body?: Uint8Array; now?: number; maxAge?: number;
+  allowDidWeb?: string[]; fetchJson?: (url: string) => Promise<unknown>;
 }): Promise<{ did: string; keyid: string; created: number; expires: number; nonce: string }> {
   const fail = (code: string): never => { throw new HttpSigError(code); };
   const h = Object.fromEntries(Object.entries(o.headers).map(([k, v]) => [k.toLowerCase(), v]));
@@ -52,11 +94,17 @@ export async function verifyRequest(o: {
   for (const [, k, v] of m[3].matchAll(/;([a-z]+)=(\d+|"[^"]*")/g)) p[k] = v.startsWith('"') ? v.slice(1, -1) : Number(v);
   if (p.alg !== "ed25519") fail("unknown_alg");
   const keyid = String(p.keyid ?? "");
-  let pub: Uint8Array;
-  try {
-    pub = publicKeyFromDidKey(keyid);
-    if (didKeyFromPublicKey(pub) !== keyid) throw 0;
-  } catch { return fail("bad_keyid"); }
+  const did = keyid.split("#")[0];
+  let pub: Uint8Array | undefined;
+  if (keyid.startsWith("did:web:")) {
+    // Allowed DIDs only, so a request never makes the verifier fetch a URL of the sender's choosing.
+    if (!/#[^#]+$/.test(keyid) || !(o.allowDidWeb ?? []).includes(did)) fail("bad_keyid");
+  } else {
+    try {
+      pub = publicKeyFromDidKey(keyid);
+      if (didKeyFromPublicKey(pub) !== keyid) throw 0;
+    } catch { return fail("bad_keyid"); }
+  }
   if (typeof p.created !== "number" || typeof p.expires !== "number") fail("missing_headers");
   const created = p.created as number, expires = p.expires as number;
   const nonce = String(p.nonce ?? "");
@@ -72,9 +120,11 @@ export async function verifyRequest(o: {
   if (now - created > maxAge) fail("created_too_old");
   if (expires < now) fail("expired");
   if (expires - created > maxAge) fail("lifetime_too_long");
+  if (!pub) pub = await didWebKey(keyid, o.fetchJson ?? didJson).catch(() => undefined);
+  if (!pub) return fail("bad_keyid");
   let ok = false;
   try { ok = ed25519.verify(unb64(s[1]), httpSigBase(o.method, o.url, comps, digest, params), pub); } catch { /* malformed signature */ }
   if (!ok) fail("bad_signature");
-  return { did: keyid, keyid, created, expires, nonce };
+  return { did, keyid, created, expires, nonce };
 }
 

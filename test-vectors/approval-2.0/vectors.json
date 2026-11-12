@@ -1,0 +1,1558 @@
+{
+  "description": "approval/2.0 vectors (ADR 0008). Throwaway keys from keys.json. digests: the preimage and its SHA-256 for both decisions. payloads: canonical JSON summaries and their digests; payloads_invalid must be refused. cases: verify `approval` with `context` against key_states[context.key_state]; `expect` is {ok, kid, counter} or {ok: false, error}. key_logs holds the key log behind each key state (keylog-1 rules, service key from keys.json, now = the cases' now).",
+  "warning": "PUBLISHED THROWAWAY KEYS FOR TEST VECTORS ONLY. Every secret is SHA-256 of a published string (keys.json). Anyone can sign with them. Never use them for anything real.",
+  "digests": [
+    {
+      "fields": {
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "decision": "approve",
+        "expires_at": 1794017100
+      },
+      "preimage": "approval/2.0|did:web:api.agentsecretstore.com|did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q|req_7Hk2:42|e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889|approve|1794017100",
+      "digest": "29dec854a0b3381d7ffb39590d58b6a121288cc9ed98dff2059dc51cd168e1cb"
+    },
+    {
+      "fields": {
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "decision": "deny",
+        "expires_at": 1794017100
+      },
+      "preimage": "approval/2.0|did:web:api.agentsecretstore.com|did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q|req_7Hk2:42|e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889|deny|1794017100",
+      "digest": "d1d3f762024469ca3ed4b6638d5d2b0b5bf865bca085324026386f3a3b0dc86e"
+    }
+  ],
+  "payloads": [
+    {
+      "summary": {
+        "action": "secret.read",
+        "agent": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "secret": "stripe/live",
+        "scope": "read",
+        "ttl_seconds": 300
+      },
+      "canonical": "{\"action\":\"secret.read\",\"agent\":\"did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7\",\"scope\":\"read\",\"secret\":\"stripe/live\",\"ttl_seconds\":300}",
+      "digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889"
+    },
+    {
+      "summary": {
+        "network": "base-mainnet",
+        "contract": "ct_9f2",
+        "milestone": 2,
+        "amount_usdc_cents": 125000,
+        "to": "0x52908400098527886E0F7030069857D2E4169EE7",
+        "over_budget": false,
+        "note": null
+      },
+      "canonical": "{\"amount_usdc_cents\":125000,\"contract\":\"ct_9f2\",\"milestone\":2,\"network\":\"base-mainnet\",\"note\":null,\"over_budget\":false,\"to\":\"0x52908400098527886E0F7030069857D2E4169EE7\"}",
+      "digest": "fb8ca17975f63de81d6a31d461e26bf831a9233038dc632048831fb014fa1b7a"
+    },
+    {
+      "summary": {
+        "z": "last",
+        "a": "first",
+        "\u00e9": "e acute sorts after z",
+        "\uff5e": "fullwidth tilde",
+        "\ud83d\ude00": "emoji sorts before U+FF5E in UTF-16 order",
+        "nested": {
+          "b": [
+            3,
+            1,
+            2
+          ],
+          "a": true
+        }
+      },
+      "canonical": "{\"a\":\"first\",\"nested\":{\"a\":true,\"b\":[3,1,2]},\"z\":\"last\",\"\u00e9\":\"e acute sorts after z\",\"\ud83d\ude00\":\"emoji sorts before U+FF5E in UTF-16 order\",\"\uff5e\":\"fullwidth tilde\"}",
+      "digest": "68f13395d91210f2585beb19a525e175b88c25fc797896391074a4c39ac24c49"
+    },
+    {
+      "summary": {
+        "agent": "Zo\u00eb",
+        "note": "Caf\u00e9 \u2615 f\u00fcr J\u00fcrgen \ud83d\ude80",
+        "lines": "one\ntwo\t\"quoted\" \\ back"
+      },
+      "canonical": "{\"agent\":\"Zo\u00eb\",\"lines\":\"one\\ntwo\\t\\\"quoted\\\" \\\\ back\",\"note\":\"Caf\u00e9 \u2615 f\u00fcr J\u00fcrgen \ud83d\ude80\"}",
+      "digest": "f5d49ce11e3c65c1f09254db1db6aef007f33e2fba35000ad468a67df0604103"
+    }
+  ],
+  "payloads_invalid": [
+    {
+      "summary": {
+        "amount": 12.5
+      },
+      "reason": "numbers must be integers: send amounts in minor units or as strings"
+    },
+    {
+      "summary": {
+        "amount": 9007199254740992
+      },
+      "reason": "integers must be within 2^53 - 1"
+    }
+  ],
+  "key_states": {
+    "owner": {
+      "did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+      "root": {
+        "kid": "07PAo82hd2JrvWLKn1nsgQpzIWE27VR0vNUbngCBKjE",
+        "type": "webauthn",
+        "jwk": {
+          "kty": "EC",
+          "crv": "P-256",
+          "x": "9AOyameX8cAM87PhFX4TMKaZ3_Roj8ilnpR_d2ATKo0",
+          "y": "wNLijrbZEO2MVCH-Km94ZiosJyVwpc7oTgeNYYX68Ng"
+        },
+        "credential_id": "oyqZss9O8IhOEQPTLVCN0g",
+        "rp_id": "account.openentity.org",
+        "aaguid": "fbfc3007-154e-4ecc-8c0b-6e020557d7bd",
+        "label": "Passkey",
+        "platform": "ios"
+      },
+      "approvers": [
+        {
+          "kid": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+          "type": "p256",
+          "jwk": {
+            "kty": "EC",
+            "crv": "P-256",
+            "x": "I6qtUJaZ7ADAygJp9kdxRIoqiM5X1v5JwGbWyExwjcM",
+            "y": "E8oX2arXfaoxhwmFzu7rBWSUGZ0ZjVaw4VHuCWUzfSM"
+          },
+          "label": "iPhone",
+          "platform": "ios",
+          "key_storage": "secure_enclave",
+          "attestation": {
+            "type": "app_attest",
+            "verified": true
+          }
+        },
+        {
+          "kid": "mTluyYyMSPInd1g_ENjr016z9DqqE2ZUX845TdohRVE",
+          "type": "webauthn",
+          "jwk": {
+            "kty": "EC",
+            "crv": "P-256",
+            "x": "-xMoowGg93Z1aEQuJcIYfVAFu3Adg3hkRRRI2HfApqc",
+            "y": "2iRpvaFX65qwOLwselP-hD-qndpn4md9DEo8TPo7SB8"
+          },
+          "credential_id": "FIlBW6SWY3Jafi2NW3KgsA",
+          "rp_id": "account.openentity.org",
+          "aaguid": "fbfc3007-154e-4ecc-8c0b-6e020557d7bd",
+          "label": "MacBook",
+          "platform": "web"
+        }
+      ],
+      "closed": false
+    },
+    "single": {
+      "did": "did:web:account.openentity.org:o:k6ssewaczrf6i6svqxslfovw5biyk5mqngx5cy7mqgdw6264jtiq",
+      "root": {
+        "kid": "07PAo82hd2JrvWLKn1nsgQpzIWE27VR0vNUbngCBKjE",
+        "type": "webauthn",
+        "jwk": {
+          "kty": "EC",
+          "crv": "P-256",
+          "x": "9AOyameX8cAM87PhFX4TMKaZ3_Roj8ilnpR_d2ATKo0",
+          "y": "wNLijrbZEO2MVCH-Km94ZiosJyVwpc7oTgeNYYX68Ng"
+        },
+        "credential_id": "oyqZss9O8IhOEQPTLVCN0g",
+        "rp_id": "account.openentity.org",
+        "aaguid": "fbfc3007-154e-4ecc-8c0b-6e020557d7bd",
+        "label": "Passkey",
+        "platform": "ios"
+      },
+      "approvers": [
+        {
+          "kid": "07PAo82hd2JrvWLKn1nsgQpzIWE27VR0vNUbngCBKjE",
+          "type": "webauthn",
+          "jwk": {
+            "kty": "EC",
+            "crv": "P-256",
+            "x": "9AOyameX8cAM87PhFX4TMKaZ3_Roj8ilnpR_d2ATKo0",
+            "y": "wNLijrbZEO2MVCH-Km94ZiosJyVwpc7oTgeNYYX68Ng"
+          },
+          "credential_id": "oyqZss9O8IhOEQPTLVCN0g",
+          "rp_id": "account.openentity.org",
+          "aaguid": "fbfc3007-154e-4ecc-8c0b-6e020557d7bd",
+          "label": "Passkey",
+          "platform": "ios"
+        }
+      ],
+      "closed": false
+    },
+    "closed": {
+      "did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+      "root": {
+        "kid": "07PAo82hd2JrvWLKn1nsgQpzIWE27VR0vNUbngCBKjE",
+        "type": "webauthn",
+        "jwk": {
+          "kty": "EC",
+          "crv": "P-256",
+          "x": "9AOyameX8cAM87PhFX4TMKaZ3_Roj8ilnpR_d2ATKo0",
+          "y": "wNLijrbZEO2MVCH-Km94ZiosJyVwpc7oTgeNYYX68Ng"
+        },
+        "credential_id": "oyqZss9O8IhOEQPTLVCN0g",
+        "rp_id": "account.openentity.org",
+        "aaguid": "fbfc3007-154e-4ecc-8c0b-6e020557d7bd",
+        "label": "Passkey",
+        "platform": "ios"
+      },
+      "approvers": [
+        {
+          "kid": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+          "type": "p256",
+          "jwk": {
+            "kty": "EC",
+            "crv": "P-256",
+            "x": "I6qtUJaZ7ADAygJp9kdxRIoqiM5X1v5JwGbWyExwjcM",
+            "y": "E8oX2arXfaoxhwmFzu7rBWSUGZ0ZjVaw4VHuCWUzfSM"
+          },
+          "label": "iPhone",
+          "platform": "ios",
+          "key_storage": "secure_enclave",
+          "attestation": {
+            "type": "app_attest",
+            "verified": true
+          }
+        },
+        {
+          "kid": "mTluyYyMSPInd1g_ENjr016z9DqqE2ZUX845TdohRVE",
+          "type": "webauthn",
+          "jwk": {
+            "kty": "EC",
+            "crv": "P-256",
+            "x": "-xMoowGg93Z1aEQuJcIYfVAFu3Adg3hkRRRI2HfApqc",
+            "y": "2iRpvaFX65qwOLwselP-hD-qndpn4md9DEo8TPo7SB8"
+          },
+          "credential_id": "FIlBW6SWY3Jafi2NW3KgsA",
+          "rp_id": "account.openentity.org",
+          "aaguid": "fbfc3007-154e-4ecc-8c0b-6e020557d7bd",
+          "label": "MacBook",
+          "platform": "web"
+        }
+      ],
+      "closed": true
+    },
+    "revoked": {
+      "did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+      "root": {
+        "kid": "07PAo82hd2JrvWLKn1nsgQpzIWE27VR0vNUbngCBKjE",
+        "type": "webauthn",
+        "jwk": {
+          "kty": "EC",
+          "crv": "P-256",
+          "x": "9AOyameX8cAM87PhFX4TMKaZ3_Roj8ilnpR_d2ATKo0",
+          "y": "wNLijrbZEO2MVCH-Km94ZiosJyVwpc7oTgeNYYX68Ng"
+        },
+        "credential_id": "oyqZss9O8IhOEQPTLVCN0g",
+        "rp_id": "account.openentity.org",
+        "aaguid": "fbfc3007-154e-4ecc-8c0b-6e020557d7bd",
+        "label": "Passkey",
+        "platform": "ios"
+      },
+      "approvers": [
+        {
+          "kid": "mTluyYyMSPInd1g_ENjr016z9DqqE2ZUX845TdohRVE",
+          "type": "webauthn",
+          "jwk": {
+            "kty": "EC",
+            "crv": "P-256",
+            "x": "-xMoowGg93Z1aEQuJcIYfVAFu3Adg3hkRRRI2HfApqc",
+            "y": "2iRpvaFX65qwOLwselP-hD-qndpn4md9DEo8TPo7SB8"
+          },
+          "credential_id": "FIlBW6SWY3Jafi2NW3KgsA",
+          "rp_id": "account.openentity.org",
+          "aaguid": "fbfc3007-154e-4ecc-8c0b-6e020557d7bd",
+          "label": "MacBook",
+          "platform": "web"
+        }
+      ],
+      "closed": false
+    }
+  },
+  "key_logs": {
+    "owner": {
+      "did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+      "log": [
+        "{\"auth\":{\"form\":\"p256\",\"kid\":\"tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU\",\"signature\":\"NjJzPZDhyVfeHZ-zqDEm_5AU2gMATujXqwSghEvuYtsKU8iKLZ4yjFh0MyuvnoKkZ813cZFIKMXVKia1tTBFog\"},\"body\":{\"approver\":{\"attestation\":{\"type\":\"app_attest\",\"verified\":true},\"jwk\":{\"crv\":\"P-256\",\"kty\":\"EC\",\"x\":\"I6qtUJaZ7ADAygJp9kdxRIoqiM5X1v5JwGbWyExwjcM\",\"y\":\"E8oX2arXfaoxhwmFzu7rBWSUGZ0ZjVaw4VHuCWUzfSM\"},\"key_storage\":\"secure_enclave\",\"kid\":\"tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU\",\"label\":\"iPhone\",\"platform\":\"ios\",\"type\":\"p256\"},\"root\":{\"aaguid\":\"fbfc3007-154e-4ecc-8c0b-6e020557d7bd\",\"credential_id\":\"oyqZss9O8IhOEQPTLVCN0g\",\"jwk\":{\"crv\":\"P-256\",\"kty\":\"EC\",\"x\":\"9AOyameX8cAM87PhFX4TMKaZ3_Roj8ilnpR_d2ATKo0\",\"y\":\"wNLijrbZEO2MVCH-Km94ZiosJyVwpc7oTgeNYYX68Ng\"},\"kid\":\"07PAo82hd2JrvWLKn1nsgQpzIWE27VR0vNUbngCBKjE\",\"label\":\"Passkey\",\"platform\":\"ios\",\"rp_id\":\"account.openentity.org\",\"type\":\"webauthn\"}},\"op\":\"genesis\",\"prev\":null,\"seq\":1,\"ts\":1794009598,\"v\":1}",
+        "{\"auth\":{\"form\":\"p256\",\"kid\":\"tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU\",\"signature\":\"TQ0Xrln2aoBtZRtZzkN9yoWmNlKqwe3YB2szNT3AqFlTMyJ41NpKVNBgHbpTRIu_XYv04Pv_AyA-fi11MJSPng\"},\"body\":{\"approver\":{\"aaguid\":\"fbfc3007-154e-4ecc-8c0b-6e020557d7bd\",\"credential_id\":\"FIlBW6SWY3Jafi2NW3KgsA\",\"jwk\":{\"crv\":\"P-256\",\"kty\":\"EC\",\"x\":\"-xMoowGg93Z1aEQuJcIYfVAFu3Adg3hkRRRI2HfApqc\",\"y\":\"2iRpvaFX65qwOLwselP-hD-qndpn4md9DEo8TPo7SB8\"},\"kid\":\"mTluyYyMSPInd1g_ENjr016z9DqqE2ZUX845TdohRVE\",\"label\":\"MacBook\",\"platform\":\"web\",\"rp_id\":\"account.openentity.org\",\"type\":\"webauthn\"}},\"op\":\"add_approver\",\"prev\":\"71949eb3b6cfd378c7899920bbc5d96adcae3c005c18f7a2a68e8110227e4ef5\",\"seq\":2,\"ts\":1794013198,\"v\":1}"
+      ],
+      "first_seen_at": [
+        1794009600,
+        1794013200
+      ]
+    },
+    "single": {
+      "did": "did:web:account.openentity.org:o:k6ssewaczrf6i6svqxslfovw5biyk5mqngx5cy7mqgdw6264jtiq",
+      "log": [
+        "{\"auth\":{\"authenticator_data\":\"D3UMQg2RHUXdnWy7aJ1fAnM1wAzOoZElYIW5k5ZyV-MdAAAAAA\",\"client_data_json\":\"eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiU3I5MjNBVWtkSV82ekZoSWtxS21ZaHY1VFVlM2xidEQ3RVBhS2JqZ3RJOCIsIm9yaWdpbiI6Imh0dHBzOi8vYWNjb3VudC5vcGVuZW50aXR5Lm9yZyIsImNyb3NzT3JpZ2luIjpmYWxzZX0\",\"form\":\"webauthn\",\"kid\":\"07PAo82hd2JrvWLKn1nsgQpzIWE27VR0vNUbngCBKjE\",\"signature\":\"MEUCIQD6DIokD_inDkwUi_IV2nntBrZCQSwsLvDrd-NRr56sVgIgGQCGN13iIYNzb_V7W--hPNLVmoe5QbwFHNjTQu0rwY0\"},\"body\":{\"approver\":null,\"root\":{\"aaguid\":\"fbfc3007-154e-4ecc-8c0b-6e020557d7bd\",\"credential_id\":\"oyqZss9O8IhOEQPTLVCN0g\",\"jwk\":{\"crv\":\"P-256\",\"kty\":\"EC\",\"x\":\"9AOyameX8cAM87PhFX4TMKaZ3_Roj8ilnpR_d2ATKo0\",\"y\":\"wNLijrbZEO2MVCH-Km94ZiosJyVwpc7oTgeNYYX68Ng\"},\"kid\":\"07PAo82hd2JrvWLKn1nsgQpzIWE27VR0vNUbngCBKjE\",\"label\":\"Passkey\",\"platform\":\"ios\",\"rp_id\":\"account.openentity.org\",\"type\":\"webauthn\"}},\"op\":\"genesis\",\"prev\":null,\"seq\":1,\"ts\":1794009598,\"v\":1}"
+      ],
+      "first_seen_at": [
+        1794009600
+      ]
+    },
+    "closed": {
+      "did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+      "log": [
+        "{\"auth\":{\"form\":\"p256\",\"kid\":\"tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU\",\"signature\":\"NjJzPZDhyVfeHZ-zqDEm_5AU2gMATujXqwSghEvuYtsKU8iKLZ4yjFh0MyuvnoKkZ813cZFIKMXVKia1tTBFog\"},\"body\":{\"approver\":{\"attestation\":{\"type\":\"app_attest\",\"verified\":true},\"jwk\":{\"crv\":\"P-256\",\"kty\":\"EC\",\"x\":\"I6qtUJaZ7ADAygJp9kdxRIoqiM5X1v5JwGbWyExwjcM\",\"y\":\"E8oX2arXfaoxhwmFzu7rBWSUGZ0ZjVaw4VHuCWUzfSM\"},\"key_storage\":\"secure_enclave\",\"kid\":\"tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU\",\"label\":\"iPhone\",\"platform\":\"ios\",\"type\":\"p256\"},\"root\":{\"aaguid\":\"fbfc3007-154e-4ecc-8c0b-6e020557d7bd\",\"credential_id\":\"oyqZss9O8IhOEQPTLVCN0g\",\"jwk\":{\"crv\":\"P-256\",\"kty\":\"EC\",\"x\":\"9AOyameX8cAM87PhFX4TMKaZ3_Roj8ilnpR_d2ATKo0\",\"y\":\"wNLijrbZEO2MVCH-Km94ZiosJyVwpc7oTgeNYYX68Ng\"},\"kid\":\"07PAo82hd2JrvWLKn1nsgQpzIWE27VR0vNUbngCBKjE\",\"label\":\"Passkey\",\"platform\":\"ios\",\"rp_id\":\"account.openentity.org\",\"type\":\"webauthn\"}},\"op\":\"genesis\",\"prev\":null,\"seq\":1,\"ts\":1794009598,\"v\":1}",
+        "{\"auth\":{\"form\":\"p256\",\"kid\":\"tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU\",\"signature\":\"TQ0Xrln2aoBtZRtZzkN9yoWmNlKqwe3YB2szNT3AqFlTMyJ41NpKVNBgHbpTRIu_XYv04Pv_AyA-fi11MJSPng\"},\"body\":{\"approver\":{\"aaguid\":\"fbfc3007-154e-4ecc-8c0b-6e020557d7bd\",\"credential_id\":\"FIlBW6SWY3Jafi2NW3KgsA\",\"jwk\":{\"crv\":\"P-256\",\"kty\":\"EC\",\"x\":\"-xMoowGg93Z1aEQuJcIYfVAFu3Adg3hkRRRI2HfApqc\",\"y\":\"2iRpvaFX65qwOLwselP-hD-qndpn4md9DEo8TPo7SB8\"},\"kid\":\"mTluyYyMSPInd1g_ENjr016z9DqqE2ZUX845TdohRVE\",\"label\":\"MacBook\",\"platform\":\"web\",\"rp_id\":\"account.openentity.org\",\"type\":\"webauthn\"}},\"op\":\"add_approver\",\"prev\":\"71949eb3b6cfd378c7899920bbc5d96adcae3c005c18f7a2a68e8110227e4ef5\",\"seq\":2,\"ts\":1794013198,\"v\":1}",
+        "{\"auth\":{\"form\":\"p256\",\"kid\":\"Docs6T6LLafUtCIRMtHzZtieHnsy6zOYuTu0x4oGbzo\",\"signature\":\"BZFjFDSDDluKrU_uDiU_RgCDruBpAxa5tRyc_N3ptvQoKFj2A-g6mmm_OVJ3qJ0fW2DdFtCToKgA_mvDLLHO5g\"},\"body\":{},\"op\":\"close\",\"prev\":\"0148cf5bf25dd085b12c0c934e2bd7f0a9dddf4ae07aa463e65702b58264ff3b\",\"seq\":3,\"ts\":1794014998,\"v\":1}"
+      ],
+      "first_seen_at": [
+        1794009600,
+        1794013200,
+        1794015000
+      ]
+    },
+    "revoked": {
+      "did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+      "log": [
+        "{\"auth\":{\"form\":\"p256\",\"kid\":\"tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU\",\"signature\":\"NjJzPZDhyVfeHZ-zqDEm_5AU2gMATujXqwSghEvuYtsKU8iKLZ4yjFh0MyuvnoKkZ813cZFIKMXVKia1tTBFog\"},\"body\":{\"approver\":{\"attestation\":{\"type\":\"app_attest\",\"verified\":true},\"jwk\":{\"crv\":\"P-256\",\"kty\":\"EC\",\"x\":\"I6qtUJaZ7ADAygJp9kdxRIoqiM5X1v5JwGbWyExwjcM\",\"y\":\"E8oX2arXfaoxhwmFzu7rBWSUGZ0ZjVaw4VHuCWUzfSM\"},\"key_storage\":\"secure_enclave\",\"kid\":\"tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU\",\"label\":\"iPhone\",\"platform\":\"ios\",\"type\":\"p256\"},\"root\":{\"aaguid\":\"fbfc3007-154e-4ecc-8c0b-6e020557d7bd\",\"credential_id\":\"oyqZss9O8IhOEQPTLVCN0g\",\"jwk\":{\"crv\":\"P-256\",\"kty\":\"EC\",\"x\":\"9AOyameX8cAM87PhFX4TMKaZ3_Roj8ilnpR_d2ATKo0\",\"y\":\"wNLijrbZEO2MVCH-Km94ZiosJyVwpc7oTgeNYYX68Ng\"},\"kid\":\"07PAo82hd2JrvWLKn1nsgQpzIWE27VR0vNUbngCBKjE\",\"label\":\"Passkey\",\"platform\":\"ios\",\"rp_id\":\"account.openentity.org\",\"type\":\"webauthn\"}},\"op\":\"genesis\",\"prev\":null,\"seq\":1,\"ts\":1794009598,\"v\":1}",
+        "{\"auth\":{\"form\":\"p256\",\"kid\":\"tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU\",\"signature\":\"TQ0Xrln2aoBtZRtZzkN9yoWmNlKqwe3YB2szNT3AqFlTMyJ41NpKVNBgHbpTRIu_XYv04Pv_AyA-fi11MJSPng\"},\"body\":{\"approver\":{\"aaguid\":\"fbfc3007-154e-4ecc-8c0b-6e020557d7bd\",\"credential_id\":\"FIlBW6SWY3Jafi2NW3KgsA\",\"jwk\":{\"crv\":\"P-256\",\"kty\":\"EC\",\"x\":\"-xMoowGg93Z1aEQuJcIYfVAFu3Adg3hkRRRI2HfApqc\",\"y\":\"2iRpvaFX65qwOLwselP-hD-qndpn4md9DEo8TPo7SB8\"},\"kid\":\"mTluyYyMSPInd1g_ENjr016z9DqqE2ZUX845TdohRVE\",\"label\":\"MacBook\",\"platform\":\"web\",\"rp_id\":\"account.openentity.org\",\"type\":\"webauthn\"}},\"op\":\"add_approver\",\"prev\":\"71949eb3b6cfd378c7899920bbc5d96adcae3c005c18f7a2a68e8110227e4ef5\",\"seq\":2,\"ts\":1794013198,\"v\":1}",
+        "{\"auth\":{\"authenticator_data\":\"D3UMQg2RHUXdnWy7aJ1fAnM1wAzOoZElYIW5k5ZyV-MdAAAAAA\",\"client_data_json\":\"eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiU3FlcktZdEhpZkpaYlNnV3gybW13TXl5YTVDWHdqeXl3cEducGM2MTB4TSIsIm9yaWdpbiI6Imh0dHBzOi8vYWNjb3VudC5vcGVuZW50aXR5Lm9yZyIsImNyb3NzT3JpZ2luIjpmYWxzZX0\",\"form\":\"webauthn\",\"kid\":\"mTluyYyMSPInd1g_ENjr016z9DqqE2ZUX845TdohRVE\",\"signature\":\"MEUCIQCP-6EV4QEbUKddlsLHjqdhlWgXYBLh_lwT0o6qoiTLgAIgQFuTFcY4e2Yqm7zb0jCm0Oo2Se44gWU7LL7Z54WwltA\"},\"body\":{\"kid\":\"tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU\"},\"op\":\"revoke\",\"prev\":\"0148cf5bf25dd085b12c0c934e2bd7f0a9dddf4ae07aa463e65702b58264ff3b\",\"seq\":3,\"ts\":1794014998,\"v\":1}"
+      ],
+      "first_seen_at": [
+        1794009600,
+        1794013200,
+        1794015000
+      ]
+    }
+  },
+  "cases": [
+    {
+      "name": "p256-approve",
+      "description": "Secure Enclave key, raw r||s over the digest, approve.",
+      "approval": {
+        "version": "approval/2.0",
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "decision": "approve",
+        "expires_at": 1794017100,
+        "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+        "form": "p256",
+        "signature": "dSEffeOblaG-VzgFSgx_X4GsNfkGnUBxTqzxukR4kxhkhe9P3urDlLilrQNmJnItRTHOgZRd1t_3RY_ZzKGYNg"
+      },
+      "context": {
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "now": 1794016800,
+        "origins": [
+          "https://account.openentity.org",
+          "android:apk-key-hash:AXVh6-zFGB0QxD0cPn3sYa1YZcCsl0Kl3sbQg35wBSw"
+        ],
+        "key_state": "owner"
+      },
+      "expect": {
+        "ok": true,
+        "kid": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+        "counter": 0
+      }
+    },
+    {
+      "name": "p256-deny",
+      "description": "Secure Enclave key, deny.",
+      "approval": {
+        "version": "approval/2.0",
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "decision": "deny",
+        "expires_at": 1794017100,
+        "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+        "form": "p256",
+        "signature": "_vdGfZgJ5YY5_x_E6JUGcLYlbl_4cDawPNG-yLnnOf5i9sxWA7a8Xv_qCiRzKVK9EeoQG2xCj3VeD_YTAjPXWA"
+      },
+      "context": {
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "now": 1794016800,
+        "origins": [
+          "https://account.openentity.org",
+          "android:apk-key-hash:AXVh6-zFGB0QxD0cPn3sYa1YZcCsl0Kl3sbQg35wBSw"
+        ],
+        "key_state": "owner"
+      },
+      "expect": {
+        "ok": true,
+        "kid": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+        "counter": 0
+      }
+    },
+    {
+      "name": "p256-high-s",
+      "description": "Approvals accept the high-S twin (ADR 0004 forms); only key log entries require low S.",
+      "approval": {
+        "version": "approval/2.0",
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "decision": "approve",
+        "expires_at": 1794017100,
+        "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+        "form": "p256",
+        "signature": "dSEffeOblaG-VzgFSgx_X4GsNfkGnUBxTqzxukR4kxibehCvIRU8bEdaUvyZ2Y3Sd7UsLBK5x6T8dDrpL8GNGw"
+      },
+      "context": {
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "now": 1794016800,
+        "origins": [
+          "https://account.openentity.org",
+          "android:apk-key-hash:AXVh6-zFGB0QxD0cPn3sYa1YZcCsl0Kl3sbQg35wBSw"
+        ],
+        "key_state": "owner"
+      },
+      "expect": {
+        "ok": true,
+        "kid": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+        "counter": 0
+      }
+    },
+    {
+      "name": "webauthn-web-origin",
+      "description": "Web approver passkey, origin https://account.openentity.org.",
+      "approval": {
+        "version": "approval/2.0",
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "decision": "approve",
+        "expires_at": 1794017100,
+        "device_id": "mTluyYyMSPInd1g_ENjr016z9DqqE2ZUX845TdohRVE",
+        "form": "webauthn",
+        "signature": "MEUCIQDz_RQtXAbeP-nVjVpVoaMSe64YqFoHCrdXGWrl4ggURAIgBb9eREogYpTNXeGst6TBupQMgS5cYB-Pn4zdie1BLOw",
+        "authenticator_data": "D3UMQg2RHUXdnWy7aJ1fAnM1wAzOoZElYIW5k5ZyV-MdAAAAAA",
+        "client_data_json": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiS2Q3SVZLQ3pPQjFfLXpsWkRWaTJvU0Vvak1udG1OX3lCWjNGSE5GbzRjcyIsIm9yaWdpbiI6Imh0dHBzOi8vYWNjb3VudC5vcGVuZW50aXR5Lm9yZyIsImNyb3NzT3JpZ2luIjpmYWxzZX0"
+      },
+      "context": {
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "now": 1794016800,
+        "origins": [
+          "https://account.openentity.org",
+          "android:apk-key-hash:AXVh6-zFGB0QxD0cPn3sYa1YZcCsl0Kl3sbQg35wBSw"
+        ],
+        "key_state": "owner"
+      },
+      "expect": {
+        "ok": true,
+        "kid": "mTluyYyMSPInd1g_ENjr016z9DqqE2ZUX845TdohRVE",
+        "counter": 0
+      }
+    },
+    {
+      "name": "webauthn-android-origin",
+      "description": "The same passkey through the Android app: origin android:apk-key-hash (example hash).",
+      "approval": {
+        "version": "approval/2.0",
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "decision": "approve",
+        "expires_at": 1794017100,
+        "device_id": "mTluyYyMSPInd1g_ENjr016z9DqqE2ZUX845TdohRVE",
+        "form": "webauthn",
+        "signature": "MEUCIQDWtWeuw_PyB55OysBMHtaslHjfoLVMVcM3i9bCC7gIMQIgMJcQXzq7HYAK1syQP4TiGt4D4YY3PdLITooynAQENjk",
+        "authenticator_data": "D3UMQg2RHUXdnWy7aJ1fAnM1wAzOoZElYIW5k5ZyV-MdAAAAAA",
+        "client_data_json": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiS2Q3SVZLQ3pPQjFfLXpsWkRWaTJvU0Vvak1udG1OX3lCWjNGSE5GbzRjcyIsIm9yaWdpbiI6ImFuZHJvaWQ6YXBrLWtleS1oYXNoOkFYVmg2LXpGR0IwUXhEMGNQbjNzWWExWVpjQ3NsMEtsM3NiUWczNXdCU3ciLCJhbmRyb2lkUGFja2FnZU5hbWUiOiJvcmcub3BlbmVudGl0eS5hcHAifQ"
+      },
+      "context": {
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "now": 1794016800,
+        "origins": [
+          "https://account.openentity.org",
+          "android:apk-key-hash:AXVh6-zFGB0QxD0cPn3sYa1YZcCsl0Kl3sbQg35wBSw"
+        ],
+        "key_state": "owner"
+      },
+      "expect": {
+        "ok": true,
+        "kid": "mTluyYyMSPInd1g_ENjr016z9DqqE2ZUX845TdohRVE",
+        "counter": 0
+      }
+    },
+    {
+      "name": "webauthn-counter",
+      "description": "A nonzero signature counter above the stored one is accepted and returned.",
+      "approval": {
+        "version": "approval/2.0",
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "decision": "approve",
+        "expires_at": 1794017100,
+        "device_id": "mTluyYyMSPInd1g_ENjr016z9DqqE2ZUX845TdohRVE",
+        "form": "webauthn",
+        "signature": "MEQCIFvxx8g29MKRWAUOsFTPu3X8tXea0BVPQ9IkSVrlQE_MAiA8CzBETiAHZPvuXyhJwIaLLphyGm0FGpSqyhbpJR9Uhg",
+        "authenticator_data": "D3UMQg2RHUXdnWy7aJ1fAnM1wAzOoZElYIW5k5ZyV-MdAAAABw",
+        "client_data_json": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiS2Q3SVZLQ3pPQjFfLXpsWkRWaTJvU0Vvak1udG1OX3lCWjNGSE5GbzRjcyIsIm9yaWdpbiI6Imh0dHBzOi8vYWNjb3VudC5vcGVuZW50aXR5Lm9yZyIsImNyb3NzT3JpZ2luIjpmYWxzZX0"
+      },
+      "context": {
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "now": 1794016800,
+        "origins": [
+          "https://account.openentity.org",
+          "android:apk-key-hash:AXVh6-zFGB0QxD0cPn3sYa1YZcCsl0Kl3sbQg35wBSw"
+        ],
+        "key_state": "owner",
+        "counter": 6
+      },
+      "expect": {
+        "ok": true,
+        "kid": "mTluyYyMSPInd1g_ENjr016z9DqqE2ZUX845TdohRVE",
+        "counter": 7
+      }
+    },
+    {
+      "name": "root-single-credential",
+      "description": "In a single-credential log the root passkey is the approver.",
+      "approval": {
+        "version": "approval/2.0",
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:k6ssewaczrf6i6svqxslfovw5biyk5mqngx5cy7mqgdw6264jtiq",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "decision": "approve",
+        "expires_at": 1794017100,
+        "device_id": "07PAo82hd2JrvWLKn1nsgQpzIWE27VR0vNUbngCBKjE",
+        "form": "webauthn",
+        "signature": "MEUCIQCBoWhd1FkGecJZz8yzA4gOqoeYDxEMIO0otgYphmK8JAIgJUZDNqcvHpt3104kdblApoIsIQWSBgHQm21aFDAeHP8",
+        "authenticator_data": "D3UMQg2RHUXdnWy7aJ1fAnM1wAzOoZElYIW5k5ZyV-MdAAAAAA",
+        "client_data_json": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiTzB4OE5UV3ZhSUdBelhGSURXc09lUDMyX1pfZmcwMkJ3dXhnN21SaHNfTSIsIm9yaWdpbiI6Imh0dHBzOi8vYWNjb3VudC5vcGVuZW50aXR5Lm9yZyIsImNyb3NzT3JpZ2luIjpmYWxzZX0"
+      },
+      "context": {
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:k6ssewaczrf6i6svqxslfovw5biyk5mqngx5cy7mqgdw6264jtiq",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "now": 1794016800,
+        "origins": [
+          "https://account.openentity.org",
+          "android:apk-key-hash:AXVh6-zFGB0QxD0cPn3sYa1YZcCsl0Kl3sbQg35wBSw"
+        ],
+        "key_state": "single"
+      },
+      "expect": {
+        "ok": true,
+        "kid": "07PAo82hd2JrvWLKn1nsgQpzIWE27VR0vNUbngCBKjE",
+        "counter": 0
+      }
+    },
+    {
+      "name": "expiry-at-limit",
+      "description": "expires_at exactly 600 seconds after now.",
+      "approval": {
+        "version": "approval/2.0",
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "decision": "approve",
+        "expires_at": 1794017400,
+        "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+        "form": "p256",
+        "signature": "xgRxuAQZuGIfvq-1w-fPYhcON6znxa-ci4QhkdpdtKpM34FKsxG8yrN7kzwywx_xZQg6SrQ0uymL28ee_dy5mw"
+      },
+      "context": {
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "now": 1794016800,
+        "origins": [
+          "https://account.openentity.org",
+          "android:apk-key-hash:AXVh6-zFGB0QxD0cPn3sYa1YZcCsl0Kl3sbQg35wBSw"
+        ],
+        "key_state": "owner"
+      },
+      "expect": {
+        "ok": true,
+        "kid": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+        "counter": 0
+      }
+    },
+    {
+      "name": "moltbotden-verifier",
+      "description": "Moltbot Den verifying an approval addressed to it.",
+      "approval": {
+        "version": "approval/2.0",
+        "verifier_did": "did:web:moltbotden.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "decision": "approve",
+        "expires_at": 1794017100,
+        "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+        "form": "p256",
+        "signature": "uGlGMrDwxiRj4kKlfdIFTfAObD8E-LhOZnrDmL7girxNu-nzs1YMaCFyz4Cc8QeGoxCwoKCVkVw09Rj53Ea4mA"
+      },
+      "context": {
+        "verifier_did": "did:web:moltbotden.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "now": 1794016800,
+        "origins": [
+          "https://account.openentity.org",
+          "android:apk-key-hash:AXVh6-zFGB0QxD0cPn3sYa1YZcCsl0Kl3sbQg35wBSw"
+        ],
+        "key_state": "owner"
+      },
+      "expect": {
+        "ok": true,
+        "kid": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+        "counter": 0
+      }
+    },
+    {
+      "name": "v1-from-keylog-key",
+      "description": "approval/1.0 (the old digest) signed by a key-log key is rejected.",
+      "approval": {
+        "version": "approval/1.0",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "decision": "approve",
+        "expires_at": 1794017100,
+        "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+        "form": "p256",
+        "signature": "PAFZLwPWVFAfs1_phqKx8ia830A_h7qcufKiw60Ie3tqlB-rA5XKavgnQ9DnzCF2pA0L0QTPTg56EaIFHp41Vw"
+      },
+      "context": {
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "now": 1794016800,
+        "origins": [
+          "https://account.openentity.org",
+          "android:apk-key-hash:AXVh6-zFGB0QxD0cPn3sYa1YZcCsl0Kl3sbQg35wBSw"
+        ],
+        "key_state": "owner"
+      },
+      "expect": {
+        "ok": false,
+        "error": "bad_version"
+      }
+    },
+    {
+      "name": "wrong-verifier",
+      "description": "An approval addressed to Moltbot Den presented to Agent Secret Store.",
+      "approval": {
+        "version": "approval/2.0",
+        "verifier_did": "did:web:moltbotden.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "decision": "approve",
+        "expires_at": 1794017100,
+        "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+        "form": "p256",
+        "signature": "uGlGMrDwxiRj4kKlfdIFTfAObD8E-LhOZnrDmL7girxNu-nzs1YMaCFyz4Cc8QeGoxCwoKCVkVw09Rj53Ea4mA"
+      },
+      "context": {
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "now": 1794016800,
+        "origins": [
+          "https://account.openentity.org",
+          "android:apk-key-hash:AXVh6-zFGB0QxD0cPn3sYa1YZcCsl0Kl3sbQg35wBSw"
+        ],
+        "key_state": "owner"
+      },
+      "expect": {
+        "ok": false,
+        "error": "wrong_verifier"
+      }
+    },
+    {
+      "name": "agent-written",
+      "description": "An approval written through POST /v1/agent/approvals names the account service; no product accepts it.",
+      "approval": {
+        "version": "approval/2.0",
+        "verifier_did": "did:web:account.openentity.org",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "decision": "approve",
+        "expires_at": 1794017100,
+        "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+        "form": "p256",
+        "signature": "7zzVl26tYRa2kbbIhdin0sA-C5c-wZftOtf94XoeKuNntzICoPIEu8uqwvQYMKktA9UJGGgY8eK_i5xqA8hzWw"
+      },
+      "context": {
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "now": 1794016800,
+        "origins": [
+          "https://account.openentity.org",
+          "android:apk-key-hash:AXVh6-zFGB0QxD0cPn3sYa1YZcCsl0Kl3sbQg35wBSw"
+        ],
+        "key_state": "owner"
+      },
+      "expect": {
+        "ok": false,
+        "error": "wrong_verifier"
+      }
+    },
+    {
+      "name": "wrong-owner",
+      "description": "The approval names another owner.",
+      "approval": {
+        "version": "approval/2.0",
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:k6ssewaczrf6i6svqxslfovw5biyk5mqngx5cy7mqgdw6264jtiq",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "decision": "approve",
+        "expires_at": 1794017100,
+        "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+        "form": "p256",
+        "signature": "IrtVakBQ7NNPyHuK6qMfEx4qEDlyfN8vByGBOUAXOZYjAIvMSGooFFBGxJ35z1ADD0UkVNVYZdq-V_BtXYQKOw"
+      },
+      "context": {
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "now": 1794016800,
+        "origins": [
+          "https://account.openentity.org",
+          "android:apk-key-hash:AXVh6-zFGB0QxD0cPn3sYa1YZcCsl0Kl3sbQg35wBSw"
+        ],
+        "key_state": "owner"
+      },
+      "expect": {
+        "ok": false,
+        "error": "wrong_owner"
+      }
+    },
+    {
+      "name": "owner-closed",
+      "description": "The owner's key log is closed.",
+      "approval": {
+        "version": "approval/2.0",
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "decision": "approve",
+        "expires_at": 1794017100,
+        "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+        "form": "p256",
+        "signature": "dSEffeOblaG-VzgFSgx_X4GsNfkGnUBxTqzxukR4kxhkhe9P3urDlLilrQNmJnItRTHOgZRd1t_3RY_ZzKGYNg"
+      },
+      "context": {
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "now": 1794016800,
+        "origins": [
+          "https://account.openentity.org",
+          "android:apk-key-hash:AXVh6-zFGB0QxD0cPn3sYa1YZcCsl0Kl3sbQg35wBSw"
+        ],
+        "key_state": "closed"
+      },
+      "expect": {
+        "ok": false,
+        "error": "owner_closed"
+      }
+    },
+    {
+      "name": "wrong-request",
+      "description": "The verifier's request id moved on (the action's state changed).",
+      "approval": {
+        "version": "approval/2.0",
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "decision": "approve",
+        "expires_at": 1794017100,
+        "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+        "form": "p256",
+        "signature": "dSEffeOblaG-VzgFSgx_X4GsNfkGnUBxTqzxukR4kxhkhe9P3urDlLilrQNmJnItRTHOgZRd1t_3RY_ZzKGYNg"
+      },
+      "context": {
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:43",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "now": 1794016800,
+        "origins": [
+          "https://account.openentity.org",
+          "android:apk-key-hash:AXVh6-zFGB0QxD0cPn3sYa1YZcCsl0Kl3sbQg35wBSw"
+        ],
+        "key_state": "owner"
+      },
+      "expect": {
+        "ok": false,
+        "error": "wrong_request"
+      }
+    },
+    {
+      "name": "wrong-payload",
+      "description": "The summary the verifier recomputes differs.",
+      "approval": {
+        "version": "approval/2.0",
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "decision": "approve",
+        "expires_at": 1794017100,
+        "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+        "form": "p256",
+        "signature": "dSEffeOblaG-VzgFSgx_X4GsNfkGnUBxTqzxukR4kxhkhe9P3urDlLilrQNmJnItRTHOgZRd1t_3RY_ZzKGYNg"
+      },
+      "context": {
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "7b9e8fbd9f2fd26eedc75ce09daece4cf01e4b7f9982ad3b314cfdbedcecdee0",
+        "now": 1794016800,
+        "origins": [
+          "https://account.openentity.org",
+          "android:apk-key-hash:AXVh6-zFGB0QxD0cPn3sYa1YZcCsl0Kl3sbQg35wBSw"
+        ],
+        "key_state": "owner"
+      },
+      "expect": {
+        "ok": false,
+        "error": "wrong_payload"
+      }
+    },
+    {
+      "name": "bad-decision",
+      "description": "This action accepts approve only.",
+      "approval": {
+        "version": "approval/2.0",
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "decision": "deny",
+        "expires_at": 1794017100,
+        "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+        "form": "p256",
+        "signature": "_vdGfZgJ5YY5_x_E6JUGcLYlbl_4cDawPNG-yLnnOf5i9sxWA7a8Xv_qCiRzKVK9EeoQG2xCj3VeD_YTAjPXWA"
+      },
+      "context": {
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "now": 1794016800,
+        "origins": [
+          "https://account.openentity.org",
+          "android:apk-key-hash:AXVh6-zFGB0QxD0cPn3sYa1YZcCsl0Kl3sbQg35wBSw"
+        ],
+        "key_state": "owner",
+        "decisions": [
+          "approve"
+        ]
+      },
+      "expect": {
+        "ok": false,
+        "error": "bad_decision"
+      }
+    },
+    {
+      "name": "expired",
+      "description": "now equals expires_at.",
+      "approval": {
+        "version": "approval/2.0",
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "decision": "approve",
+        "expires_at": 1794017100,
+        "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+        "form": "p256",
+        "signature": "dSEffeOblaG-VzgFSgx_X4GsNfkGnUBxTqzxukR4kxhkhe9P3urDlLilrQNmJnItRTHOgZRd1t_3RY_ZzKGYNg"
+      },
+      "context": {
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "now": 1794017100,
+        "origins": [
+          "https://account.openentity.org",
+          "android:apk-key-hash:AXVh6-zFGB0QxD0cPn3sYa1YZcCsl0Kl3sbQg35wBSw"
+        ],
+        "key_state": "owner"
+      },
+      "expect": {
+        "ok": false,
+        "error": "expired"
+      }
+    },
+    {
+      "name": "expiry-too-far",
+      "description": "expires_at 601 seconds after now.",
+      "approval": {
+        "version": "approval/2.0",
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "decision": "approve",
+        "expires_at": 1794017401,
+        "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+        "form": "p256",
+        "signature": "Vj__9N3_Jmj4ckMWqKb51eEaWTKDTVH4brH1OcRCXhRrpbV2xHX_Y38ZYGZyW7xkSv2lnaqh3BUUQGCal1j9CA"
+      },
+      "context": {
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "now": 1794016800,
+        "origins": [
+          "https://account.openentity.org",
+          "android:apk-key-hash:AXVh6-zFGB0QxD0cPn3sYa1YZcCsl0Kl3sbQg35wBSw"
+        ],
+        "key_state": "owner"
+      },
+      "expect": {
+        "ok": false,
+        "error": "expiry_too_far"
+      }
+    },
+    {
+      "name": "unknown-key",
+      "description": "Signed by a key that is not an approver in the owner's key log.",
+      "approval": {
+        "version": "approval/2.0",
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "decision": "approve",
+        "expires_at": 1794017100,
+        "device_id": "njSMcnFS8gLSI4-5PgIQeJTFQudLF6moiczrC46hNXU",
+        "form": "p256",
+        "signature": "E_wHZ0uyr0osUHCJgsOa8HT75z4LXQTMv77gn4T0X4ol7htJFFLbjvJcvi5NgSXR5Il-fwKF7mF1JSM9TRlcAQ"
+      },
+      "context": {
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "now": 1794016800,
+        "origins": [
+          "https://account.openentity.org",
+          "android:apk-key-hash:AXVh6-zFGB0QxD0cPn3sYa1YZcCsl0Kl3sbQg35wBSw"
+        ],
+        "key_state": "owner"
+      },
+      "expect": {
+        "ok": false,
+        "error": "unknown_key"
+      }
+    },
+    {
+      "name": "root-not-approver",
+      "description": "allowRoot off (the default): the root passkey is not an approver once another approver exists.",
+      "approval": {
+        "version": "approval/2.0",
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "decision": "approve",
+        "expires_at": 1794017100,
+        "device_id": "07PAo82hd2JrvWLKn1nsgQpzIWE27VR0vNUbngCBKjE",
+        "form": "webauthn",
+        "signature": "MEUCIQD5WZ7AXjt4sN4BhgpzgGI9aE2LEf4yH-1kE_FV9yeBjgIgIAvpW5rXraLAlk-HqF7H2A2yzodxCGUkdDrEZg8rZYg",
+        "authenticator_data": "D3UMQg2RHUXdnWy7aJ1fAnM1wAzOoZElYIW5k5ZyV-MdAAAAAA",
+        "client_data_json": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiS2Q3SVZLQ3pPQjFfLXpsWkRWaTJvU0Vvak1udG1OX3lCWjNGSE5GbzRjcyIsIm9yaWdpbiI6Imh0dHBzOi8vYWNjb3VudC5vcGVuZW50aXR5Lm9yZyIsImNyb3NzT3JpZ2luIjpmYWxzZX0"
+      },
+      "context": {
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "now": 1794016800,
+        "origins": [
+          "https://account.openentity.org",
+          "android:apk-key-hash:AXVh6-zFGB0QxD0cPn3sYa1YZcCsl0Kl3sbQg35wBSw"
+        ],
+        "key_state": "owner"
+      },
+      "expect": {
+        "ok": false,
+        "error": "unknown_key"
+      }
+    },
+    {
+      "name": "root-allow-root",
+      "description": "allowRoot on (account-service flows such as cancelling a deletion request): the root passkey's WebAuthn approval is accepted.",
+      "approval": {
+        "version": "approval/2.0",
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "decision": "approve",
+        "expires_at": 1794017100,
+        "device_id": "07PAo82hd2JrvWLKn1nsgQpzIWE27VR0vNUbngCBKjE",
+        "form": "webauthn",
+        "signature": "MEUCIQD5WZ7AXjt4sN4BhgpzgGI9aE2LEf4yH-1kE_FV9yeBjgIgIAvpW5rXraLAlk-HqF7H2A2yzodxCGUkdDrEZg8rZYg",
+        "authenticator_data": "D3UMQg2RHUXdnWy7aJ1fAnM1wAzOoZElYIW5k5ZyV-MdAAAAAA",
+        "client_data_json": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiS2Q3SVZLQ3pPQjFfLXpsWkRWaTJvU0Vvak1udG1OX3lCWjNGSE5GbzRjcyIsIm9yaWdpbiI6Imh0dHBzOi8vYWNjb3VudC5vcGVuZW50aXR5Lm9yZyIsImNyb3NzT3JpZ2luIjpmYWxzZX0"
+      },
+      "context": {
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "now": 1794016800,
+        "origins": [
+          "https://account.openentity.org",
+          "android:apk-key-hash:AXVh6-zFGB0QxD0cPn3sYa1YZcCsl0Kl3sbQg35wBSw"
+        ],
+        "key_state": "owner",
+        "allow_root": true
+      },
+      "expect": {
+        "ok": true,
+        "kid": "07PAo82hd2JrvWLKn1nsgQpzIWE27VR0vNUbngCBKjE",
+        "counter": 0
+      }
+    },
+    {
+      "name": "revoked-approver",
+      "description": "A revoked approver never signs an approval, even with allowRoot on (it may only sign the key log cancel op).",
+      "approval": {
+        "version": "approval/2.0",
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "decision": "approve",
+        "expires_at": 1794017100,
+        "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+        "form": "p256",
+        "signature": "dSEffeOblaG-VzgFSgx_X4GsNfkGnUBxTqzxukR4kxhkhe9P3urDlLilrQNmJnItRTHOgZRd1t_3RY_ZzKGYNg"
+      },
+      "context": {
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "now": 1794016800,
+        "origins": [
+          "https://account.openentity.org",
+          "android:apk-key-hash:AXVh6-zFGB0QxD0cPn3sYa1YZcCsl0Kl3sbQg35wBSw"
+        ],
+        "key_state": "revoked",
+        "allow_root": true
+      },
+      "expect": {
+        "ok": false,
+        "error": "unknown_key"
+      }
+    },
+    {
+      "name": "tampered-decision",
+      "description": "Signed approve, presented as deny.",
+      "approval": {
+        "version": "approval/2.0",
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "decision": "deny",
+        "expires_at": 1794017100,
+        "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+        "form": "p256",
+        "signature": "dSEffeOblaG-VzgFSgx_X4GsNfkGnUBxTqzxukR4kxhkhe9P3urDlLilrQNmJnItRTHOgZRd1t_3RY_ZzKGYNg"
+      },
+      "context": {
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "now": 1794016800,
+        "origins": [
+          "https://account.openentity.org",
+          "android:apk-key-hash:AXVh6-zFGB0QxD0cPn3sYa1YZcCsl0Kl3sbQg35wBSw"
+        ],
+        "key_state": "owner"
+      },
+      "expect": {
+        "ok": false,
+        "error": "bad_signature"
+      }
+    },
+    {
+      "name": "form-mismatch",
+      "description": "A passkey key presenting a raw p256 signature.",
+      "approval": {
+        "version": "approval/2.0",
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "decision": "approve",
+        "expires_at": 1794017100,
+        "device_id": "mTluyYyMSPInd1g_ENjr016z9DqqE2ZUX845TdohRVE",
+        "form": "p256",
+        "signature": "rMs_FPSIsUP7Jc2gxFol6xEcpFMEx8R9g5Fm4ULO13MilsGTEGA941GVk8k55rzobhWVnGSjcevtjWdOZj0Mug"
+      },
+      "context": {
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "now": 1794016800,
+        "origins": [
+          "https://account.openentity.org",
+          "android:apk-key-hash:AXVh6-zFGB0QxD0cPn3sYa1YZcCsl0Kl3sbQg35wBSw"
+        ],
+        "key_state": "owner"
+      },
+      "expect": {
+        "ok": false,
+        "error": "bad_signature"
+      }
+    },
+    {
+      "name": "webauthn-wrong-origin",
+      "description": "Origin https://evil.example.",
+      "approval": {
+        "version": "approval/2.0",
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "decision": "approve",
+        "expires_at": 1794017100,
+        "device_id": "mTluyYyMSPInd1g_ENjr016z9DqqE2ZUX845TdohRVE",
+        "form": "webauthn",
+        "signature": "MEQCIENp48ZMdU-e-Nw16QoCb84vuHR8WS0b5DSRM7Kpm0fsAiB4Zfeamjop-OfzLTJo-NqgGyLfxiWFoxz830wwuqRcWA",
+        "authenticator_data": "D3UMQg2RHUXdnWy7aJ1fAnM1wAzOoZElYIW5k5ZyV-MdAAAAAA",
+        "client_data_json": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiS2Q3SVZLQ3pPQjFfLXpsWkRWaTJvU0Vvak1udG1OX3lCWjNGSE5GbzRjcyIsIm9yaWdpbiI6Imh0dHBzOi8vZXZpbC5leGFtcGxlIiwiY3Jvc3NPcmlnaW4iOmZhbHNlfQ"
+      },
+      "context": {
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "now": 1794016800,
+        "origins": [
+          "https://account.openentity.org",
+          "android:apk-key-hash:AXVh6-zFGB0QxD0cPn3sYa1YZcCsl0Kl3sbQg35wBSw"
+        ],
+        "key_state": "owner"
+      },
+      "expect": {
+        "ok": false,
+        "error": "bad_webauthn"
+      }
+    },
+    {
+      "name": "webauthn-wrong-rp",
+      "description": "rpIdHash of evil.example.",
+      "approval": {
+        "version": "approval/2.0",
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "decision": "approve",
+        "expires_at": 1794017100,
+        "device_id": "mTluyYyMSPInd1g_ENjr016z9DqqE2ZUX845TdohRVE",
+        "form": "webauthn",
+        "signature": "MEQCIDmIICi75sN_ooWfhFJ88Ck7SHDtDp34csWcj4flSwGtAiAz2oHk7CNp0Ah8g8AIsTx3htMwv1X9YYZXqTc_kDIigg",
+        "authenticator_data": "nBgN4M1pnueIl8R8_bPn7h11kG4xt3RqR0fepTaQmDcdAAAAAA",
+        "client_data_json": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiS2Q3SVZLQ3pPQjFfLXpsWkRWaTJvU0Vvak1udG1OX3lCWjNGSE5GbzRjcyIsIm9yaWdpbiI6Imh0dHBzOi8vYWNjb3VudC5vcGVuZW50aXR5Lm9yZyIsImNyb3NzT3JpZ2luIjpmYWxzZX0"
+      },
+      "context": {
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "now": 1794016800,
+        "origins": [
+          "https://account.openentity.org",
+          "android:apk-key-hash:AXVh6-zFGB0QxD0cPn3sYa1YZcCsl0Kl3sbQg35wBSw"
+        ],
+        "key_state": "owner"
+      },
+      "expect": {
+        "ok": false,
+        "error": "bad_webauthn"
+      }
+    },
+    {
+      "name": "webauthn-no-uv",
+      "description": "User verification flag missing.",
+      "approval": {
+        "version": "approval/2.0",
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "decision": "approve",
+        "expires_at": 1794017100,
+        "device_id": "mTluyYyMSPInd1g_ENjr016z9DqqE2ZUX845TdohRVE",
+        "form": "webauthn",
+        "signature": "MEUCIQDxyRAu9kj-vLha0dsoQ2WMsp3PKzpKA-uOWi34QqQFCwIgJ4-lYZGXaIZRPrnziBrBvT7n-K4JleCLQgjIirWNmq4",
+        "authenticator_data": "D3UMQg2RHUXdnWy7aJ1fAnM1wAzOoZElYIW5k5ZyV-MBAAAAAA",
+        "client_data_json": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiS2Q3SVZLQ3pPQjFfLXpsWkRWaTJvU0Vvak1udG1OX3lCWjNGSE5GbzRjcyIsIm9yaWdpbiI6Imh0dHBzOi8vYWNjb3VudC5vcGVuZW50aXR5Lm9yZyIsImNyb3NzT3JpZ2luIjpmYWxzZX0"
+      },
+      "context": {
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "now": 1794016800,
+        "origins": [
+          "https://account.openentity.org",
+          "android:apk-key-hash:AXVh6-zFGB0QxD0cPn3sYa1YZcCsl0Kl3sbQg35wBSw"
+        ],
+        "key_state": "owner"
+      },
+      "expect": {
+        "ok": false,
+        "error": "bad_webauthn"
+      }
+    },
+    {
+      "name": "webauthn-create-type",
+      "description": "clientDataJSON type webauthn.create.",
+      "approval": {
+        "version": "approval/2.0",
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "decision": "approve",
+        "expires_at": 1794017100,
+        "device_id": "mTluyYyMSPInd1g_ENjr016z9DqqE2ZUX845TdohRVE",
+        "form": "webauthn",
+        "signature": "MEUCIQDmKGBSmRstoixWzHhuz3wqpD-SgJdqcEyB5X9Dx8PqjgIgBIdOnr9my9uCoiJP47XIr3ybb_HxuUqBybdOkzPrl4o",
+        "authenticator_data": "D3UMQg2RHUXdnWy7aJ1fAnM1wAzOoZElYIW5k5ZyV-MdAAAAAA",
+        "client_data_json": "eyJ0eXBlIjoid2ViYXV0aG4uY3JlYXRlIiwiY2hhbGxlbmdlIjoiS2Q3SVZLQ3pPQjFfLXpsWkRWaTJvU0Vvak1udG1OX3lCWjNGSE5GbzRjcyIsIm9yaWdpbiI6Imh0dHBzOi8vYWNjb3VudC5vcGVuZW50aXR5Lm9yZyIsImNyb3NzT3JpZ2luIjpmYWxzZX0"
+      },
+      "context": {
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "now": 1794016800,
+        "origins": [
+          "https://account.openentity.org",
+          "android:apk-key-hash:AXVh6-zFGB0QxD0cPn3sYa1YZcCsl0Kl3sbQg35wBSw"
+        ],
+        "key_state": "owner"
+      },
+      "expect": {
+        "ok": false,
+        "error": "bad_webauthn"
+      }
+    },
+    {
+      "name": "webauthn-wrong-challenge",
+      "description": "The challenge is the digest of another request.",
+      "approval": {
+        "version": "approval/2.0",
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "decision": "approve",
+        "expires_at": 1794017100,
+        "device_id": "mTluyYyMSPInd1g_ENjr016z9DqqE2ZUX845TdohRVE",
+        "form": "webauthn",
+        "signature": "MEUCIQCk4SOOjXRvIWY8w6cOAh38UZIpgi-06Vo-6GygXPpHzgIgbrtcukWgdk5DFISsVwdywJhPUSbnayzPNAkzBCTsw3k",
+        "authenticator_data": "D3UMQg2RHUXdnWy7aJ1fAnM1wAzOoZElYIW5k5ZyV-MdAAAAAA",
+        "client_data_json": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiLVFsdk1Ib3psQWw5NVZPRnktQmhfaEY5aFZreWNDZVFFN054aG1vME0xOCIsIm9yaWdpbiI6Imh0dHBzOi8vYWNjb3VudC5vcGVuZW50aXR5Lm9yZyIsImNyb3NzT3JpZ2luIjpmYWxzZX0"
+      },
+      "context": {
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "now": 1794016800,
+        "origins": [
+          "https://account.openentity.org",
+          "android:apk-key-hash:AXVh6-zFGB0QxD0cPn3sYa1YZcCsl0Kl3sbQg35wBSw"
+        ],
+        "key_state": "owner"
+      },
+      "expect": {
+        "ok": false,
+        "error": "bad_webauthn"
+      }
+    },
+    {
+      "name": "webauthn-cross-origin",
+      "description": "crossOrigin true.",
+      "approval": {
+        "version": "approval/2.0",
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "decision": "approve",
+        "expires_at": 1794017100,
+        "device_id": "mTluyYyMSPInd1g_ENjr016z9DqqE2ZUX845TdohRVE",
+        "form": "webauthn",
+        "signature": "MEUCIQCGo6PDiCian8Y5yZuOTzUooec6QxoijdoPdy4GaQSFJAIgflxvDauSwBYkRZak4yGZ5u48AXkK3MpGhUJ7T40kXm4",
+        "authenticator_data": "D3UMQg2RHUXdnWy7aJ1fAnM1wAzOoZElYIW5k5ZyV-MdAAAAAA",
+        "client_data_json": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiS2Q3SVZLQ3pPQjFfLXpsWkRWaTJvU0Vvak1udG1OX3lCWjNGSE5GbzRjcyIsIm9yaWdpbiI6Imh0dHBzOi8vYWNjb3VudC5vcGVuZW50aXR5Lm9yZyIsImNyb3NzT3JpZ2luIjp0cnVlfQ"
+      },
+      "context": {
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "now": 1794016800,
+        "origins": [
+          "https://account.openentity.org",
+          "android:apk-key-hash:AXVh6-zFGB0QxD0cPn3sYa1YZcCsl0Kl3sbQg35wBSw"
+        ],
+        "key_state": "owner"
+      },
+      "expect": {
+        "ok": false,
+        "error": "bad_webauthn"
+      }
+    },
+    {
+      "name": "webauthn-bom",
+      "description": "clientDataJSON starting with a UTF-8 byte order mark is not JSON.",
+      "approval": {
+        "version": "approval/2.0",
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "decision": "approve",
+        "expires_at": 1794017100,
+        "device_id": "mTluyYyMSPInd1g_ENjr016z9DqqE2ZUX845TdohRVE",
+        "form": "webauthn",
+        "signature": "MEQCIAXCgWdFwINviiro0zr3lDyV_ao0C9Pbm1Ch1H8opYPlAiAAs1hPkJppHlaEZrRKLu5aGCtzGaBMcGANsufvkz3nlA",
+        "authenticator_data": "D3UMQg2RHUXdnWy7aJ1fAnM1wAzOoZElYIW5k5ZyV-MdAAAAAA",
+        "client_data_json": "77u_eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiS2Q3SVZLQ3pPQjFfLXpsWkRWaTJvU0Vvak1udG1OX3lCWjNGSE5GbzRjcyIsIm9yaWdpbiI6Imh0dHBzOi8vYWNjb3VudC5vcGVuZW50aXR5Lm9yZyIsImNyb3NzT3JpZ2luIjpmYWxzZX0"
+      },
+      "context": {
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "now": 1794016800,
+        "origins": [
+          "https://account.openentity.org",
+          "android:apk-key-hash:AXVh6-zFGB0QxD0cPn3sYa1YZcCsl0Kl3sbQg35wBSw"
+        ],
+        "key_state": "owner"
+      },
+      "expect": {
+        "ok": false,
+        "error": "bad_webauthn"
+      }
+    },
+    {
+      "name": "webauthn-lone-surrogate",
+      "description": "clientDataJSON with a lone surrogate in any string.",
+      "approval": {
+        "version": "approval/2.0",
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "decision": "approve",
+        "expires_at": 1794017100,
+        "device_id": "mTluyYyMSPInd1g_ENjr016z9DqqE2ZUX845TdohRVE",
+        "form": "webauthn",
+        "signature": "MEMCHykBBKN-wH8rqkagk2Hn6agPBqgkf6dTV8SpB-E3NXMCID4r8j6u92f8x_yW8AQTV1qiNgYRoSiD6_usDCKbjcGX",
+        "authenticator_data": "D3UMQg2RHUXdnWy7aJ1fAnM1wAzOoZElYIW5k5ZyV-MdAAAAAA",
+        "client_data_json": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiS2Q3SVZLQ3pPQjFfLXpsWkRWaTJvU0Vvak1udG1OX3lCWjNGSE5GbzRjcyIsIm9yaWdpbiI6Imh0dHBzOi8vYWNjb3VudC5vcGVuZW50aXR5Lm9yZyIsImNyb3NzT3JpZ2luIjpmYWxzZSwibm90ZSI6Ilx1ZDgwMCJ9"
+      },
+      "context": {
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "now": 1794016800,
+        "origins": [
+          "https://account.openentity.org",
+          "android:apk-key-hash:AXVh6-zFGB0QxD0cPn3sYa1YZcCsl0Kl3sbQg35wBSw"
+        ],
+        "key_state": "owner"
+      },
+      "expect": {
+        "ok": false,
+        "error": "bad_webauthn"
+      }
+    },
+    {
+      "name": "webauthn-duplicate-key",
+      "description": "clientDataJSON with a duplicate origin key, the first one 70 spaces before its colon: rejected, never read as the last value.",
+      "approval": {
+        "version": "approval/2.0",
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "decision": "approve",
+        "expires_at": 1794017100,
+        "device_id": "mTluyYyMSPInd1g_ENjr016z9DqqE2ZUX845TdohRVE",
+        "form": "webauthn",
+        "signature": "MEQCIFQ2JIJosgAeR_NIJqeBwQ7XXb21g-crNj0zB8hm9yXtAiAWuwIRvUEzU7-2V83h_NxUPVsXMwtIenFxO3AncpaZWA",
+        "authenticator_data": "D3UMQg2RHUXdnWy7aJ1fAnM1wAzOoZElYIW5k5ZyV-MdAAAAAA",
+        "client_data_json": "eyJvcmlnaW4iICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDoiaHR0cHM6Ly9ldmlsLmV4YW1wbGUiLCJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiS2Q3SVZLQ3pPQjFfLXpsWkRWaTJvU0Vvak1udG1OX3lCWjNGSE5GbzRjcyIsIm9yaWdpbiI6Imh0dHBzOi8vYWNjb3VudC5vcGVuZW50aXR5Lm9yZyIsImNyb3NzT3JpZ2luIjpmYWxzZX0"
+      },
+      "context": {
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "now": 1794016800,
+        "origins": [
+          "https://account.openentity.org",
+          "android:apk-key-hash:AXVh6-zFGB0QxD0cPn3sYa1YZcCsl0Kl3sbQg35wBSw"
+        ],
+        "key_state": "owner"
+      },
+      "expect": {
+        "ok": false,
+        "error": "bad_webauthn"
+      }
+    },
+    {
+      "name": "webauthn-no-origins",
+      "description": "An empty origins list accepts no origin.",
+      "approval": {
+        "version": "approval/2.0",
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "decision": "approve",
+        "expires_at": 1794017100,
+        "device_id": "mTluyYyMSPInd1g_ENjr016z9DqqE2ZUX845TdohRVE",
+        "form": "webauthn",
+        "signature": "MEUCIQDz_RQtXAbeP-nVjVpVoaMSe64YqFoHCrdXGWrl4ggURAIgBb9eREogYpTNXeGst6TBupQMgS5cYB-Pn4zdie1BLOw",
+        "authenticator_data": "D3UMQg2RHUXdnWy7aJ1fAnM1wAzOoZElYIW5k5ZyV-MdAAAAAA",
+        "client_data_json": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiS2Q3SVZLQ3pPQjFfLXpsWkRWaTJvU0Vvak1udG1OX3lCWjNGSE5GbzRjcyIsIm9yaWdpbiI6Imh0dHBzOi8vYWNjb3VudC5vcGVuZW50aXR5Lm9yZyIsImNyb3NzT3JpZ2luIjpmYWxzZX0"
+      },
+      "context": {
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "now": 1794016800,
+        "origins": [],
+        "key_state": "owner"
+      },
+      "expect": {
+        "ok": false,
+        "error": "bad_webauthn"
+      }
+    },
+    {
+      "name": "webauthn-counter-replayed",
+      "description": "The signature counter did not increase.",
+      "approval": {
+        "version": "approval/2.0",
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "decision": "approve",
+        "expires_at": 1794017100,
+        "device_id": "mTluyYyMSPInd1g_ENjr016z9DqqE2ZUX845TdohRVE",
+        "form": "webauthn",
+        "signature": "MEUCIQCkIBdm6lXLix2TR-2K1tcTKqSd05Hfneqvw7CWBVtxvgIgOo_UIqsT_9sYLSDON9tWWLJggDNG7shxuEVxmZUClRo",
+        "authenticator_data": "D3UMQg2RHUXdnWy7aJ1fAnM1wAzOoZElYIW5k5ZyV-MdAAAABg",
+        "client_data_json": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiS2Q3SVZLQ3pPQjFfLXpsWkRWaTJvU0Vvak1udG1OX3lCWjNGSE5GbzRjcyIsIm9yaWdpbiI6Imh0dHBzOi8vYWNjb3VudC5vcGVuZW50aXR5Lm9yZyIsImNyb3NzT3JpZ2luIjpmYWxzZX0"
+      },
+      "context": {
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "now": 1794016800,
+        "origins": [
+          "https://account.openentity.org",
+          "android:apk-key-hash:AXVh6-zFGB0QxD0cPn3sYa1YZcCsl0Kl3sbQg35wBSw"
+        ],
+        "key_state": "owner",
+        "counter": 6
+      },
+      "expect": {
+        "ok": false,
+        "error": "counter_replayed"
+      }
+    },
+    {
+      "name": "request-id-with-separator",
+      "description": "request_id may not contain the | separator.",
+      "approval": {
+        "version": "approval/2.0",
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req|1",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "decision": "approve",
+        "expires_at": 1794017100,
+        "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+        "form": "p256",
+        "signature": "dSEffeOblaG-VzgFSgx_X4GsNfkGnUBxTqzxukR4kxhkhe9P3urDlLilrQNmJnItRTHOgZRd1t_3RY_ZzKGYNg"
+      },
+      "context": {
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req|1",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "now": 1794016800,
+        "origins": [
+          "https://account.openentity.org",
+          "android:apk-key-hash:AXVh6-zFGB0QxD0cPn3sYa1YZcCsl0Kl3sbQg35wBSw"
+        ],
+        "key_state": "owner"
+      },
+      "expect": {
+        "ok": false,
+        "error": "malformed"
+      }
+    }
+  ]
+}

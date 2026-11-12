@@ -114,3 +114,51 @@ def test_bad_signature():
     check(req(), "bad_signature", url=URL + "?y=1")
     check(req(), "bad_signature", method="GET")
     check(forge(params(), key=bytes(32)), "bad_signature")  # signed by another key
+
+
+W = VEC["did_web"]
+
+
+def _web(case, **kw):
+    from openentity import httpsig
+    httpsig._did_web_keys.clear()
+    kw.setdefault("allow_did_web", [W["did"]])
+    kw.setdefault("fetch", lambda url: W["document"] if url == W["url"] else None)
+    return verify_request(case["method"], case["url"], case["headers"], case["body"].encode(), now=W["now"], **kw)
+
+
+@pytest.mark.parametrize("case", W["valid"], ids=lambda c: c["name"])
+def test_did_web_vectors_verify(case):
+    assert _web(case) == {"did": W["did"], "keyid": case["keyid"], "created": case["created"], "expires": case["created"] + 60,
+                          "nonce": case["nonce"]}
+
+
+@pytest.mark.parametrize("case", W["invalid"], ids=lambda c: c["name"])
+def test_did_web_vectors_reject(case):
+    with pytest.raises(HttpSigError) as e:
+        _web(case)
+    assert e.value.code == case["code"]
+
+
+def test_did_web_cache_refetch_and_allow_list():
+    from openentity import httpsig
+    mk, jk = W["valid"]
+    calls = []
+    no_jwk = {**W["document"], "verificationMethod": W["document"]["verificationMethod"][:1]}
+
+    def fetch(doc):
+        return lambda url: (calls.append(url), doc)[1]
+    httpsig._did_web_keys.clear()
+    run = lambda c, f, **kw: verify_request(c["method"], c["url"], c["headers"], c["body"].encode(), now=W["now"],
+                                            allow_did_web=kw.get("allow", [W["did"]]), fetch=f)
+    run(mk, fetch(no_jwk))
+    run(mk, fetch(no_jwk))
+    assert calls == [W["url"]]  # cached
+    with pytest.raises(HttpSigError):  # an unknown key: no refetch within 30 seconds
+        run(jk, fetch(W["document"]))
+    at, keys = httpsig._did_web_keys[W["did"]]
+    httpsig._did_web_keys[W["did"]] = (at - 31, keys)
+    assert run(jk, fetch(W["document"]))["did"] == W["did"] and len(calls) == 2  # refetched: a rotation
+    with pytest.raises(HttpSigError) as e:  # a DID it was not told to allow: no fetch at all
+        run(mk, fetch(W["document"]), allow=[])
+    assert e.value.code == "bad_keyid" and len(calls) == 2

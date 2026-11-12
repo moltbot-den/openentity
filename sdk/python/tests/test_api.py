@@ -13,14 +13,14 @@ TS_INDEX = pathlib.Path(__file__).parents[2] / "ts" / "src" / "index.ts"
 SNAPSHOT = """
 A2A_EXTENSION_URI CLIENTS DECLARATION_SHA256 DECLARATION_TEXT DECLARATION_VERSION DEFAULT_REGISTRY DISPUTE_REASONS HttpSigError
 Identity InvalidInputError KeyPair OpenEntityError REGISTRY_ERROR_CODES RegistryError SPEC TrustReport VerificationError
-a2a_extension adopt agent_card base58btc_decode base58btc_encode build_declaration build_did_document build_document
+a2a_extension adopt agent_card approval_digest base58btc_decode base58btc_encode build_declaration build_did_document build_document
 build_openentity_json build_presentation build_rotation canonical_hash canonicalize check_stamp check_timestamp checkpoint_body
 clear_trust_cache consistency_proof default_resolver did_key_from_public_key did_web_resolver dispute eip712_digest find
 generate_key_pair hash_data http_sig_base inclusion_proof key_pair_from_jwk key_pair_from_seed leaf_hash log_leaf merkle_root
-mint_stamp node_hash normalize_eid note_vkey now_seconds parse_json present public_key_from_did_key random_nonce record
+mint_stamp node_hash normalize_eid note_vkey now_seconds pair_sas parse_json payload_digest present public_key_from_did_key random_nonce record
 record_entry_hash recover_eip712 rotate sha256 sha256_hex sign_attestation sign_note sign_object sign_proof sign_request
-sign_revocation successor_document trust validate verification_method_id verify_consistency verify_inclusion verify_note
-verify_object verify_presentation verify_proof verify_request withdraw
+sign_revocation successor_document trust validate verification_method_id verify_approval verify_consistency verify_inclusion
+verify_key_log verify_note verify_object verify_presentation verify_proof verify_request withdraw
 """.split()
 
 # In the TypeScript SDK only (camelCase there). Empty since 0.6.1; a function added to one SDK must land in the other.

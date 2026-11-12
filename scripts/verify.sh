@@ -20,6 +20,10 @@ if [ -f pnpm-lock.yaml ]; then
   pnpm -r --if-present run lint
   pnpm -r --if-present run typecheck
   pnpm -r --if-present run build  # deploy.yml builds every package; a missing build tool fails here first
+  # sdk/ts/dist is committed so the package installs from a git commit; it must equal a fresh build.
+  if ! git diff --quiet -- sdk/ts/dist || [ -n "$(git ls-files --others --exclude-standard sdk/ts/dist)" ]; then
+    echo "verify: sdk/ts/dist differs from a fresh build; commit the rebuilt files"; fail=1
+  fi
   pnpm -r --if-present run test
 fi
 
@@ -53,6 +57,19 @@ done
 # goose recipe and deeplinks stay in step.
 if [ -d integrations/goose ]; then
   uv run --quiet --with pyyaml --with pytest pytest -q integrations/goose || fail=1
+fi
+
+# Verify-only mobile SDKs (the apps build them from a pinned checkout) run the owner and OEIS vectors too.
+# OpenEntityKit uses CryptoKit, which exists only on Apple platforms.
+if [ -d sdk/kotlin ]; then
+  (cd sdk/kotlin && ./gradlew --quiet test) || fail=1
+fi
+if [ -d sdk/swift ]; then
+  if [ "$(uname)" = Darwin ]; then
+    (cd sdk/swift && swift test --quiet) || fail=1
+  else
+    echo "verify: sdk/swift skipped (CryptoKit needs macOS); it runs in the pre-push hook on the Mac"
+  fi
 fi
 
 # The skill passes the official Agent Skills validator (PRD Appendix B).

@@ -184,6 +184,7 @@ describe("objects and validation", () => {
     expect(() => oe.parseJson('{"a":1,"a":2}')).toThrow(/duplicate key/);
     expect(() => oe.parseJson('{"x":{"k":1,"\\u006b":2}}')).toThrow(/duplicate key/);
     expect(() => oe.parseJson('[{"a":1,"b":{"c":1,"c":1}}]')).toThrow(/duplicate key/);
+    expect(() => oe.parseJson('{"a"' + " ".repeat(70) + ':1,"a":2}')).toThrow(/duplicate key/); // any whitespace before the colon
     const att = JSON.parse(read("test-vectors/attestation.json").toString()).object;
     expect(oe.validate("Attestation", { ...att, confidence: 0.123456 }).errors.join()).not.toMatch(/decimal/);
     expect(oe.validate("Attestation", { ...att, confidence: 0.1234567 }).errors.join()).toMatch(/6 decimal places/);
@@ -420,6 +421,8 @@ describe("custom claim types (spec/claim-types.md)", () => {
       [{ mode: "remote" }, { model_endpoint_class: "confidential_vm" }, { redaction: ["faces", "faces"] }, { redaction: ["voices"] }]],
     ["claim-gateway-governed", "agentsecretstore-gateway_governed", "custom:agentsecretstore:gateway_governed",
       [{ gateway: "yes" }, { retention_mode: "all" }, { requests_30d: -1 }, { requests_30d: 1.5 }, { guard_preset: "" }, { connector_only_secrets: null }]],
+    ["claim-operated-by", "openentity-operated_by", "custom:openentity:operated_by",
+      [{ owner: "did:web:moltbotden.com" }, { owner: "did:web:account.openentity.org:o:short" }, { paired_at: "yesterday" }, { evidence_hash: "ABC" }]],
   ];
   for (const [vec, sch, claimType, bad] of cases)
     it(`${claimType}: the signed vector verifies and fits its schema; broken variants do not`, async () => {
@@ -433,6 +436,33 @@ describe("custom claim types (spec/claim-types.md)", () => {
       const { [Object.keys(v.claim)[0]]: _gone, ...missing } = v.claim;
       expect(validator.validate(missing).valid).toBe(false);
     });
+  it("every registered custom type has a schema at spec/schemas/claims/<ns>-<name>.json, and every schema a registered type", () => {
+    const types = [...read("spec/claim-types.md").toString().matchAll(/^### `(custom:[a-z0-9_.-]+:[a-z0-9_.-]+)`$/gm)].map((m) => m[1]);
+    const file = (t: string) => t.slice("custom:".length).replace(":", "-");
+    expect(types.length).toBeGreaterThanOrEqual(9);
+    expect(readdirSync(new URL("spec/schemas/claims/", root)).filter((f) => f.endsWith(".json")).sort()).toEqual(types.map((t) => `${file(t)}.json`).sort());
+    for (const t of types) {
+      const s = schema(file(t));
+      expect([s.title, s.$id]).toEqual([t, `https://openentity.org/spec/1.0/schemas/claims/${file(t)}.json`]);
+      expect(s.type).toBe("object");
+      expect(Object.keys(s.properties).sort()).toEqual([...s.required].sort());
+    }
+  });
+  it("the schemas of the types without signed vectors accept the documented shape", () => {
+    const hash = "ab".repeat(32), at = "2026-10-24T19:05:00Z";
+    const ok: [string, object, object][] = [
+      ["securemyagent-security_posture", { score_band: "strong", checks_passed: ["tls", "secrets"], scanner_version: "1.4.0", evidence_hash: hash }, { checks_passed: "tls" }],
+      ["moltbotden-transaction_review", { job_ref: hash, role: "seller", ratings: { accuracy: 5, value: 4 }, completed_at: at, marketplace: "did:web:moltbotden.com" }, { ratings: { accuracy: 6 } }],
+      ["clawgrc-compliance", { framework: "owasp-agentic-2026", controls_passed: 18, controls_total: 20, score: 90, evidence_hash: hash }, { score: 101 }],
+      ["clawgrc-violation", { policy: "declaration:1.0#3", severity: "high", evidence_hash: hash, observed_at: at }, { severity: "severe" }],
+    ];
+    for (const [name, claim, broken] of ok) {
+      const validator = new Validator(schema(name), "2020-12", false);
+      expect(validator.validate(claim).valid, name).toBe(true);
+      expect(validator.validate({ ...claim, ...broken }).valid, `${name} ${JSON.stringify(broken)}`).toBe(false);
+    }
+    expect(new Validator(schema("moltbotden-transaction_review"), "2020-12", false).validate({ ...ok[1][1], job_ref: "https://moltbotden.com/jobs/1" }).valid).toBe(true);
+  });
   it("local mode needs a localhost endpoint, and confidential needs a confidential VM", () => {
     const validator = new Validator(schema("securemyagent-vision_privacy"), "2020-12", false);
     expect(validator.validate({ mode: "confidential", model_endpoint_class: "confidential_vm", redaction: [] }).valid).toBe(true);

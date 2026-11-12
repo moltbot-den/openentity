@@ -1,0 +1,28 @@
+{
+  "description": "custom:openentity:operated_by attestation by the second throwaway key about the entity (spec/claim-types.md)",
+  "object": {
+    "spec": "openentity/1.0",
+    "type": "Attestation",
+    "issuer": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+    "subject": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+    "claim_type": "custom:openentity:operated_by",
+    "claim": {
+      "owner": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+      "paired_at": "2026-10-24T19:05:00Z",
+      "evidence_hash": "314de14f3e4ba8fcd820447c50794007ba1ad5de9eedd7bbdfb0f47da87ed8f8"
+    },
+    "created": "2026-10-24T19:05:00Z",
+    "expires": "2027-01-22T19:05:00Z",
+    "proof": {
+      "type": "DataIntegrityProof",
+      "cryptosuite": "eddsa-jcs-2022",
+      "created": "2026-10-24T19:05:00Z",
+      "verificationMethod": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw#z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+      "proofPurpose": "assertionMethod",
+      "proofValue": "z2TPbMvYmbwiLPgg7jb2TfpTscceWttxhR4BmnYsJLac961KoQz3EpRjSjM26hr3hdUdEkEuis63Pjnn6v5NZRNMq"
+    }
+  },
+  "canonical": "{\"claim\":{\"evidence_hash\":\"314de14f3e4ba8fcd820447c50794007ba1ad5de9eedd7bbdfb0f47da87ed8f8\",\"owner\":\"did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q\",\"paired_at\":\"2026-10-24T19:05:00Z\"},\"claim_type\":\"custom:openentity:operated_by\",\"created\":\"2026-10-24T19:05:00Z\",\"expires\":\"2027-01-22T19:05:00Z\",\"issuer\":\"did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw\",\"proof\":{\"created\":\"2026-10-24T19:05:00Z\",\"cryptosuite\":\"eddsa-jcs-2022\",\"proofPurpose\":\"assertionMethod\",\"proofValue\":\"z2TPbMvYmbwiLPgg7jb2TfpTscceWttxhR4BmnYsJLac961KoQz3EpRjSjM26hr3hdUdEkEuis63Pjnn6v5NZRNMq\",\"type\":\"DataIntegrityProof\",\"verificationMethod\":\"did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw#z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw\"},\"spec\":\"openentity/1.0\",\"subject\":\"did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7\",\"type\":\"Attestation\"}",
+  "sha256": "bf22db6633dcd54ecf60bef20575425d678964c31c001f2c8e5dbb80f460b03f",
+  "unsigned_canonical": "{\"claim\":{\"evidence_hash\":\"314de14f3e4ba8fcd820447c50794007ba1ad5de9eedd7bbdfb0f47da87ed8f8\",\"owner\":\"did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q\",\"paired_at\":\"2026-10-24T19:05:00Z\"},\"claim_type\":\"custom:openentity:operated_by\",\"created\":\"2026-10-24T19:05:00Z\",\"expires\":\"2027-01-22T19:05:00Z\",\"issuer\":\"did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw\",\"spec\":\"openentity/1.0\",\"subject\":\"did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7\",\"type\":\"Attestation\"}"
+}
