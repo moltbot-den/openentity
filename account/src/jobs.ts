@@ -13,6 +13,15 @@ const JOBS: [string, (d: Deps) => Promise<unknown>][] = [
   ["login_codes", (d) => d.db.run("DELETE FROM login_codes WHERE expires_at < $1", [now() - 3600])],
   ["push_tokens", (d) => d.db.run("DELETE FROM push_tokens WHERE removed_at < $1", [now() - 8 * 86_400])],
   ["sig_nonces", (d) => d.db.run("DELETE FROM sig_nonces WHERE expires_at < $1", [now() - 60])],
+  // Agent channel rows past any use: acknowledged items after 7 days, pairings and step-up requests after a day, and
+  // enrollments past their 24-hour listing window plus a week.
+  ["agent_rows", async (d) => {
+    const t = now();
+    await d.db.run("DELETE FROM inbox WHERE acked_at < $1", [t - 7 * 86_400]);
+    await d.db.run("DELETE FROM pairings WHERE expires_at < $1 AND (state <> 'confirmed' OR confirmed_at < $1)", [t - 86_400]);
+    await d.db.run("DELETE FROM step_ups WHERE expires_at < $1", [t - 86_400]);
+    await d.db.run("DELETE FROM enrollments WHERE expires_at < $1 AND state IN ('pending', 'cancelled', 'completed')", [t - 8 * 86_400]);
+  }],
 ];
 
 /** Runs every job; one failing job never stops the others. */

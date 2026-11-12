@@ -11,6 +11,7 @@ import { integrity, revokedSerials } from "./binding.ts";
 import { bump, newId, now } from "./db.ts";
 import { bearer, fail, json, str } from "./http.ts";
 import { nonceHash } from "./idtoken.ts";
+import { track } from "./events.ts";
 import { notifyOwner } from "./notify.ts";
 import { BUNDLE_ID } from "./wellknown.ts";
 
@@ -138,6 +139,13 @@ async function append(d: Deps, id: string, line: string, o: { account?: string; 
     });
   }
   if (accountId) await settleEnrollments(d, accountId, id, entry, out, delayed);
+  const added = entry.op === "add_approver" ? entry.body.approver : null;
+  const event = {
+    genesis: ["owner_key_log_created", { approver_kind: entry.body?.approver ? entry.body.approver.type : "root_only" }],
+    add_approver: added && ["approver_added", { platform: added.platform ?? "web", storage: added.type === "webauthn" ? "passkey" : added.key_storage ?? "tee", strong_integrity: !!added.integrity?.strong }],
+    recover: ["recovery_started", {}], replace_root: ["root_replace_started", {}],
+  }[entry.op as string] as [string, Record<string, string | boolean>] | undefined;
+  if (event) await track(d, event[0], event[1], { owner: did });
   return out;
 }
 

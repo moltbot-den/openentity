@@ -43,7 +43,11 @@ test("the function runs outside any VPC; production sign-in stays closed, stagin
 });
 
 test("isolation: the role reads only /openentity/account/ parameters, never the registry's /openentity/app or the other stage's values", () => {
-  const statements = (t: Template) => all(t, "AWS::IAM::Policy").flatMap((p) => p.Properties.PolicyDocument.Statement);
+  // The app function's own role. The analytics forwarder has its own, held to its stage's analytics names (below).
+  const statements = (t: Template) => {
+    const role = appFn(t).Properties.Role["Fn::GetAtt"][0];
+    return all(t, "AWS::IAM::Policy").filter((p) => JSON.stringify(p.Properties.Roles) === JSON.stringify([{ Ref: role }])).flatMap((p) => p.Properties.PolicyDocument.Statement);
+  };
   for (const [t, other] of [[prod, "staging"], [staging, "prod"]] as const) {
     const text = JSON.stringify(statements(t));
     expect(text).not.toContain("parameter/openentity/app");
@@ -82,8 +86,29 @@ test("agent WebSocket: action routing, a MOCK heartbeat with a route response, t
   staging.hasResourceProperties("AWS::ApiGatewayV2::DomainName", { DomainName: "agents.staging.account.openentity.org" });
 });
 
-test("events go to an encrypted queue with a dead-letter queue", () => {
-  prod.hasResourceProperties("AWS::SQS::Queue", { RedrivePolicy: Match.objectLike({ maxReceiveCount: 5 }), SqsManagedSseEnabled: true });
+test("the analytics forwarder reads only its own stage's analytics parameters, by name", () => {
+  for (const [t, suffix, other] of [[prod, "prod", "staging"], [staging, "staging", "prod"]] as const) {
+    const app = appFn(t).Properties.Role["Fn::GetAtt"][0];
+    const ssm = all(t, "AWS::IAM::Policy").filter((p) => JSON.stringify(p.Properties.Roles) !== JSON.stringify([{ Ref: app }]))
+      .flatMap((p) => p.Properties.PolicyDocument.Statement).filter((st: any) => JSON.stringify(st.Action).includes("ssm:"));
+    const text = JSON.stringify(ssm);
+    expect(text).not.toContain("GetParametersByPath");
+    expect(text).toContain(`analytics_`);
+    expect(text).not.toContain(`_${other}`);
+    expect(text).not.toMatch(/parameter\/openentity\/account\/\*/);
+    expect(text).toContain(`_${suffix}`);
+  }
+});
+
+test("events go to the analytics forwarder's queue (dead-letter queue, alarm), and only the app function may send to it", () => {
+  for (const t of [prod, staging]) {
+    const queues = Object.entries(t.findResources("AWS::SQS::Queue"));
+    expect(queues).toHaveLength(2); // the forwarder's queue and its DLQ; no second events queue
+    const [queueId] = queues.find(([, q]: any) => q.Properties.RedrivePolicy?.maxReceiveCount === 5)!;
+    expect(appFn(t).Properties.Environment.Variables.EVENTS_QUEUE_URL).toEqual({ Ref: queueId });
+    t.hasResourceProperties("AWS::Lambda::EventSourceMapping", { FunctionResponseTypes: ["ReportBatchItemFailures"] });
+    t.hasResourceProperties("AWS::CloudWatch::Alarm", { AlarmDescription: Match.stringLikeRegexp("dead-letter") });
+  }
 });
 
 test("jobs tick: every minute in production, every 6 hours in staging, no retries of a missed tick", () => {

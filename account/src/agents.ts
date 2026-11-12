@@ -7,6 +7,7 @@ import { OpenEntityError, payloadDigest } from "@openentity/sdk";
 import type { Deps } from "./app.ts";
 import { bump, newId, now } from "./db.ts";
 import { bearer, fail, json } from "./http.ts";
+import { track } from "./events.ts";
 import { notifyOwner } from "./notify.ts";
 import { callProduct, reaches, sendEvent } from "./outbound.ts";
 import { agentSigned, productSigned } from "./rfc9421.ts";
@@ -86,6 +87,7 @@ export async function pause(d: Deps, a: AgentRow, source: string): Promise<boole
   await closeSocket(d, a.did, a.connection_id, 4001, "agent_paused", "the owner paused this agent; reconnect to receive the resume command");
   const data = { agent_did: a.did, owner_did: a.owner_did, paused_at: t, seq };
   await Promise.all((await productsOf(d, a.did)).map((p) => sendEvent(d, p, "agent.paused", data)));
+  await track(d, "agent_paused", { source }, { owner: a.owner_did, agent: a.did });
   return true;
 }
 
@@ -94,6 +96,7 @@ async function resume(d: Deps, a: AgentRow): Promise<void> {
   await deliver(d, a.did, { type: "command", command: "resume", args: {} });
   const data = { agent_did: a.did, owner_did: a.owner_did, resumed_at: t, seq };
   await Promise.all((await productsOf(d, a.did)).map((p) => sendEvent(d, p, "agent.resumed", data)));
+  await track(d, "agent_resumed", {}, { owner: a.owner_did, agent: a.did });
 }
 
 /** RFC 9421 response signature over "@status" and content-digest by the service key (GET /v1/paused). */
@@ -152,6 +155,7 @@ export function routes(app: Hono, d: Deps) {
     const id = newId("msg");
     await d.db.run("INSERT INTO messages (id, agent_did, sender, text, created_at) VALUES ($1, $2, 'agent', $3, $4)", [id, a.did, text, now()]);
     await notifyOwner(d, a.account_id, { type: "message", id, agent: a.did });
+    await track(d, "agent_message_sent", { has_attachment: false }, { owner: a.owner_did, agent: a.did });
     return c.json({ id }, 201);
   });
 
@@ -172,6 +176,7 @@ export function routes(app: Hono, d: Deps) {
     const status = { state: b.state, summary: b.summary, progress: b.progress ?? null, at: now() };
     await d.db.run("UPDATE agents SET status = $2 WHERE did = $1", [a.did, JSON.stringify(status)]);
     await notifyOwner(d, a.account_id, { type: "agent.status", id: a.did, agent: a.did });
+    await track(d, a.status ? "agent_status_reported" : "agent_first_status", a.status ? { state: b.state } : {}, { owner: a.owner_did, agent: a.did });
     return c.body(null, 204);
   });
 
@@ -192,7 +197,10 @@ export function routes(app: Hono, d: Deps) {
     const n = await bump(d.db, `appr:${a.did}`, String(Math.floor(now() / 3600)));
     if (n > APPROVALS_PER_HOUR) {
       // Muted for the rest of the hour; the owner hears about it once.
-      if (n === APPROVALS_PER_HOUR + 1) await notifyOwner(d, a.account_id, { type: "agent.muted", id: a.did, agent: a.did });
+      if (n === APPROVALS_PER_HOUR + 1) {
+        await notifyOwner(d, a.account_id, { type: "agent.muted", id: a.did, agent: a.did });
+        await track(d, "agent_auto_muted", {}, { owner: a.owner_did, agent: a.did });
+      }
       fail(429, "muted", `more than ${APPROVALS_PER_HOUR} approval requests this hour; this agent is muted until the hour ends`, { retry_after: (Math.floor(now() / 3600) + 1) * 3600 - now() });
     }
     const t = now(), row: ApprovalRow = {
@@ -202,6 +210,7 @@ export function routes(app: Hono, d: Deps) {
     await d.db.run("INSERT INTO agent_approvals (id, agent_did, account_id, owner_did, request_id, payload, payload_digest, state, created_at, expires_at) VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending', $8, $9)",
       [row.id, row.agent_did, row.account_id, row.owner_did, row.request_id, row.payload, row.payload_digest, row.created_at, row.expires_at]);
     await notifyOwner(d, a.account_id, { type: "approval.requested", id: row.id, agent: a.did });
+    await track(d, "approval_requested", { product: "openentity", kind: "agent", risk: payload.risk }, { owner: a.owner_did, agent: a.did });
     return c.json(approvalView(d, row, false), 201);
   });
 
@@ -290,6 +299,7 @@ export function routes(app: Hono, d: Deps) {
     if (b.command !== "checkup" && b.command !== "fix") fail(400, "bad_request", "command is checkup or fix");
     if (b.args !== undefined && (!b.args || typeof b.args !== "object" || Array.isArray(b.args))) fail(400, "bad_request", "args is an object");
     const f = await deliver(d, a.did, { type: "command", command: b.command, args: b.args ?? {} });
+    await track(d, "command_sent", { command: b.command }, { owner: a.owner_did, agent: a.did });
     return c.json({ id: f.id }, 202);
   });
 
@@ -313,6 +323,7 @@ export function routes(app: Hono, d: Deps) {
     const id = newId("msg"), t = now();
     await d.db.run("INSERT INTO messages (id, agent_did, sender, text, created_at) VALUES ($1, $2, 'owner', $3, $4)", [id, a.did, text, t]);
     await deliver(d, a.did, { type: "message", text, attachments: [] }, id);
+    await track(d, "owner_message_sent", {}, { owner: a.owner_did, agent: a.did });
     return c.json({ id, from: "owner", text, attachments: [], created_at: t, acked_at: null }, 201);
   });
 
@@ -342,6 +353,9 @@ export function routes(app: Hono, d: Deps) {
     const won = await d.db.run("UPDATE agent_approvals SET state = $2, approval = $3, decided_at = $4 WHERE id = $1 AND state = 'pending'", [r.id, state, JSON.stringify(approval), t]);
     if (!won.changes) fail(409, "already_decided", "this approval was already decided");
     await deliver(d, r.agent_did, { type: "approval.result", approval_id: r.id, state, approval });
+    await track(d, "approval_decided", {
+      decision: state, product: "openentity", kind: "agent", risk: JSON.parse(r.payload).risk, seconds_to_decide: t - Number(r.created_at), number_match: false, form: String(approval.form),
+    }, { owner: r.owner_did, agent: r.agent_did });
     return c.json(approvalView(d, { ...r, state, approval: JSON.stringify(approval), decided_at: t }, true));
   });
 

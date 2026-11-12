@@ -12,6 +12,7 @@ import { type Db, bump, now } from "./db.ts";
 import * as deletion from "./deletion.ts";
 import type { SendCode } from "./email.ts";
 import * as events from "./events.ts";
+import type { QueuedEvent } from "./events.ts";
 import { HttpError, bearer, fail, ipOf, json, str } from "./http.ts";
 import type { SigningKey } from "./keys.ts";
 import * as keylog from "./keylog.ts";
@@ -52,6 +53,8 @@ export interface Deps {
   fetch?: typeof fetch;
   /** Frames to agents' open sockets (ws.ts); unset, frames wait in the inbox. */
   ws?: WsClient;
+  /** Sends validated analytics events to the forwarder's queue (events.ts); unset, events are dropped with a warning. */
+  queue?: (events: QueuedEvent[]) => Promise<void>;
   /** Tests only: stand-in attestation roots. Production pins Apple's and Google's roots (attest.ts). */
   attestRoots?: { apple?: X509Certificate[]; google?: X509Certificate[] };
   /** Decodes a Play Integrity token through Google; unset until this environment has Google credentials. */

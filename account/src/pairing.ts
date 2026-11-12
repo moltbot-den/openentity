@@ -9,6 +9,7 @@ import { type AgentRow, agentView, productKeys } from "./agents.ts";
 import type { Deps } from "./app.ts";
 import { bump, newId, now } from "./db.ts";
 import { bearer, fail, ipOf, json } from "./http.ts";
+import { track } from "./events.ts";
 import { sendEvent } from "./outbound.ts";
 import { agentSigned } from "./rfc9421.ts";
 import { checkApproval, permissionList } from "./stepup.ts";
@@ -81,7 +82,10 @@ export function routes(app: Hono, d: Deps) {
       const p = { id: newId("pr"), code: newCode(), expires_at: t + CODE_TTL };
       const ins = await d.db.run("INSERT INTO pairings (id, account_id, code, state, created_at, expires_at) VALUES ($1, $2, $3, 'waiting', $4, $5) ON CONFLICT (code) DO NOTHING",
         [p.id, o.accountId, p.code, t, p.expires_at]);
-      if (ins.changes) return c.json({ ...p, url: `https://openentity.org/pair#${p.code}`, state: "waiting" }, 201);
+      if (ins.changes) {
+        await track(d, "pair_code_created", {}, { owner: o.ownerDid });
+        return c.json({ ...p, url: `https://openentity.org/pair#${p.code}`, state: "waiting" }, 201);
+      }
       if (attempt > 3) throw new Error("no free pairing code");
     }
   });
@@ -129,6 +133,7 @@ export function routes(app: Hono, d: Deps) {
     });
     const data = { agent_did: p.agent_did, owner_did: o.ownerDid, permissions, framework: agent.framework, seq: permSeq };
     await Promise.all(PRODUCT_DIDS.map((product) => sendEvent(d, product, "agent.paired", data)));
+    await track(d, "pair_confirmed", { framework: agent.framework, permissions_count: permissions.length, seconds_from_code: t - Number(p.created_at) }, { owner: o.ownerDid, agent: p.agent_did! });
     return c.json(await agentView(d, (await d.db.first<AgentRow>("SELECT * FROM agents WHERE did = $1", [p.agent_did]))!));
   });
 
@@ -158,6 +163,8 @@ export function routes(app: Hono, d: Deps) {
       "UPDATE pairings SET state = 'claimed', agent_did = $2, agent = $3, request_id = $4, claimed_at = $5, expires_at = $6 WHERE id = $1 AND state = 'waiting' AND expires_at > $5",
       [p.id, did, JSON.stringify(agent), newId("pc"), t, t + CONFIRM_TTL]);
     if (!won.changes) fail(409, "code_used", "this code was already used");
+    const owner = await d.db.first<{ owner_did: string | null }>("SELECT owner_did FROM accounts WHERE id = $1", [p.account_id]);
+    await track(d, "pair_requested", { framework: agent.framework!, sdk: agent.sdk!, sdk_version: agent.sdk_version! }, { owner: owner?.owner_did, agent: did });
     return c.json({ pairing_id: p.id, sas: sas(code, did), expires_at: t + CONFIRM_TTL, poll_interval: POLL_GAP }, 201);
   });
 

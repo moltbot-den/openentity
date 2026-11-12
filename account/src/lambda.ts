@@ -2,11 +2,13 @@
 // scheduled jobs tick (EventBridge).
 import { createHash, timingSafeEqual } from "node:crypto";
 import { KMSClient } from "@aws-sdk/client-kms";
+import { SendMessageBatchCommand, SQSClient } from "@aws-sdk/client-sqs";
 import { GetParametersCommand, SSMClient } from "@aws-sdk/client-ssm";
 import { Hono } from "hono";
 import { handle } from "hono/aws-lambda";
 import { type Deps, createApp } from "./app.ts";
 import { awake, dataApiDb } from "./db.ts";
+import type { QueuedEvent } from "./events.ts";
 import { customerIo } from "./email.ts";
 import { fail } from "./http.ts";
 import { PRODUCT_APIS } from "./outbound.ts";
@@ -58,11 +60,24 @@ async function init() {
     version: e.AWS_LAMBDA_FUNCTION_VERSION,
     web: webConfig(s),
     ws: apiGatewayWs(e.WS_CALLBACK_URL!),
+    queue: sqsQueue(e.EVENTS_QUEUE_URL!),
     // Product API hosts by DID. Production calls the products; staging calls none unless product_apis names stubs.
     products: s.product_apis ? JSON.parse(s.product_apis) : e.STAGE === "production" ? PRODUCT_APIS : {},
   };
   return { deps, app: createApp(deps), verify: e.ORIGIN_VERIFY! };
 }
+/** One SQS message per event (the forwarder validates and sends each), ten to a batch. */
+function sqsQueue(url: string) {
+  const sqs = new SQSClient({});
+  return async (events: QueuedEvent[]) => {
+    for (let i = 0; i < events.length; i += 10) {
+      const batch = events.slice(i, i + 10);
+      const r = await sqs.send(new SendMessageBatchCommand({ QueueUrl: url, Entries: batch.map((ev, n) => ({ Id: String(n), MessageBody: JSON.stringify(ev) })) }));
+      if (r.Failed?.length) throw new Error(`${r.Failed.length} events were not queued: ${r.Failed[0].Message}`);
+    }
+  };
+}
+
 let ready: ReturnType<typeof init> | undefined;
 const boot = () => (ready ??= init().catch((err) => ((ready = undefined), Promise.reject(err))));
 

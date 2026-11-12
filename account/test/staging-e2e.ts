@@ -133,18 +133,21 @@ try {
   step("resumed with an approval/2.0 step-up");
   await call("DELETE", `/v1/agents/${encodeURIComponent(kp.did)}`, undefined, auth);
   step("unlinked");
+} catch (e) {
+  console.error(`FAILED: ${(e as Error).message}`);
+  process.exitCode = 1;
 } finally {
-  // Leave nothing behind: every row this run created.
-  if (agentDid) for (const t of ["inbox", "messages", "agent_approvals", "pause_changes", "agent_products"]) await db.run(`DELETE FROM ${t} WHERE agent_did = $1`, [agentDid]);
-  if (agentDid) await db.run("DELETE FROM agents WHERE did = $1", [agentDid]);
+  // Leave nothing behind: every row this run created. One failed delete never stops the others.
+  const del = (sql: string, p: unknown[]) => db.run(sql, p).catch((e) => console.error(`cleanup: ${sql.split(" WHERE")[0]}: ${(e as Error).message}`));
+  if (agentDid) for (const t of ["inbox", "messages", "agent_approvals", "pause_changes", "agent_products"]) await del(`DELETE FROM ${t} WHERE agent_did = $1`, [agentDid]);
+  if (agentDid) await del("DELETE FROM agents WHERE did = $1", [agentDid]);
   if (accountId) {
-    await db.run("DELETE FROM pairings WHERE account_id = $1", [accountId]);
-    await db.run("DELETE FROM step_ups WHERE account_id = $1", [accountId]);
-    if (ownerId) await db.run("DELETE FROM keylog_entries WHERE owner_id = $1", [ownerId]);
-    await db.run("DELETE FROM refresh_tokens WHERE session_id IN (SELECT id FROM sessions WHERE account_id = $1)", [accountId]);
-    for (const t of ["sessions", "methods", "passkey_challenges"]) await db.run(`DELETE FROM ${t} WHERE account_id = $1`, [accountId]);
-    await db.run("DELETE FROM accounts WHERE id = $1", [accountId]);
+    for (const t of ["pairings", "step_ups", "enrollments", "push_tokens"]) await del(`DELETE FROM ${t} WHERE account_id = $1`, [accountId]);
+    if (ownerId) await del("DELETE FROM keylog_entries WHERE owner_id = $1", [ownerId]);
+    await del("DELETE FROM refresh_tokens WHERE session_id IN (SELECT id FROM sessions WHERE account_id = $1)", [accountId]);
+    for (const t of ["sessions", "methods", "passkey_challenges"]) await del(`DELETE FROM ${t} WHERE account_id = $1`, [accountId]);
+    await del("DELETE FROM accounts WHERE id = $1", [accountId]);
   }
-  await db.run("DELETE FROM email_codes WHERE email = $1", [email]);
+  await del("DELETE FROM email_codes WHERE email = $1", [email]);
   console.log("cleaned up");
 }
