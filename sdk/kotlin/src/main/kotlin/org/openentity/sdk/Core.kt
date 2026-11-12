@@ -1,5 +1,5 @@
 // Open Entity primitives, ported from sdk/ts/src/core.ts: JSON read the way JavaScript reads it, its RFC 8785 (JCS) form,
-// and eddsa-jcs-2022 proofs by did:key signers. Verify only: nothing in this SDK signs or touches the network.
+// and eddsa-jcs-2022 proofs. Verify only: nothing in this SDK signs, and only a DidWebResolver the caller passes touches the network.
 package org.openentity.sdk
 
 import java.math.BigInteger
@@ -14,9 +14,9 @@ import java.util.Base64
 /**
  * A verification failure. [code] is the error the shared test vectors name (`malformed`, `bad_signature`, `unauthorized`, ...);
  * [seq] is the failing key log entry, null elsewhere. A bad argument (an invalid service key, a summary with a float) is the
- * caller's error and throws IllegalArgumentException instead.
+ * caller's error and throws IllegalArgumentException instead. Unchecked, so Java callers can catch it by name.
  */
-class OpenEntityException(val code: String, val seq: Int?, message: String) : Exception(message)
+class OpenEntityException(val code: String, val seq: Int?, message: String) : RuntimeException(message)
 
 internal fun fail(code: String, message: String): Nothing = throw OpenEntityException(code, null, message)
 
@@ -160,12 +160,8 @@ private class Parser(private val s: String) {
                 if (i + 4 > s.length) bad("short \\u escape")
                 var code = 0
                 repeat(4) {
-                    val h = when (val c = s[i++]) {
-                        in '0'..'9' -> c - '0'
-                        in 'a'..'f' -> c - 'a' + 10
-                        in 'A'..'F' -> c - 'A' + 10
-                        else -> bad("bad \\u escape")
-                    }
+                    val h = hexValue(s[i++])
+                    if (h < 0) bad("bad \\u escape")
                     code = code * 16 + h
                 }
                 Char(code)
@@ -268,6 +264,27 @@ internal fun sha256(s: String): ByteArray = sha256(s.toByteArray())
 internal fun hex(b: ByteArray): String = buildString { for (x in b) append(HEX[(x.toInt() shr 4) and 15]).append(HEX[x.toInt() and 15]) }
 internal fun b64url(b: ByteArray): String = Base64.getUrlEncoder().withoutPadding().encodeToString(b)
 
+/** An ASCII hex digit's value, or -1. */
+internal fun hexValue(c: Char): Int = when (c) {
+    in '0'..'9' -> c - '0'
+    in 'a'..'f' -> c - 'a' + 10
+    in 'A'..'F' -> c - 'A' + 10
+    else -> -1
+}
+
+private val B64U = Regex("[A-Za-z0-9_-]*")
+
+/** Strict base64url: no padding, and only the one encoding of the bytes (re-encoding gives the same string). */
+internal fun b64u(s: String?): ByteArray? {
+    if (s == null || !B64U.matches(s) || s.length % 4 == 1) return null
+    val b = try {
+        Base64.getUrlDecoder().decode(s)
+    } catch (e: IllegalArgumentException) {
+        return null
+    }
+    return if (b64url(b) == s) b else null
+}
+
 // ---------------------------------------------------------------- did:key and eddsa-jcs-2022
 
 private const val B58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
@@ -286,7 +303,7 @@ private fun base58(s: String): ByteArray? {
 }
 
 /** The Ed25519 key of a did:key, or null for any other DID. */
-private fun didKeyEd25519(did: String): ByteArray? {
+internal fun didKeyEd25519(did: String): ByteArray? {
     val b = base58(DID_KEY.matchEntire(did)?.groupValues?.get(1) ?: return null) ?: return null
     return if (b.size == 34 && b[0] == 0xed.toByte() && b[1].toInt() == 1) b.copyOfRange(2, 34) else null
 }
@@ -307,15 +324,31 @@ internal fun ed25519Verify(publicKey: ByteArray, message: ByteArray, signature: 
     }
 }
 
+/** Finds the Ed25519 keys that may have made a proof. [DID_KEY] is offline; a [DidWebResolver] also fetches did:web documents. */
+fun interface Resolver {
+    /** The Ed25519 keys of the signer a proof's [verificationMethod] (a DID URL) names. Throws OpenEntityException when the DID does not resolve. */
+    fun ed25519Keys(verificationMethod: String): List<ByteArray>
+
+    companion object {
+        /** did:key only, offline: the default of [verifyObject] and [verifyProof]. */
+        val DID_KEY = Resolver { method ->
+            listOf(didKeyEd25519(method.substringBefore('#')) ?: fail("unsupported", "only did:key resolves offline; pass a DidWebResolver for did:web signers"))
+        }
+    }
+}
+
 /** Verifies an object's own `proof` and returns the signer's DID. Throws OpenEntityException. */
-fun verifyObject(obj: JsonValue): String = verifyProof(obj, obj["proof"] ?: fail("malformed", "missing proof"))
+fun verifyObject(obj: JsonValue, resolver: Resolver = Resolver.DID_KEY): String =
+    verifyProof(obj, obj["proof"] ?: fail("malformed", "missing proof"), resolver)
 
 /**
  * Verifies one eddsa-jcs-2022 proof over [obj] (a ContinuityLink carries one per key in `proofs`) and returns the signer's DID.
- * Only did:key (Ed25519) signers resolve offline. EIP-712 proofs by did:pkh signers fail with `unsupported`: the JDK has no
- * secp256k1 or keccak. Throws OpenEntityException (`malformed`, `unsupported`, `bad_signature`).
+ * did:key signers verify offline; pass a [DidWebResolver] for did:web signers. Any Ed25519 key of the signer's document
+ * verifies, as in the TS and Python SDKs; checking that the signer is the object's issuer is the caller's job. EIP-712 proofs
+ * by did:pkh signers fail with `unsupported`: the JDK has no secp256k1 or keccak. Throws OpenEntityException (`malformed`,
+ * `unsupported`, `unresolved`, `bad_signature`).
  */
-fun verifyProof(obj: JsonValue, proof: JsonValue): String {
+fun verifyProof(obj: JsonValue, proof: JsonValue, resolver: Resolver = Resolver.DID_KEY): String {
     if (obj !is JsonValue.Obj) fail("malformed", "the signed object must be a JSON object")
     if (proof !is JsonValue.Obj) fail("malformed", "missing proof")
     val method = proof["verificationMethod"].str() ?: fail("malformed", "missing proof")
@@ -330,14 +363,14 @@ fun verifyProof(obj: JsonValue, proof: JsonValue): String {
     if (value == null || !value.startsWith("z")) fail("malformed", "proofValue must be multibase base58btc")
     val sig = base58(value.substring(1))
     if (sig == null || sig.size != 64) fail("malformed", "proofValue must be a 64-byte signature")
-    val signer = method.substringBefore('#')
-    val key = didKeyEd25519(signer) ?: fail("unsupported", "only did:key Ed25519 signers resolve offline")
     // hashData: SHA-256(JCS(proof without proofValue)) || SHA-256(JCS(object without proof and proofs)).
     val message = try {
         sha256(canonicalize(JsonValue.Obj(proof.fields - "proofValue"))) + sha256(canonicalize(JsonValue.Obj(obj.fields - "proof" - "proofs")))
     } catch (e: IllegalArgumentException) {
         fail("malformed", e.message.orEmpty())
     }
-    if (!ed25519Verify(key, message, sig)) fail("bad_signature", "signature does not verify")
+    val signer = method.substringBefore('#')
+    // Resolution runs last, so a malformed proof never makes a resolver fetch.
+    if (resolver.ed25519Keys(method).none { ed25519Verify(it, message, sig) }) fail("bad_signature", "no Ed25519 key of $signer verifies the proof")
     return signer
 }

@@ -16,7 +16,6 @@ import java.security.spec.ECGenParameterSpec
 import java.security.spec.ECParameterSpec
 import java.security.spec.ECPoint
 import java.security.spec.ECPublicKeySpec
-import java.util.Base64
 
 private const val RP_ID = "account.openentity.org"
 private const val DAY = 86_400L
@@ -26,7 +25,6 @@ private const val MAX_SAFE = 9_007_199_254_740_991L // 2^53 - 1
 private val REQUEST_ID = Regex("[A-Za-z0-9:._-]{1,128}")
 private val HEX64 = Regex("[0-9a-f]{64}")
 private val DID = Regex("did:[a-z0-9]+:[A-Za-z0-9._%:-]*[A-Za-z0-9._%-]")
-private val B64U = Regex("[A-Za-z0-9_-]*")
 private val P256: ECParameterSpec = AlgorithmParameters.getInstance("EC").run {
     init(ECGenParameterSpec("secp256r1"))
     getParameterSpec(ECParameterSpec::class.java)
@@ -81,17 +79,6 @@ data class KeyLogState(
 data class Revoked(val kid: String, val at: Long)
 data class Pending(val seq: Int, val op: String, val hash: String, val effectiveAt: Long)
 data class ApprovalOk(val kid: String, val counter: Long)
-
-/** Strict base64url: no padding, and only the one encoding of the bytes (re-encoding gives the same string). */
-private fun b64u(s: String?): ByteArray? {
-    if (s == null || !B64U.matches(s) || s.length % 4 == 1) return null
-    val b = try {
-        Base64.getUrlDecoder().decode(s)
-    } catch (e: IllegalArgumentException) {
-        return null
-    }
-    return if (b64url(b) == s) b else null
-}
 
 /** RFC 4648 base32, lowercase, no padding: the owner DID suffix. */
 private fun base32(b: ByteArray): String {
