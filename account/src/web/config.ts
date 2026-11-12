@@ -16,7 +16,7 @@ export const WEB_PARAMS = [
   "apple_siwa_key_id", "apple_siwa_private_key",
   "turnstile_site_key", "turnstile_secret",
   "app_review_email", "app_review_code", "app_review_open",
-  "test_idp_key", "test_product_seeds",
+  "test_idp_key", "test_product_keys",
   "play_push_audience", "play_push_service_account",
 ];
 
@@ -44,7 +44,10 @@ export interface WebConfig {
   playPush?: { audience: string; serviceAccount: string; keys?: JWTVerifyGetKey };
   /** Tests only: roots in place of Apple Root CA - G3. */
   appleRoots?: X509Certificate[];
-  /** Staging only: Ed25519 keys of the test product identities by name (approve.ts TEST_PRODUCTS). */
+  /**
+   * Staging only: the Ed25519 public keys of the test product identities by name (approve.ts TEST_PRODUCTS), from
+   * `test_product_keys` (JSON name to JWK x). Their seeds stay in SSM test_product_<name>_seed_staging for harnesses.
+   */
   testProducts?: Record<string, KeyObject>;
   /** Staging only: the test identity provider's P-256 key (PLAN 2.3, "No test doors in production"). */
   testIdp?: { privateKey: KeyObject; publicKey: KeyObject };
@@ -56,11 +59,10 @@ export function webConfig(p: Record<string, string | undefined>, env: { DATA_KEY
   const kms = dataKeyId ? new KMSClient({}) : undefined;
   // Never in production: the name is read only in staging (and the production role cannot read *_staging values).
   const testKey = env.STAGE === "staging" && p.test_idp_key ? createPrivateKey(p.test_idp_key) : undefined;
-  // {"ass": "<base64url 32-byte Ed25519 seed>", ...}: PKCS#8 is the fixed Ed25519 prefix and the seed.
-  const seeds: Record<string, string> = env.STAGE === "staging" && p.test_product_seeds ? JSON.parse(p.test_product_seeds) : {};
-  const ed25519 = (seed: string) => createPrivateKey({ key: Buffer.concat([Buffer.from("302e020100300506032b657004220420", "hex"), Buffer.from(seed, "base64url")]), format: "der", type: "pkcs8" });
+  // Never in production: the name is read only in staging.
+  const pubs: Record<string, string> = env.STAGE === "staging" && p.test_product_keys ? JSON.parse(p.test_product_keys) : {};
   return {
-    testProducts: Object.keys(seeds).length ? Object.fromEntries(Object.entries(seeds).map(([n, seed]) => [n, ed25519(seed)])) : undefined,
+    testProducts: Object.keys(pubs).length ? Object.fromEntries(Object.entries(pubs).map(([n, x]) => [n, createPublicKey({ key: { kty: "OKP", crv: "Ed25519", x }, format: "jwk" })])) : undefined,
     testIdp: testKey ? { privateKey: testKey, publicKey: createPublicKey(testKey) } : undefined,
     playPush: p.play_push_audience && p.play_push_service_account ? { audience: p.play_push_audience, serviceAccount: p.play_push_service_account } : undefined,
     apple: p.apple_siwa_key_id && p.apple_siwa_private_key ? { teamId: APP_ID.split(".")[0], keyId: p.apple_siwa_key_id, privateKey: p.apple_siwa_private_key } : undefined,

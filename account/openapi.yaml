@@ -2680,8 +2680,9 @@ paths:
         did:web:staging.account.openentity.org:test-products:<name> for name ass, mbd, sma and clawgrc, each standing in for
         the real product (Agent Secret Store, Moltbot Den, Secure My Agent, ClawGRC). Staging's /v1/approve/check accepts
         envelopes they sign (kid `<did>#key-1`), returning to that real product's site or to http(s)://localhost or
-        127.0.0.1 on any port. The Ed25519 seeds are in staging SSM `/openentity/account/test_product_seeds_staging`
-        (JSON name to base64url seed) for test harnesses. Production has none of this (404, and 403 unknown_verifier).
+        127.0.0.1 on any port. Each seed (base64url, 32 bytes) is in staging SSM
+        `/openentity/account/test_product_<name>_seed_staging` for test harnesses; the service holds only the public
+        keys. Production has none of this (404, and 403 unknown_verifier).
       x-available: day-4
       security: []
       parameters:

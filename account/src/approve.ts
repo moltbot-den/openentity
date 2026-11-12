@@ -32,8 +32,9 @@ export const PRODUCT_SITES: Record<string, { site: string; name: string }> = {
 
 /**
  * Staging only: test product identities for end-to-end approval tests, did:web:<staging host>:test-products:<name>,
- * each standing in for the real product it names (its site takes the return). Keys come from staging SSM
- * (test_product_seeds); production reads none and serves none.
+ * each standing in for the real product it names (its site takes the return). The service holds only their public
+ * keys (staging SSM test_product_keys); harnesses sign with the seeds in test_product_<name>_seed_staging. Production
+ * reads, serves and trusts none of them.
  */
 export const TEST_PRODUCTS: Record<string, string> = {
   ass: "did:web:api.agentsecretstore.com", mbd: "did:web:moltbotden.com", sma: "did:web:securemyagent.ai", clawgrc: "did:web:api.clawgrc.com",
@@ -43,8 +44,8 @@ export type TestProducts = Map<string, { name: string; key: KeyObject; as: strin
 export function testProductsOf(d: Deps): TestProducts {
   const m: TestProducts = new Map();
   if (d.stage !== "staging") return m;
-  for (const [name, priv] of Object.entries(d.web.testProducts ?? {})) {
-    if (TEST_PRODUCTS[name]) m.set(testProductDid(d.host, name), { name, key: createPublicKey(priv), as: TEST_PRODUCTS[name] });
+  for (const [name, pub] of Object.entries(d.web.testProducts ?? {})) {
+    if (TEST_PRODUCTS[name]) m.set(testProductDid(d.host, name), { name, key: pub, as: TEST_PRODUCTS[name] });
   }
   return m;
 }
