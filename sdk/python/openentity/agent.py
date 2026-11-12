@@ -54,18 +54,18 @@ def pair(code: str, identity=None, framework: str = "other", sdk: str = "openent
          host: str | None = None, account: str = ACCOUNT, on_match=None) -> dict:
     """Pair this agent with its owner (PLAN 8.1). `code` is the OE-XXXX-XXXX code the owner's app shows.
 
-    Signs a Presentation (audience = the account service DID, nonce = the code) into POST /v1/pair, checks that the service's
-    match items equal the ones computed here from this agent's own DID (else it refuses: a service must not be able to substitute
-    another agent), hands them to `on_match` (default: prints "Match: ..."), then polls until the owner confirms, rejects or the
-    code expires. Returns {"pairing_id", "owner_did", "permissions", "credentials", "match"}; bearer credentials appear only here.
+    Signs a Presentation (audience = the account service DID, nonce = "pair:" + the code) into POST /v1/pair, checks that the
+    service's match items equal the ones computed here from this agent's own DID (else it refuses: a service must not be able to
+    substitute another agent), hands them to `on_match` (default: prints "Match: ..."), then polls until the owner confirms,
+    rejects or the code expires. Returns {"pairing_id", "owner_did", "permissions", "credentials", "match"}; bearer credentials appear only here.
     Raises OpenEntityError: pairing_rejected, pairing_expired, verification_failed (match mismatch) or the service's code."""
     kp, base = _keypair(identity), account.rstrip("/")
     c = str(code).strip().upper()
     if not _CODE.fullmatch(c):
         raise InvalidInputError("the pairing code looks like OE-XXXX-XXXX")
     match = pair_sas(c, kp.did)
-    # ponytail: the contract sets nonce = the code (12 characters); the OEIS-1 Presentation schema wants 16 or more (see agent.ts).
-    presentation = core.build_presentation(kp, "did:web:" + urlsplit(base).netloc.replace(":", "%3A"), c)
+    # "pair:" + the code: OEIS-1 nonces have at least 16 characters, so the bare code would fail verify_presentation.
+    presentation = core.build_presentation(kp, "did:web:" + urlsplit(base).netloc.replace(":", "%3A"), f"pair:{c}")
     claim = _call(kp, base, "POST", "/v1/pair", {"code": c, "presentation": presentation, "framework": framework, "sdk": sdk,
                                                  "sdk_version": sdk_version, "host": host or socket.gethostname()})
     sas = (claim or {}).get("sas") or {}
@@ -170,10 +170,13 @@ class Listener:
         return True
 
     def _run(self):
+        refused = False
         while not self._halt.is_set():
             wait = self._interval
             try:
                 r = self._owner._call("GET", "/v1/agent/messages")
+                if refused:  # answered after agent_paused: resumed
+                    self.paused = refused = False
                 done = [i["id"] for i in r["items"] if not self._halt.is_set() and self._handle(i)]
                 if done:
                     self._owner._call("POST", "/v1/agent/messages/ack", {"ids": done})
@@ -181,7 +184,7 @@ class Listener:
                 if getattr(e, "status", None) == 403:  # not_paired: nothing will arrive
                     self._halt.set()
                 if getattr(e, "code", None) == "agent_paused":
-                    self.paused = True
+                    self.paused = refused = True
                 wait = getattr(e, "retry_after", None) or wait
                 self._report(e)
             self._halt.wait(wait)

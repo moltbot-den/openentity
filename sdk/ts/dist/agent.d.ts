@@ -27,9 +27,10 @@ export interface InboxItem {
 export type AgentState = "running" | "idle" | "blocked" | "error" | "done";
 /**
  * Pair this agent with its owner (PLAN 8.1). `code` is the `OE-XXXX-XXXX` code the owner's app shows. Signs a Presentation
- * (audience = the account service DID, nonce = the code) into `POST /v1/pair`, checks that the service's match items equal the
- * ones computed here from this agent's own DID (else it refuses: a service must not be able to substitute another agent), hands
- * them to `onMatch` (default: prints `Match: ...`), then polls until the owner confirms, rejects or the code expires.
+ * (audience = the account service DID, nonce = "pair:" + the code) into `POST /v1/pair`, checks that the service's match
+ * items equal the ones computed here from this agent's own DID (else it refuses: a service must not be able to substitute
+ * another agent), hands them to `onMatch` (default: prints `Match: ...`), then polls until the owner confirms, rejects or the
+ * code expires.
  * Errors: `pairing_rejected`, `pairing_expired`, `verification_failed` (match mismatch) or the service's code (`code_unknown`,
  * `code_used`, `code_expired`, ...). Bearer credentials appear only in this result: store them (PLAN 8.4).
  */
@@ -96,9 +97,11 @@ export declare class Owner {
      * one at a time, and is acknowledged once the handler returns; a handler that throws leaves it for the next delivery. Holds
      * the WebSocket at wss://agents.<account host>/ (signed connect, heartbeat every 9 minutes, a fresh socket before the 2-hour
      * limit, backoff on drops). When no socket opens three times running, or there is no WebSocket, it polls
-     * GET /v1/agent/messages every 15 seconds and tries the socket again after 10 minutes. Close 4001 means paused (`onPaused`);
-     * 4003 (unlinked) and 4008 (another socket of this agent took over) end it. `WebSocket` must send headers on the upgrade, as
-     * Node's built-in one does; pass `WebSocket: null` to poll only.
+     * GET /v1/agent/messages every 15 seconds and tries the socket again after 10 minutes. The service names a close in its last
+     * frame (`close_code`; API Gateway cannot set one), and a real close code counts too: 4001 means paused (`onPaused`): no
+     * socket until the agent is resumed, which the polled resume command (or a GET that succeeds after 423) tells; 4003 (unlinked)
+     * and 4008 (another socket of this agent took over) end it. `WebSocket` must send headers on the upgrade, as Node's built-in
+     * one does; pass `WebSocket: null` to poll only.
      */
     onCommand(handler: (item: InboxItem) => void | Promise<void>, o?: {
         onPaused?: () => void;

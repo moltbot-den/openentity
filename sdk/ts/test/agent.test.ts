@@ -56,7 +56,7 @@ describe("pair()", () => {
     serve({
       "POST /v1/pair": (r) => {
         expect(r.body).toMatchObject({ code: CODE, framework: "openclaw", sdk: "openentity-cli", sdk_version: "9.9.9", host: "box" });
-        expect(r.body.presentation).toMatchObject({ type: "Presentation", eid: kp.did, audience: SERVICE, nonce: CODE });
+        expect(r.body.presentation).toMatchObject({ type: "Presentation", eid: kp.did, audience: SERVICE, nonce: `pair:${CODE}` });
         return claim();
       },
       "GET /v1/pair/pr_1": () => {
@@ -72,7 +72,7 @@ describe("pair()", () => {
     expect(shown).toEqual([["red shell", "olive tree", "purple moon", "coral owl"]]); // test-vectors/pair-sas-1, case 1
     expect(r).toEqual({ pairingId: "pr_1", ownerDid: "did:web:account.example:o:abc", permissions: ["owner.message"], credentials, match: shown[0] });
     expect(calls.map((c) => c.method)).toEqual(["POST", "GET", "GET", "GET"]);
-    expect((await oe.verifyPresentation(calls[0].body.presentation, { audience: SERVICE, nonce: CODE })).errors.join()).toMatch(/nonce/); // see the ponytail note in agent.ts
+    expect(await oe.verifyPresentation(calls[0].body.presentation, { audience: SERVICE, nonce: `pair:${CODE}` })).toMatchObject({ ok: true, eid: kp.did });
   });
 
   it("refuses when the service's match items are not this agent's", async () => {
@@ -237,22 +237,36 @@ describe("Owner.onCommand", () => {
     expect(onError.mock.calls[0][0].message).toBe("busy");
   });
 
-  it("4001 means paused and reconnects; resume clears it; 4003 ends it", async () => {
-    const onPaused = vi.fn(), onError = vi.fn();
-    const l = owner.onCommand(() => {}, { WebSocket: FakeWS, onPaused, onError });
+  it("the service's last frame names the close: 4001 pauses and polls until the resume command, then 4003 ends it", async () => {
+    const polls = [[cmd("p0", "pause")], [], [cmd("r1", "resume")]];
+    serve({ "GET /v1/agent/messages": () => ({ json: { items: polls.shift() ?? [], more: false } }), "POST /v1/agent/messages/ack": () => ({ status: 204 }) });
+    const onPaused = vi.fn(), onError = vi.fn(), got: string[] = [];
+    const l = owner.onCommand((i) => void got.push(i.id), { WebSocket: FakeWS, onPaused, onError });
     await tick();
     last().open();
-    last().close(4001);
-    expect([l.paused, onPaused.mock.calls.length]).toEqual([true, 1]);
-    await tick(3000);
-    expect(FakeWS.all.length).toBe(2);
-    last().open();
-    last().push(cmd("r1", "resume"));
+    last().push({ type: "error", error: "agent_paused", message: "the owner paused this agent", close_code: 4001 });
     await tick();
-    expect(l.paused).toBe(false);
-    last().close(4003);
+    expect([last().readyState, l.paused, l.mode, onPaused.mock.calls.length, onError.mock.calls.length]).toEqual([3, true, "poll", 1, 0]);
+    await tick(15_000);
+    expect([FakeWS.all.length, l.paused]).toEqual([1, true]); // no socket while paused
+    await tick(15_000);
+    expect([got, l.paused, l.mode, FakeWS.all.length]).toEqual([["p0", "r1"], false, "socket", 2]);
+    last().open();
+    last().push({ type: "error", error: "unlinked", message: "the owner unlinked this agent", close_code: 4003 });
     await tick(120_000);
     expect([l.mode, FakeWS.all.length, onError.mock.calls[0][0].code]).toEqual(["closed", 2, "unlinked"]);
+  });
+
+  it("a real close code still counts: 4008 ends it; an error frame without close_code is only reported", async () => {
+    const onError = vi.fn();
+    const l = owner.onCommand(() => {}, { WebSocket: FakeWS, onError });
+    await tick();
+    last().open();
+    last().push({ type: "error", error: "bad_request", message: "actions are sync, ack and heartbeat" });
+    expect([last().readyState, onError.mock.calls[0][0].code]).toEqual([1, "bad_request"]);
+    last().close(4008);
+    await tick(120_000);
+    expect([l.mode, FakeWS.all.length, onError.mock.calls[1][0].code]).toEqual(["closed", 1, "replaced"]);
   });
 
   it("falls back to polling GET /v1/agent/messages every 15 seconds when no socket opens", async () => {

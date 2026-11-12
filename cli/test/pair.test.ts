@@ -1,7 +1,8 @@
 // `openentity pair` and `openentity owner` against the fake registry plus an in-memory account service. No network.
-import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, relative } from "node:path";
+import { join } from "node:path";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { pairSas, verifyRequest } from "@openentity/sdk";
 import { run } from "../src/main";
@@ -71,7 +72,7 @@ describe("pair", () => {
     expect(r.err).toContain("signed the Open Entity Declaration");
     expect(r.err).toContain(`Match: ${pairSas(CODE, out.eid).join(", ")}`);
     expect(calls[0]).toMatchObject({ method: "POST", path: "/v1/pair", did: out.eid, body: { code: CODE, framework: "other", sdk: "openentity-cli" } });
-    expect(calls[0].body.presentation).toMatchObject({ eid: out.eid, audience: "did:web:account.example", nonce: CODE });
+    expect(calls[0].body.presentation).toMatchObject({ eid: out.eid, audience: "did:web:account.example", nonce: `pair:${CODE}` });
   });
 
   it("pairs the existing entity without adopting again; text output", async () => {
@@ -137,9 +138,8 @@ describe("pair", () => {
     await rm(dir, { recursive: true, force: true });
   });
 
-  it("SKILL_FILES lists every file of skill/openentity", async () => {
-    const root = join(import.meta.dirname, "../../skill/openentity");
-    const files = (await readdir(root, { recursive: true, withFileTypes: true })).filter((d) => d.isFile()).map((d) => relative(root, join(d.parentPath, d.name)));
+  it("SKILL_FILES lists every tracked file of skill/openentity", () => {
+    const files = execFileSync("git", ["ls-files"], { cwd: join(import.meta.dirname, "../../skill/openentity"), encoding: "utf8" }).trim().split("\n");
     expect(files.sort()).toEqual([...SKILL_FILES].sort());
   });
 });

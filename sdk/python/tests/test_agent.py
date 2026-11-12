@@ -49,8 +49,8 @@ def test_pair_signs_checks_the_match_locally_and_polls_until_confirmed(monkeypat
         assert {k: body[k] for k in ("code", "framework", "sdk", "sdk_version", "host")} == {
             "code": CODE, "framework": "crewai", "sdk": "openentity-crewai", "sdk_version": "0.1.0", "host": "box"}
         p = body["presentation"]
-        assert (p["type"], p["eid"], p["audience"], p["nonce"]) == ("Presentation", KP.did, SERVICE, CODE)
-        assert core.verify_object(p) == (True, KP.did)
+        assert (p["type"], p["eid"], p["audience"], p["nonce"]) == ("Presentation", KP.did, SERVICE, f"pair:{CODE}")
+        assert core.verify_presentation(p, SERVICE, f"pair:{CODE}")["ok"]
         return claim()
 
     def status(_):

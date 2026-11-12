@@ -3000,7 +3000,7 @@ async function pair(code, o) {
   const c = String(code).trim().toUpperCase();
   if (!CODE.test(c)) throw new OpenEntityError("invalid_input", "the pairing code looks like OE-XXXX-XXXX");
   const match = pairSas(c, kp.did);
-  const presentation = await buildPresentation(kp, { audience: serviceDid(base2), nonce: c });
+  const presentation = await buildPresentation(kp, { audience: serviceDid(base2), nonce: `pair:${c}` });
   const claim = await agentCall(kp, base2, "POST", "/v1/pair", {
     code: c,
     presentation,
@@ -3081,9 +3081,11 @@ var Owner = class {
    * one at a time, and is acknowledged once the handler returns; a handler that throws leaves it for the next delivery. Holds
    * the WebSocket at wss://agents.<account host>/ (signed connect, heartbeat every 9 minutes, a fresh socket before the 2-hour
    * limit, backoff on drops). When no socket opens three times running, or there is no WebSocket, it polls
-   * GET /v1/agent/messages every 15 seconds and tries the socket again after 10 minutes. Close 4001 means paused (`onPaused`);
-   * 4003 (unlinked) and 4008 (another socket of this agent took over) end it. `WebSocket` must send headers on the upgrade, as
-   * Node's built-in one does; pass `WebSocket: null` to poll only.
+   * GET /v1/agent/messages every 15 seconds and tries the socket again after 10 minutes. The service names a close in its last
+   * frame (`close_code`; API Gateway cannot set one), and a real close code counts too: 4001 means paused (`onPaused`): no
+   * socket until the agent is resumed, which the polled resume command (or a GET that succeeds after 423) tells; 4003 (unlinked)
+   * and 4008 (another socket of this agent took over) end it. `WebSocket` must send headers on the upgrade, as Node's built-in
+   * one does; pass `WebSocket: null` to poll only.
    */
   onCommand(handler, o = {}) {
     const kp = this.#kp, base2 = this.account, url = o.url ?? socketUrl(base2);
@@ -3124,7 +3126,7 @@ var Owner = class {
         return void poll();
       }
       ws = s;
-      let openedAt = 0, renewing = false;
+      let openedAt = 0, renewing = false, closeAs = 0;
       const send = (frame) => s.readyState === 1 && s.send(JSON.stringify(frame));
       const heartbeat = setInterval(() => send({ action: "heartbeat" }), 54e4);
       const renew = setTimeout(() => (renewing = true, s.close(1e3)), 714e4);
@@ -3140,7 +3142,11 @@ var Owner = class {
         } catch {
           return;
         }
-        if (f?.type === "error") return report(new OpenEntityError(String(f.error), String(f.message)));
+        if (f?.type === "error") {
+          if (![4001, 4003, 4008].includes(f.close_code)) return report(new OpenEntityError(String(f.error), String(f.message)));
+          closeAs = f.close_code;
+          return s.close(1e3);
+        }
         if (typeof f?.id !== "string" || f.type === "heartbeat") return;
         queue = queue.then(async () => {
           if (await handle(f)) s.readyState === 1 ? send({ action: "ack", ids: [f.id] }) : await httpAck([f.id]);
@@ -3150,11 +3156,13 @@ var Owner = class {
         clearInterval(heartbeat);
         clearTimeout(renew);
         if (stop.signal.aborted || ws !== s) return;
-        if (ev.code === 4003) return end(new OpenEntityError("unlinked", "the owner unlinked this agent, or it is not paired"));
-        if (ev.code === 4008) return end(new OpenEntityError("replaced", "another socket of this agent took over"));
-        if (ev.code === 4001) {
+        const code = closeAs || ev.code;
+        if (code === 4003) return end(new OpenEntityError("unlinked", "the owner unlinked this agent, or it is not paired"));
+        if (code === 4008) return end(new OpenEntityError("replaced", "another socket of this agent took over"));
+        if (code === 4001) {
           paused = true;
           o.onPaused?.();
+          return void poll();
         }
         if (!openedAt && ++failures >= 3) return void poll();
         if (openedAt && Date.now() - openedAt > 6e4) backoff = 1e3;
@@ -3165,25 +3173,27 @@ var Owner = class {
     };
     const poll = async () => {
       mode = "poll";
-      const retrySocketAt = Date.now() + 6e5;
+      const untilResumed = paused, retrySocketAt = Date.now() + 6e5;
+      let refused = false;
       while (!stop.signal.aborted) {
         let wait = 15e3;
         try {
           const r = await agentCall(kp, base2, "GET", "/v1/agent/messages");
+          if (refused) paused = refused = false;
           const done = [];
           for (const item of r.items) if (!stop.signal.aborted && await handle(item)) done.push(item.id);
           await httpAck(done);
         } catch (e) {
           if (e.status === 403) return end(e);
-          if (e.code === "agent_paused") paused = true;
+          if (e.code === "agent_paused") paused = refused = true;
           if (e.retryAfter) wait = e.retryAfter * 1e3;
           report(e);
         }
-        await sleep(wait, stop.signal);
-        if (WS && Date.now() >= retrySocketAt) {
+        if (WS && !stop.signal.aborted && (untilResumed ? !paused : Date.now() >= retrySocketAt)) {
           failures = 0;
           return connect().catch(report);
         }
+        await sleep(wait, stop.signal);
       }
     };
     void (WS ? connect() : poll()).catch(report);
