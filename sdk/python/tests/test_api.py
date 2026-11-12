@@ -20,7 +20,7 @@ generate_key_pair hash_data http_sig_base inclusion_proof key_pair_from_jwk key_
 mint_stamp node_hash normalize_eid note_vkey now_seconds pair_sas parse_json payload_digest present public_key_from_did_key random_nonce record
 record_entry_hash recover_eip712 rotate sha256 sha256_hex sign_attestation sign_note sign_object sign_proof sign_request
 sign_revocation successor_document trust validate verification_method_id verify_approval verify_consistency verify_inclusion
-verify_key_log verify_note verify_object verify_presentation verify_proof verify_request withdraw
+verify_key_log verify_note verify_object verify_presentation verify_proof verify_request verify_response withdraw
 """.split()
 
 # In the TypeScript SDK only (camelCase there). Empty since 0.6.1; a function added to one SDK must land in the other.

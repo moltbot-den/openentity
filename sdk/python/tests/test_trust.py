@@ -1,5 +1,7 @@
 """trust(): built from registry reads, every signature checked locally, fail closed."""
+import json
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import pytest
 
@@ -104,3 +106,15 @@ def test_expired_and_unlisted_issuers_are_ignored_and_not_fetched():
 
 def test_withdrawn_is_reported():
     assert trust(SUBJECT, fetch=Registry([], withdrawn=True)).withdrawn
+
+
+DID_WEB = json.loads((Path(__file__).resolve().parents[3] / "test-vectors/did-web-1/vectors.json").read_text())
+
+
+@pytest.mark.parametrize("case", DID_WEB["cases"], ids=lambda c: c["name"])
+def test_did_web_issuer_vectors(case):
+    urls = []
+    resolver = report.did_web_resolver(lambda url: (urls.append(url), case["document"] if url == case["url"] else None)[1])
+    ok, signer = core.verify_object(case["attestation"], resolver)
+    assert urls == [case["url"]]
+    assert ({"ok": True, "signer": signer} if ok else {"ok": False}) == case["expect"]

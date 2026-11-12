@@ -64,6 +64,29 @@ describe("did:web signers", () => {
   });
 });
 
+describe("signed responses", () => {
+  const R = VEC.responses;
+  const verify = (c: any, o: Record<string, unknown> = {}) =>
+    oe.verifyResponse({ status: c.status, headers: c.headers, body: enc.encode(c.body), now: c.now ?? R.now, allowDidWeb: [R.did], fetchJson: async (url) => (url === R.url ? R.document : undefined), ...o });
+  it.each(R.valid as { name: string }[])("vector $name verifies through the DID document", async (c: any) => {
+    didWebKeys.clear();
+    expect(await verify(c)).toEqual({ did: R.did, keyid: c.keyid, created: c.created, expires: c.expires });
+  });
+  it.each(R.invalid as { name: string; code: string }[])("vector $name rejects with $code", async (c: any) => {
+    didWebKeys.clear();
+    const e = await verify(c).catch((x) => x);
+    expect([e instanceof oe.HttpSigError, e.code]).toEqual([true, c.code]);
+  });
+  it("maxAge caps the lifetime; a DID not in allowDidWeb is never fetched", async () => {
+    didWebKeys.clear();
+    const [c] = R.valid, calls: string[] = [];
+    expect((await verify(c, { maxAge: 59 }).catch((x) => x)).code).toBe("lifetime_too_long");
+    expect((await verify(c, { allowDidWeb: [], fetchJson: async (url: string) => (calls.push(url), R.document) }).catch((x) => x)).code).toBe("bad_keyid");
+    expect((await verify(c, { allowDidWeb: R.did }).catch((x) => x)).code).toBe("bad_keyid"); // a string is not an allow list
+    expect(calls).toEqual([]);
+  });
+});
+
 describe("http message signatures", () => {
   it.each(VEC.valid as { name: string }[])("vector $name signs byte-identically and verifies", async (c: any) => {
     const h = await oe.signRequest({ method: c.method, url: c.url, body: enc.encode(c.body), privateKey: SEED, did: VEC.did, created: c.created, expiresIn: c.expires_in, nonce: c.nonce });

@@ -110,7 +110,7 @@
     }
   ],
   "did_web": {
-    "description": "did:web keyids. Verify with allow_did_web = [did] and a fetch that returns `document` for `url` (no network). `valid` verify to did = `did`; each `invalid` fails with `code`. Signed with the second and log throwaway seeds from keys.json.",
+    "description": "did:web keyids. Verify with allow_did_web = [did] and a fetch that returns `document` for `url` (no network). `valid` verify to did = `did`; each `invalid` fails with `code`. Only methods under `authentication` sign: the entity key is listed for assertionMethod only. Signed with the second, log and entity throwaway seeds from keys.json.",
     "did": "did:web:service.example",
     "url": "https://service.example/.well-known/did.json",
     "document": {
@@ -136,15 +136,22 @@
             "crv": "Ed25519",
             "x": "rcFAEfgtHFbZVqpPnXPYhYNhpgYEhSXg0Ixjjcdd2Mc"
           }
+        },
+        {
+          "id": "did:web:service.example#WWpn_pfHui9YKR4CZtQsDGMu7_Gch2zYChfSvnxgtPk",
+          "type": "Multikey",
+          "controller": "did:web:service.example",
+          "publicKeyMultibase": "z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7"
         }
       ],
       "authentication": [
-        "did:web:service.example#xI3rd3t3j4T1RUdk0e55Y0dIOqTOh_K-UacV0zckBik",
+        "#xI3rd3t3j4T1RUdk0e55Y0dIOqTOh_K-UacV0zckBik",
         "did:web:service.example#lNnm0a7r26H94dQ2zarzrs_oaj0omklAjTtYQtyfrrA"
       ],
       "assertionMethod": [
         "did:web:service.example#xI3rd3t3j4T1RUdk0e55Y0dIOqTOh_K-UacV0zckBik",
-        "did:web:service.example#lNnm0a7r26H94dQ2zarzrs_oaj0omklAjTtYQtyfrrA"
+        "did:web:service.example#lNnm0a7r26H94dQ2zarzrs_oaj0omklAjTtYQtyfrrA",
+        "did:web:service.example#WWpn_pfHui9YKR4CZtQsDGMu7_Gch2zYChfSvnxgtPk"
       ]
     },
     "now": 1792868410,
@@ -198,6 +205,22 @@
         }
       },
       {
+        "name": "not-authentication",
+        "code": "bad_keyid",
+        "method": "POST",
+        "url": "https://gateway.example.com/v1/oe/events",
+        "body": "{\"type\":\"agent.paused\"}",
+        "created": 1792868400,
+        "expires_in": 60,
+        "nonce": "ICEiIyQlJicoKSorLC0uLw",
+        "keyid": "did:web:service.example#WWpn_pfHui9YKR4CZtQsDGMu7_Gch2zYChfSvnxgtPk",
+        "headers": {
+          "Content-Digest": "sha-256=:ceN7watxHMjgZ4AFeQVkRRUdu/8/UOq/UwZVGdZz+rY=:",
+          "Signature-Input": "sig1=(\"@method\" \"@target-uri\" \"content-digest\");created=1792868400;expires=1792868460;nonce=\"ICEiIyQlJicoKSorLC0uLw\";keyid=\"did:web:service.example#WWpn_pfHui9YKR4CZtQsDGMu7_Gch2zYChfSvnxgtPk\";alg=\"ed25519\"",
+          "Signature": "sig1=:zfb9kgLxLPnC84iiSQISp56WXUGJPzFcjsmm0LS5Eod4ZJhSy+ZB1OjDGu9VDpyZkm92aiQ0ZktT1QCRkaUxCw==:"
+        }
+      },
+      {
         "name": "key-mismatch",
         "code": "bad_signature",
         "method": "POST",
@@ -243,6 +266,260 @@
           "Content-Digest": "sha-256=:ceN7watxHMjgZ4AFeQVkRRUdu/8/UOq/UwZVGdZz+rY=:",
           "Signature-Input": "sig1=(\"@method\" \"@target-uri\" \"content-digest\");created=1792868400;expires=1792868460;nonce=\"ICEiIyQlJicoKSorLC0uLw\";keyid=\"did:web:service.example\";alg=\"ed25519\"",
           "Signature": "sig1=:VXV1047GJjxLSxmMf5RmpGUPcgoQp0MGLK5o3W8Nzh7AAB8pr6Qab2xW/kRpgvYABROn4TjAkEyxgVHP1w9ACw==:"
+        }
+      }
+    ]
+  },
+  "responses": {
+    "description": "RFC 9421 response signatures by a did:web service. Verify with the response status, headers and body, allow_did_web = [did] and a fetch that returns `document` for `url` (no network), at `now` unless a case sets its own. `valid` verify to {did, keyid, created, expires}; each `invalid` fails with `code`. Signed with the second, log and entity throwaway seeds from keys.json.",
+    "did": "did:web:service.example",
+    "url": "https://service.example/.well-known/did.json",
+    "document": {
+      "@context": [
+        "https://www.w3.org/ns/did/v1",
+        "https://w3id.org/security/multikey/v1",
+        "https://w3id.org/security/jwk/v1"
+      ],
+      "id": "did:web:service.example",
+      "verificationMethod": [
+        {
+          "id": "did:web:service.example#xI3rd3t3j4T1RUdk0e55Y0dIOqTOh_K-UacV0zckBik",
+          "type": "Multikey",
+          "controller": "did:web:service.example",
+          "publicKeyMultibase": "z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw"
+        },
+        {
+          "id": "#lNnm0a7r26H94dQ2zarzrs_oaj0omklAjTtYQtyfrrA",
+          "type": "JsonWebKey",
+          "controller": "did:web:service.example",
+          "publicKeyJwk": {
+            "kty": "OKP",
+            "crv": "Ed25519",
+            "x": "rcFAEfgtHFbZVqpPnXPYhYNhpgYEhSXg0Ixjjcdd2Mc"
+          }
+        },
+        {
+          "id": "did:web:service.example#WWpn_pfHui9YKR4CZtQsDGMu7_Gch2zYChfSvnxgtPk",
+          "type": "Multikey",
+          "controller": "did:web:service.example",
+          "publicKeyMultibase": "z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7"
+        }
+      ],
+      "authentication": [
+        "#xI3rd3t3j4T1RUdk0e55Y0dIOqTOh_K-UacV0zckBik",
+        "did:web:service.example#lNnm0a7r26H94dQ2zarzrs_oaj0omklAjTtYQtyfrrA"
+      ],
+      "assertionMethod": [
+        "did:web:service.example#xI3rd3t3j4T1RUdk0e55Y0dIOqTOh_K-UacV0zckBik",
+        "did:web:service.example#lNnm0a7r26H94dQ2zarzrs_oaj0omklAjTtYQtyfrrA",
+        "did:web:service.example#WWpn_pfHui9YKR4CZtQsDGMu7_Gch2zYChfSvnxgtPk"
+      ]
+    },
+    "now": 1792868410,
+    "valid": [
+      {
+        "name": "paused-multikey",
+        "status": 200,
+        "body": "{\"since\":null,\"cursor\":\"c2\",\"generated_at\":1792868400,\"changes\":[{\"agent_did\":\"did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7\",\"owner_did\":\"did:web:service.example:o:owner\",\"state\":\"paused\",\"at\":1792868395,\"seq\":4}]}",
+        "headers": {
+          "Content-Digest": "sha-256=:mRVEdY0k38np5yxhqKAukNCo4megy6bOc6t+CGVyAXg=:",
+          "Signature-Input": "sig1=(\"@status\" \"content-digest\");created=1792868400;expires=1792868460;keyid=\"did:web:service.example#xI3rd3t3j4T1RUdk0e55Y0dIOqTOh_K-UacV0zckBik\";alg=\"ed25519\"",
+          "Signature": "sig1=:+o0pi9iujwcVxZnFf1vwKSwscaEnfmy+TNEJYlKw719QcmMIsD+n6b+SvUBYmJ/+hZty3z+Xs4gFQnjwkMHuCw==:"
+        },
+        "keyid": "did:web:service.example#xI3rd3t3j4T1RUdk0e55Y0dIOqTOh_K-UacV0zckBik",
+        "created": 1792868400,
+        "expires": 1792868460
+      },
+      {
+        "name": "paused-jsonwebkey-relative-id",
+        "status": 200,
+        "body": "{\"since\":\"c2\",\"cursor\":\"c3\",\"generated_at\":1792868400,\"changes\":[]}",
+        "headers": {
+          "Content-Digest": "sha-256=:Q/xC6c4ncYCYzHV1wiNvQst0/XQlJYjFyHh8fDlbgMQ=:",
+          "Signature-Input": "sig1=(\"@status\" \"content-digest\");created=1792868400;expires=1792868460;keyid=\"did:web:service.example#lNnm0a7r26H94dQ2zarzrs_oaj0omklAjTtYQtyfrrA\";alg=\"ed25519\"",
+          "Signature": "sig1=:aE2LKK7yiyhrFwS6AwcsPVMoMck50eSWuKMeFLrmeObIWWcB2WrdY8jT7cYPfNZd0qh+MoBTP2Hw5CXnEgG2BQ==:"
+        },
+        "keyid": "did:web:service.example#lNnm0a7r26H94dQ2zarzrs_oaj0omklAjTtYQtyfrrA",
+        "created": 1792868400,
+        "expires": 1792868460
+      }
+    ],
+    "invalid": [
+      {
+        "name": "no-signature",
+        "code": "missing_headers",
+        "status": 200,
+        "body": "{\"since\":null,\"cursor\":\"c2\",\"generated_at\":1792868400,\"changes\":[{\"agent_did\":\"did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7\",\"owner_did\":\"did:web:service.example:o:owner\",\"state\":\"paused\",\"at\":1792868395,\"seq\":4}]}",
+        "headers": {
+          "Content-Digest": "sha-256=:mRVEdY0k38np5yxhqKAukNCo4megy6bOc6t+CGVyAXg=:",
+          "Signature-Input": "sig1=(\"@status\" \"content-digest\");created=1792868400;expires=1792868460;keyid=\"did:web:service.example#xI3rd3t3j4T1RUdk0e55Y0dIOqTOh_K-UacV0zckBik\";alg=\"ed25519\""
+        }
+      },
+      {
+        "name": "status-not-covered",
+        "code": "missing_headers",
+        "status": 200,
+        "body": "{\"since\":null,\"cursor\":\"c2\",\"generated_at\":1792868400,\"changes\":[{\"agent_did\":\"did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7\",\"owner_did\":\"did:web:service.example:o:owner\",\"state\":\"paused\",\"at\":1792868395,\"seq\":4}]}",
+        "headers": {
+          "Content-Digest": "sha-256=:mRVEdY0k38np5yxhqKAukNCo4megy6bOc6t+CGVyAXg=:",
+          "Signature-Input": "sig1=(\"content-digest\");created=1792868400;expires=1792868460;keyid=\"did:web:service.example#xI3rd3t3j4T1RUdk0e55Y0dIOqTOh_K-UacV0zckBik\";alg=\"ed25519\"",
+          "Signature": "sig1=:amrIHgHuMFJV4l0XiYu3PcWv4QJgHAI8bBkAjERMO/NMjY0KL0FWffj2FgHRrk+6YMEyxqL5ksqtwcJvmfMUBA==:"
+        }
+      },
+      {
+        "name": "digest-not-covered",
+        "code": "missing_headers",
+        "status": 200,
+        "body": "{\"since\":null,\"cursor\":\"c2\",\"generated_at\":1792868400,\"changes\":[{\"agent_did\":\"did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7\",\"owner_did\":\"did:web:service.example:o:owner\",\"state\":\"paused\",\"at\":1792868395,\"seq\":4}]}",
+        "headers": {
+          "Content-Digest": "sha-256=:mRVEdY0k38np5yxhqKAukNCo4megy6bOc6t+CGVyAXg=:",
+          "Signature-Input": "sig1=(\"@status\");created=1792868400;expires=1792868460;keyid=\"did:web:service.example#xI3rd3t3j4T1RUdk0e55Y0dIOqTOh_K-UacV0zckBik\";alg=\"ed25519\"",
+          "Signature": "sig1=:WhSKsUDrCGwqqqxD9Aeg4cKuSMORksR06mq7J1Ej3oDggL37a+CK8xGQOohZYigEvmmmuyUHB/tgs+UqlFyOAQ==:"
+        }
+      },
+      {
+        "name": "no-expires",
+        "code": "missing_headers",
+        "status": 200,
+        "body": "{\"since\":null,\"cursor\":\"c2\",\"generated_at\":1792868400,\"changes\":[{\"agent_did\":\"did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7\",\"owner_did\":\"did:web:service.example:o:owner\",\"state\":\"paused\",\"at\":1792868395,\"seq\":4}]}",
+        "headers": {
+          "Content-Digest": "sha-256=:mRVEdY0k38np5yxhqKAukNCo4megy6bOc6t+CGVyAXg=:",
+          "Signature-Input": "sig1=(\"@status\" \"content-digest\");created=1792868400;keyid=\"did:web:service.example#xI3rd3t3j4T1RUdk0e55Y0dIOqTOh_K-UacV0zckBik\";alg=\"ed25519\"",
+          "Signature": "sig1=:mHuUMaZl/maGjpOIdvB76/jSIKZfiaLOrpQO5q5WgadV5itaZOSIgilqeuWK8z1N2288f//XXLpvjGc+jgENDw==:"
+        }
+      },
+      {
+        "name": "unknown-alg",
+        "code": "unknown_alg",
+        "status": 200,
+        "body": "{\"since\":null,\"cursor\":\"c2\",\"generated_at\":1792868400,\"changes\":[{\"agent_did\":\"did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7\",\"owner_did\":\"did:web:service.example:o:owner\",\"state\":\"paused\",\"at\":1792868395,\"seq\":4}]}",
+        "headers": {
+          "Content-Digest": "sha-256=:mRVEdY0k38np5yxhqKAukNCo4megy6bOc6t+CGVyAXg=:",
+          "Signature-Input": "sig1=(\"@status\" \"content-digest\");created=1792868400;expires=1792868460;keyid=\"did:web:service.example#xI3rd3t3j4T1RUdk0e55Y0dIOqTOh_K-UacV0zckBik\";alg=\"hmac-sha256\"",
+          "Signature": "sig1=:Y/G1PlhKMqCh6PVxR7Mk0WYXy7r0Q/J+EjJTSpLiygit5MN+U8VTNnl7hUs2RlSnhjl1ktheZhTAhzvF1ZXRAA==:"
+        }
+      },
+      {
+        "name": "did-key-keyid",
+        "code": "bad_keyid",
+        "status": 200,
+        "body": "{\"since\":null,\"cursor\":\"c2\",\"generated_at\":1792868400,\"changes\":[{\"agent_did\":\"did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7\",\"owner_did\":\"did:web:service.example:o:owner\",\"state\":\"paused\",\"at\":1792868395,\"seq\":4}]}",
+        "headers": {
+          "Content-Digest": "sha-256=:mRVEdY0k38np5yxhqKAukNCo4megy6bOc6t+CGVyAXg=:",
+          "Signature-Input": "sig1=(\"@status\" \"content-digest\");created=1792868400;expires=1792868460;keyid=\"did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7\";alg=\"ed25519\"",
+          "Signature": "sig1=:a2sp92WMtYz4/w9g3nD/ioF0T487aCxaG2djzA4qEtqa7nfDd2TK1ilmMj1gVm1R9/IDaB46YI4ZnAlfIdbdAA==:"
+        }
+      },
+      {
+        "name": "did-not-allowed",
+        "code": "bad_keyid",
+        "status": 200,
+        "body": "{\"since\":null,\"cursor\":\"c2\",\"generated_at\":1792868400,\"changes\":[{\"agent_did\":\"did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7\",\"owner_did\":\"did:web:service.example:o:owner\",\"state\":\"paused\",\"at\":1792868395,\"seq\":4}]}",
+        "headers": {
+          "Content-Digest": "sha-256=:mRVEdY0k38np5yxhqKAukNCo4megy6bOc6t+CGVyAXg=:",
+          "Signature-Input": "sig1=(\"@status\" \"content-digest\");created=1792868400;expires=1792868460;keyid=\"did:web:other.example#xI3rd3t3j4T1RUdk0e55Y0dIOqTOh_K-UacV0zckBik\";alg=\"ed25519\"",
+          "Signature": "sig1=:uTQdabpkb7vOrkUqtS7XBYSawW8W3kpMc6AzaNp6yicOJ5mrDRBknEXPuS1ABNHxfuTxYx+cH6qFpo8ATPkzAg==:"
+        }
+      },
+      {
+        "name": "no-fragment",
+        "code": "bad_keyid",
+        "status": 200,
+        "body": "{\"since\":null,\"cursor\":\"c2\",\"generated_at\":1792868400,\"changes\":[{\"agent_did\":\"did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7\",\"owner_did\":\"did:web:service.example:o:owner\",\"state\":\"paused\",\"at\":1792868395,\"seq\":4}]}",
+        "headers": {
+          "Content-Digest": "sha-256=:mRVEdY0k38np5yxhqKAukNCo4megy6bOc6t+CGVyAXg=:",
+          "Signature-Input": "sig1=(\"@status\" \"content-digest\");created=1792868400;expires=1792868460;keyid=\"did:web:service.example\";alg=\"ed25519\"",
+          "Signature": "sig1=:MU9tHoMtgBQ85Ww47aTo2TXxBXvTVJqDKNEy9avqCskMWjxgcacXcbsuaVbUuE5nKQie7ZyI7BajwEd4JD8RDg==:"
+        }
+      },
+      {
+        "name": "unknown-key",
+        "code": "bad_keyid",
+        "status": 200,
+        "body": "{\"since\":null,\"cursor\":\"c2\",\"generated_at\":1792868400,\"changes\":[{\"agent_did\":\"did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7\",\"owner_did\":\"did:web:service.example:o:owner\",\"state\":\"paused\",\"at\":1792868395,\"seq\":4}]}",
+        "headers": {
+          "Content-Digest": "sha-256=:mRVEdY0k38np5yxhqKAukNCo4megy6bOc6t+CGVyAXg=:",
+          "Signature-Input": "sig1=(\"@status\" \"content-digest\");created=1792868400;expires=1792868460;keyid=\"did:web:service.example#not-in-the-document\";alg=\"ed25519\"",
+          "Signature": "sig1=:ns01xUQLLwVpLRR8+q/BbM+5MvMQEkz1mWd1CWvgGBdoQCKdeqZhADb1O5vle6XyUewI1U8YZSS1uZ7Mhn/pAQ==:"
+        }
+      },
+      {
+        "name": "not-authentication",
+        "code": "bad_keyid",
+        "status": 200,
+        "body": "{\"since\":null,\"cursor\":\"c2\",\"generated_at\":1792868400,\"changes\":[{\"agent_did\":\"did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7\",\"owner_did\":\"did:web:service.example:o:owner\",\"state\":\"paused\",\"at\":1792868395,\"seq\":4}]}",
+        "headers": {
+          "Content-Digest": "sha-256=:mRVEdY0k38np5yxhqKAukNCo4megy6bOc6t+CGVyAXg=:",
+          "Signature-Input": "sig1=(\"@status\" \"content-digest\");created=1792868400;expires=1792868460;keyid=\"did:web:service.example#WWpn_pfHui9YKR4CZtQsDGMu7_Gch2zYChfSvnxgtPk\";alg=\"ed25519\"",
+          "Signature": "sig1=:FYq7EUhQ/M5ntMlNhFG/llHaMHtjJzSaI0ab0Nz7ADUQVHUSh/CKB6ofA1BVIN1c1lH10tZNETkFgetBG2fuBQ==:"
+        }
+      },
+      {
+        "name": "tampered-body",
+        "code": "digest_mismatch",
+        "status": 200,
+        "body": "{\"since\":null,\"cursor\":\"c2\",\"generated_at\":1792868400,\"changes\":[{\"agent_did\":\"did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7\",\"owner_did\":\"did:web:service.example:o:owner\",\"state\":\"paused\",\"at\":1792868395,\"seq\":5}]}",
+        "headers": {
+          "Content-Digest": "sha-256=:mRVEdY0k38np5yxhqKAukNCo4megy6bOc6t+CGVyAXg=:",
+          "Signature-Input": "sig1=(\"@status\" \"content-digest\");created=1792868400;expires=1792868460;keyid=\"did:web:service.example#xI3rd3t3j4T1RUdk0e55Y0dIOqTOh_K-UacV0zckBik\";alg=\"ed25519\"",
+          "Signature": "sig1=:+o0pi9iujwcVxZnFf1vwKSwscaEnfmy+TNEJYlKw719QcmMIsD+n6b+SvUBYmJ/+hZty3z+Xs4gFQnjwkMHuCw==:"
+        }
+      },
+      {
+        "name": "tampered-status",
+        "code": "bad_signature",
+        "status": 500,
+        "body": "{\"since\":null,\"cursor\":\"c2\",\"generated_at\":1792868400,\"changes\":[{\"agent_did\":\"did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7\",\"owner_did\":\"did:web:service.example:o:owner\",\"state\":\"paused\",\"at\":1792868395,\"seq\":4}]}",
+        "headers": {
+          "Content-Digest": "sha-256=:mRVEdY0k38np5yxhqKAukNCo4megy6bOc6t+CGVyAXg=:",
+          "Signature-Input": "sig1=(\"@status\" \"content-digest\");created=1792868400;expires=1792868460;keyid=\"did:web:service.example#xI3rd3t3j4T1RUdk0e55Y0dIOqTOh_K-UacV0zckBik\";alg=\"ed25519\"",
+          "Signature": "sig1=:+o0pi9iujwcVxZnFf1vwKSwscaEnfmy+TNEJYlKw719QcmMIsD+n6b+SvUBYmJ/+hZty3z+Xs4gFQnjwkMHuCw==:"
+        }
+      },
+      {
+        "name": "key-mismatch",
+        "code": "bad_signature",
+        "status": 200,
+        "body": "{\"since\":null,\"cursor\":\"c2\",\"generated_at\":1792868400,\"changes\":[{\"agent_did\":\"did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7\",\"owner_did\":\"did:web:service.example:o:owner\",\"state\":\"paused\",\"at\":1792868395,\"seq\":4}]}",
+        "headers": {
+          "Content-Digest": "sha-256=:mRVEdY0k38np5yxhqKAukNCo4megy6bOc6t+CGVyAXg=:",
+          "Signature-Input": "sig1=(\"@status\" \"content-digest\");created=1792868400;expires=1792868460;keyid=\"did:web:service.example#xI3rd3t3j4T1RUdk0e55Y0dIOqTOh_K-UacV0zckBik\";alg=\"ed25519\"",
+          "Signature": "sig1=:rE/dJvPB0x64+bY1/KIv2bcBEH/YAyJWqwSduz2DREdCIM+vVLE7LWirp2WolN7ffohGV+bDwkb1AUG2BDgcBg==:"
+        }
+      },
+      {
+        "name": "expired",
+        "code": "expired",
+        "status": 200,
+        "body": "{\"since\":null,\"cursor\":\"c2\",\"generated_at\":1792868400,\"changes\":[{\"agent_did\":\"did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7\",\"owner_did\":\"did:web:service.example:o:owner\",\"state\":\"paused\",\"at\":1792868395,\"seq\":4}]}",
+        "headers": {
+          "Content-Digest": "sha-256=:mRVEdY0k38np5yxhqKAukNCo4megy6bOc6t+CGVyAXg=:",
+          "Signature-Input": "sig1=(\"@status\" \"content-digest\");created=1792868400;expires=1792868460;keyid=\"did:web:service.example#xI3rd3t3j4T1RUdk0e55Y0dIOqTOh_K-UacV0zckBik\";alg=\"ed25519\"",
+          "Signature": "sig1=:+o0pi9iujwcVxZnFf1vwKSwscaEnfmy+TNEJYlKw719QcmMIsD+n6b+SvUBYmJ/+hZty3z+Xs4gFQnjwkMHuCw==:"
+        },
+        "now": 1792868461
+      },
+      {
+        "name": "created-in-future",
+        "code": "created_in_future",
+        "status": 200,
+        "body": "{\"since\":null,\"cursor\":\"c2\",\"generated_at\":1792868400,\"changes\":[{\"agent_did\":\"did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7\",\"owner_did\":\"did:web:service.example:o:owner\",\"state\":\"paused\",\"at\":1792868395,\"seq\":4}]}",
+        "headers": {
+          "Content-Digest": "sha-256=:mRVEdY0k38np5yxhqKAukNCo4megy6bOc6t+CGVyAXg=:",
+          "Signature-Input": "sig1=(\"@status\" \"content-digest\");created=1792868400;expires=1792868460;keyid=\"did:web:service.example#xI3rd3t3j4T1RUdk0e55Y0dIOqTOh_K-UacV0zckBik\";alg=\"ed25519\"",
+          "Signature": "sig1=:+o0pi9iujwcVxZnFf1vwKSwscaEnfmy+TNEJYlKw719QcmMIsD+n6b+SvUBYmJ/+hZty3z+Xs4gFQnjwkMHuCw==:"
+        },
+        "now": 1792868394
+      },
+      {
+        "name": "lifetime-too-long",
+        "code": "lifetime_too_long",
+        "status": 200,
+        "body": "{\"since\":null,\"cursor\":\"c2\",\"generated_at\":1792868400,\"changes\":[{\"agent_did\":\"did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7\",\"owner_did\":\"did:web:service.example:o:owner\",\"state\":\"paused\",\"at\":1792868395,\"seq\":4}]}",
+        "headers": {
+          "Content-Digest": "sha-256=:mRVEdY0k38np5yxhqKAukNCo4megy6bOc6t+CGVyAXg=:",
+          "Signature-Input": "sig1=(\"@status\" \"content-digest\");created=1792868400;expires=1792868461;keyid=\"did:web:service.example#xI3rd3t3j4T1RUdk0e55Y0dIOqTOh_K-UacV0zckBik\";alg=\"ed25519\"",
+          "Signature": "sig1=:E3XslNf7w1avLoUhzrTd9i/uP//q1tIi6sajO3W2BPIFP6hLxfDnvSZxUhP4Z+s/86FrN42nWhmTZln0UnshDg==:"
         }
       }
     ]

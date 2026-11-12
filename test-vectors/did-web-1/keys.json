@@ -1,0 +1,19 @@
+{
+  "warning": "PUBLISHED THROWAWAY KEYS FOR TEST VECTORS ONLY. Anyone can sign as did:web:issuer.example with them. Never use them for anything real.",
+  "multikey": {
+    "seed": "6162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f80",
+    "publicKeyHex": "882d0ea3b2864e7a587f3e698cea4459998312e655e05fa5e8b5119d8baac8cd",
+    "method": "did:web:issuer.example#key-1"
+  },
+  "jsonwebkey": {
+    "seed": "8182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0",
+    "publicKeyHex": "020bd427446b723424d80d2cad352ba3df3649d0ef8faae0ca7eb25443941b29",
+    "method": "#key-2"
+  },
+  "unlisted": {
+    "seed": "a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0",
+    "publicKeyHex": "0b47823e71095dd59be78ac271c576ef389f87b64561ab07cf9a4ebcd02d2041",
+    "method": "did:web:issuer.example#key-3",
+    "note": "named by a proof, listed in no document"
+  }
+}

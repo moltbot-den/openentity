@@ -77,8 +77,9 @@ import {
   verifyPresentation,
   verifyProof,
   verifyRequest,
+  verifyResponse,
   withdraw
-} from "./chunk-KN2ECPHF.js";
+} from "./chunk-RRRTO2SV.js";
 export {
   A2A_EXTENSION_URI,
   CLIENTS,
@@ -158,5 +159,6 @@ export {
   verifyPresentation,
   verifyProof,
   verifyRequest,
+  verifyResponse,
   withdraw
 };

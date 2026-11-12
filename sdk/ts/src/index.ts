@@ -8,6 +8,6 @@ export { rotate, CLIENTS, type Client, adopt, type TrustReport, clearTrustCache,
 export { leafHash, nodeHash, merkleRoot, inclusionProof, verifyInclusion, consistencyProof, verifyConsistency, logLeaf, checkpointBody, signNote, noteVkey, verifyNote } from "./merkle.ts";
 export { DEFAULT_REGISTRY, DISPUTE_REASONS, type DisputeReason, withdraw, record, dispute, find, present } from "./client.ts";
 export { OpenEntityError, HttpSigError, type RegistryErrorCode, type LocalErrorCode } from "./errors.ts";
-export { httpSigBase, signRequest, verifyRequest } from "./httpsig.ts";
+export { httpSigBase, signRequest, verifyRequest, verifyResponse } from "./httpsig.ts";
 export { approvalDigest, payloadDigest, verifyApproval, verifyKeyLog, type Credential, type KeyLogState, type KeyLogResult, type KeyLogOptions, type KeyLogError, type ApprovalOptions, type ApprovalResult, type ApprovalError } from "./owner.ts";
 export { pairSas } from "./pair.ts";

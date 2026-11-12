@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
 from . import client, core
-from .httpsig import _did_web_url
+from .httpsig import _did_web_url, _ed25519_methods
 from .errors import InvalidInputError, VerificationError
 
 MOLTBOTDEN, CLAWGRC = "did:web:moltbotden.com", "did:web:api.clawgrc.com"
@@ -30,20 +30,12 @@ class TrustReport:
 
 
 def did_web_resolver(fetch=client._request):
-    """did:web through /.well-known/did.json (or <path>/did.json); everything else offline."""
+    """did:web through /.well-known/did.json (or <path>/did.json): any Ed25519 key of the document verifies; everything else
+    offline."""
     def resolve(did: str) -> dict:
         if not did.startswith("did:web:"):
             return core.default_resolver(did)
-        doc = fetch(_did_web_url(did))
-        if doc.get("id") != did:
-            raise VerificationError(f"{did} document names {doc.get('id')}")
-        keys = []
-        for vm in doc.get("verificationMethod", []):
-            try:
-                keys.append(core.public_key_from_did_key("did:key:" + vm["publicKeyMultibase"]))
-            except (KeyError, ValueError):
-                continue  # not an Ed25519 Multikey
-        return {"ed25519": keys}
+        return {"ed25519": list(_ed25519_methods(did, fetch(_did_web_url(did))).values())}
     return resolve
 
 

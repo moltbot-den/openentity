@@ -98,7 +98,7 @@ export declare const trustCache: Map<string, {
     report: TrustReport;
 }>;
 export declare const clearTrustCache: () => void;
-/** did:web through /.well-known/did.json (or <path>/did.json); everything else offline. */
+/** did:web through /.well-known/did.json (or <path>/did.json): any Ed25519 key of the document verifies; everything else offline. */
 export declare function didWebResolver(fetchJson?: FetchJson): Resolver;
 /**
  * One TrustReport from `GET /v1/entities/{eid}` and `/attestations` only. Every attestation and revocation from the accepted

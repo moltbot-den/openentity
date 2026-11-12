@@ -1,9 +1,11 @@
 import { type KeyPair } from "./core.ts";
-/** @internal Ed25519 keys of allowed did:web signers by verification method id, per DID, from its did.json. */
+/** @internal Ed25519 `authentication` keys of allowed did:web signers by verification method id, per DID, from its did.json. */
 export declare const didWebKeys: Map<string, {
     at: number;
     keys: Map<string, Uint8Array>;
 }>;
+/** @internal Ed25519 keys of a DID document by absolute method id (Ed25519 publicKeyMultibase or OKP publicKeyJwk); with `relationship`, only the methods it references. */
+export declare function ed25519Methods(did: string, doc: any, relationship?: "authentication"): Map<string, Uint8Array>;
 /** @internal */
 export declare const HTTPSIG_SKEW = 5;
 /** @internal */
@@ -22,8 +24,8 @@ export declare function signRequest(o: {
 }): Promise<Record<string, string>>;
 /**
  * Verify a request signed by signRequest. Throws HttpSigError with `.code`. Nonce replay tracking is the caller's job.
- * A did:key keyid verifies offline. A `did:web:<host>#<key>` keyid verifies only when its DID is in `allowDidWeb`: the key comes from
- * the DID's did.json (Ed25519 Multikey or JsonWebKey), cached for ten minutes and refetched when it names an unknown key.
+ * A did:key keyid verifies offline. A `did:web:<host>#<key>` keyid verifies only when its DID is in `allowDidWeb`: the key is an
+ * Ed25519 method listed under `authentication` in the DID's did.json, cached for ten minutes and refetched when it names an unknown key.
  */
 export declare function verifyRequest(o: {
     method: string;
@@ -40,4 +42,23 @@ export declare function verifyRequest(o: {
     created: number;
     expires: number;
     nonce: string;
+}>;
+/**
+ * Verify a response signed by a did:web service, such as the OpenEntity Account's signed paused list. Throws HttpSigError with `.code`.
+ * The signature covers `"@status"` and `"content-digest"`, lives at most `maxAge` seconds (one minute by default), and its keyid is a
+ * `did:web:<host>#<key>` of a DID in `allowDidWeb`, resolved as verifyRequest resolves one.
+ */
+export declare function verifyResponse(o: {
+    status: number;
+    headers: Record<string, string>;
+    body: Uint8Array;
+    now?: number;
+    maxAge?: number;
+    allowDidWeb: string[];
+    fetchJson?: (url: string) => Promise<unknown>;
+}): Promise<{
+    did: string;
+    keyid: string;
+    created: number;
+    expires: number;
 }>;

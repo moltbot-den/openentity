@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { readFileSync, readdirSync } from "node:fs";
 import * as oe from "../src/index.ts";
+import { buildDidWebVectors, serialize } from "../scripts/gen-vectors.ts";
 
 const seeded = (n: number) => oe.keyPairFromSeed(Uint8Array.from({ length: 32 }, () => n));
 const MBD = "did:web:moltbotden.com", GRC = "did:web:api.clawgrc.com", SMA = "did:web:securemyagent.ai", EVIL = "did:web:evil.example";
@@ -88,5 +90,20 @@ describe("trust()", () => {
   });
   it("reports withdrawn", async () => {
     expect((await oe.trust(SUBJECT, { fetchJson: registry([], { withdrawn: true }).fetchJson })).withdrawn).toBe(true);
+  });
+});
+
+describe("did:web issuer vectors (test-vectors/did-web-1)", () => {
+  const dir = new URL("../../../test-vectors/", import.meta.url);
+  const V = JSON.parse(readFileSync(new URL("did-web-1/vectors.json", dir), "utf8"));
+  it("committed files equal a fresh deterministic generation", async () => {
+    const fresh = await buildDidWebVectors();
+    expect(readdirSync(new URL("did-web-1/", dir)).filter((f) => f.endsWith(".json")).map((f) => `did-web-1/${f}`).sort()).toEqual(Object.keys(fresh).sort());
+    for (const [path, v] of Object.entries(fresh)) expect(readFileSync(new URL(path, dir), "utf8"), path).toBe(serialize(v));
+  });
+  it.each(V.cases as { name: string }[])("$name", async (c: any) => {
+    const urls: string[] = [];
+    const r = await oe.verifyObject(c.attestation, oe.didWebResolver(async (url) => (urls.push(url), url === c.url ? c.document : undefined)));
+    expect([urls, r.ok ? { ok: true, signer: r.signer } : { ok: false }]).toEqual([[c.url], c.expect]);
   });
 });
