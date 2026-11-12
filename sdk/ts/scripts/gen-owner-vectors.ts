@@ -68,16 +68,7 @@ const C = {
 // ---------------------------------------------------------------- signatures (what devices and passkeys do)
 
 const highS = (sig: Uint8Array) => cat(sig.slice(0, 32), Uint8Array.from(Buffer.from((N - BigInt("0x" + hex(sig.slice(32)))).toString(16).padStart(64, "0"), "hex")));
-function der(sig: Uint8Array): Uint8Array {
-  const int = (b: Uint8Array) => {
-    let i = 0;
-    while (i < 31 && b[i] === 0) i++;
-    const v = b.slice(i);
-    return v[0] & 0x80 ? cat(Uint8Array.of(0), v) : v;
-  };
-  const r = int(sig.slice(0, 32)), s = int(sig.slice(32));
-  return cat(Uint8Array.of(0x30, r.length + s.length + 4, 2, r.length), r, Uint8Array.of(2, s.length), s);
-}
+const der = (sig: Uint8Array) => p256.Signature.fromBytes(sig).toBytes("der");
 /** Raw r||s over the 32-byte digest, as the Secure Enclave produces once the app normalizes to low S. */
 const rawSign = (k: Key, digest: Uint8Array, high = false) => {
   const sig = p256.sign(digest, k.secret, { prehash: false, lowS: true });
@@ -101,7 +92,7 @@ function assertion(k: Key, digest: Uint8Array, o: Assert = {}) {
 
 // ---------------------------------------------------------------- key logs
 
-interface Sign extends Assert { key: Key; form?: "p256" | "webauthn"; raw?: boolean; highRaw?: boolean }
+interface Sign extends Assert { key: Key; form?: "p256" | "webauthn"; highRaw?: boolean }
 interface EntryOpts { ts?: number; seq?: number; prev?: string | null; tamper?: (e: Record<string, unknown>) => void; line?: (e: Record<string, unknown>) => string }
 
 class Log {

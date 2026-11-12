@@ -4,6 +4,7 @@ import hashlib
 import re
 
 from .errors import InvalidInputError
+from .owner import _DID
 
 _COLORS = "red orange yellow green blue purple pink brown black white gray gold silver navy olive coral".split()
 _NOUNS = "fox kite bear boat star tree fish moon drum frog lamp owl wolf shell crown horse".split()
@@ -16,6 +17,6 @@ def pair_sas(code: str, agent_did: str) -> list[str]:
     c = str(code).strip().upper()
     if not re.fullmatch(r"OE-[0-9A-Z]{4}-[0-9A-Z]{4}", c):
         raise InvalidInputError("pairing code must look like OE-XXXX-XXXX")
-    if not isinstance(agent_did, str) or not re.fullmatch(r"did:[a-z0-9]+:[A-Za-z0-9._%:-]*[A-Za-z0-9._%-]", agent_did):
+    if not isinstance(agent_did, str) or not _DID.fullmatch(agent_did):
         raise InvalidInputError("agent_did must be a DID")
     return [PAIR_SAS_WORDS[b] for b in hashlib.sha256(f"oe-pair-sas/1|{c}|{agent_did}".encode()).digest()[:4]]

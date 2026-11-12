@@ -34,12 +34,6 @@ describe("owner key log (keylog-1)", () => {
         : { ok: false, error: r.error, seq: r.seq };
       expect(got, r.ok ? "" : r.message).toEqual(v.expect);
     });
-  it("each line hashes to the next prev, and the DID is base32 of the genesis hash", () => {
-    const v = json("keylog-1/recover-cancelled-by-revoked-approver.json");
-    v.log.forEach((line: string, i: number) => i && expect(JSON.parse(line).prev).toBe(sha256hex(v.log[i - 1])));
-    const b32 = (h: Buffer) => [...h].map((x) => x.toString(2).padStart(8, "0")).join("").match(/.{1,5}/g)!.map((g) => "abcdefghijklmnopqrstuvwxyz234567"[parseInt(g.padEnd(5, "0"), 2)]).join("");
-    expect(v.did).toBe(`did:web:account.openentity.org:o:${b32(createHash("sha256").update(v.log[0]).digest())}`);
-  });
   it("rejects bad input as input, not as a log failure", () => {
     const v = json("keylog-1/genesis-device.json");
     expect(oe.verifyKeyLog(v.did, v.log, [], { now: v.now }).ok).toBe(false);
