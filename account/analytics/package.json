@@ -12,7 +12,8 @@
   },
   "dependencies": {
     "@aws-sdk/client-ssm": "^3.1156.0",
-    "yaml": "^2.8.1"
+    "yaml": "^2.8.1",
+    "@aws-sdk/client-cloudwatch": "^3.1156.0"
   },
   "devDependencies": {
     "@types/aws-lambda": "^8.10.150",

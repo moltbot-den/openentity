@@ -12,6 +12,7 @@ const dry = process.argv.includes("--dry-run");
 export const PROJECTS = {
   "moltbot-den": {
     dashboard: "Moltbot Den: Cloud Run",
+    api: { services: ["moltbotden-api"], errors: false }, // "API 5xx rate above 0.1/s" already covers 5xx
     checks: [
       { name: "API /health", host: "api.moltbotden.com", path: "/health", noPolicy: true }, // existing "API down" policy covers it,
       { name: "Web /", host: "moltbotden.com", path: "/", noPolicy: true },
@@ -23,6 +24,7 @@ export const PROJECTS = {
   },
   "agent-secret-store": {
     dashboard: "Agent Secret Store: Cloud Run",
+    api: { services: ["ass-api", "ass-gateway"], errors: true },
     checks: [
       { name: "ass-api-uptime", host: "api.agentsecretstore.com", path: "/v1/health" },
       { name: "ass-frontend-uptime", host: "agentsecretstore.com", path: "/" },
@@ -31,6 +33,7 @@ export const PROJECTS = {
   },
   clawgrc: {
     dashboard: "ClawGRC: Cloud Run",
+    api: { services: ["api-gateway"], errors: true },
     checks: [{ name: "clawgrc-api /health", host: "api.clawgrc.com", path: "/health" }],
   },
 };
@@ -75,6 +78,29 @@ export const policy = (c, checkId, channel) => ({
     comparison: "COMPARISON_GT", thresholdValue: 1, duration: "60s", trigger: { count: 1 } } }],
 });
 
+const svc = (names) => `resource.label.service_name=one_of(${names.map((n) => `"${n}"`).join(",")})`;
+const RUN = 'resource.type="cloud_run_revision"';
+/** p95 request latency above 800 ms for 5 minutes (PLAN 13.3: account service p95 target, applied to every API). */
+export const latencyPolicy = (names, channel) => ({
+  displayName: `p95 latency above 800 ms: ${names.join(", ")}`, combiner: "OR", enabled: true, notificationChannels: [channel],
+  conditions: [{ displayName: "p95 above 800 ms", conditionThreshold: {
+    filter: `metric.type="run.googleapis.com/request_latencies" AND ${RUN} AND ${svc(names)}`,
+    aggregations: [{ alignmentPeriod: "300s", perSeriesAligner: "ALIGN_PERCENTILE_95" }],
+    comparison: "COMPARISON_GT", thresholdValue: 800, duration: "300s", trigger: { count: 1 } } }],
+});
+/** 5xx responses above 1% of requests for 5 minutes. */
+export const errorRatePolicy = (names, channel) => {
+  const agg = [{ alignmentPeriod: "300s", perSeriesAligner: "ALIGN_RATE", crossSeriesReducer: "REDUCE_SUM" }];
+  const req = `metric.type="run.googleapis.com/request_count" AND ${RUN} AND ${svc(names)}`;
+  return {
+    displayName: `5xx above 1%: ${names.join(", ")}`, combiner: "OR", enabled: true, notificationChannels: [channel],
+    conditions: [{ displayName: "5xx ratio above 1%", conditionThreshold: {
+      filter: `${req} AND metric.label.response_code_class="5xx"`, aggregations: agg,
+      denominatorFilter: req, denominatorAggregations: agg,
+      comparison: "COMPARISON_GT", thresholdValue: 0.01, duration: "300s", trigger: { count: 1 } } }],
+  };
+};
+
 async function ensure(project, kind, key, displayName, make, label) {
   const found = (await list(project, kind, key)).find((x) => x.displayName === displayName);
   if (found) { console.log(`${project}: ${label} "${displayName}" exists`); return found; }
@@ -98,6 +124,14 @@ if (process.argv[1] === new URL(import.meta.url).pathname) {
       if (!r.ok) throw new Error(`dashboard ${project}: ${await r.text()}`);
       console.log(`${project}: created dashboard`);
     } else console.log(`${project}: create dashboard`);
+    if (cfg.api) {
+      const lp = latencyPolicy(cfg.api.services, ch.name);
+      await ensure(project, "alertPolicies", "alertPolicies", lp.displayName, () => lp, "alert policy");
+      if (cfg.api.errors) {
+        const ep = errorRatePolicy(cfg.api.services, ch.name);
+        await ensure(project, "alertPolicies", "alertPolicies", ep.displayName, () => ep, "alert policy");
+      }
+    }
     for (const c of cfg.checks) {
       const check = await ensure(project, "uptimeCheckConfigs", "uptimeCheckConfigs", c.name, () => uptimeCheck(c), "uptime check");
       const checkId = check.name.split("/").pop();
