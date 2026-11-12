@@ -30,7 +30,7 @@ Read first: `docs/PRD.md` (product scope), `spec/OEIS-1.md` (normative), `docs/R
 - Brand in prose: "Open Entity" (and "Moltbot Den", two words). "OEIS" appears only as the spec identifier `OEIS-1`. Identifiers (`openentity`, `org.openentity`, `X-OE-Stamp`) keep their forms.
 - No em dashes anywhere: docs, code comments, UI copy, emails, posts. `verify.sh` fails on one.
 - Agent endpoints never get a CAPTCHA, Turnstile, login, email, wallet or payment requirement. Only `/v1/subscribe` (the human form) has Turnstile. A test asserts it.
-- Secrets live in the SSM Parameter Store SecureString `/openentity/app` (a JSON document; the origin header also sits in the String parameter `/openentity/origin-verify` because CloudFormation cannot resolve a SecureString into a CloudFront origin; the database credential stays in Secrets Manager because the RDS Data API requires it) (registry signing key, custody key, Customer.io credentials, Turnstile secret, origin header), never in code, tests, fixtures or committed env files. Test vectors use a published throwaway seed and say so.
+- Secrets live in the SSM Parameter Store SecureString `/openentity/app` (a JSON document; the origin header also sits in the String parameter `/openentity/origin-verify` because CloudFormation cannot resolve a SecureString into a CloudFront origin; the database credential stays in Secrets Manager because the RDS Data API requires it) (registry signing key, custody key, Customer.io credentials, Turnstile secret, origin header), never in code, tests, fixtures or committed env files. The account service never reads `/openentity/app`: its secrets are SecureString parameters under `/openentity/account/` (`<name>` for both stages, `<name>_prod` or `<name>_staging` for one; its role cannot read the other stage's), and its signing keys are KMS keys that never leave KMS. Test vectors use a published throwaway seed and say so.
 - The registry is a mirror of signed objects, never their source of truth. Verifiers verify locally.
 
 ## Releases
@@ -41,7 +41,7 @@ The registry, site, oeis.dev and the remote MCP server deploy on every merge to 
 
 ## Layout
 
-pnpm workspaces: `spec/` (OEIS-1.md, schemas, declaration text and hash, claim-types.md), `site/` (Astro with Starlight; `server/` renders the dynamic pages), `site-dev/` (the oeis.dev hub, same design system, reference pages generated from the code), `registry/` (Hono on Node, PostgreSQL through the RDS Data API, S3; `schema.sql`), `infra/` (CDK: CloudFront, the one app Lambda, Aurora Serverless v2, S3, the per-minute cron), `cli/` (npm `openentity`), `mcp/` (remote MCP server at mcp.openentity.org, `server.json`), `skill/openentity/` (Agent Skills format), `sdk/ts/`, `sdk/python/` (PyPI `openentity`), `test-vectors/`, `scripts/` (`verify.sh`, load test, independent Python verifier), `docs/` (PRD, research, outreach drafts), `tasks/` (`todo.md`, `lessons.md`).
+pnpm workspaces: `spec/` (OEIS-1.md, schemas, declaration text and hash, claim-types.md), `site/` (Astro with Starlight; `server/` renders the dynamic pages), `site-dev/` (the oeis.dev hub, same design system, reference pages generated from the code), `registry/` (Hono on Node, PostgreSQL through the RDS Data API, S3; `schema.sql`), `account/` (the OpenEntity Account service at account.openentity.org: `openapi.yaml` is its frozen contract; Hono on Node, its own Aurora through the RDS Data API, `schema.sql`), `infra/` (CDK: CloudFront, the one app Lambda, Aurora Serverless v2, S3, the per-minute cron), `cli/` (npm `openentity`), `mcp/` (remote MCP server at mcp.openentity.org, `server.json`), `skill/openentity/` (Agent Skills format), `sdk/ts/`, `sdk/python/` (PyPI `openentity`), `test-vectors/`, `scripts/` (`verify.sh`, load test, independent Python verifier), `docs/` (PRD, research, outreach drafts), `tasks/` (`todo.md`, `lessons.md`).
 
 ## Domains
 
@@ -49,7 +49,7 @@ pnpm workspaces: `spec/` (OEIS-1.md, schemas, declaration text and hash, claim-t
 
 ## Hosting
 
-AWS account `openentity` (099705791378, us-east-1, profile `openentity`), paid from AWS credits; stack `OpenEntity` in `infra/`. Cloudflare has no budget beyond its free plan: it keeps DNS, the redirects Worker, Turnstile and Web Analytics only. Never put compute, storage or a paid feature on Cloudflare.
+AWS account `openentity` (099705791378, us-east-1, profile `openentity`), paid from AWS credits; stacks in `infra/`: `OpenEntity` (registry, site, MCP, hub) and the account service's `OpenEntityAccountStaging` and `OpenEntityAccount`, which share nothing with it. Cloudflare has no budget beyond its free plan: it keeps DNS, the redirects Worker, Turnstile and Web Analytics only. Never put compute, storage or a paid feature on Cloudflare.
 
 ## Task tracking
 

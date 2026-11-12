@@ -1,6 +1,8 @@
 // Idempotent Cloudflare DNS writer for openentity.org and oeis.dev. Every record it writes is DNS-only.
-//   tsx scripts/cloudflare-dns.ts validation   # ACM validation CNAMEs for openentity.org, mcp.openentity.org and oeis.dev; polls until all are issued
-//   tsx scripts/cloudflare-dns.ts apex         # each domain -> its CloudFront distribution (replaces any Worker custom domain on it)
+//   tsx scripts/cloudflare-dns.ts validation           # ACM validation CNAMEs for openentity.org, mcp.openentity.org and oeis.dev; polls until all are issued
+//   tsx scripts/cloudflare-dns.ts apex                 # each domain -> its CloudFront distribution (replaces any Worker custom domain on it)
+//   tsx scripts/cloudflare-dns.ts account-validation   # the same for the account hosts; run beside the first `cdk deploy` of the account stacks
+//   tsx scripts/cloudflare-dns.ts account              # account hosts -> their CloudFront distributions, agents hosts -> their API Gateway domains
 // Needs: aws CLI (profile openentity) and the gcloud configuration moltbot-den (service account; reads the Cloudflare token at runtime, never written out).
 import { execFileSync } from "node:child_process";
 
@@ -36,8 +38,14 @@ async function upsert(type: string, name: string, content: string) {
   console.log(`set     ${type} ${name} -> ${content}`);
 }
 
-async function validation() {
-  const pending = new Set([DOMAIN, MCP, HUB]);
+// The account service (OpenEntityAccount, OpenEntityAccountStaging): HTTPS host and agent WebSocket host per stage.
+const ACCOUNT_HOSTS: [stack: string, host: string, ws: string][] = [
+  ["OpenEntityAccount", "account.openentity.org", "agents.account.openentity.org"],
+  ["OpenEntityAccountStaging", "staging.account.openentity.org", "agents.staging.account.openentity.org"],
+];
+
+async function validation(names = [DOMAIN, MCP, HUB]) {
+  const pending = new Set(names);
   for (const deadline = Date.now() + 20 * 60_000; pending.size && Date.now() < deadline; await new Promise((r) => setTimeout(r, 15_000))) {
     for (const name of pending) {
       const cert = aws("acm", "list-certificates").CertificateSummaryList.find((c: any) => c.DomainName === name && c.Status !== "FAILED");
@@ -69,7 +77,18 @@ async function apex() {
   }
 }
 
+async function account() {
+  for (const [stack, host, ws] of ACCOUNT_HOSTS) {
+    const outputs = aws("cloudformation", "describe-stacks", "--stack-name", stack).Stacks[0].Outputs;
+    const out = (k: string) => outputs.find((o: any) => o.OutputKey === k).OutputValue;
+    await upsert("CNAME", host, out("DistributionDomain"));
+    await upsert("CNAME", ws, out("WsDomainTarget"));
+  }
+}
+
 const phase = process.argv[2];
 if (phase === "validation") await validation();
 else if (phase === "apex") await apex();
-else (console.error("usage: cloudflare-dns.ts validation|apex"), process.exit(2));
+else if (phase === "account-validation") await validation(ACCOUNT_HOSTS.flatMap(([, host, ws]) => [host, ws]));
+else if (phase === "account") await account();
+else (console.error("usage: cloudflare-dns.ts validation|apex|account-validation|account"), process.exit(2));

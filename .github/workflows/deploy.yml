@@ -31,6 +31,23 @@ jobs:
       - name: Apply schema.sql through the Data API
         working-directory: infra
         run: npx tsx scripts/migrate.ts
+      # The account service (ADR 0007): staging first; production deploys only after staging answers.
+      - name: Deploy the account service to staging
+        working-directory: infra
+        run: npx cdk deploy OpenEntityAccountStaging --require-approval never
+      - name: Apply account/schema.sql to staging
+        working-directory: infra
+        run: STACK=OpenEntityAccountStaging SCHEMA=account/schema.sql DB_NAME=account npx tsx scripts/migrate.ts
+      - name: Staging check
+        run: bash scripts/account-check.sh staging.account.openentity.org
+      - name: Deploy the account service to production
+        working-directory: infra
+        run: npx cdk deploy OpenEntityAccount --require-approval never
+      - name: Apply account/schema.sql to production
+        working-directory: infra
+        run: STACK=OpenEntityAccount SCHEMA=account/schema.sql DB_NAME=account npx tsx scripts/migrate.ts
+      - name: Production check
+        run: bash scripts/account-check.sh account.openentity.org
       - name: Deploy redirects (Cloudflare, free plan)
         working-directory: redirects
         env:
