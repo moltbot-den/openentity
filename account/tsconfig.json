@@ -11,5 +11,5 @@
     "allowImportingTsExtensions": true,
     "skipLibCheck": true
   },
-  "include": ["src", "test", "payments"]
+  "include": ["src", "test", "payments", "e2e"]
 }

@@ -75,7 +75,7 @@ const CHECKS: Record<string, (covers: string[]) => Promise<void>> = {
       expect(g, sku).toMatchObject({ host: API[CATALOG[sku].product], product: CATALOG[sku].product, plan: CATALOG[sku].plan, status: "active", source: "iap" });
       expect(g.plan).toMatch(ACCEPTS[g.product]);
       expect(g.store_transaction_id).toBe(CATALOG[sku].kind === "subscription" ? t.originalTransactionId : t.transactionId);
-      expect(g.period_end).toBe(CATALOG[sku].kind === "subscription" ? nowS() + 30 * 86_400 : null);
+      expect(g.period_end).toBe(CATALOG[sku].kind === "subscription" ? (t as { expiresDate: number }).expiresDate / 1000 : null);
     }
   },
   grant_play: async (covers) => {
@@ -156,8 +156,9 @@ describe("grants", () => {
     const t = await txn(other, "org.openentity.app.sma.team.monthly");
     expect((await call(app, "POST", "/v1/purchases", { platform: "ios", signed_transaction: appleJws(t) }, bearer(o))).body.error).toBe("account_mismatch");
     expect((await call(app, "POST", "/v1/purchases", { platform: "ios", signed_transaction: "x.y.z" }, bearer(o))).body.error).toBe("transaction_invalid");
-    const r = await call(app, "POST", "/v1/purchases", { platform: "ios", signed_transaction: appleJws(await txn(o, "org.openentity.app.sma.team.monthly")) }, bearer(o));
-    expect(r.body.entitlements).toEqual([{ product: "did:web:securemyagent.ai", plan: "team", status: "active", source: "iap", period_end: nowS() + 30 * 86_400 }]);
+    const bought = await txn(o, "org.openentity.app.sma.team.monthly");
+    const r = await call(app, "POST", "/v1/purchases", { platform: "ios", signed_transaction: appleJws(bought) }, bearer(o));
+    expect(r.body.entitlements).toEqual([{ product: "did:web:securemyagent.ai", plan: "team", status: "active", source: "iap", period_end: (bought as { expiresDate: number }).expiresDate / 1000 }]);
     expect((await call(app, "GET", "/v1/entitlements", undefined, bearer(o))).body).toEqual(r.body);
   });
 
