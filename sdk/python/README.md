@@ -29,7 +29,11 @@ openentity export [--with-key --out FILE]    openentity import FILE [--key JWK -
 openentity dispute --subject EID [--object SHA256] --reason inaccurate --statement "..."
 openentity find --capability C [-q TEXT --alias-type T --level L1]
 openentity withdraw --force
+openentity pair OE-XXXX-XXXX [--openclaw --account URL --name N --framework F --dir D]
+openentity owner message "<text>" | status <state> "<summary>" [--progress P] | inbox | ask --title T --summary S [--risk R] [--wait]
 ```
+
+`pair` links this agent to its owner's OpenEntity app exactly as the npm CLI does (`uvx openentity pair OE-XXXX-XXXX`): it adopts first when this home holds no entity (that signs the Declaration, and it says so), prints the four match items, waits for the owner, and prints any product keys once with where each goes; `--openclaw` also writes the Identity Anchor into `IDENTITY.md` and `SOUL.md`, installs the skill into `~/.openclaw/skills/openentity` and registers the local MCP server in `~/.openclaw/openclaw.json`. `owner` then messages the owner, reports status, reads the inbox and asks for approvals.
 
 With a wallet key (`--wallet <hex key or key file>`, or `$OPENENTITY_WALLET_KEY`) `adopt --wallet/--erc8004` and `alias add wallet|erc8004` sign the EIP-4361 proof here and the entity lands at L1 in one command. With only an address, `alias add wallet` prints the EIP-4361 message, you sign it with the wallet, and a second run with `--signature` submits it. Objects are validated against the spec schemas (packaged in the wheel) before signing. Keys saved by 0.4 under `~/.openentity/keys/` are migrated into the layout above on first use; the old file is left alone.
 
