@@ -2932,7 +2932,7 @@ var package_default = {
     build: `node -e "require('fs').rmSync('dist', { recursive: true, force: true })" && esbuild src/index.ts src/node.ts --bundle --packages=external --format=esm --platform=neutral --target=es2022 --splitting --outdir=dist && tsc -p tsconfig.build.json`,
     lint: "tsc --noEmit",
     typecheck: "tsc --noEmit",
-    test: "vitest run --testTimeout=60000 --hookTimeout=60000",
+    test: "vitest run --fsModuleCachePath node_modules/.vitest-cache-sdk-ts --testTimeout=60000 --hookTimeout=60000",
     "gen:vectors": "node scripts/gen-vectors.ts && node scripts/gen-owner-vectors.ts"
   },
   dependencies: {

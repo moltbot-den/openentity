@@ -13,7 +13,7 @@
     "build": "esbuild src/stdio.ts --bundle --platform=node --format=esm --target=node22 --outfile=dist/stdio.js --banner:js=\"#!/usr/bin/env node\" && chmod +x dist/stdio.js",
     "lint": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run --testTimeout=60000 --hookTimeout=60000"
+    "test": "vitest run --fsModuleCachePath node_modules/.vitest-cache-mcp --testTimeout=60000 --hookTimeout=60000"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.2",
