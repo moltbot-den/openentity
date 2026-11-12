@@ -1423,6 +1423,40 @@
       }
     },
     {
+      "name": "webauthn-duplicate-key",
+      "description": "clientDataJSON with a duplicate origin key, the first one 70 spaces before its colon: rejected, never read as the last value.",
+      "approval": {
+        "version": "approval/2.0",
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "decision": "approve",
+        "expires_at": 1794017100,
+        "device_id": "mTluyYyMSPInd1g_ENjr016z9DqqE2ZUX845TdohRVE",
+        "form": "webauthn",
+        "signature": "MEQCIFQ2JIJosgAeR_NIJqeBwQ7XXb21g-crNj0zB8hm9yXtAiAWuwIRvUEzU7-2V83h_NxUPVsXMwtIenFxO3AncpaZWA",
+        "authenticator_data": "D3UMQg2RHUXdnWy7aJ1fAnM1wAzOoZElYIW5k5ZyV-MdAAAAAA",
+        "client_data_json": "eyJvcmlnaW4iICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDoiaHR0cHM6Ly9ldmlsLmV4YW1wbGUiLCJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiS2Q3SVZLQ3pPQjFfLXpsWkRWaTJvU0Vvak1udG1OX3lCWjNGSE5GbzRjcyIsIm9yaWdpbiI6Imh0dHBzOi8vYWNjb3VudC5vcGVuZW50aXR5Lm9yZyIsImNyb3NzT3JpZ2luIjpmYWxzZX0"
+      },
+      "context": {
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "now": 1794016800,
+        "origins": [
+          "https://account.openentity.org",
+          "android:apk-key-hash:AXVh6-zFGB0QxD0cPn3sYa1YZcCsl0Kl3sbQg35wBSw"
+        ],
+        "key_state": "owner"
+      },
+      "expect": {
+        "ok": false,
+        "error": "bad_webauthn"
+      }
+    },
+    {
       "name": "webauthn-no-origins",
       "description": "An empty origins list accepts no origin.",
       "approval": {

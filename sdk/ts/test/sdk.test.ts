@@ -184,6 +184,7 @@ describe("objects and validation", () => {
     expect(() => oe.parseJson('{"a":1,"a":2}')).toThrow(/duplicate key/);
     expect(() => oe.parseJson('{"x":{"k":1,"\\u006b":2}}')).toThrow(/duplicate key/);
     expect(() => oe.parseJson('[{"a":1,"b":{"c":1,"c":1}}]')).toThrow(/duplicate key/);
+    expect(() => oe.parseJson('{"a"' + " ".repeat(70) + ':1,"a":2}')).toThrow(/duplicate key/); // any whitespace before the colon
     const att = JSON.parse(read("test-vectors/attestation.json").toString()).object;
     expect(oe.validate("Attestation", { ...att, confidence: 0.123456 }).errors.join()).not.toMatch(/decimal/);
     expect(oe.validate("Attestation", { ...att, confidence: 0.1234567 }).errors.join()).toMatch(/6 decimal places/);

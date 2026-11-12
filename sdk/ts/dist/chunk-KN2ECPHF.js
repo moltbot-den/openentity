@@ -75,13 +75,15 @@ function parseJson(text) {
   const v = JSON.parse(text);
   const scopes = [];
   const str = /"(?:[^"\\]|\\.)*"/y;
+  const colon = /\s*:/y;
   for (let i = 0; i < text.length; ) {
     const ch = text[i];
     if (ch === '"') {
       str.lastIndex = i;
       const m = str.exec(text)[0];
       i += m.length;
-      if (scopes.length && /^\s*:/.test(text.slice(i, i + 64))) {
+      colon.lastIndex = i;
+      if (scopes.length && colon.test(text)) {
         const key = JSON.parse(m);
         if (scopes[scopes.length - 1].has(key)) throw new OpenEntityError("invalid_input", `duplicate key ${m}`);
         scopes[scopes.length - 1].add(key);

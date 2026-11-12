@@ -74,7 +74,7 @@ const rawSign = (k: Key, digest: Uint8Array, high = false) => {
   const sig = p256.sign(digest, k.secret, { prehash: false, lowS: true });
   return high ? highS(sig) : sig;
 };
-interface Assert { origin?: string; rpId?: string; flags?: number; counter?: number; type?: string; crossOrigin?: boolean; challenge?: Uint8Array; high?: boolean; widenR?: boolean; bom?: boolean; extra?: Record<string, unknown> }
+interface Assert { origin?: string; rpId?: string; flags?: number; counter?: number; type?: string; crossOrigin?: boolean; challenge?: Uint8Array; high?: boolean; widenR?: boolean; bom?: boolean; extra?: Record<string, unknown>; prefix?: string }
 /** A WebAuthn get() assertion with challenge = digest, as a browser or Credential Manager returns it. */
 function assertion(k: Key, digest: Uint8Array, o: Assert = {}) {
   const origin = o.origin ?? WEB_ORIGIN;
@@ -83,7 +83,8 @@ function assertion(k: Key, digest: Uint8Array, o: Assert = {}) {
   if (origin.startsWith("android:")) client.androidPackageName = "org.openentity.app";
   else client.crossOrigin = o.crossOrigin ?? false;
   Object.assign(client, o.extra);
-  const cdj = cat(o.bom ? Uint8Array.of(0xef, 0xbb, 0xbf) : new Uint8Array(), enc.encode(JSON.stringify(client)));
+  const json = JSON.stringify(client);
+  const cdj = cat(o.bom ? Uint8Array.of(0xef, 0xbb, 0xbf) : new Uint8Array(), enc.encode(o.prefix ? "{" + o.prefix + "," + json.slice(1) : json));
   const sig = p256.sign(cat(authData, sha(cdj)), k.secret, { prehash: true, lowS: true });
   let d = der(o.high ? highS(sig) : sig);
   // r as a 33-byte INTEGER led by 0x01: a lax parser that drops the first byte reads the same r, giving a second encoding.
@@ -358,6 +359,8 @@ function approvalVectors(): object {
     c("webauthn-cross-origin", "crossOrigin true.", approval({ key: K.web, assert: { crossOrigin: true } }), ctx(), no("bad_webauthn")),
     c("webauthn-bom", "clientDataJSON starting with a UTF-8 byte order mark is not JSON.", approval({ key: K.web, assert: { bom: true } }), ctx(), no("bad_webauthn")),
     c("webauthn-lone-surrogate", "clientDataJSON with a lone surrogate in any string.", approval({ key: K.web, assert: { extra: { note: "\ud800" } } }), ctx(), no("bad_webauthn")),
+    c("webauthn-duplicate-key", "clientDataJSON with a duplicate origin key, the first one 70 spaces before its colon: rejected, never read as the last value.",
+      approval({ key: K.web, assert: { prefix: `"origin"${" ".repeat(70)}:"https://evil.example"` } }), ctx(), no("bad_webauthn")),
     c("webauthn-no-origins", "An empty origins list accepts no origin.", approval({ key: K.web }), ctx({ origins: [] }), no("bad_webauthn")),
     c("webauthn-counter-replayed", "The signature counter did not increase.", approval({ key: K.web, assert: { counter: 6 } }), ctx({ counter: 6 }), no("counter_replayed")),
     c("request-id-with-separator", "request_id may not contain the | separator.", { ...approval(), request_id: "req|1" }, ctx({ request_id: "req|1" }), no("malformed")),
