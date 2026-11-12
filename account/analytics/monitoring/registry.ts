@@ -10,6 +10,8 @@ import * as lambda from "aws-cdk-lib/aws-lambda";
 import * as nodejs from "aws-cdk-lib/aws-lambda-nodejs";
 import { Construct } from "constructs";
 import { AccountServiceMonitoring } from "./aws.ts";
+import { OperationsDashboard } from "./dashboard.ts";
+import { SignalAlarms } from "./signals.ts";
 import type { Target } from "./probe.ts";
 
 export type RegistryMonitoringProps = {
@@ -20,6 +22,8 @@ export type RegistryMonitoringProps = {
   /** CloudFront distribution ids to watch for 5xx (stack outputs DistributionId, McpDistributionId, hub). */
   distributionIds: string[];
   probeTargets: Target[];
+  /** Turn on the legacy approval alert (PLAN 13.3: after Day 8). */
+  legacyApprovalActionsEnabled?: boolean;
 };
 
 export class RegistryMonitoring extends Construct {
@@ -54,6 +58,14 @@ export class RegistryMonitoring extends Construct {
         metric: new cloudwatch.Metric({ namespace: "OpenEntity/Uptime", metricName: "Up", dimensionsMap: { Target: t.name }, statistic: "Minimum", period: Duration.minutes(5) }),
         alarmDescription: `${t.name} is down: ${t.url}`,
       })));
+
+    const signals = new SignalAlarms(this, "Signals", { stage: props.stage, legacyApprovalActionsEnabled: props.legacyApprovalActionsEnabled });
+    extra.push(...signals.alarms);
+
+    new OperationsDashboard(this, "Dashboard", {
+      name: `OpenEntity-${props.stage}`, registryFunctionName: props.functionName, distributionIds: props.distributionIds,
+      probeTargets: props.probeTargets, accountPrefix: props.stage === "production" ? "OpenEntityAccount-" : "OpenEntityAccountStaging-",
+    });
 
     this.monitoring = new AccountServiceMonitoring(this, "Monitoring", {
       alertEmail: props.alertEmail, stage: props.stage, alarms: extra,

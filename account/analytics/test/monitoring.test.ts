@@ -23,7 +23,7 @@ describe("AccountServiceMonitoring", () => {
     t.hasResourceProperties("AWS::CloudWatch::Alarm", { Threshold: 1, EvaluationPeriods: 5, Metrics: Match.anyValue() });
     t.hasResourceProperties("AWS::CloudWatch::Alarm", { MetricName: "ApproximateNumberOfMessagesVisible" });
     expect(Object.keys(t.findResources("AWS::CloudWatch::Alarm")).length).toBe(5);
-    for (const a of Object.values(t.findResources("AWS::CloudWatch::Alarm")) as { Properties: { AlarmActions: unknown[] } }[]) expect(a.Properties.AlarmActions).toHaveLength(1);
+    for (const a of Object.values(t.findResources("AWS::CloudWatch::Alarm")) as { Properties: { AlarmActions: unknown[]; OKActions: unknown[] } }[]) { expect(a.Properties.AlarmActions).toHaveLength(1); expect(a.Properties.OKActions).toHaveLength(1); }
   });
   it.each([["staging", "_prod"], ["production", "_staging"]] as const)("%s relay reads only the account Customer.io key for its own stage", (stage, other) => {
     const stack = new Stack(new App({ context: { "aws:cdk:bundling-stacks": [] } }), "T", { env: { account: "099705791378", region: "us-east-1" } });
