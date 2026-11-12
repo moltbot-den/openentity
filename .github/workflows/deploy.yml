@@ -48,6 +48,10 @@ jobs:
         run: STACK=OpenEntityAccount SCHEMA=account/schema.sql DB_NAME=account npx tsx scripts/migrate.ts
       - name: Production check
         run: bash scripts/account-check.sh account.openentity.org
+      # Alarms, uptime probe and alert relay for the registry (account/analytics/monitoring). Its own CDK app: the OpenEntity stack is not edited.
+      - name: Deploy the registry monitoring
+        working-directory: infra
+        run: npx cdk deploy OpenEntityMonitoring -a "npx tsx ../account/analytics/monitoring/app.ts" --require-approval never
       - name: Deploy redirects (Cloudflare, free plan)
         working-directory: redirects
         env:
