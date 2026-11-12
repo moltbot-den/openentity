@@ -26,11 +26,11 @@ test("staging Aurora: one writer that pauses when idle (0 ACU)", () => {
   expect(all(staging, "AWS::RDS::DBInstance")).toHaveLength(1);
 });
 
-test("three KMS keys per stage: P-256 for tokens, Ed25519 for the DID, a rotating symmetric data key", () => {
+test("four KMS keys per stage: P-256 for tokens, P-256 for key log close entries, Ed25519 for the DID, a rotating data key", () => {
   for (const t of [prod, staging]) {
     const keys = all(t, "AWS::KMS::Key").map((k) => k.Properties);
-    expect(keys).toHaveLength(3);
-    expect(keys.filter((k) => k.KeySpec === "ECC_NIST_P256" && k.KeyUsage === "SIGN_VERIFY")).toHaveLength(1);
+    expect(keys).toHaveLength(4);
+    expect(keys.filter((k) => k.KeySpec === "ECC_NIST_P256" && k.KeyUsage === "SIGN_VERIFY")).toHaveLength(2);
     expect(keys.filter((k) => k.KeySpec === "ECC_NIST_EDWARDS25519" && k.KeyUsage === "SIGN_VERIFY")).toHaveLength(1);
     expect(keys.filter((k) => !k.KeySpec && k.EnableKeyRotation === true)).toHaveLength(1);
   }
@@ -93,4 +93,14 @@ test("the account stacks stand alone: nothing is imported from the registry stac
 test("each stage's policy on the shared CI role has its own name, so both stages can attach one", () => {
   const name = (t: Template) => all(t, "AWS::IAM::Policy").find((p) => JSON.stringify(p.Properties.Roles) === '["openentity-github-deploy"]').Properties.PolicyName;
   expect(name(prod)).not.toBe(name(staging));
+});
+
+test("the close key is never deleted: retained by CloudFormation in both stages, and its policy denies scheduling deletion", () => {
+  for (const t of [prod, staging]) {
+    const close = Object.values(t.findResources("AWS::KMS::Key")).find((k: any) => String(k.Properties.Description).includes("close entries")) as any;
+    expect(close.DeletionPolicy).toBe("Retain");
+    const deny = close.Properties.KeyPolicy.Statement.find((st: any) => st.Effect === "Deny");
+    expect(deny.Action).toEqual(["kms:ScheduleKeyDeletion", "kms:DisableKey"]);
+    expect(deny.Principal).toEqual({ AWS: "*" });
+  }
 });

@@ -14,11 +14,13 @@ const tokenPair = generateKeyPairSync("ec", { namedCurve: "P-256" });
 const tokenKey = await publicKey(tokenPair.publicKey.export({ format: "jwk" }) as any, async (d) => derToJose(new Uint8Array(nodeSign("sha256", d, { key: tokenPair.privateKey, dsaEncoding: "der" }))));
 const didPair = generateKeyPairSync("ed25519");
 const didKey = await publicKey(didPair.publicKey.export({ format: "jwk" }) as any, async (d) => new Uint8Array(nodeSign(null, d, didPair.privateKey)));
+const closePair = generateKeyPairSync("ec", { namedCurve: "P-256" });
+const closeKey = await publicKey(closePair.publicKey.export({ format: "jwk" }) as any, async () => new Uint8Array(64));
 const idp = await generateKeyPair("RS256");
 const providerKeys = createLocalJWKSet({ keys: [{ ...(await exportJWK(idp.publicKey)), kid: "p1", alg: "RS256" }] });
 const outbox: string[] = [];
 const base: Deps = {
-  stage: "staging", host: HOST, db: await pgliteDb(), keys: { token: tokenKey, did: didKey }, pepper: "test-pepper",
+  stage: "staging", host: HOST, db: await pgliteDb(), keys: { token: tokenKey, did: didKey, close: closeKey }, pepper: "test-pepper",
   sendCode: async (_e, code) => { outbox.push(code); }, rp: rpFor(HOST),
   apple: { native: ["org.openentity.app"], web: ["org.openentity.app.web"] }, google: ["ios-client", "web-client"],
   androidFingerprints: [], signinOpen: true, providerKeys: { apple: providerKeys, google: providerKeys },
@@ -53,7 +55,7 @@ test("well-known: the AASA is JSON with webcredentials and applinks for the app,
   expect((await call("GET", "/.well-known/assetlinks.json")).status).toBe(404); // until the Play signing fingerprint exists
 });
 
-test("well-known: jwks.json publishes the ES256 token key; did.json carries it and the Ed25519 service key", async () => {
+test("well-known: jwks.json publishes the ES256 token key; did.json carries the Ed25519 service key and the P-256 close key", async () => {
   const k = (await call("GET", "/.well-known/jwks.json")).body.keys;
   expect(k).toEqual([{ ...tokenKey.jwk, kid: tokenKey.kid, alg: "ES256", use: "sig" }]);
   const d = (await call("GET", "/.well-known/did.json")).body;
@@ -62,7 +64,9 @@ test("well-known: jwks.json publishes the ES256 token key; did.json carries it a
   expect(ed.id).toBe(`${DID}#${didKey.kid}`);
   expect(ed.publicKeyMultibase).toMatch(/^z6Mk/);
   expect(d.authentication).toEqual([ed.id]);
-  expect(d.assertionMethod).toEqual([ed.id, `${DID}#${tokenKey.kid}`]);
+  expect(d.assertionMethod).toEqual([ed.id, `${DID}#${closeKey.kid}`]);
+  expect(d.verificationMethod.find((v: any) => v.type === "JsonWebKey").publicKeyJwk).toEqual(closeKey.jwk);
+  expect(JSON.stringify(d)).not.toContain(tokenKey.kid); // tokens verify from jwks.json; did.json P-256 keys are close keys only
   expect((await call("GET", "/.well-known/openid-configuration")).body.issuer).toBe(ORIGIN);
 });
 

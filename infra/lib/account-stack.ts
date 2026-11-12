@@ -82,6 +82,15 @@ export class OpenEntityAccountStack extends Stack {
       keySpec: kms.KeySpec.ECC_NIST_EDWARDS25519, keyUsage: kms.KeyUsage.SIGN_VERIFY, removalPolicy: keep,
       alias: `alias/openentity-account-${suffix}-did`, description: `OpenEntity Account ${stage}: Ed25519 RFC 9421 signatures to products (did.json)`,
     });
+    // Signs key log `close` entries (test-vectors/keylog-1: p256 form). Never deleted: a closed log must verify forever, so
+    // this key and every retired close key stay in did.json. RETAIN in both stages, and nobody may schedule its deletion.
+    const closeKey = new kms.Key(this, "CloseKey", {
+      keySpec: kms.KeySpec.ECC_NIST_P256, keyUsage: kms.KeyUsage.SIGN_VERIFY, removalPolicy: RemovalPolicy.RETAIN,
+      alias: `alias/openentity-account-${suffix}-close`, description: `OpenEntity Account ${stage}: signs key log close entries; never delete`,
+    });
+    closeKey.addToResourcePolicy(new iam.PolicyStatement({
+      effect: iam.Effect.DENY, principals: [new iam.AnyPrincipal()], actions: ["kms:ScheduleKeyDeletion", "kms:DisableKey"], resources: ["*"],
+    }));
     // One symmetric key for data at rest the service encrypts itself (Apple refresh tokens and the like).
     const dataKey = new kms.Key(this, "DataKey", {
       enableKeyRotation: true, removalPolicy: keep,
@@ -127,6 +136,7 @@ export class OpenEntityAccountStack extends Stack {
         DB_NAME: "account",
         TOKEN_KEY_ID: tokenKey.keyArn,
         DID_KEY_ID: didKey.keyArn,
+        CLOSE_KEY_ID: closeKey.keyArn,
         DATA_KEY_ID: dataKey.keyArn,
         EVENTS_QUEUE_URL: events.queueUrl,
         // Production sign-in stays closed until device binding and the Day 6 review gate (PLAN 3.6); staging is open.
@@ -137,6 +147,7 @@ export class OpenEntityAccountStack extends Stack {
     db.grantDataApiAccess(fn);
     tokenKey.grant(fn, "kms:Sign", "kms:GetPublicKey");
     didKey.grant(fn, "kms:Sign", "kms:GetPublicKey");
+    closeKey.grant(fn, "kms:Sign", "kms:GetPublicKey");
     dataKey.grantEncryptDecrypt(fn);
     events.grantSendMessages(fn);
     // Its own parameters only: never /openentity/app (the registry's keys), never the other stage's values.
@@ -219,6 +230,7 @@ export class OpenEntityAccountStack extends Stack {
     out("DbSecretArn", db.secret!.secretArn);
     out("TokenKeyArn", tokenKey.keyArn);
     out("DidKeyArn", didKey.keyArn);
+    out("CloseKeyArn", closeKey.keyArn);
     out("EventsQueueUrl", events.queueUrl);
   }
 }

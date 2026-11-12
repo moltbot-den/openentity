@@ -33,13 +33,14 @@ async function init() {
   const s = await params();
   if (!s.code_pepper) throw new Error("code_pepper is not set in SSM");
   const kms = new KMSClient({});
-  const [token, did] = await Promise.all([kmsKey(kms, e.TOKEN_KEY_ID!, kmsEs256), kmsKey(kms, e.DID_KEY_ID!, kmsEd25519)]);
+  // ponytail: the close key signs nothing until account deletion lands; its signer must then normalize s to low-S (keylog-1).
+  const [token, did, close] = await Promise.all([kmsKey(kms, e.TOKEN_KEY_ID!, kmsEs256), kmsKey(kms, e.DID_KEY_ID!, kmsEd25519), kmsKey(kms, e.CLOSE_KEY_ID!, kmsEs256)]);
   const fingerprints = list(s.android_cert_sha256);
   const app = createApp({
     stage: e.STAGE === "production" ? "production" : "staging",
     host: e.HOST!,
     db: awake(dataApiDb({ resourceArn: e.DB_CLUSTER_ARN!, secretArn: e.DB_SECRET_ARN!, database: e.DB_NAME! })),
-    keys: { token, did },
+    keys: { token, did, close },
     pepper: s.code_pepper,
     sendCode: s.cio_app_api_key ? customerIo(s.cio_app_api_key, s.code_pepper) : async () => fail(503, "email_unavailable", "email sign-in is not configured in this environment"),
     // android:apk-key-hash:<base64url SHA-256 of the signing certificate>, from the hex fingerprints assetlinks.json publishes.

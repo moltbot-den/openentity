@@ -20,7 +20,7 @@ export interface Deps {
   stage: "staging" | "production";
   host: string;
   db: Db;
-  keys: { token: SigningKey; did: SigningKey };
+  keys: { token: SigningKey; did: SigningKey; close: SigningKey };
   pepper: string;
   sendCode: SendCode;
   rp: Rp;
@@ -97,7 +97,7 @@ export function createApp(d: Deps) {
   });
   app.get("/.well-known/jwks.json", (c) => c.json(jwks([d.keys.token]), 200, { "cache-control": "public, max-age=600" }));
   app.get("/.well-known/openid-configuration", (c) => c.json(openidConfiguration(d.host), 200, { "cache-control": "public, max-age=600" }));
-  app.get("/.well-known/did.json", (c) => c.json(didDocument(d.host, { did: [d.keys.did], token: [d.keys.token] }), 200, { "cache-control": "public, max-age=600" }));
+  app.get("/.well-known/did.json", (c) => c.json(didDocument(d.host, { did: [d.keys.did], close: [d.keys.close] }), 200, { "cache-control": "public, max-age=600" }));
   app.get("/v1/health", (c) => c.json({ ok: true, stage: d.stage, version: d.version ?? "dev" }));
 
   // ---------- sign-in ----------

@@ -33,16 +33,17 @@ export const openidConfiguration = (host: string) => ({
 });
 
 /**
- * did:web:<host>. The Ed25519 key signs RFC 9421 requests to products (authentication, assertionMethod); the P-256 key
- * signs access tokens (assertionMethod). Each key's fragment is its RFC 7638 thumbprint, the JWT kid for the token key.
+ * did:web:<host>. The Ed25519 key signs RFC 9421 requests and envelopes to products (authentication, assertionMethod).
+ * The P-256 close keys, current and every retired one, sign key log `close` entries (assertionMethod): verifiers pass
+ * them as serviceKeys. Access tokens are verified from jwks.json, not from here. Fragments are RFC 7638 thumbprints.
  */
-export function didDocument(host: string, o: { did: SigningKey[]; token: SigningKey[] }) {
+export function didDocument(host: string, o: { did: SigningKey[]; close: SigningKey[] }) {
   const id = `did:web:${host}`;
   const ed = o.did.map((k) => ({
     id: `${id}#${k.kid}`, type: "Multikey", controller: id,
     publicKeyMultibase: didKeyFromPublicKey(Buffer.from(k.jwk.x!, "base64url")).slice("did:key:".length),
   }));
-  const ec = o.token.map((k) => ({ id: `${id}#${k.kid}`, type: "JsonWebKey", controller: id, publicKeyJwk: k.jwk as JWK }));
+  const ec = o.close.map((k) => ({ id: `${id}#${k.kid}`, type: "JsonWebKey", controller: id, publicKeyJwk: k.jwk as JWK }));
   return {
     "@context": ["https://www.w3.org/ns/did/v1", "https://w3id.org/security/multikey/v1", "https://w3id.org/security/jwk/v1"],
     id,

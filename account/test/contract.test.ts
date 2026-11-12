@@ -11,7 +11,11 @@ const spec = parse(readFileSync(new URL("../openapi.yaml", import.meta.url), "ut
 const jwk = (k: { publicKey: import("node:crypto").KeyObject }) => k.publicKey.export({ format: "jwk" }) as any;
 const app = createApp({
   stage: "staging", host: "staging.account.openentity.org", db: await pgliteDb(), pepper: "p", sendCode: async () => {},
-  keys: { token: await publicKey(jwk(generateKeyPairSync("ec", { namedCurve: "P-256" })), async () => new Uint8Array(64)), did: await publicKey(jwk(generateKeyPairSync("ed25519")), async () => new Uint8Array(64)) },
+  keys: {
+    token: await publicKey(jwk(generateKeyPairSync("ec", { namedCurve: "P-256" })), async () => new Uint8Array(64)),
+    did: await publicKey(jwk(generateKeyPairSync("ed25519")), async () => new Uint8Array(64)),
+    close: await publicKey(jwk(generateKeyPairSync("ec", { namedCurve: "P-256" })), async () => new Uint8Array(64)),
+  },
   rp: rpFor("staging.account.openentity.org"), apple: { native: [], web: [] }, google: [], androidFingerprints: [], signinOpen: true,
 });
 
