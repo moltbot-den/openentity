@@ -3,11 +3,15 @@
 // the same token again within RETRY_GRACE seconds, while its successor is still unused, replaces that successor.
 // That covers a response lost on a mobile network; theft inside the window is what device binding stops.
 import { createHash, randomBytes } from "node:crypto";
+import type { Context } from "hono";
 import type { Deps } from "./app.ts";
+import type { KeyLogState } from "@openentity/sdk";
+import { deviceBinding } from "./binding.ts";
 import { type Db, newId, now } from "./db.ts";
 import { deletionOf } from "./deletion.ts";
 import { HttpError, fail } from "./http.ts";
 import { signJwt } from "./keys.ts";
+import { keyLogState } from "./keylog.ts";
 import { methodList } from "./methods.ts";
 import { BUNDLE_ID } from "./wellknown.ts";
 
@@ -29,25 +33,25 @@ export async function accessToken(d: Deps, accountId: string, aud: string, sid: 
   return { audience: aud, access_token: token, expires_at: t + ACCESS_TTL };
 }
 
+/** "Add a backup" (PLAN 3.2): until the log holds a second passkey or a second approver device, total loss is one device away. */
+const needsBackup = (s: KeyLogState | null) =>
+  !!s && !s.closed && !(s.approvers.some((k) => k.type === "webauthn" && k.kid !== s.root.kid) || s.approvers.filter((k) => k.type === "p256").length >= 2);
+
 /** The Account object (openapi.yaml) for the signed-in owner. */
 export async function me(d: Deps, accountId: string) {
   const a = await d.db.first<any>("SELECT * FROM accounts WHERE id = $1", [accountId]);
   return {
     id: a.id, owner_did: a.owner_did ?? null, email: a.email ?? null, email_private: !!a.email_private, created_at: Number(a.created_at),
-    has_key_log: !!a.owner_did, backup_needed: !!a.owner_did, app_account_token: a.app_account_token,
+    has_key_log: !!a.owner_did, backup_needed: a.owner_did ? needsBackup(await keyLogState(d, a.owner_did)) : false, app_account_token: a.app_account_token,
     methods: await methodList(d, accountId),
     deletion: await deletionOf(d, accountId),
   };
 }
 
-/**
- * Device binding (PLAN 2.4): checks the `attestation` a sign-in or refresh sends (App Attest, or Android Key Attestation
- * plus Play Integrity, bound to the raw nonce) and returns the JSON to keep in sessions.binding. The sign-in routes
- * (signin.ts) call it on an install's first sign-in. Until the checks land it binds nothing and returns null.
- */
-export async function deviceBinding(_d: Deps, _o: { platform: Platform; installId: string | null; attestation: unknown; nonce: string }): Promise<string | null> {
-  return null;
-}
+
+/** The session a refresh token belongs to (its binding included), or null. */
+export const sessionOf = (db: Db, token: string) =>
+  db.first<{ id: string; platform: Platform; binding: string | null }>("SELECT s.id, s.platform, s.binding FROM refresh_tokens r JOIN sessions s ON s.id = r.session_id WHERE r.hash = $1", [tokenHash(token)]);
 
 export interface Session {
   id: string; account_id: string; platform: Platform; install_id: string | null; binding: string | null;
@@ -58,9 +62,32 @@ export interface Rotated { session: Session; refreshToken: string; expiresAt: nu
 export const tokenHash = (t: string) => createHash("sha256").update(t, "utf8").digest("hex");
 const mint = () => `oert_${randomBytes(32).toString("base64url")}`;
 
-export async function openSession(db: Db, o: {
-  accountId: string; platform: Platform; amr: string; installId?: string | null; deviceModel?: string | null; appVersion?: string | null; binding?: string | null;
-}, t = now()): Promise<{ sessionId: string; refreshToken: string; expiresAt: number }> {
+export interface SessionInit { accountId: string; platform: Platform; amr: string; installId?: string | null; deviceModel?: string | null; appVersion?: string | null }
+export interface Opened { sessionId: string; refreshToken: string; expiresAt: number }
+
+/**
+ * Opens a session. From a sign-in route, `openSession(c, d, init)`: device binding is enforced first (binding.ts
+ * deviceBinding, from the body's `attestation` and `nonce` or the install key's proof over the body) and stored with
+ * the session. `openSession(db, init & {binding})` stores what it is given (fixtures and tests only).
+ */
+export function openSession(c: Context, d: Deps, o: SessionInit & { attestation?: unknown; nonce?: string }): Promise<Opened>;
+export function openSession(db: Db, o: SessionInit & { binding?: string | null }, t?: number): Promise<Opened>;
+export async function openSession(x: Context | Db, y: any, z?: any): Promise<Opened> {
+  if ("req" in x) {
+    const c = x as Context, d = y as Deps, o = z as SessionInit & { attestation?: unknown; nonce?: string };
+    const text = await c.req.text();
+    let body: Record<string, any> = {};
+    try { body = JSON.parse(text) ?? {}; } catch { /* a form post carries no attestation */ }
+    const binding = await deviceBinding(d, {
+      platform: o.platform, installId: o.installId ?? null, attestation: o.attestation ?? body.attestation,
+      nonce: o.nonce ?? (typeof body.nonce === "string" ? body.nonce : undefined), proof: { header: (n) => c.req.header(n), body: new TextEncoder().encode(text) },
+    });
+    return insert(d.db, { ...o, binding });
+  }
+  return insert(x as Db, y, z);
+}
+
+async function insert(db: Db, o: SessionInit & { binding?: string | null }, t = now()): Promise<Opened> {
   const id = newId("ses"), token = mint(), expiresAt = t + (o.platform === "web" ? WEB_TTL : APP_TTL);
   await db.tx(async (tx) => {
     await tx.run(

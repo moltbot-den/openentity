@@ -1,12 +1,13 @@
 // OpenEntity Account HTTP API (account/openapi.yaml). This file holds the error format, well-known documents, the
 // sign-in gate, tokens and sessions; every other area is a module with its own routes, registered at the end.
 // Core lane: keylog, stepup, pairing, agents, events. Web lane: signin, methods, deletion, notify, store, approve.
-import { createHash } from "node:crypto";
+import { createHash, type X509Certificate } from "node:crypto";
 import { Hono, type Context } from "hono";
 import { getCookie } from "hono/cookie";
 import type { JWTVerifyGetKey } from "jose";
 import * as agents from "./agents.ts";
 import * as approve from "./approve.ts";
+import { type IntegrityVerdict, checkBinding } from "./binding.ts";
 import { type Db, bump, now } from "./db.ts";
 import * as deletion from "./deletion.ts";
 import type { SendCode } from "./email.ts";
@@ -18,7 +19,7 @@ import * as methods from "./methods.ts";
 import * as notify from "./notify.ts";
 import * as pairing from "./pairing.ts";
 import type { Rp } from "./passkey.ts";
-import { COOKIE, accessToken, me, revoke, rotate } from "./sessions.ts";
+import { COOKIE, accessToken, me, openSession, revoke, rotate, sessionOf } from "./sessions.ts";
 import * as signin from "./signin.ts";
 import * as stepup from "./stepup.ts";
 import * as store from "./store.ts";
@@ -51,6 +52,10 @@ export interface Deps {
   fetch?: typeof fetch;
   /** Frames to agents' open sockets (ws.ts); unset, frames wait in the inbox. */
   ws?: WsClient;
+  /** Tests only: stand-in attestation roots. Production pins Apple's and Google's roots (attest.ts). */
+  attestRoots?: { apple?: X509Certificate[]; google?: X509Certificate[] };
+  /** Decodes a Play Integrity token through Google; unset until this environment has Google credentials. */
+  playIntegrity?: (token: string) => Promise<IntegrityVerdict | null>;
   /** Tests only: stand-ins for Apple's and Google's published keys. Production uses the providers' JWKS. */
   providerKeys?: { apple?: JWTVerifyGetKey; google?: JWTVerifyGetKey };
 }
@@ -102,13 +107,25 @@ export function createApp(d: Deps) {
   // ---------- tokens ----------
   app.post("/v1/token", async (c) => {
     const b = await json(c);
-    if (b.grant_type !== "refresh_token") fail(400, "bad_request", "grant_type must be refresh_token");
+    const aud: string[] = Array.isArray(b.audience) ? b.audience : fail(400, "bad_request", "audience must be an array of 1 to 5 DIDs");
+    if (!aud.length || aud.length > 5 || new Set(aud).size !== aud.length || aud.some((a) => !audiences.has(a))) fail(400, "invalid_audience", `audience must be 1 to 5 distinct values from: ${[...audiences].join(", ")}`);
+    if (b.grant_type === "login_code" || b.grant_type === "urn:openentity:login_code") {
+      // Android Apple sign-in: the code from /v1/auth/apple/callback, single use, 120 s, this install only (signin.ts).
+      const platform = b.client?.platform, install = b.client?.install_id;
+      if ((platform !== "android" && platform !== "ios") || typeof install !== "string" || !/^[0-9a-fA-F-]{36}$/.test(install)) fail(400, "bad_request", "client with platform and install_id is required");
+      const { accountId, amr } = await signin.redeemLoginCode(d, str(b.login_code, "login_code", 128), install);
+      const s = await openSession(c, d, { accountId, platform, amr, installId: install, deviceModel: typeof b.client.device_model === "string" ? b.client.device_model.slice(0, 64) : null, appVersion: typeof b.client.app_version === "string" ? b.client.app_version.slice(0, 64) : null });
+      const t = now(), tokens = [];
+      for (const a of aud) tokens.push(await accessToken(d, accountId, a, s.sessionId, platform, t, amr, t));
+      return c.json({ token_type: "Bearer", refresh_token: s.refreshToken, refresh_expires_at: s.expiresAt, tokens });
+    }
+    if (b.grant_type !== "refresh_token") fail(400, "bad_request", "grant_type must be refresh_token or login_code");
     const web = !b.refresh_token;
     if (web && c.req.header("origin") !== origin) fail(403, "bad_origin", "cookie requests must come from this origin");
     const token = web ? getCookie(c, COOKIE) ?? fail(401, "invalid_grant", "no session cookie") : str(b.refresh_token, "refresh_token", 128);
-    const aud: string[] = Array.isArray(b.audience) ? b.audience : fail(400, "bad_request", "audience must be an array of 1 to 5 DIDs");
-    if (!aud.length || aud.length > 5 || new Set(aud).size !== aud.length || aud.some((a) => !audiences.has(a))) fail(400, "invalid_audience", `audience must be 1 to 5 distinct values from: ${[...audiences].join(", ")}`);
-    // Day 2 adds the App Attest and Play Integrity binding checks here, against sessionOf(token).binding, before rotation.
+    // Device binding: an app proves its install's key over this body before the token rotates (binding.ts).
+    const s = await sessionOf(d.db, token);
+    if (s) await checkBinding(c, d, s, new TextEncoder().encode(await c.req.text()));
     const r = await rotate(d.db, token);
     if ((r.session.platform === "web") !== web) fail(400, "bad_request", "apps send refresh_token in the body; the web uses the cookie");
     const tokens = [];

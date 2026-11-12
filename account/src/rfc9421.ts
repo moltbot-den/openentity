@@ -23,6 +23,7 @@ const fetchJson = (d: Deps) => async (url: string) => {
  */
 export async function verifySigned(d: Deps, req: SignedRequest, o: { products: boolean }): Promise<{ did: string; keyid: string }> {
   const input = Object.entries(req.headers).find(([k]) => k.toLowerCase() === "signature-input")?.[1] ?? "";
+  if (!input || !Object.keys(req.headers).some((k) => k.toLowerCase() === "signature")) fail(401, "signature_invalid", "missing_headers");
   const keyid = /keyid="([^"]*)"/.exec(input)?.[1] ?? "";
   const signer = keyid.split("#")[0];
   if (o.products && !PRODUCT_DIDS.includes(signer)) fail(403, "unknown_signer", "only the four product DIDs sign these calls");

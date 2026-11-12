@@ -101,6 +101,12 @@ info:
     - A web email start without a valid Turnstile token still answers 202, but sends a code only to an address that
       already has an account (web sign-up needs Turnstile; the answer never reveals whether an account exists).
     - Every sign-in attempt consumes its nonce. After attestation_required, fetch a new nonce and retry.
+    - Device binding at sign-in (apps): an install that has attested before proves the same key over the sign-in
+      request's raw body with the refresh headers (X-OE-App-Attest; X-OE-Device-Signature with X-OE-Play-Integrity),
+      no nonce needed. An install's first sign-in, or one with a new key, sends `attestation` over a nonce issued to
+      that install: the sign-in's own `nonce` (Apple, Google), else the newest unused nonce from POST /v1/auth/nonce
+      (email, passkey), which the sign-in then uses up. Production refuses an app sign-in or refresh without a binding
+      (403 attestation_required, 401 binding_required); staging binds when the app proves a key.
     - id_token_invalid and nonce_invalid are 401. attestation_required, attestation_invalid, turnstile_required and
       turnstile_invalid are 403. A failed Apple code exchange is 502 provider_error.
     - Passkey verification failures, an unknown credential included, are 401 passkey_invalid. An unknown, used or
