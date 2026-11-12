@@ -52,11 +52,24 @@ export function homeClient(cfg: { serviceDid: string; rpId: string; turnstile: s
     const r = c.response as AuthenticatorAttestationResponse;
     return { id: c.id, rawId: b64u(c.rawId), type: c.type, clientExtensionResults: {}, response: { attestationObject: b64u(r.attestationObject), clientDataJSON: b64u(r.clientDataJSON), transports: r.getTransports?.() ?? [] } };
   };
+  // Key log entries accept only a low S (keylog-1): an authenticator's DER signature with s > n/2 is sent as n - s.
+  const N = 0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551n;
+  const lowS = (der: Uint8Array) => {
+    const rLen = der[3], r = der.slice(4, 4 + rLen), sBytes = der.slice(6 + rLen, 6 + rLen + der[5 + rLen]);
+    const s = BigInt(`0x${hex(sBytes)}`);
+    if (s <= N >> 1n) return der;
+    const h = (N - s).toString(16).padStart(64, "0");
+    let low = Uint8Array.from(h.match(/../g)!.map((x) => parseInt(x, 16)));
+    while (low.length > 1 && low[0] === 0 && !(low[1] & 0x80)) low = low.slice(1);
+    if (low[0] & 0x80) low = Uint8Array.of(0, ...low);
+    const body = [0x02, r.length, ...r, 0x02, low.length, ...low];
+    return Uint8Array.from([0x30, body.length, ...body]);
+  };
   /** A passkey assertion whose challenge is `digest`, by one of `credentialIds`: the webauthn form fields. */
   const signWithPasskey = async (digest: Uint8Array<ArrayBuffer>, credentialIds: string[]) => {
     const c = (await navigator.credentials.get({ publicKey: { challenge: digest, rpId: cfg.rpId, allowCredentials: credentialIds.map((id) => ({ type: "public-key" as const, id: bytes(id) })), userVerification: "required", timeout: 120_000 } })) as PublicKeyCredential;
     const r = c.response as AuthenticatorAssertionResponse;
-    return { id: c.id, signature: b64u(r.signature), authenticator_data: b64u(r.authenticatorData), client_data_json: b64u(r.clientDataJSON) };
+    return { id: c.id, signature: b64u(lowS(new Uint8Array(r.signature))), authenticator_data: b64u(r.authenticatorData), client_data_json: b64u(r.clientDataJSON) };
   };
 
   // ---------------------------------------------------------------- signed out

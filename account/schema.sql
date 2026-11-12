@@ -291,3 +291,23 @@ CREATE TABLE IF NOT EXISTS login_codes (
   expires_at bigint NOT NULL,
   used_at bigint
 );
+
+-- Store-bought plans (store.ts): one row per App Store original transaction (subscriptions), transaction (consumables)
+-- or Play purchase token. A row only moves forward in time (signed_at); each change goes to the product as plan.changed.
+CREATE TABLE IF NOT EXISTS entitlements (
+  source text NOT NULL CHECK (source IN ('iap', 'play')),
+  store_transaction_id text NOT NULL,
+  account_id text NOT NULL REFERENCES accounts (id),
+  product text NOT NULL,
+  plan text NOT NULL,
+  sku text NOT NULL,
+  status text NOT NULL CHECK (status IN ('active', 'grace', 'expired', 'revoked', 'refunded')),
+  period_end bigint,
+  signed_at bigint NOT NULL,
+  price bigint,                               -- App Store milliunits of `currency`; null when the store does not say
+  currency text,
+  created_at bigint NOT NULL,
+  updated_at bigint NOT NULL,
+  PRIMARY KEY (source, store_transaction_id)
+);
+CREATE INDEX IF NOT EXISTS entitlements_account ON entitlements (account_id);

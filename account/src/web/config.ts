@@ -1,11 +1,13 @@
 // Web lane settings: the SSM parameter names its modules read (lambda.ts loads them with the core names) and the
 // WebConfig built from them, which reaches every module as Deps.web. A missing value turns its feature off; it never
 // falls back to a test value.
-import { createPrivateKey, createPublicKey, type KeyObject } from "node:crypto";
+import { createPrivateKey, createPublicKey, type KeyObject, type X509Certificate } from "node:crypto";
+import type { JWTVerifyGetKey } from "jose";
 import { KMSClient } from "@aws-sdk/client-kms";
 import type { AppleSiwa, Vault } from "../apple.ts";
 import { customerIoMail, type SendMail } from "../email.ts";
 import { apnsSender, type Sender } from "../notify.ts";
+import type { PlayApi } from "../store.ts";
 import { open, seal } from "../seal.ts";
 import { APP_ID, BUNDLE_ID } from "../wellknown.ts";
 
@@ -15,6 +17,7 @@ export const WEB_PARAMS = [
   "turnstile_site_key", "turnstile_secret",
   "app_review_email", "app_review_code", "app_review_open",
   "test_idp_key",
+  "play_push_audience", "play_push_service_account",
 ];
 
 export interface WebConfig {
@@ -35,6 +38,12 @@ export interface WebConfig {
    * `openSince` is the Unix time the release lane turned it on; null means off.
    */
   appReview?: { email: string; code: string; openSince: number | null };
+  /** Google Play: the Play Developer API through Workload Identity Federation; absent until the Google project exists. */
+  play?: PlayApi;
+  /** The Pub/Sub push subscription for Play notifications: its OIDC audience and service account. */
+  playPush?: { audience: string; serviceAccount: string; keys?: JWTVerifyGetKey };
+  /** Tests only: roots in place of Apple Root CA - G3. */
+  appleRoots?: X509Certificate[];
   /** Staging only: the test identity provider's P-256 key (PLAN 2.3, "No test doors in production"). */
   testIdp?: { privateKey: KeyObject; publicKey: KeyObject };
 }
@@ -47,6 +56,7 @@ export function webConfig(p: Record<string, string | undefined>, env: { DATA_KEY
   const testKey = env.STAGE === "staging" && p.test_idp_key ? createPrivateKey(p.test_idp_key) : undefined;
   return {
     testIdp: testKey ? { privateKey: testKey, publicKey: createPublicKey(testKey) } : undefined,
+    playPush: p.play_push_audience && p.play_push_service_account ? { audience: p.play_push_audience, serviceAccount: p.play_push_service_account } : undefined,
     apple: p.apple_siwa_key_id && p.apple_siwa_private_key ? { teamId: APP_ID.split(".")[0], keyId: p.apple_siwa_key_id, privateKey: p.apple_siwa_private_key } : undefined,
     vault: kms && dataKeyId ? { seal: (purpose, text) => seal(kms, dataKeyId, purpose, text), open: (purpose, sealed) => open(kms, dataKeyId, purpose, sealed) } : undefined,
     apns: p.apns_auth_key && p.apns_key_id && p.apns_team_id ? apnsSender({ keyPem: p.apns_auth_key, keyId: p.apns_key_id, teamId: p.apns_team_id, topic: BUNDLE_ID }) : undefined,

@@ -165,7 +165,15 @@ tags:
   - name: Analytics
     description: App events (PLAN 13.1). The Monitoring lane owns account/analytics/events.yaml.
   - name: Store
-    description: App Store and Google Play purchase events (PLAN 10.3).
+    description: |
+      App Store and Google Play purchase events (PLAN 10.3). Product ids, the same on both stores, and the plan each
+      grants (account/src/store.ts CATALOG): org.openentity.app.sma.pro.monthly (Secure My Agent pro),
+      org.openentity.app.sma.team.monthly (team), org.openentity.app.ass.solo.monthly and .ass.solo.yearly (Agent Secret
+      Store solo), org.openentity.app.ass.team.monthly and .ass.team.yearly (team), org.openentity.app.clawgrc.starter.monthly
+      (ClawGRC starter), org.openentity.app.denpro.monthly (Moltbot Den den_pro), and the consumables
+      org.openentity.app.credits.500, .credits.2200 and .credits.6000 (credits_500, credits_2200, credits_6000). Staging
+      grants sandbox purchases only; production grants App Store Production and non-test Play purchases only, plus the
+      App Review demo account's sandbox purchases while APP_REVIEW_OPEN is on.
   - name: Web approvals
     description: Approvals on account.openentity.org without the phone (PLAN 3.5).
   - name: Implemented by products
