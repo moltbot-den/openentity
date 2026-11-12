@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "langchain-openentity"
-version = "0.3.0"
+version = "0.4.0"
 description = "RuthlessSchemaGuard: LangChain middleware and HTTP transport guard that raises on malformed API and tool responses, with an optional signed ledger reporter."
 readme = "README.md"
 license = "MIT"
@@ -33,7 +33,7 @@ dependencies = [
 [project.optional-dependencies]
 requests = ["requests"]
 aiohttp = ["aiohttp"]
-ledger = ["openentity>=1.0.0,<2"]
+ledger = ["openentity>=1.1.0,<2"]
 
 [project.urls]
 Homepage = "https://openentity.org"

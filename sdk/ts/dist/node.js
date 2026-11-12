@@ -1,6 +1,6 @@
 import {
   keyPairFromSeed
-} from "./chunk-2ALXGQTY.js";
+} from "./chunk-I5OCHPGX.js";
 
 // src/node.ts
 import { execFileSync } from "node:child_process";

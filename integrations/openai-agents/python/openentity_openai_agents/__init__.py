@@ -4,7 +4,7 @@ from agents import function_tool
 from . import _core
 from ._core import pair
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 
 @function_tool(name_override="openentity_adopt")

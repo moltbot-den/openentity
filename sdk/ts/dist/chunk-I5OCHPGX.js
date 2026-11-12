@@ -2914,7 +2914,7 @@ function pairSas(code, agentDid) {
 // package.json
 var package_default = {
   name: "@openentity/sdk",
-  version: "1.0.0",
+  version: "1.1.0",
   description: "Reference TypeScript SDK for the Open Entity Identity Standard (OEIS-1)",
   license: "MIT",
   type: "module",

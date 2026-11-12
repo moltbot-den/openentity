@@ -174,3 +174,4 @@ Verification
 - [ ] `openentity pair` (CLI) and `openentity_pair` (MCP) claim the code through `POST /v1/pair` and print the four items computed locally with `pairSas` (Day 3, once the account service serves `/v1/pair`)
 - [ ] Pin the OpenEntity Android app's `android:apk-key-hash:` origin in the four SDKs once `assetlinks.json` carries the Play app signing fingerprint
 - [ ] Day 5 release batch: `@openentity/sdk`, `openentity` (PyPI), CLI and MCP with `pair()` and the owner tools (PLAN 8.5)
+- [x] Day 5 batch prepared (2026-11-12): SDK 1.1.0 in both languages, CLI 0.7.0, `@openentity/mcp` 0.3.0, every bridge one minor up on SDK 1.1.0; versions, `publish.yml` input and the steps in `CHANGELOG.md`. `@openentity/mcp` goes out first from the npm CLI, because npm adds a trusted publisher only to a package that exists

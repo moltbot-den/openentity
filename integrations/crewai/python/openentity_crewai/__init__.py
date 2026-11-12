@@ -6,7 +6,7 @@ from crewai.tools import tool
 from . import _core
 from ._core import pair  # noqa: F401  pair(code): from the developer's code, before the crew runs
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 
 @tool("openentity_adopt")
