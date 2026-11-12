@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openentity.org/spec/1.0/schemas/claims/openentity-operated_by.json",
+  "title": "custom:openentity:operated_by",
+  "description": "The `claim` of an Attestation with claim_type custom:openentity:operated_by (spec/claim-types.md).",
+  "type": "object",
+  "required": [
+    "owner",
+    "paired_at",
+    "evidence_hash"
+  ],
+  "properties": {
+    "owner": {
+      "type": "string",
+      "pattern": "^did:web:account\\.openentity\\.org:o:[a-z2-7]{52}$"
+    },
+    "paired_at": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    },
+    "evidence_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    }
+  }
+}

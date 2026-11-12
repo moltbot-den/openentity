@@ -127,4 +127,16 @@ Whether the entity's model and tool calls go through the Entity Gateway of Agent
 
 Expiry: 30 days; the issuer republishes each month while the entity stays governed. Revocation: the issuer revokes when the entity leaves the gateway or a later window shows `gateway` or `connector_only_secrets` no longer true.
 
-Schemas for these claims are in `spec/schemas/claims/`, with signed test vectors in `test-vectors/claim-*.json`.
+### `custom:openentity:operated_by`
+
+The owner who operates the agent, published at the owner's choice. The link between an agent and its owner's OpenEntity Account is private by default (ADR 0007). The account service, `did:web:account.openentity.org`, issues this attestation about the agent's EID only after the owner chooses to publish the link.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `owner` | string | The owner DID, `did:web:account.openentity.org:o:<id>`, whose key log the owner controls |
+| `paired_at` | string | When the owner confirmed the pairing (spec 4.3 timestamp) |
+| `evidence_hash` | string | SHA-256 hex of the RFC 8785 form of the approval/2.0 object with which the owner confirmed the pairing; the issuer retains it |
+
+Expiry: at most 90 days; the issuer republishes while the link stays published. Revocation: the issuer revokes at once when the owner unpublishes the link, unpairs the agent or deletes the account.
+
+Every registered custom type has a JSON Schema for its `claim` in `spec/schemas/claims/<namespace>-<name>.json` (a test fails otherwise); signed test vectors are in `test-vectors/claim-*.json`.
