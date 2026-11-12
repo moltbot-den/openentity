@@ -1,30 +1,36 @@
-import { randomBytes } from "node:crypto";
+import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
+import { DecryptCommand, EncryptCommand } from "@aws-sdk/client-kms";
 import { expect, test } from "vitest";
-import { dataKey, open, seal } from "../src/seal.ts";
+import { open, seal } from "../src/seal.ts";
 
-const key = randomBytes(32); // a throwaway key per run
+// A stand-in for KMS with its encryption-context rule: the context is authenticated, and Decrypt fails unless it is the
+// same. The live check against the real key is account/test/kms-live.ts.
+const key = randomBytes(32);
+const sent: unknown[] = [];
+const kms = {
+  async send(cmd: EncryptCommand | DecryptCommand) {
+    const i = cmd.input as any;
+    sent.push(i);
+    const aad = Buffer.from(JSON.stringify(i.EncryptionContext ?? {}));
+    if (cmd instanceof EncryptCommand) {
+      const iv = randomBytes(12), c = createCipheriv("aes-256-gcm", key, iv).setAAD(aad);
+      const body = Buffer.concat([c.update(i.Plaintext), c.final()]);
+      return { CiphertextBlob: Buffer.concat([iv, body, c.getAuthTag()]) };
+    }
+    const b = Buffer.from(i.CiphertextBlob), d = createDecipheriv("aes-256-gcm", key, b.subarray(0, 12)).setAAD(aad);
+    d.setAuthTag(b.subarray(b.length - 16));
+    try { return { Plaintext: Buffer.concat([d.update(b.subarray(12, b.length - 16)), d.final()]) }; } catch { throw Object.assign(new Error("InvalidCiphertextException"), { name: "InvalidCiphertextException" }); }
+  },
+} as any;
 
-test("a sealed value opens under the same key and purpose", () => {
-  expect(open(key, "apple-refresh", seal(key, "apple-refresh", "r.apple-refresh-token"))).toBe("r.apple-refresh-token");
-  expect(seal(key, "data", "x")).not.toBe(seal(key, "data", "x")); // fresh IV every time
+test("seal and open send the purpose as the KMS encryption context and round-trip", async () => {
+  const s = await seal(kms, "arn:data", "apple-refresh", "r.apple-refresh-token");
+  expect(await open(kms, "arn:data", "apple-refresh", s)).toBe("r.apple-refresh-token");
+  expect(sent.map((x: any) => x.EncryptionContext)).toEqual([{ purpose: "apple-refresh" }, { purpose: "apple-refresh" }]);
+  expect(sent.every((x: any) => x.KeyId === "arn:data")).toBe(true);
 });
 
-test("purposes are separate: a value sealed for one purpose fails to open as the other, either way", () => {
-  expect(() => open(key, "data", seal(key, "apple-refresh", "secret"))).toThrow();
-  expect(() => open(key, "apple-refresh", seal(key, "data", "secret"))).toThrow();
-});
-
-test("another key, a flipped bit or a truncated value fails", () => {
-  const s = seal(key, "data", "secret");
-  expect(() => open(randomBytes(32), "data", s)).toThrow();
-  const b = Buffer.from(s, "base64url");
-  b[14] ^= 1;
-  expect(() => open(key, "data", b.toString("base64url"))).toThrow();
-  expect(() => open(key, "data", s.slice(0, 20))).toThrow();
-});
-
-test("the data key must be exactly 32 bytes", () => {
-  expect(dataKey(randomBytes(32).toString("base64url")).length).toBe(32);
-  expect(() => dataKey(randomBytes(16).toString("base64url"))).toThrow();
-  expect(() => dataKey(undefined)).toThrow();
+test("a value sealed for one purpose fails to open as the other, either way", async () => {
+  await expect(open(kms, "arn:data", "data", await seal(kms, "arn:data", "apple-refresh", "secret"))).rejects.toThrow("InvalidCiphertextException");
+  await expect(open(kms, "arn:data", "apple-refresh", await seal(kms, "arn:data", "data", "secret"))).rejects.toThrow("InvalidCiphertextException");
 });

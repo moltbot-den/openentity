@@ -1,31 +1,19 @@
-// Data the service encrypts itself (Apple refresh tokens and the like): AES-256-GCM under one data key from SSM
-// (/openentity/account/data_key_<stage>, 32 random bytes, base64url). Each purpose is bound in as additional data,
-// the way a KMS encryption context would be, so a value sealed for one purpose never opens as another.
-// ponytail: an SSM-held data key keeps KMS at three signing keys per stage (the $6 budget); a KMS data key is the upgrade.
-import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
+// Data the service encrypts itself (Apple refresh tokens and the like): AWS KMS Encrypt and Decrypt under the data key,
+// which never leaves KMS; every decrypt is logged in CloudTrail. The purpose is the encryption context, so a value
+// sealed for one purpose fails to open as another. Values are small (KMS encrypts up to 4 KB directly).
+import { DecryptCommand, EncryptCommand, type KMSClient } from "@aws-sdk/client-kms";
 
 export type Purpose = "data" | "apple-refresh";
-const aad = (purpose: Purpose) => Buffer.from(`purpose=${purpose}`);
+type Kms = Pick<KMSClient, "send">;
 
-/** base64url(iv 12 bytes || ciphertext || tag 16 bytes) */
-export function seal(key: Buffer, purpose: Purpose, plaintext: string): string {
-  const iv = randomBytes(12);
-  const c = createCipheriv("aes-256-gcm", key, iv).setAAD(aad(purpose));
-  const body = Buffer.concat([c.update(plaintext, "utf8"), c.final()]);
-  return Buffer.concat([iv, body, c.getAuthTag()]).toString("base64url");
+/** base64url of the KMS ciphertext blob. */
+export async function seal(kms: Kms, keyId: string, purpose: Purpose, plaintext: string): Promise<string> {
+  const r = await kms.send(new EncryptCommand({ KeyId: keyId, Plaintext: new TextEncoder().encode(plaintext), EncryptionContext: { purpose } }));
+  return Buffer.from(r.CiphertextBlob!).toString("base64url");
 }
 
-/** Throws when the value was sealed under another key or purpose, or was altered. */
-export function open(key: Buffer, purpose: Purpose, sealed: string): string {
-  const b = Buffer.from(sealed, "base64url");
-  if (b.length < 28) throw new Error("sealed value too short");
-  const d = createDecipheriv("aes-256-gcm", key, b.subarray(0, 12)).setAAD(aad(purpose));
-  d.setAuthTag(b.subarray(b.length - 16));
-  return Buffer.concat([d.update(b.subarray(12, b.length - 16)), d.final()]).toString("utf8");
-}
-
-export function dataKey(b64url: string | undefined): Buffer {
-  const k = Buffer.from(b64url ?? "", "base64url");
-  if (k.length !== 32) throw new Error("data_key must be 32 bytes, base64url");
-  return k;
+/** Throws (InvalidCiphertextException) when the value was sealed for another purpose or under another key. */
+export async function open(kms: Kms, keyId: string, purpose: Purpose, sealed: string): Promise<string> {
+  const r = await kms.send(new DecryptCommand({ KeyId: keyId, CiphertextBlob: Buffer.from(sealed, "base64url"), EncryptionContext: { purpose } }));
+  return new TextDecoder().decode(r.Plaintext!);
 }

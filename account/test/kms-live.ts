@@ -5,6 +5,7 @@ import { createPublicKey, verify } from "node:crypto";
 import { KMSClient } from "@aws-sdk/client-kms";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import { kmsEd25519, kmsEs256, kmsKey, signJwt } from "../src/keys.ts";
+import { open, seal } from "../src/seal.ts";
 
 const [host, stack] = process.argv.slice(2);
 const outputs = JSON.parse(execFileSync("aws", ["cloudformation", "describe-stacks", "--stack-name", stack, "--region", "us-east-1", "--output", "json"], { encoding: "utf8" })).Stacks[0].Outputs;
@@ -29,3 +30,11 @@ const msg = new TextEncoder().encode(`"@method": POST\n"@signature-params": ("@m
 const pub = createPublicKey({ key: { kty: "OKP", crv: "Ed25519", x: did.jwk.x! }, format: "jwk" });
 if (!verify(null, msg, pub, await did.sign(msg))) throw new Error("Ed25519 signature from KMS does not verify");
 console.log(`Ed25519 through KMS: verifies against ${vm.id} (${vm.publicKeyMultibase.slice(0, 12)}...)`);
+
+// The data key: the purpose is the encryption context; a value sealed for one purpose does not open as the other.
+const data = out("DataKeyArn");
+const sealed = await seal(kms, data, "apple-refresh", "kms-live proof value");
+if ((await open(kms, data, "apple-refresh", sealed)) !== "kms-live proof value") throw new Error("data key round trip failed");
+const crossed = await open(kms, data, "data", sealed).then(() => "opened", (e) => e.name);
+if (crossed !== "InvalidCiphertextException") throw new Error(`purpose=data opened an apple-refresh value (${crossed})`);
+console.log("Data key through KMS: round trip ok; purpose=apple-refresh value refused under purpose=data (InvalidCiphertextException)");

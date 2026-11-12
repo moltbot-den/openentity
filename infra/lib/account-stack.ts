@@ -91,8 +91,12 @@ export class OpenEntityAccountStack extends Stack {
     closeKey.addToResourcePolicy(new iam.PolicyStatement({
       effect: iam.Effect.DENY, principals: [new iam.AnyPrincipal()], actions: ["kms:ScheduleKeyDeletion", "kms:DisableKey"], resources: ["*"],
     }));
-    // Three KMS keys per stage (the approved budget): the three signing keys. Data the service encrypts itself uses an
-    // AES-256 key from SSM (data_key_<stage>, account/src/seal.ts), a much smaller loss than a signing key.
+    // One symmetric key for data the service encrypts itself (Apple refresh tokens and the like). Each use names its
+    // purpose in the encryption context (account/src/seal.ts), so a value sealed for one purpose never opens as another.
+    const dataKey = new kms.Key(this, "DataKey", {
+      enableKeyRotation: true, removalPolicy: keep,
+      alias: `alias/openentity-account-${suffix}-data`, description: `OpenEntity Account ${stage}: data encryption`,
+    });
 
     // ---- Events: app and product analytics events, validated by the API, forwarded by the Monitoring lane's consumer ----
     const deadEvents = new sqs.Queue(this, "EventsDlq", { retentionPeriod: Duration.days(14), encryption: sqs.QueueEncryption.SQS_MANAGED, enforceSSL: true });
@@ -134,6 +138,7 @@ export class OpenEntityAccountStack extends Stack {
         TOKEN_KEY_ID: tokenKey.keyArn,
         DID_KEY_ID: didKey.keyArn,
         CLOSE_KEY_ID: closeKey.keyArn,
+        DATA_KEY_ID: dataKey.keyArn,
         EVENTS_QUEUE_URL: events.queueUrl,
         // Production sign-in stays closed until device binding and the Day 6 review gate (PLAN 3.6); staging is open.
         SIGNIN_OPEN: prod ? "0" : "1",
@@ -144,6 +149,7 @@ export class OpenEntityAccountStack extends Stack {
     tokenKey.grant(fn, "kms:Sign", "kms:GetPublicKey");
     didKey.grant(fn, "kms:Sign", "kms:GetPublicKey");
     closeKey.grant(fn, "kms:Sign", "kms:GetPublicKey");
+    dataKey.grant(fn, "kms:Encrypt", "kms:Decrypt");
     events.grantSendMessages(fn);
     // Its own parameters only: never /openentity/app (the registry's keys), never the other stage's values.
     fn.addToRolePolicy(new iam.PolicyStatement({ actions: ["ssm:GetParameters"], resources: [`arn:aws:ssm:${this.region}:${this.account}:parameter${PARAM_PATH}*`] }));
@@ -226,6 +232,7 @@ export class OpenEntityAccountStack extends Stack {
     out("TokenKeyArn", tokenKey.keyArn);
     out("DidKeyArn", didKey.keyArn);
     out("CloseKeyArn", closeKey.keyArn);
+    out("DataKeyArn", dataKey.keyArn);
     out("EventsQueueUrl", events.queueUrl);
   }
 }
