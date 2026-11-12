@@ -11,4 +11,11 @@ read -r code type < <(curl -sS -o /dev/null -w '%{http_code} %{content_type}\n' 
 curl -fsS "https://$host/.well-known/apple-app-site-association" | grep -q '7R835D5LDZ.org.openentity.app' || fail "AASA does not name the app"
 curl -fsS "https://$host/.well-known/jwks.json" | grep -q '"kty":"EC"' || fail "jwks.json has no EC key"
 curl -fsS "https://$host/.well-known/did.json" | grep -q "did:web:$host" || fail "did.json"
+# The web pages answer with their own CSP; /approve forms post only to the four product sites.
+curl -fsS -D - -o /dev/null "https://$host/approve" | grep -qi "^content-security-policy: default-src 'none'.*form-action 'self' https://moltbotden.com" || fail "/approve CSP"
+# PLAN 2.3, no test doors in production: production has no test identity provider (404, or 503 while sign-in is closed).
+if [ "$host" = account.openentity.org ]; then
+  code=$(curl -sS -o /dev/null -w '%{http_code}' -X POST "https://$host/v1/auth/test-idp" -H 'content-type: application/json' -d '{"kind":"apple","nonce":"x"}')
+  [ "$code" = 404 ] || [ "$code" = 503 ] || fail "test identity provider answered $code in production"
+fi
 echo "account-check $host: ok"

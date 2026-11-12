@@ -23,7 +23,12 @@ const base: Deps = {
   stage: "staging", host: HOST, db: await pgliteDb(), keys: { token: tokenKey, did: didKey, close: closeKey }, pepper: "test-pepper",
   sendCode: async (_e, code) => { outbox.push(code); }, rp: rpFor(HOST),
   apple: { native: ["org.openentity.app"], web: ["org.openentity.app.web"] }, google: ["ios-client", "web-client"],
-  androidFingerprints: [], signinOpen: true, providerKeys: { apple: providerKeys, google: providerKeys }, web: {},
+  androidFingerprints: [], signinOpen: true, providerKeys: { apple: providerKeys, google: providerKeys },
+  // Turnstile's siteverify stand-in: the token "ok" passes on this host.
+  web: { turnstile: { siteKey: "test-site-key", secret: "test-secret" } },
+  fetch: (async (url: string, init?: RequestInit) => String(url).includes("turnstile")
+    ? Response.json({ success: new URLSearchParams(String(init?.body)).get("response") === "ok", hostname: HOST })
+    : new Response(null, { status: 204 })) as typeof fetch,
 };
 const app = createApp(base);
 
@@ -39,7 +44,7 @@ const web = { platform: "web" };
 const bearer = (t: string) => ({ authorization: `Bearer ${t}` });
 
 async function emailSignIn(email: string, client: Record<string, unknown> = ios(), headers: Record<string, string> = {}) {
-  const s = await call("POST", "/v1/auth/email/start", { email, client }, headers);
+  const s = await call("POST", "/v1/auth/email/start", { email, client, ...(client.platform === "web" ? { turnstile_token: "ok" } : {}) }, headers);
   expect(s.status).toBe(202);
   return call("POST", "/v1/auth/email/verify", { challenge_id: s.body.challenge_id, code: outbox.at(-1), client }, headers);
 }
@@ -120,7 +125,7 @@ test("web: the session lives in a __Host- cookie (HttpOnly, Secure, SameSite=Str
   expect((await call("POST", "/v1/auth/email/start", { email: "web@example.com", client: web })).body.error).toBe("bad_origin");
   const r = await emailSignIn("web@example.com", web, { origin: ORIGIN });
   expect(r.body.refresh_token).toBeUndefined();
-  const cookie = r.headers.get("set-cookie")!;
+  const cookie = r.headers.getSetCookie().find((v) => v.startsWith("__Host-oe_session="))!;
   expect(cookie).toMatch(/^__Host-oe_session=oert_[A-Za-z0-9_-]{43}; Path=\/; Max-Age=432\d\d; HttpOnly; Secure; SameSite=Strict$/);
   const jar = { cookie: cookie.split(";")[0] };
   expect((await call("POST", "/v1/token", { grant_type: "refresh_token", audience: [DID] }, jar)).body.error).toBe("bad_origin");

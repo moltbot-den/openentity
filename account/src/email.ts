@@ -10,7 +10,7 @@ const EMAIL = /^[^\s@]{1,64}@[^\s@]{1,253}\.[^\s@]{2,}$/;
 export const newCode = () => String(randomInt(0, 100_000_000)).padStart(8, "0");
 const mac = (pepper: string, id: string, code: string) => createHmac("sha256", pepper).update(`${id}:${code}`).digest("hex");
 
-function normalizeEmail(raw: unknown): string {
+export function normalizeEmail(raw: unknown): string {
   const email = String(raw ?? "").trim().toLowerCase();
   if (email.length > 254 || !EMAIL.test(email)) fail(400, "email_invalid", "a valid email address is required");
   return email;
@@ -18,15 +18,16 @@ function normalizeEmail(raw: unknown): string {
 
 export type SendCode = (email: string, code: string) => Promise<void>;
 
-export async function startEmail(db: Db, o: { email: string; installId?: string | null; pepper: string; send: SendCode }, t = now()) {
+/** `human` false: a web start without Turnstile; the verify call must then prove Turnstile itself. */
+export async function startEmail(db: Db, o: { email: string; installId?: string | null; pepper: string; send: SendCode; human?: boolean }, t = now()) {
   const email = normalizeEmail(o.email);
   const count = async (col: string, v: string) =>
     Number((await db.first<{ n: number }>(`SELECT count(*) AS n FROM email_codes WHERE ${col} = $1 AND created_at > $2`, [v, t - 3600]))!.n);
   if ((await count("email", email)) >= PER_ADDRESS_PER_HOUR) fail(429, "rate_limited", "too many codes for this address; try again within the hour", { retry_after: 3600 });
   if (o.installId && (await count("install_id", o.installId)) >= PER_INSTALL_PER_HOUR) fail(429, "rate_limited", "too many codes from this install; try again within the hour", { retry_after: 3600 });
   const id = newId("eml"), code = newCode();
-  await db.run("INSERT INTO email_codes (id, email, code_mac, install_id, created_at, expires_at) VALUES ($1, $2, $3, $4, $5, $6)",
-    [id, email, mac(o.pepper, id, code), o.installId ?? null, t, t + CODE_TTL]);
+  await db.run("INSERT INTO email_codes (id, email, code_mac, install_id, human, created_at, expires_at) VALUES ($1, $2, $3, $4, $5, $6, $7)",
+    [id, email, mac(o.pepper, id, code), o.installId ?? null, o.human ?? true, t, t + CODE_TTL]);
   try {
     await o.send(email, code);
   } catch (e) {
@@ -38,8 +39,11 @@ export async function startEmail(db: Db, o: { email: string; installId?: string 
 
 type Outcome = { email: string } | { error: HttpError };
 
-/** Returns the verified address. A wrong code costs a try; the fifth wrong try locks the code. */
-export async function verifyEmailCode(db: Db, o: { challengeId: string; code: string; pepper: string }, t = now()): Promise<string> {
+/**
+ * Returns the verified address. A wrong code costs a try; the fifth wrong try locks the code. `fixed` is the App Review
+ * demo address and its fixed code (PLAN 2.3), passed only while APP_REVIEW_OPEN is on; it opens that address's codes only.
+ */
+export async function verifyEmailCode(db: Db, o: { challengeId: string; code: string; pepper: string; fixed?: { email: string; code: string } }, t = now()): Promise<string> {
   if (!/^\d{8}$/.test(o.code ?? "")) fail(400, "bad_request", "the code is 8 digits");
   // A wrong try must commit before the error goes out, so the transaction returns the outcome.
   const out = await db.tx<Outcome>(async (tx) => {
@@ -47,7 +51,8 @@ export async function verifyEmailCode(db: Db, o: { challengeId: string; code: st
       "SELECT email, code_mac, tries, expires_at, used_at FROM email_codes WHERE id = $1 FOR UPDATE", [o.challengeId]);
     if (!row || row.used_at !== null || Number(row.expires_at) <= t) return { error: new HttpError(410, "code_expired", "this code has expired or was used; request a new one") };
     if (row.tries >= MAX_TRIES) return { error: new HttpError(410, "code_locked", "too many wrong tries; request a new code") };
-    const ok = timingSafeEqual(Buffer.from(row.code_mac, "hex"), Buffer.from(mac(o.pepper, o.challengeId, o.code), "hex"));
+    const review = !!o.fixed && row.email === o.fixed.email && timingSafeEqual(Buffer.from(o.code), Buffer.from(o.fixed.code));
+    const ok = review || timingSafeEqual(Buffer.from(row.code_mac, "hex"), Buffer.from(mac(o.pepper, o.challengeId, o.code), "hex"));
     if (!ok) {
       const tries = row.tries + 1;
       await tx.run("UPDATE email_codes SET tries = $2 WHERE id = $1", [o.challengeId, tries]);

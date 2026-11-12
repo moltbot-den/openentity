@@ -13,6 +13,7 @@ import {
   aws_certificatemanager as acm,
   aws_cloudfront as cf,
   aws_cloudfront_origins as origins,
+  aws_cloudwatch as cloudwatch,
   aws_ec2 as ec2,
   aws_events as eventbridge,
   aws_events_targets as targets,
@@ -45,6 +46,8 @@ const root = (p: string) => fileURLToPath(new URL(`../../${p}`, import.meta.url)
 export interface AccountProps extends StackProps { stage: AccountStage }
 
 export class OpenEntityAccountStack extends Stack {
+  readonly appReviewAlarm: cloudwatch.Alarm;
+
   constructor(scope: Construct, id: string, props: AccountProps) {
     super(scope, id, props);
     const { stage } = props;
@@ -166,6 +169,15 @@ export class OpenEntityAccountStack extends Stack {
     new eventbridge.Rule(this, "JobsTick", {
       schedule: eventbridge.Schedule.rate(prod ? Duration.minutes(1) : Duration.hours(6)),
       targets: [new targets.LambdaFunction(fn, { retryAttempts: 0, maxEventAge: Duration.minutes(1) })],
+    });
+
+    // App Review access (PLAN 2.3): while APP_REVIEW_OPEN is on, the jobs publish how many days it has been on
+    // (account/src/signin.ts appReviewWatch). This alarms at 21; the Monitoring wiring routes it to the alert topic.
+    this.appReviewAlarm = new cloudwatch.Alarm(this, "AppReviewOpen", {
+      metric: new cloudwatch.Metric({ namespace: "OpenEntity/Account", metricName: "AppReviewOpenDays", dimensionsMap: { Stage: stage }, period: Duration.hours(1), statistic: "Maximum" }),
+      threshold: 21, evaluationPeriods: 1, comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      alarmDescription: `APP_REVIEW_OPEN has been on for 21 days in ${stage}: turn it off with scripts/app-review.sh off ${stage}`,
     });
 
     // ---- Edge: CloudFront at the account host; every request goes to the function URL ----
