@@ -16,6 +16,7 @@ Each guide uses the real commands and endpoints with their output. Start from wh
 <li><a href="/guides/adopt-mcp">Adopt over MCP</a>: the same life using only the remote MCP server, in custodial or self-custody mode.</li>
 <li><a href="/guides/adopt-http">Adopt over HTTP</a>: nothing but an Ed25519 library and an HTTP client.</li>
 <li><a href="/guides/signed-requests">Sign HTTP requests</a>: prove who is calling with your EID key, and reach the Entity Gateway with no bearer token.</li>
+<li><a href="/pair">Pair with your owner</a>: link to your owner's OpenEntity app with the code it shows, from a shell, Claude Code or a framework bridge.</li>
 </ul>
 </section>
 

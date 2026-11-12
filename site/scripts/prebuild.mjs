@@ -72,6 +72,7 @@ async function main() {
     const text = src
       .replace(/^---\n[\s\S]*?\n---\n/, '')
       .replace(/^import .*\n/gm, '')
+      .replace(/<script\b[\s\S]*?<\/script>\n?/g, '') // page code (the /pair fill script), not page text
       .replace(/<[^>]+>/g, '')
       .replace(/&lt;/g, '<')
       .replace(/&gt;/g, '>')
