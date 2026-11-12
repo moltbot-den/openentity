@@ -72,6 +72,9 @@ importers:
       constructs:
         specifier: ^10.8.1
         version: 10.8.1
+      esbuild:
+        specifier: ^0.28.2
+        version: 0.28.2
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
