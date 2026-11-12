@@ -109,3 +109,27 @@ test("a deletion stopped after the log closed finishes with a fresh sign-in (a c
   expect((await call(app, "POST", "/v1/account/delete", undefined, bearer(fresh))).status).toBe(202);
   expect(events("owner.deleted").some((e) => e.body.data.owner_did === fresh.ownerDid)).toBe(true);
 });
+
+test("deletion removes the account's sessions and refresh token hashes, not only revokes them", async () => {
+  const o = await owner(d, { keyLog: false });
+  await call(app, "POST", "/v1/account/delete", undefined, bearer(o));
+  expect(await d.db.first("SELECT 1 FROM sessions WHERE account_id = $1", [o.accountId])).toBeNull();
+  expect(await d.db.first("SELECT 1 FROM refresh_tokens r JOIN sessions s ON s.id = r.session_id WHERE s.account_id = $1", [o.accountId])).toBeNull();
+});
+
+test("jobs drop sign-in rows a day after they expire, and rate counters a day old (minute and hour windows)", async () => {
+  const { runJobs } = await import("../src/jobs.ts");
+  const t = Math.floor(Date.now() / 1000), old = t - 2 * 86_400;
+  await d.db.run("INSERT INTO email_codes (id, email, code_mac, created_at, expires_at) VALUES ('eml_old', 'old@example.com', 'x', $1, $1), ('eml_new', 'new@example.com', 'x', $2, $3)", [old, t, t + 600]);
+  await d.db.run("INSERT INTO auth_nonces (hash, platform, flow, created_at, expires_at) VALUES ('h_old', 'ios', 'native', $1, $1)", [old]);
+  await d.db.run("INSERT INTO passkey_challenges (id, challenge, mode, created_at, expires_at) VALUES ('pkc_old', 'c', 'authenticate', $1, $1)", [old]);
+  const minute = Math.floor(t / 60), hour = Math.floor(t / 3600);
+  await d.db.run("INSERT INTO rate_events (key, window_start, count) VALUES ('ip:a', $1, 1), ('ip:a', $2, 1), ('attest:a', $3, 1), ('attest:a', $4, 1)",
+    [String(minute - 2000), String(minute), String(hour - 100), String(hour)]);
+  await runJobs(d);
+  expect((await d.db.all<{ id: string }>("SELECT id FROM email_codes WHERE id IN ('eml_old', 'eml_new')")).map((r) => r.id)).toEqual(["eml_new"]);
+  expect(await d.db.first("SELECT 1 FROM auth_nonces WHERE hash = 'h_old'")).toBeNull();
+  expect(await d.db.first("SELECT 1 FROM passkey_challenges WHERE id = 'pkc_old'")).toBeNull();
+  expect((await d.db.all<{ window_start: string }>("SELECT window_start FROM rate_events WHERE key IN ('ip:a', 'attest:a') ORDER BY window_start")).map((r) => r.window_start).sort())
+    .toEqual([String(minute), String(hour)].sort());
+});
