@@ -29,15 +29,38 @@ const AAGUID = { production: Buffer.from("appattest\0\0\0\0\0\0\0"), development
 const sha256 = (...parts: Uint8Array[]) => { const h = createHash("sha256"); for (const p of parts) h.update(p); return h.digest(); };
 const bad = (why: string): never => fail(403, "attestation_invalid", why);
 
-/** The chain leaf -> ... -> a pinned root, each signature and validity checked at `at`. */
-function chainTo(ders: Uint8Array[], roots: X509Certificate[], at: Date): X509Certificate {
+/**
+ * The chain leaf -> ... -> a pinned root: each certificate signed by the next one's key and valid at `at`, and every
+ * issuer a CA that may sign certificates (basicConstraints CA and keyUsage keyCertSign; every Apple and Google issuer
+ * carries both). Links are proven by signature, not by name: Google's StrongBox chains name the wrong issuer in the
+ * leaf (github.com/google/android-key-attestation test data), and Google's own verifier checks signatures only.
+ */
+export function chainTo(ders: Uint8Array[], roots: X509Certificate[], at: Date): X509Certificate {
   const certs = ders.map((c) => { try { return new X509Certificate(Buffer.from(c)); } catch { return bad("a certificate in the chain does not parse"); } });
   const ok = (c: X509Certificate) => new Date(c.validFrom) <= at && at <= new Date(c.validTo);
   for (let i = 0; i < certs.length; i++) {
-    const issuer = certs[i + 1] ?? roots.find((r) => certs[i].checkIssued(r) && certs[i].verify(r.publicKey)) ?? bad("the chain does not end at the pinned root");
-    if (!certs[i].checkIssued(issuer) || !certs[i].verify(issuer.publicKey) || !ok(certs[i])) bad(`certificate ${i} is not issued by the next one or is not valid now`);
+    const issuer = certs[i + 1] ?? roots.find((r) => certs[i].verify(r.publicKey)) ?? bad("the chain does not end at the pinned root");
+    if (!certs[i].verify(issuer.publicKey) || !ok(certs[i])) bad(`certificate ${i} is not signed by the next one or is not valid now`);
+    if (!signsCertificates(issuer)) bad(`certificate ${i + 1} is not a CA that may sign certificates`);
   }
   return certs[0];
+}
+
+const KEY_USAGE = Buffer.from("551d0f", "hex"); // 2.5.29.15
+/** basicConstraints CA, and keyCertSign (bit 5) in a keyUsage extension, which a certificate signer must carry (RFC 5280). */
+function signsCertificates(c: X509Certificate): boolean {
+  if (!c.ca) return false;
+  try {
+    const der = c.raw, tbs = kids(der, tlv(der, 0))[0];
+    const exts = kids(der, tbs).find((t) => t.context && t.tag === 3);
+    for (const e of exts ? kids(der, kids(der, exts)[0]) : []) {
+      const [oid, ...rest] = kids(der, e);
+      if (!der.subarray(oid.start, oid.end).equals(KEY_USAGE)) continue;
+      const bits = tlv(der, rest[rest.length - 1].start); // the BIT STRING in extnValue
+      return bits.end - bits.start >= 2 && (der[bits.start + 1] & 0x04) !== 0;
+    }
+  } catch { /* an unreadable extension list signs nothing */ }
+  return false;
 }
 
 /**

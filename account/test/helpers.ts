@@ -97,7 +97,8 @@ const utc = (t: Date) => der(0x17, Buffer.from(`${t.toISOString().replace(/[-:T]
 
 /** An X.509 v3 certificate signed with ECDSA SHA-256 by `signer`. */
 export function testCert(o: { subject: string; issuer: string; key: KeyObject; signer: KeyObject; ca?: boolean; extensions?: Buffer[]; from?: Date; to?: Date }): Buffer {
-  const exts = [...(o.ca ? [der(0x30, hex("0603551d13"), hex("0101ff"), der(0x04, der(0x30, hex("0101ff"))))] : []), ...(o.extensions ?? [])];
+  // A CA: basicConstraints CA, and keyUsage keyCertSign and cRLSign, as Apple's and Google's issuers carry.
+  const exts = [...(o.ca ? [der(0x30, hex("0603551d13"), hex("0101ff"), der(0x04, der(0x30, hex("0101ff")))), der(0x30, hex("0603551d0f"), hex("0101ff"), der(0x04, hex("03020106")))] : []), ...(o.extensions ?? [])];
   const tbs = der(0x30,
     der(0xa0, hex("020102")), hex("020101"), ECDSA_SHA256, cn(o.issuer),
     der(0x30, utc(o.from ?? new Date(Date.now() - 3_600_000)), utc(o.to ?? new Date(Date.now() + 86_400_000))), cn(o.subject),
