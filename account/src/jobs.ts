@@ -2,13 +2,14 @@
 // JOBS; each must be quick, idempotent and safe to run twice at once.
 import type { Deps } from "./app.ts";
 import { now } from "./db.ts";
-import { runDueDeletions } from "./deletion.ts";
+import { purgeTestAccounts, runDueDeletions } from "./deletion.ts";
 import { retryOutbox } from "./outbound.ts";
 import { appReviewWatch } from "./signin.ts";
 
 const JOBS: [string, (d: Deps) => Promise<unknown>][] = [
   ["outbox", retryOutbox],
   ["deletions", runDueDeletions],
+  ["test_accounts", (d) => purgeTestAccounts(d)], // staging only (deletion.ts)
   ["app_review", appReviewWatch],
   ["login_codes", (d) => d.db.run("DELETE FROM login_codes WHERE expires_at < $1", [now() - 3600])],
   // Sign-in rows past any use: codes (they name an address), nonces and passkey challenges after a day.

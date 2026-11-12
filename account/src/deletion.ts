@@ -14,6 +14,7 @@ import { closeKeyLog, keyLogState } from "./keylog.ts";
 import { notifyOwner } from "./notify.ts";
 import { sendEvent } from "./outbound.ts";
 import { revokeAppleTokens } from "./apple.ts";
+import { TEST_EMAIL_DOMAIN } from "./signin.ts";
 import { requireApproval } from "./stepup.ts";
 import { PRODUCT_DIDS } from "./wellknown.ts";
 
@@ -57,6 +58,35 @@ export async function deleteAccount(d: Deps, accountId: string): Promise<number>
   // Products know the owner only by its DID; an account with no key log never had a product token.
   if (a.owner_did) await Promise.all(PRODUCT_DIDS.map((p) => sendEvent(d, p, "owner.deleted", { owner_did: a.owner_did, deleted_at: t })));
   return t;
+}
+
+/**
+ * jobs.ts, staging only: hard-deletes test owners (an @test.openentity.org address, made by the staging test sign-in)
+ * older than `minAge` seconds, with every row that names them. Production never runs it: the stage check below, and
+ * production has no test sign-in. Agent rows, messages and files go through unlinkAll first, as at a deletion.
+ */
+export async function purgeTestAccounts(d: Deps, minAge = 86_400): Promise<number> {
+  if (d.stage !== "staging") return 0;
+  const owners = await d.db.all<{ id: string; owner_did: string | null }>(
+    `SELECT DISTINCT a.id, a.owner_did FROM accounts a LEFT JOIN methods m ON m.account_id = a.id
+      WHERE a.created_at < $1 AND (a.email LIKE $2 OR (m.type = 'email' AND m.subject LIKE $2))`, [now() - minAge, `%@${TEST_EMAIL_DOMAIN}`]);
+  for (const o of owners) {
+    await unlinkAll(d, o.id);
+    await d.db.tx(async (tx) => {
+      await tx.run("DELETE FROM refresh_tokens WHERE session_id IN (SELECT id FROM sessions WHERE account_id = $1)", [o.id]);
+      await tx.run("DELETE FROM agent_products WHERE agent_did IN (SELECT did FROM agents WHERE account_id = $1)", [o.id]);
+      for (const t of ["sessions", "methods", "step_ups", "pairings", "enrollments", "push_tokens", "deletion_requests", "login_codes", "entitlements", "uploads", "agent_approvals", "passkey_challenges", "agents"]) {
+        await tx.run(`DELETE FROM ${t} WHERE account_id = $1`, [o.id]);
+      }
+      if (o.owner_did) {
+        await tx.run("DELETE FROM pause_changes WHERE owner_did = $1", [o.owner_did]);
+        await tx.run("DELETE FROM approver_counters WHERE owner_did = $1", [o.owner_did]);
+        await tx.run("DELETE FROM keylog_entries WHERE owner_id = $1", [o.owner_did.split(":o:")[1] ?? ""]);
+      }
+      await tx.run("DELETE FROM accounts WHERE id = $1", [o.id]);
+    });
+  }
+  return owners.length;
 }
 
 /** jobs.ts: carries out deletion requests whose 7 days have passed. */

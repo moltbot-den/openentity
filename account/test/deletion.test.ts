@@ -133,3 +133,25 @@ test("jobs drop sign-in rows a day after they expire, and rate counters a day ol
   expect((await d.db.all<{ window_start: string }>("SELECT window_start FROM rate_events WHERE key IN ('ip:a', 'attest:a') ORDER BY window_start")).map((r) => r.window_start).sort())
     .toEqual([String(minute), String(hour)].sort());
 });
+
+test("staging purges test owners older than a day with all their rows; production never does", async () => {
+  const { purgeTestAccounts } = await import("../src/deletion.ts");
+  const old = Math.floor(Date.now() / 1000) - 2 * 86_400;
+  const mk = async (email: string, age: number) => {
+    const o = await owner(d, { email });
+    await d.db.run("UPDATE accounts SET created_at = $2 WHERE id = $1", [o.accountId, age]);
+    await d.db.run("INSERT INTO methods (id, account_id, type, subject, email, created_at) VALUES ($1, $2, 'email', $3, $3, $4)", [`mth_${o.accountId.slice(5)}`, o.accountId, email, age]);
+    await d.db.run("INSERT INTO deletion_requests (id, account_id, requested_at, effective_at, state) VALUES ($1, $2, 1, 2, 'pending')", [`del_${o.accountId.slice(5)}`, o.accountId]);
+    return o;
+  };
+  const test1 = await mk("ass-e2e-1@test.openentity.org", old), young = await mk("ass-e2e-2@test.openentity.org", Math.floor(Date.now() / 1000)), real = await mk("person@example.com", old);
+  const prod = { ...d, stage: "production" as const };
+  expect(await purgeTestAccounts(prod)).toBe(0);
+  expect(await d.db.first("SELECT 1 FROM accounts WHERE id = $1", [test1.accountId])).not.toBeNull();
+  expect(await purgeTestAccounts(d)).toBe(1);
+  for (const [table, col, v] of [["accounts", "id", test1.accountId], ["methods", "account_id", test1.accountId], ["sessions", "account_id", test1.accountId], ["deletion_requests", "account_id", test1.accountId], ["keylog_entries", "owner_id", test1.ownerDid.split(":o:")[1]]] as const) {
+    expect(await d.db.first(`SELECT 1 FROM ${table} WHERE ${col} = $1`, [v]), table).toBeNull();
+  }
+  expect(await d.db.first("SELECT 1 FROM accounts WHERE id = $1", [young.accountId])).not.toBeNull(); // under a day
+  expect(await d.db.first("SELECT 1 FROM accounts WHERE id = $1", [real.accountId])).not.toBeNull(); // not a test address
+});
