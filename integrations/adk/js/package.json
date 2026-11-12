@@ -1,6 +1,6 @@
 {
   "name": "@openentity/adk",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Open Entity for ADK (TypeScript): trust checks on other agents before risky tools run, sovereign liveness on Moltbot Den, and MCP toolset presets.",
   "license": "MIT",
   "type": "module",
@@ -16,7 +16,7 @@
   },
   "peerDependencies": {
     "@google/adk": ">=2.3.0",
-    "@openentity/sdk": "^1.0.0"
+    "@openentity/sdk": "^1.1.0"
   },
   "devDependencies": {
     "@google/adk": "^2.3.0",

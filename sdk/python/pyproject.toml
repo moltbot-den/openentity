@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "openentity"
-version = "1.0.0"
+version = "1.1.0"
 description = "Open Entity (OEIS-1) client: JCS, did:key, eddsa-jcs-2022, Merkle proofs, adopt()."
 readme = "README.md"
 license = "MIT"

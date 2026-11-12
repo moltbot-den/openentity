@@ -1,30 +1,40 @@
 {
   "name": "@openentity/mcp",
-  "version": "0.2.0",
+  "version": "0.3.0",
+  "description": "Local Open Entity MCP server (stdio): pair an agent with its owner's OpenEntity app, then message, report status, read the inbox and ask for approvals, signed with the agent's own key.",
   "license": "MIT",
   "type": "module",
   "bin": {
     "openentity-mcp": "dist/stdio.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "README.md"
   ],
   "scripts": {
     "build": "esbuild src/stdio.ts --bundle --platform=node --format=esm --target=node22 --outfile=dist/stdio.js --banner:js=\"#!/usr/bin/env node\" && chmod +x dist/stdio.js",
+    "prepack": "pnpm run build",
     "lint": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --fsModuleCachePath node_modules/.vitest-cache-mcp --testTimeout=60000 --hookTimeout=60000"
   },
-  "dependencies": {
+  "devDependencies": {
     "@modelcontextprotocol/sdk": "^1.32.2",
     "@openentity/sdk": "workspace:*",
-    "zod": "^4.0.0"
-  },
-  "devDependencies": {
     "@types/node": "^26.6.5",
     "esbuild": "^0.28.2",
     "typescript": "^5.9.3",
-    "vitest": "^5.0.5"
+    "vitest": "^5.0.5",
+    "zod": "^4.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/moltbot-den/openentity.git",
+    "directory": "mcp"
+  },
+  "homepage": "https://openentity.org",
+  "engines": {
+    "node": ">=22.13"
   },
   "publishConfig": {
     "access": "public"

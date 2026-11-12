@@ -695,7 +695,7 @@ wheels = [
 
 [[package]]
 name = "openentity"
-version = "1.0.0"
+version = "1.1.0"
 source = { directory = "../../../sdk/python" }
 dependencies = [
     { name = "cryptography" },
@@ -720,7 +720,7 @@ dev = [
 
 [[package]]
 name = "openentity-adk"
-version = "0.3.0"
+version = "0.4.0"
 source = { editable = "." }
 dependencies = [
     { name = "google-adk" },

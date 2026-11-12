@@ -18,7 +18,7 @@ from .pair import pair_sas
 from .report import TrustReport, clear_trust_cache, did_web_resolver, trust
 from .schema import validate
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 
 __all__ = sorted([
     *_core, "CLIENTS", "DEFAULT_REGISTRY", "DISPUTE_REASONS", "adopt", "dispute", "find", "present", "record", "rotate", "withdraw",
