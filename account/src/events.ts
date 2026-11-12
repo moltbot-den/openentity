@@ -45,15 +45,22 @@ async function enqueue(d: Deps, events: QueuedEvent[]) {
   await d.queue(events);
 }
 
-/** Validates each event; answers EventsAccepted with the rejects by index. */
-async function accept(d: Deps, list: QueuedEvent[], allow: ("client" | "web" | "server")[]) {
+/**
+ * Validates each event and answers EventsAccepted with the rejects by index. An insert_id this source sent in the last
+ * 7 days is accepted again but not queued again: GA4 has no dedupe of its own. `source` is the install or the product.
+ */
+async function accept(d: Deps, list: QueuedEvent[], allow: ("client" | "web" | "server")[], source: string) {
   const ok: QueuedEvent[] = [], rejected: { index: number; error: string }[] = [];
   list.forEach((e, index) => {
     const v = validateEvent(e, { allow });
     if (v.ok) ok.push(v.event);
     else rejected.push({ index, error: v.error });
   });
-  await enqueue(d, ok);
+  const key = (e: QueuedEvent) => `${source}|${e.event_id}`;
+  const fresh = ok.length ? new Set((await d.db.all<{ key: string }>(
+    "INSERT INTO event_ids (key, seen_at) SELECT k, $2 FROM jsonb_array_elements_text($1::jsonb) AS k ON CONFLICT DO NOTHING RETURNING key",
+    [JSON.stringify(ok.map(key)), now()])).map((r) => r.key)) : new Set<string>();
+  await enqueue(d, ok.filter((e) => fresh.delete(key(e)))); // delete: a repeat inside one batch is queued once
   return { accepted: ok.length, rejected };
 }
 
@@ -81,17 +88,17 @@ export function routes(app: Hono, d: Deps) {
     if (!Array.isArray(b.events) || !b.events.length || b.events.length > APP_MAX) fail(400, "bad_request", `events is 1 to ${APP_MAX} events`);
     if ((await bump(d.db, `events:${install}`, String(Math.floor(now() / 60)))) > APP_PER_MINUTE) fail(429, "rate_limited", "too many event calls from this install", { retry_after: 60 });
     const list = (b.events as any[]).map((e) => ({ event: e?.name, props: e?.properties ?? {}, event_id: e?.insert_id, ts_ms: e?.time, install_id: install, ...who }) as QueuedEvent);
-    return c.json(await accept(d, list, ["client", "web"]), 202);
+    return c.json(await accept(d, list, ["client", "web"], install), 202);
   });
 
   app.post("/v1/events/ingest", async (c: Context) => {
-    await productSigned(c, d);
+    const { did: product } = await productSigned(c, d);
     const b = await json(c);
     if (!Array.isArray(b.events) || !b.events.length || b.events.length > INGEST_MAX) fail(400, "bad_request", `events is 1 to ${INGEST_MAX} events`);
     const list = (b.events as any[]).map((e) => ({
       event: e?.name, props: { ...(e?.properties ?? {}), ...(typeof e?.agent_did === "string" ? { agent_did: e.agent_did } : {}) },
       event_id: e?.insert_id, ts_ms: e?.time, platform: "server", ...(typeof e?.owner_did === "string" ? { user_id: userId(d, e.owner_did) } : {}),
     }) as QueuedEvent);
-    return c.json(await accept(d, list, ["server"]), 202);
+    return c.json(await accept(d, list, ["server"], product), 202);
   });
 }

@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createPublicKey, randomUUID } from "node:crypto";
 import { generateKeyPair, signRequest } from "@openentity/sdk";
 import { expect, test } from "vitest";
 import { createApp } from "../src/app.ts";
@@ -60,4 +60,26 @@ test("the service's own server events go through the same catalog check; a bad o
   await track(d, "agent_paused", {}, { owner }); // missing its required source
   await track(d, "no_such_event", {}, { owner });
   expect(queued).toMatchObject([{ event: "agent_paused", platform: "server", user_id: userId(d, owner), props: { source: "control", agent_did: agent } }]);
+});
+
+test("insert_id: a resent batch is accepted again and queued once; the same id from another product is its own event", async () => {
+  // A staging test product (approve.ts TEST_PRODUCTS) signs as the product it stands in for, with a throwaway key.
+  const sma = await generateKeyPair(), SMA_TEST = `did:web:${HOST}:test-products:sma`;
+  const testProducts = { sma: createPublicKey({ key: { kty: "OKP", crv: "Ed25519", x: Buffer.from(sma.publicKey).toString("base64url") }, format: "jwk" }) };
+  const sd = { ...d, web: { ...d.web, testProducts } }, staging = caller(createApp(sd)), production = caller(createApp({ ...sd, stage: "production" }));
+  const url = `https://${HOST}/v1/events/ingest`;
+  const owner_did = `did:web:${HOST}:o:${"c".repeat(52)}`;
+  const body = JSON.stringify({ events: [{ ...event("checkup_completed", { score_band: "high", judged: true }), owner_did }, { ...event("checkup_completed", { score_band: "low", judged: false }), owner_did }] });
+  const as = async (kp: typeof den, keyid: string) => signRequest({ method: "POST", url, body: new TextEncoder().encode(body), privateKey: kp, did: keyid });
+  queued.length = 0;
+  const first = await staging("POST", "/v1/events/ingest", body, await as(sma, `${SMA_TEST}#key-1`));
+  expect(first).toMatchObject({ status: 202, body: { accepted: 2, rejected: [] } });
+  expect(queued).toHaveLength(2);
+  const again = await staging("POST", "/v1/events/ingest", body, await as(sma, `${SMA_TEST}#key-1`));
+  expect(again).toMatchObject({ status: 202, body: { accepted: 2, rejected: [] } });
+  expect(queued).toHaveLength(2); // the resend queued nothing
+  expect((await call("POST", "/v1/events/ingest", body, await as(den, `${DEN}#k1`))).status).toBe(202);
+  expect(queued).toHaveLength(4); // Moltbot Den's events with the same ids are its own
+  // Production trusts no test product.
+  expect(await production("POST", "/v1/events/ingest", body, await as(sma, `${SMA_TEST}#key-1`))).toMatchObject({ status: 403, body: { error: "unknown_signer" } });
 });
