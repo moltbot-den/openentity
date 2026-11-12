@@ -481,6 +481,7 @@ func checkSignature(_ cred: Credential, _ s: JSONValue, message: [UInt8], origin
     }
     // Strict UTF-8 JSON: a byte order mark, a lone surrogate or a duplicate key is not client data.
     guard let client = try? JSONValue.parse(Data(clientRaw)) else { throw OpenEntityError("bad_webauthn", "clientDataJSON is not JSON") }
+    if let odd = plainError(client, ints: false) { throw OpenEntityError("bad_webauthn", "clientDataJSON: \(odd)") }
     guard let type = client["type"]?.stringValue, same(type, "webauthn.get") else {
         throw OpenEntityError("bad_webauthn", "clientDataJSON type must be webauthn.get")
     }
@@ -574,16 +575,24 @@ func uint(_ v: JSONValue?) -> Int64? {
     return Int64(d)
 }
 
-/// Entries and payload summaries hold only integers within 2^53 - 1 (and strings without lone surrogates, which the parser
-/// already refuses), so every SDK reads them the same way.
-func plainError(_ v: JSONValue) -> String? {
+/// Containers on one path, in an entry, a payload summary or clientDataJSON: the same limit in all four SDKs.
+let ownerMaxDepth = 64
+
+/// Entries and payload summaries hold only integers within 2^53 - 1 (unless `ints` is false), strings without lone surrogates
+/// (which the parser already refuses) and at most 64 nested containers, so every SDK reads them the same way.
+func plainError(_ v: JSONValue, ints: Bool = true, depth: Int = 0) -> String? {
     switch v {
     case .number(let d):
-        return d.isFinite && d.rounded(.towardZero) == d && abs(d) <= Double(maxSafe) ? nil : "number \(d) is not an integer within 2^53"
+        return !ints || (d.isFinite && d.rounded(.towardZero) == d && abs(d) <= Double(maxSafe)) ? nil : "number \(d) is not an integer within 2^53"
+    // Plain loops: `lazy.compactMap { }.first` runs the closure twice on the way to the first hit, 2^depth calls down a nested path.
     case .array(let items):
-        return items.lazy.compactMap(plainError).first
+        if depth >= ownerMaxDepth { return "nested deeper than \(ownerMaxDepth) levels" }
+        for item in items { if let e = plainError(item, ints: ints, depth: depth + 1) { return e } }
+        return nil
     case .object(let members):
-        return members.lazy.compactMap { plainError($0.value) }.first
+        if depth >= ownerMaxDepth { return "nested deeper than \(ownerMaxDepth) levels" }
+        for member in members { if let e = plainError(member.value, ints: ints, depth: depth + 1) { return e } }
+        return nil
     default:
         return nil
     }

@@ -24,8 +24,12 @@ export declare function signRequest(o: {
 }): Promise<Record<string, string>>;
 /**
  * Verify a request signed by signRequest. Throws HttpSigError with `.code`. Nonce replay tracking is the caller's job.
- * A did:key keyid verifies offline. A `did:web:<host>#<key>` keyid verifies only when its DID is in `allowDidWeb`: the key is an
- * Ed25519 method listed under `authentication` in the DID's did.json, cached for ten minutes and refetched when it names an unknown key.
+ * `expectDid` (one DID or a list) pins the signer: any other keyid, a did:key included, fails with `unexpected_signer` before any key
+ * is read. Pass it whenever only known services may call. `allowDidWeb` alone is not a pin: it only lets those did:web DIDs be
+ * resolved, and any did:key signer still verifies.
+ * A did:key keyid verifies offline. A `did:web:<host>#<key>` keyid verifies only when its DID is in `expectDid` or `allowDidWeb`: the
+ * key is an Ed25519 method listed under `authentication` in the DID's did.json, cached for ten minutes and refetched when it names an
+ * unknown key.
  */
 export declare function verifyRequest(o: {
     method: string;
@@ -34,6 +38,7 @@ export declare function verifyRequest(o: {
     body?: Uint8Array;
     now?: number;
     maxAge?: number;
+    expectDid?: string | string[];
     allowDidWeb?: string[];
     fetchJson?: (url: string) => Promise<unknown>;
 }): Promise<{
@@ -46,7 +51,8 @@ export declare function verifyRequest(o: {
 /**
  * Verify a response signed by a did:web service, such as the OpenEntity Account's signed paused list. Throws HttpSigError with `.code`.
  * The signature covers `"@status"` and `"content-digest"`, lives at most `maxAge` seconds (one minute by default), and its keyid is a
- * `did:web:<host>#<key>` of a DID in `allowDidWeb`, resolved as verifyRequest resolves one.
+ * `did:web:<host>#<key>` of a DID in `expectDid` (the signer pin, which refuses any other signer with `unexpected_signer`) or
+ * `allowDidWeb`, resolved as verifyRequest resolves one.
  */
 export declare function verifyResponse(o: {
     status: number;
@@ -54,7 +60,8 @@ export declare function verifyResponse(o: {
     body: Uint8Array;
     now?: number;
     maxAge?: number;
-    allowDidWeb: string[];
+    expectDid?: string | string[];
+    allowDidWeb?: string[];
     fetchJson?: (url: string) => Promise<unknown>;
 }): Promise<{
     did: string;

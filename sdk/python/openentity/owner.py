@@ -21,6 +21,7 @@ _DAY = 86_400
 _WEEK = 7 * _DAY
 _MAX_TTL = 600
 _MAX_SAFE = 2**53 - 1
+_MAX_DEPTH = 64  # containers on one path, in an entry, a payload summary or clientDataJSON (all four SDKs)
 _N = 0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551
 _REQUEST_ID = re.compile(r"[A-Za-z0-9:._-]{1,128}")
 _HEX64 = re.compile(r"[0-9a-f]{64}")
@@ -62,19 +63,21 @@ def _b64u(s) -> bytes | None:
     return b if _b64u_encode(b) == s else None
 
 
-def _plain(v, ints: bool = True) -> str | None:
-    """Only integers within 2^53 (unless `ints` is False) and well-formed strings, so all four SDKs read an entry, a
-    summary or client data the same way."""
+def _plain(v, ints: bool = True, depth: int = 0) -> str | None:
+    """Only integers within 2^53 (unless `ints` is False), well-formed strings and at most 64 nested containers, so all four
+    SDKs read an entry, a summary or client data the same way."""
     if isinstance(v, bool) or v is None:
         return None
     if isinstance(v, (int, float)):
         return None if not ints or _int(v) else f"number {v} is not an integer within 2^53"
     if isinstance(v, str):
         return "string has a lone surrogate" if _SURROGATE.search(v) else None
+    if isinstance(v, (list, dict)) and depth >= _MAX_DEPTH:
+        return f"nested deeper than {_MAX_DEPTH} levels"
     if isinstance(v, list):
-        return next((e for x in v if (e := _plain(x, ints))), None)
+        return next((e for x in v if (e := _plain(x, ints, depth + 1))), None)
     if isinstance(v, dict):
-        return next((e for k, x in v.items() for e in (_plain(k, ints), _plain(x, ints)) if e), None)
+        return next((e for k, x in v.items() for e in (_plain(k, ints), _plain(x, ints, depth + 1)) if e), None)
     return f"not JSON: {type(v).__name__}"
 
 
@@ -107,7 +110,7 @@ def _der_to_raw(der: bytes) -> bytes | None:
         return None
     out, i = b"", 2
     for _ in range(2):
-        if der[i] != 0x02:
+        if i + 2 > len(der) or der[i] != 0x02:  # a truncated sequence is refused, never read past its end
             return None
         n = der[i + 1]
         v = der[i + 2:i + 2 + n]
@@ -143,8 +146,9 @@ def _check_signature(cred: dict, s: dict, digest: bytes, origins, rp_id: str, lo
         client = parse_json(client_raw.decode("utf-8"))
     except (ValueError, UnicodeDecodeError):
         raise _Fail("bad_webauthn", "clientDataJSON is not JSON")
-    if _plain(client, False):
-        raise _Fail("bad_webauthn", "clientDataJSON has a lone surrogate")
+    bad = _plain(client, False)
+    if bad:
+        raise _Fail("bad_webauthn", f"clientDataJSON: {bad}")
     if not isinstance(client, dict) or client.get("type") != "webauthn.get":
         raise _Fail("bad_webauthn", "clientDataJSON type must be webauthn.get")
     if client.get("challenge") != _b64u_encode(digest):

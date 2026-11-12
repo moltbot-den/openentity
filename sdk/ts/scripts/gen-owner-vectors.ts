@@ -67,6 +67,8 @@ const C = {
 
 // ---------------------------------------------------------------- signatures (what devices and passkeys do)
 
+/** Empty arrays nested `n` containers deep. Every SDK refuses an entry, summary or clientDataJSON nested deeper than 64 levels. */
+const nest = (n: number): unknown => (n > 1 ? [nest(n - 1)] : []);
 const highS = (sig: Uint8Array) => cat(sig.slice(0, 32), Uint8Array.from(Buffer.from((N - BigInt("0x" + hex(sig.slice(32)))).toString(16).padStart(64, "0"), "hex")));
 const der = (sig: Uint8Array) => p256.Signature.fromBytes(sig).toBytes("der");
 /** Raw r||s over the 32-byte digest, as the Secure Enclave produces once the app normalizes to low S. */
@@ -74,7 +76,7 @@ const rawSign = (k: Key, digest: Uint8Array, high = false) => {
   const sig = p256.sign(digest, k.secret, { prehash: false, lowS: true });
   return high ? highS(sig) : sig;
 };
-interface Assert { origin?: string; rpId?: string; flags?: number; counter?: number; type?: string; crossOrigin?: boolean; challenge?: Uint8Array; high?: boolean; widenR?: boolean; bom?: boolean; extra?: Record<string, unknown>; prefix?: string }
+interface Assert { origin?: string; rpId?: string; flags?: number; counter?: number; type?: string; crossOrigin?: boolean; challenge?: Uint8Array; high?: boolean; widenR?: boolean; bom?: boolean; extra?: Record<string, unknown>; prefix?: string; edit?: (json: string) => string }
 /** A WebAuthn get() assertion with challenge = digest, as a browser or Credential Manager returns it. */
 function assertion(k: Key, digest: Uint8Array, o: Assert = {}) {
   const origin = o.origin ?? WEB_ORIGIN;
@@ -83,7 +85,7 @@ function assertion(k: Key, digest: Uint8Array, o: Assert = {}) {
   if (origin.startsWith("android:")) client.androidPackageName = "org.openentity.app";
   else client.crossOrigin = o.crossOrigin ?? false;
   Object.assign(client, o.extra);
-  const json = JSON.stringify(client);
+  const json = (o.edit ?? ((j: string) => j))(JSON.stringify(client));
   const cdj = cat(o.bom ? Uint8Array.of(0xef, 0xbb, 0xbf) : new Uint8Array(), enc.encode(o.prefix ? "{" + o.prefix + "," + json.slice(1) : json));
   const sig = p256.sign(cat(authData, sha(cdj)), k.secret, { prehash: true, lowS: true });
   let d = der(o.high ? highS(sig) : sig);
@@ -216,6 +218,11 @@ function keylogVectors(): Record<string, object> {
     basic().add("close", {}, { key: K.service_retired }, T0 + H), T0 + 2 * H, { root: K.root, approvers: [K.ios], closed: true });
 
   // Failure cases: each breaks exactly one rule.
+  // Depth: entry (1) > body (2) > approver (3) > a descriptive field of n nested arrays (4 to 3 + n).
+  add("depth-limit", "An entry nested exactly 64 containers deep is accepted.",
+    basic().add("add_approver", { approver: { ...C.android, extra: nest(61) } }, { key: K.ios }, T0 + H), T0 + 2 * H, { root: K.root, approvers: [K.ios, K.android] });
+  add("too-deep", "An entry nested 65 containers deep is malformed in every SDK.",
+    basic().add("add_approver", { approver: { ...C.android, extra: nest(62) } }, { key: K.ios }, T0 + H), T0 + 2 * H, { error: "malformed", seq: 2 });
   add("unjustified-key-self-signed", "A key the chain does not justify: add_approver signed by the new key itself (what a compromised server would forge).",
     basic().add("add_approver", { approver: C.stranger }, { key: K.stranger }, T0 + H), T0 + 2 * H, { error: "unauthorized", seq: 2 });
   add("unjustified-key-unknown-signer", "A key the chain does not justify: add_approver signed by a key that is not in the log.",
@@ -361,6 +368,9 @@ function approvalVectors(): object {
     c("webauthn-lone-surrogate", "clientDataJSON with a lone surrogate in any string.", approval({ key: K.web, assert: { extra: { note: "\ud800" } } }), ctx(), no("bad_webauthn")),
     c("webauthn-duplicate-key", "clientDataJSON with a duplicate origin key, the first one 70 spaces before its colon: rejected, never read as the last value.",
       approval({ key: K.web, assert: { prefix: `"origin"${" ".repeat(70)}:"https://evil.example"` } }), ctx(), no("bad_webauthn")),
+    c("webauthn-nan", "clientDataJSON with a NaN literal is not JSON.", approval({ key: K.web, assert: { edit: (j) => j.replace(/}$/, ',"n":NaN}') } }), ctx(), no("bad_webauthn")),
+    c("webauthn-client-data-depth-limit", "clientDataJSON nested exactly 64 containers deep is accepted.", approval({ key: K.web, assert: { extra: { n: nest(63) } } }), ctx(), ok(K.web)),
+    c("webauthn-client-data-too-deep", "clientDataJSON nested 65 containers deep is refused.", approval({ key: K.web, assert: { extra: { n: nest(64) } } }), ctx(), no("bad_webauthn")),
     c("webauthn-no-origins", "An empty origins list accepts no origin.", approval({ key: K.web }), ctx({ origins: [] }), no("bad_webauthn")),
     c("webauthn-counter-replayed", "The signature counter did not increase.", approval({ key: K.web, assert: { counter: 6 } }), ctx({ counter: 6 }), no("counter_replayed")),
     c("request-id-with-separator", "request_id may not contain the | separator.", { ...approval(), request_id: "req|1" }, ctx({ request_id: "req|1" }), no("malformed")),
@@ -371,6 +381,7 @@ function approvalVectors(): object {
     { network: "base-mainnet", contract: "ct_9f2", milestone: 2, amount_usdc_cents: 125000, to: "0x52908400098527886E0F7030069857D2E4169EE7", over_budget: false, note: null },
     { "z": "last", "a": "first", "é": "e acute sorts after z", "～": "fullwidth tilde", "😀": "emoji sorts before U+FF5E in UTF-16 order", nested: { b: [3, 1, 2], a: true } },
     { agent: "Zoë", note: "Café ☕ für Jürgen 🚀", lines: "one\ntwo\t\"quoted\" \\ back" },
+    { n: nest(63) }, // exactly 64 containers deep: the most any SDK accepts
   ].map((s) => ({ summary: s, canonical: canonicalize(s), digest: hex(sha(canonicalize(s))) }));
 
   return {
@@ -384,6 +395,7 @@ function approvalVectors(): object {
     payloads_invalid: [
       { summary: { amount: 12.5 }, reason: "numbers must be integers: send amounts in minor units or as strings" },
       { summary: { amount: 9007199254740992 }, reason: "integers must be within 2^53 - 1" },
+      { summary: { n: nest(64) }, reason: "nested deeper than 64 containers" },
     ],
     key_states,
     key_logs,

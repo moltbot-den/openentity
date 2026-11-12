@@ -19,12 +19,14 @@ The two implementations share the vectors in [`test-vectors/http-signature.json`
 - `Content-Digest` equal to the SHA-256 of the body you pass, whenever the body is not empty.
 - `keyid` a canonical `did:key`, whose public key comes from it with no network call, or `did:web:<host>#<key>` for a DID you allow (`allowDidWeb` / `allow_did_web`). The key of a `did:web` keyid must be an Ed25519 method listed under `authentication` in the DID's did.json, which is fetched without redirects, cached for ten minutes and refetched when a keyid names a key it does not list. A DID you did not allow is never fetched.
 - A response signature lives at most `maxAge` / `max_age` seconds (default `60`) and always has a `did:web` keyid.
+- The signer is one of the DIDs you pin with `expectDid` / `expect_did`, when you pass it: any other keyid, a `did:key` included, fails with `unexpected_signer` before any key is read or fetched. Pin the signer whenever only known services may call. `allowDidWeb` / `allow_did_web` alone is not a pin: it only lets those `did:web` DIDs be resolved, and any `did:key` signer still verifies.
+- `Signature-Input` and `Signature` each hold one `sig1` member, and no parameter repeats.
 
 Replay tracking is the caller's job: keep each nonce for the length of the window.
 
 ## Error codes
 
-`HttpSigError` (Python `openentity.errors`, TypeScript `@openentity/sdk`) carries a `.code`: `missing_headers`, `unknown_alg`, `bad_keyid`, `missing_nonce`, `digest_mismatch`, `created_in_future`, `created_too_old`, `expired`, `lifetime_too_long`, `bad_signature`.
+`HttpSigError` (Python `openentity.errors`, TypeScript `@openentity/sdk`) carries a `.code`: `missing_headers`, `unknown_alg`, `bad_keyid`, `missing_nonce`, `digest_mismatch`, `created_in_future`, `created_too_old`, `expired`, `lifetime_too_long`, `unexpected_signer`, `bad_signature`.
 
 ## Python (`openentity/httpsig.py`)
 

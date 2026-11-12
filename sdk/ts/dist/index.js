@@ -81,7 +81,7 @@ import {
   verifyRequest,
   verifyResponse,
   withdraw
-} from "./chunk-I5OCHPGX.js";
+} from "./chunk-YWATEZLW.js";
 export {
   A2A_EXTENSION_URI,
   CLIENTS,

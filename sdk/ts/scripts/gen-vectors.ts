@@ -11,6 +11,7 @@ import {
   buildDeclaration,
   signObject,
   signRequest,
+  httpSigBase,
   signProof,
   signAttestation,
   type KeyPair,
@@ -185,7 +186,7 @@ export async function buildVectors(): Promise<Record<string, object>> {
   });
   const post = await sigCase("post-with-body", "POST", "https://gateway.example.com/v1/tools/call?x=1", '{"hello":"world"}', "AAECAwQFBgcICQoLDA0ODw");
   const get = await sigCase("get-empty-body", "GET", "https://gateway.example.com/v1/ping", "", "EBESExQVFhcYGRobHB0eHw");
-  const bad = (name: string, code: string, o: Record<string, unknown>) => ({ name, code, ...o });
+  const bad = (name: string, code: string, o: Record<string, unknown>) => ({ ...o, name, code }); // the case's own name, not its base case's
   // did:web signers (a service such as the OpenEntity Account): the keyid is a verification method under `authentication` in the
   // DID's did.json, an Ed25519 Multikey (second key) or JsonWebKey (log key, relative id), named by its RFC 7638 thumbprint. The
   // entity key is an assertionMethod only, like the account service's close keys, so it signs no message.
@@ -218,6 +219,13 @@ export async function buildVectors(): Promise<Record<string, object>> {
     return { status, body, headers: { "Content-Digest": digest, "Signature-Input": `sig1=${params}`, Signature: `sig1=:${Buffer.from(sig).toString("base64")}:` } };
   };
   const paused = respond(multikey, SEEDS.second);
+  // A request signed by the entity key over any Signature-Input parameters, sent with optional extra members.
+  const postParams = post.headers["Signature-Input"].slice("sig1=".length);
+  const forged = (name: string, params: string, inputPrefix = "", sigPrefix = "") => {
+    const digest = post.headers["Content-Digest"];
+    const sig = ed25519.sign(httpSigBase("POST", post.url, ["@method", "@target-uri", "content-digest"], digest, params), SEEDS.entity);
+    return { ...post, name, headers: { "Content-Digest": digest, "Signature-Input": `${inputPrefix}sig1=${params}`, Signature: `${sigPrefix}sig1=:${Buffer.from(sig).toString("base64")}:` } };
+  };
   const { Signature: _unsigned, ...noSignature } = paused.headers;
   out["http-signature"] = {
     description: "RFC 9421 HTTP message signature vectors (spec 11.2 Web Bot Auth row, ADR 0005). Signed with the entity throwaway seed from keys.json. `now` is a unix time; `valid` must be signed to exactly `headers` and verify; each `invalid` must fail with `code`.",
@@ -230,6 +238,10 @@ export async function buildVectors(): Promise<Record<string, object>> {
       bad("tampered-method", "bad_signature", { ...get, method: "POST" }),
       bad("too-late", "expired", { ...post, now: CREATED + 61 }),
       bad("created-in-future", "created_in_future", { ...post, now: CREATED - 6 }),
+      // A repeated parameter or a second sig1 member is ambiguous (parsers keep the first or the last), so it is refused.
+      bad("duplicate-param", "missing_headers", forged("duplicate-param", postParams.replace(`;expires=${CREATED + 60}`, `;expires=${CREATED + 60};expires=${CREATED + 61}`))),
+      bad("two-sig1-inputs", "missing_headers", forged("two-sig1-inputs", postParams, `sig1=${postParams}, `)),
+      bad("two-sig1-signatures", "missing_headers", forged("two-sig1-signatures", postParams, "", "sig1=:AAAA:, ")),
     ],
     did_web: {
       description: "did:web keyids. Verify with allow_did_web = [did] and a fetch that returns `document` for `url` (no network). `valid` verify to did = `did`; each `invalid` fails with `code`. Only methods under `authentication` sign: the entity key is listed for assertionMethod only. Signed with the second, log and entity throwaway seeds from keys.json.",
@@ -270,6 +282,30 @@ export async function buildVectors(): Promise<Record<string, object>> {
         bad("created-in-future", "created_in_future", { ...paused, now: CREATED - 6 }),
         bad("lifetime-too-long", "lifetime_too_long", respond(multikey, SEEDS.second, { expires: CREATED + 61 })),
       ],
+    },
+    // The signer pin: expect_did refuses every other keyid, a did:key included, before any key is read or fetched. allow_did_web
+    // alone is not a pin: it only lets a did:web DID be resolved, and a did:key signer still verifies under it.
+    expect_did: {
+      description: "Signer pins (expectDid / expect_did). Verify request cases with method, url, headers and body, response cases with status, headers and body; pass `expect_did` as given (one DID or a list) and no allow_did_web, a fetch that returns `document` for `url`, at `now`. `valid` verify to `did`; each `invalid` fails with `code` before any fetch. Signed with the throwaway seeds from keys.json.",
+      url: WEB_URL, document: webDocument, now: CREATED + 10,
+      requests: {
+        valid: [
+          { ...mk, name: "did-web-pinned", expect_did: [WEB], did: WEB },
+          { ...post, name: "did-key-pinned", expect_did: a.did, did: a.did },
+        ],
+        invalid: [
+          bad("did-key-under-did-web-pin", "unexpected_signer", { ...post, expect_did: [WEB] }),
+          bad("other-did-web", "unexpected_signer", { ...(await webCase("other-did-web", `did:web:other.example#${thumb(b)}`, SEEDS.second)), expect_did: [WEB] }),
+          bad("other-did-key", "unexpected_signer", { ...post, expect_did: b.did }),
+        ],
+      },
+      responses: {
+        valid: [{ ...paused, name: "paused-pinned", expect_did: WEB, did: WEB }],
+        invalid: [
+          bad("other-did-web", "unexpected_signer", { ...respond(`did:web:other.example#${thumb(b)}`, SEEDS.second), expect_did: [WEB] }),
+          bad("did-key-keyid", "unexpected_signer", { ...respond(a.did, SEEDS.entity), expect_did: [WEB] }),
+        ],
+      },
     },
   };
 

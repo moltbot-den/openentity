@@ -197,3 +197,35 @@ def test_response_max_age_and_allow_list():
             _response(case, allow_did_web=allow, fetch=lambda url: (calls.append(url), R["document"])[1])
         assert e.value.code == "bad_keyid"
     assert calls == []  # a DID it was not told to allow is never fetched
+
+
+E = VEC["expect_did"]
+
+
+def _pinned_call(case, kind, fetches):
+    from openentity import httpsig
+    httpsig._did_web_keys.clear()
+    fetch = lambda url: (fetches.append(url), E["document"] if url == E["url"] else None)[1]
+    if kind == "requests":
+        return verify_request(case["method"], case["url"], case["headers"], case["body"].encode(), now=E["now"],
+                              expect_did=case["expect_did"], fetch=fetch)
+    return verify_response(case["status"], case["headers"], case["body"].encode(), now=E["now"], expect_did=case["expect_did"], fetch=fetch)
+
+
+@pytest.mark.parametrize("kind,case", [(k, c) for k in ("requests", "responses") for c in E[k]["valid"]], ids=lambda x: x if isinstance(x, str) else x["name"])
+def test_expect_did_valid(kind, case):
+    assert _pinned_call(case, kind, [])["did"] == case["did"]
+
+
+@pytest.mark.parametrize("kind,case", [(k, c) for k in ("requests", "responses") for c in E[k]["invalid"]], ids=lambda x: x if isinstance(x, str) else x["name"])
+def test_expect_did_refuses_before_any_fetch(kind, case):
+    fetches = []
+    with pytest.raises(HttpSigError) as e:
+        _pinned_call(case, kind, fetches)
+    assert e.value.code == case["code"] and fetches == []
+
+
+def test_allow_did_web_alone_is_not_a_pin():
+    c = next(x for x in E["requests"]["invalid"] if x["name"] == "did-key-under-did-web-pin")
+    v = verify_request(c["method"], c["url"], c["headers"], c["body"].encode(), now=E["now"], allow_did_web=c["expect_did"])
+    assert v["did"].startswith("did:key:")

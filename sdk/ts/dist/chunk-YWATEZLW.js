@@ -2140,15 +2140,26 @@ var fail = (code) => {
 };
 var lower = (headers) => Object.fromEntries(Object.entries(headers).map(([k, v]) => [k.toLowerCase(), v]));
 function sig1(h) {
-  const m = /(?:^|,)\s*sig1=(\(([^)]*)\)((?:;[a-z]+=(?:\d+|"[^"]*"))*))/.exec(h["signature-input"] ?? "");
-  const s = /(?:^|,)\s*sig1=:([A-Za-z0-9+/]+={0,2}):/.exec(h["signature"] ?? "");
+  const input = h["signature-input"] ?? "", signature = h["signature"] ?? "";
+  const members = (v) => (v.match(/(?:^|,)\s*sig1=/g) ?? []).length;
+  if (members(input) !== 1 || members(signature) !== 1) fail("missing_headers");
+  const m = /(?:^|,)\s*sig1=(\(([^)]*)\)((?:;[a-z]+=(?:\d+|"[^"]*"))*))/.exec(input);
+  const s = /(?:^|,)\s*sig1=:([A-Za-z0-9+/]+={0,2}):/.exec(signature);
   if (!m || !s) return fail("missing_headers");
   const p = {};
-  for (const [, k, v] of m[3].matchAll(/;([a-z]+)=(\d+|"[^"]*")/g)) p[k] = v.startsWith('"') ? v.slice(1, -1) : Number(v);
+  for (const [, k, v] of m[3].matchAll(/;([a-z]+)=(\d+|"[^"]*")/g)) {
+    if (Object.hasOwn(p, k)) fail("missing_headers");
+    p[k] = v.startsWith('"') ? v.slice(1, -1) : Number(v);
+  }
   if (p.alg !== "ed25519") fail("unknown_alg");
   return { params: m[1], comps: [...m[2].matchAll(/"([^"]*)"/g)].map((x) => x[1]), p, sig: s[1], keyid: String(p.keyid ?? "") };
 }
 var allowedDidWeb = (keyid, allow) => /^did:web:[^#]+#[^#]+$/.test(keyid) && Array.isArray(allow) && allow.includes(keyid.split("#")[0]);
+function pinned(did, expectDid, allowDidWeb) {
+  const pin = expectDid === void 0 ? void 0 : typeof expectDid === "string" ? [expectDid] : [...expectDid];
+  if (pin && !pin.includes(did)) fail("unexpected_signer");
+  return [...Array.isArray(allowDidWeb) ? allowDidWeb : [], ...pin ?? []];
+}
 var verifies = (sig, base2, pub) => {
   try {
     return ed255192.verify(unb64(sig), base2, pub);
@@ -2178,9 +2189,10 @@ async function verifyRequest(o) {
   const body = o.body ?? new Uint8Array();
   const { params, comps, p, sig, keyid } = sig1(h);
   const did = keyid.split("#")[0];
+  const resolvable = pinned(did, o.expectDid, o.allowDidWeb);
   let pub;
   if (keyid.startsWith("did:web:")) {
-    if (!allowedDidWeb(keyid, o.allowDidWeb)) fail("bad_keyid");
+    if (!allowedDidWeb(keyid, resolvable)) fail("bad_keyid");
   } else {
     try {
       pub = publicKeyFromDidKey(keyid);
@@ -2212,7 +2224,7 @@ async function verifyRequest(o) {
 async function verifyResponse(o) {
   const h = lower(o.headers);
   const { params, comps, p, sig, keyid } = sig1(h);
-  if (!allowedDidWeb(keyid, o.allowDidWeb)) fail("bad_keyid");
+  if (!allowedDidWeb(keyid, pinned(keyid.split("#")[0], o.expectDid, o.allowDidWeb))) fail("bad_keyid");
   if (typeof p.created !== "number" || typeof p.expires !== "number") fail("missing_headers");
   const created = p.created, expires = p.expires;
   if (comps.length !== 2 || comps[0] !== "@status" || comps[1] !== "content-digest") fail("missing_headers");
@@ -2565,15 +2577,17 @@ function base32(b) {
   }
   return bits ? out + A[value << 5 - bits & 31] : out;
 }
-function plainJson(v, ints = true) {
+var MAX_DEPTH = 64;
+function plainJson(v, ints = true, depth = 0) {
   if (typeof v === "number") return !ints || Number.isSafeInteger(v) ? null : `number ${v} is not an integer within 2^53`;
   if (typeof v === "string") return /[\uD800-\uDFFF]/u.test(v) ? "string has a lone surrogate" : null;
+  if ((Array.isArray(v) || isObj(v)) && depth >= MAX_DEPTH) return `nested deeper than ${MAX_DEPTH} levels`;
   if (Array.isArray(v)) for (const x of v) {
-    const e = plainJson(x, ints);
+    const e = plainJson(x, ints, depth + 1);
     if (e) return e;
   }
   else if (isObj(v)) for (const [k, x] of Object.entries(v)) {
-    const e = plainJson(k, ints) ?? plainJson(x, ints);
+    const e = plainJson(k, ints) ?? plainJson(x, ints, depth + 1);
     if (e) return e;
   }
   return null;
@@ -2628,7 +2642,8 @@ function checkSignature(cred, s, digest, o) {
   } catch {
     fail2("bad_webauthn", "clientDataJSON is not JSON");
   }
-  if (plainJson(client, false)) fail2("bad_webauthn", "clientDataJSON has a lone surrogate");
+  const odd = plainJson(client, false);
+  if (odd) fail2("bad_webauthn", `clientDataJSON: ${odd}`);
   if (!isObj(client) || client.type !== "webauthn.get") fail2("bad_webauthn", "clientDataJSON type must be webauthn.get");
   const c = client;
   if (c.challenge !== b64url(digest)) fail2("bad_webauthn", "challenge is not the digest");
