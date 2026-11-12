@@ -23,6 +23,7 @@ import * as signin from "./signin.ts";
 import * as stepup from "./stepup.ts";
 import * as store from "./store.ts";
 import type { WebConfig } from "./web/config.ts";
+import type { WsClient } from "./ws.ts";
 import { PRODUCT_DIDS, aasa, assetlinks, didDocument, jwks, openidConfiguration } from "./wellknown.ts";
 
 export { PRODUCT_DIDS };
@@ -48,6 +49,8 @@ export interface Deps {
   products?: Record<string, string>;
   /** Outbound HTTP to products; tests pass a fake. */
   fetch?: typeof fetch;
+  /** Frames to agents' open sockets (ws.ts); unset, frames wait in the inbox. */
+  ws?: WsClient;
   /** Tests only: stand-ins for Apple's and Google's published keys. Production uses the providers' JWKS. */
   providerKeys?: { apple?: JWTVerifyGetKey; google?: JWTVerifyGetKey };
 }

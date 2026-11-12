@@ -6,7 +6,8 @@ import { httpSigBase } from "@openentity/sdk";
 import type { Deps } from "./app.ts";
 import { newId, now } from "./db.ts";
 
-/** Each product's API host (did:web:<product> answers there). */
+/** Each product's API host (did:web:<product> answers there): production's targets. Staging calls no product unless the
+ * SSM parameter product_apis_staging names stubs, until the products turn OE_ACCOUNT_ENABLED on (Day 7). */
 export const PRODUCT_APIS: Record<string, string> = {
   "did:web:moltbotden.com": "https://api.moltbotden.com",
   "did:web:securemyagent.ai": "https://api.securemyagent.ai",
@@ -24,8 +25,12 @@ export async function signHeaders(d: Deps, method: string, url: string, body: Ui
   return { "content-digest": digest, "signature-input": `sig1=${params}`, signature: `sig1=:${Buffer.from(sig).toString("base64")}:` };
 }
 
+/** Whether this environment calls the product at all (lambda.ts sets Deps.products per stage). */
+export const reaches = (d: Deps, product: string) => !!(d.products ?? PRODUCT_APIS)[product];
+
 /** A signed JSON POST to a product. Never throws: status 0 is a network error or timeout. */
 export async function callProduct(d: Deps, product: string, path: string, payload: unknown): Promise<{ status: number; body: any }> {
+  if (!reaches(d, product)) return { status: 0, body: null };
   const url = `${(d.products ?? PRODUCT_APIS)[product]}${path}`;
   const body = new TextEncoder().encode(JSON.stringify(payload));
   try {
@@ -50,6 +55,7 @@ const retryable = (status: number) => status === 0 || status === 408 || status =
  * in the outbox and retried by jobs; a 4xx refusal is logged and dropped. Resolves true when the product took it now.
  */
 export async function sendEvent(d: Deps, productDid: string, type: string, data: Record<string, unknown>): Promise<boolean> {
+  if (!reaches(d, productDid)) return false;
   const event = { id: newId("evt"), type, created_at: now(), data };
   const r = await callProduct(d, productDid, "/v1/oe/events", event);
   if (r.status >= 200 && r.status < 300) return true;

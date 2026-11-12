@@ -2049,8 +2049,9 @@ paths:
       summary: Claim a pairing code (the agent's one-liner calls this)
       description: |
         The request is signed by the agent's did:key and carries an OEIS-1 Presentation built with buildPresentation:
-        audience = the service DID, nonce = the code exactly as shown (`OE-XXXX-XXXX`). The signer DID must equal
-        `presentation.eid` (else 400 presentation_invalid). The first valid claim wins; the code is then used. The
+        audience = the service DID, nonce = `pair:` followed by the code as shown (`pair:OE-XXXX-XXXX`; an OEIS-1
+        nonce has at least 16 characters, the code alone 12). The signer DID must equal `presentation.eid` (else 400
+        presentation_invalid). The first valid claim wins; the code is then used. The
         agent prints `sas.names`; the app shows the same string. No CAPTCHA, login or payment. Rate limited per IP.
       x-available: day-3
       security:
@@ -4128,7 +4129,7 @@ components:
       required: [code, presentation, framework, sdk, sdk_version]
       properties:
         code: { $ref: '#/components/schemas/PairingCode' }
-        presentation: { type: object, description: 'An OEIS-1 Presentation (buildPresentation): eid = the signer, audience = the service DID, nonce = the code exactly as shown.' }
+        presentation: { type: object, description: 'An OEIS-1 Presentation (buildPresentation): eid = the signer, audience = the service DID, nonce = "pair:" + the code as shown (pair:OE-XXXX-XXXX).' }
         framework: { type: string, maxLength: 64, description: 'e.g. openclaw, claude-code, openai-agents, langchain, crewai.' }
         sdk: { type: string, maxLength: 64 }
         sdk_version: { type: string, maxLength: 32 }

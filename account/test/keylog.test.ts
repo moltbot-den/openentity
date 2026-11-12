@@ -1,12 +1,12 @@
-import { expect, test, vi } from "vitest";
+import { expect, test } from "vitest";
 import { createApp } from "../src/app.ts";
 import { closeKeyLog, keyLogState } from "../src/keylog.ts";
-import { notifyOwner } from "../src/notify.ts";
-import { type Key, caller, entry, lineHash, ownerId, p256Key, registerRoot, signIn, testDeps } from "./helpers.ts";
+import { type Key, caller, entry, lineHash, noticeRecorder, ownerId, p256Key, registerRoot, signIn, testDeps } from "./helpers.ts";
 
-vi.mock("../src/notify.ts", async (orig) => ({ ...(await orig<typeof import("../src/notify.ts")>()), notifyOwner: vi.fn(async () => {}) }));
-
-const d = await testDeps();
+// Notices go through the real path (notify.ts): a stand-in APNs and mail record them. A module mock of notify.ts does
+// not reach keylog.ts through the notify, approve and keylog import cycle.
+const notices = noticeRecorder();
+const d = await testDeps({ web: notices.web });
 const app = createApp(d), call = caller(app);
 
 /** A signed-in owner whose root passkey is registered, and a genesis line by a device approver. */
@@ -65,11 +65,12 @@ test("appends verify through the SDK: a current approver adds one, a stranger ke
 
 test("revoke and recover notify the owner; recover takes effect 24 hours after the service first saw it", async () => {
   const o = await owner();
+  await notices.device(d.db, o.accountId, o.install);
   await post(o.id, o.genesis, o.auth);
   const second = p256Key();
   const add = entry(o.approver, { seq: 2, prev: lineHash(o.genesis), op: "add_approver", body: { approver: second.credential } });
   await post(o.id, add);
-  vi.mocked(notifyOwner).mockClear();
+  notices.pushes.length = notices.mail.length = 0;
   const revoke = entry(o.approver, { seq: 3, prev: lineHash(add), op: "revoke", body: { kid: second.kid } });
   const r = await post(o.id, revoke);
   expect(r.body.effective_at).toBe(r.body.first_seen_at);
@@ -78,8 +79,8 @@ test("revoke and recover notify the owner; recover takes effect 24 hours after t
   const rec = await post(o.id, recover);
   expect(rec.status).toBe(201);
   expect(rec.body.effective_at).toBe(rec.body.first_seen_at + 86_400);
-  const sent = vi.mocked(notifyOwner).mock.calls.map(([, account, n]) => [account, n.type, !!n.email]);
-  expect(sent).toEqual([[o.accountId, "keylog.revoke", true], [o.accountId, "keylog.recover", true]]);
+  expect(notices.pushes.map((p) => p.type)).toEqual(["keylog.revoke", "keylog.recover"]);
+  expect(notices.mail.map((m) => m.subject)).toEqual(["A change to your OpenEntity approvers", "A change to your OpenEntity approvers"]);
   expect((await keyLogState(d, o.did))!.pending).toMatchObject([{ seq: 4, op: "recover" }]);
 });
 
