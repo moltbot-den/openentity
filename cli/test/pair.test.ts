@@ -139,8 +139,9 @@ describe("pair", () => {
   });
 
   it("SKILL_FILES lists every tracked file of skill/openentity", () => {
-    const files = execFileSync("git", ["ls-files"], { cwd: join(import.meta.dirname, "../../skill/openentity"), encoding: "utf8" }).trim().split("\n");
-    expect(files.sort()).toEqual([...SKILL_FILES].sort());
+    // From the repository root: under a git hook GIT_DIR is set, and git then takes the working directory for the top level.
+    const files = execFileSync("git", ["ls-files", "skill/openentity"], { cwd: join(import.meta.dirname, "../.."), encoding: "utf8" }).trim().split("\n");
+    expect(files.map((f) => f.slice("skill/openentity/".length)).sort()).toEqual([...SKILL_FILES].sort());
   });
 });
 
