@@ -14,6 +14,8 @@ import {
   aws_cloudfront as cf,
   aws_cloudfront_origins as origins,
   aws_ec2 as ec2,
+  aws_events as eventbridge,
+  aws_events_targets as targets,
   aws_iam as iam,
   aws_kms as kms,
   aws_lambda as lambda,
@@ -158,6 +160,13 @@ export class OpenEntityAccountStack extends Stack {
       actions: ["kms:Decrypt"], resources: [SSM_KEY_ARN], conditions: { StringEquals: { "kms:ViaService": `ssm.${this.region}.amazonaws.com` } },
     }));
     const url = fn.addFunctionUrl({ authType: lambda.FunctionUrlAuthType.NONE });
+
+    // ---- Jobs: an EventBridge tick runs account/src/jobs.ts (outbox retries, expiry, cleanup). Production every minute;
+    // staging every 6 hours, so its Aurora still pauses when nobody is using it (tests call runJobs directly).
+    new eventbridge.Rule(this, "JobsTick", {
+      schedule: eventbridge.Schedule.rate(prod ? Duration.minutes(1) : Duration.hours(6)),
+      targets: [new targets.LambdaFunction(fn, { retryAttempts: 0, maxEventAge: Duration.minutes(1) })],
+    });
 
     // ---- Edge: CloudFront at the account host; every request goes to the function URL ----
     const cert = new acm.Certificate(this, "Cert", { domainName: host, validation: acm.CertificateValidation.fromDns() });

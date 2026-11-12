@@ -16,7 +16,7 @@ const app = createApp({
     did: await publicKey(jwk(generateKeyPairSync("ed25519")), async () => new Uint8Array(64)),
     close: await publicKey(jwk(generateKeyPairSync("ec", { namedCurve: "P-256" })), async () => new Uint8Array(64)),
   },
-  rp: rpFor("staging.account.openentity.org"), apple: { native: [], web: [] }, google: [], androidFingerprints: [], signinOpen: true,
+  rp: rpFor("staging.account.openentity.org"), apple: { native: [], web: [] }, google: [], androidFingerprints: [], signinOpen: true, web: {},
 });
 
 test("every route the service answers is in the frozen contract, with the same method", () => {

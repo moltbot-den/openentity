@@ -23,7 +23,7 @@ const base: Deps = {
   stage: "staging", host: HOST, db: await pgliteDb(), keys: { token: tokenKey, did: didKey, close: closeKey }, pepper: "test-pepper",
   sendCode: async (_e, code) => { outbox.push(code); }, rp: rpFor(HOST),
   apple: { native: ["org.openentity.app"], web: ["org.openentity.app.web"] }, google: ["ios-client", "web-client"],
-  androidFingerprints: [], signinOpen: true, providerKeys: { apple: providerKeys, google: providerKeys },
+  androidFingerprints: [], signinOpen: true, providerKeys: { apple: providerKeys, google: providerKeys }, web: {},
 };
 const app = createApp(base);
 

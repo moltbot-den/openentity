@@ -128,6 +128,14 @@ info:
     - PairStatus.owner_did is null until the owner confirms.
     - AccountEvent.type is an open string; products ignore types they do not know.
     - Google Play notifications authenticate with the Pub/Sub push OIDC token (security scheme pubsubPush).
+    - Pairing fan-out: on confirm the service sends agent.paired to every product (POST /v1/oe/events) and products
+      enroll the agent on it. The agent's first bearer keys come from each product's POST /v1/oe/credentials/renew,
+      asked for when the agent first reads its confirmed pairing; the service passes them through and stores none.
+    - A claim by an agent that is paired with another owner is 409 agent_linked: that owner unlinks it first, so a
+      paused agent cannot pair itself to a second account.
+    - API Gateway cannot choose the close code of a socket the server closes, so before closing the service sends a
+      last error frame whose `close_code` is the code listed under closeCodes (4001, 4003, 4008). SDKs treat that frame
+      as the close.
 servers:
   - url: https://account.openentity.org
     description: production
@@ -211,6 +219,7 @@ x-websocket:
     After {"action":"sync"} the server sends every unacknowledged item, oldest first, up to 100; sync again after
     acknowledging to get more. The server also pushes new items as they arrive.
   closeCodes:
+    description: Carried as `close_code` in the last error frame before the server closes the socket (API Gateway sends its own close code).
     '4001': The agent was paused. Reconnecting is allowed, so a resume command can arrive; products refuse the agent until it is resumed.
     '4003': The agent was unlinked or is not paired. Do not reconnect.
     '4008': Replaced by a newer socket from the same agent.
@@ -1485,8 +1494,9 @@ paths:
       summary: Confirm a claimed pairing with Face ID (approval/2.0 over the link)
       description: |
         The owner checks that the match string matches what the agent printed, picks permissions, and signs the
-        pairing's `approval_request` (action pairing.confirm). The service then provisions the agent in each product
-        through that product's existing path and sends agent.permissions.
+        pairing's `approval_request` (action pairing.confirm). The service then sends agent.paired to every product
+        (POST /v1/oe/events), which enrolls the agent there. The agent's first product keys follow on its first
+        confirmed read of GET /v1/pair/{pairing_id}.
       x-available: day-3
       security:
         - ownerBearer: []
@@ -2072,7 +2082,7 @@ paths:
           description: 'error: code_unknown'
         '409':
           $ref: '#/components/responses/Error'
-          description: 'error: code_used'
+          description: 'error: code_used, agent_linked (paired with another owner, who must unlink it first)'
         '410':
           $ref: '#/components/responses/Error'
           description: 'error: code_expired'
@@ -2085,8 +2095,10 @@ paths:
       summary: Pairing status for the claiming agent
       description: |
         Only the DID that claimed the pairing may read it (others get 404). Poll at most every 2 seconds (else 429).
-        `credentials` (bearer keys for tools that still need them, PLAN 8.4) appear once, on the first confirmed read;
-        write each to its tool's existing config location with file mode 0600.
+        `credentials` (bearer keys for tools that still need them, PLAN 8.4) appear once, on the first confirmed read:
+        the service then asks each product for the agent's first 30-day key (POST /v1/oe/credentials/renew) and passes
+        the keys through without storing them. A product that has none yet is missing from the list; get it later with
+        POST /v1/agent/credentials/renew. Write each key to its tool's existing config location with file mode 0600.
       x-available: day-3
       security:
         - agentSignature: []
@@ -2649,6 +2661,8 @@ paths:
       description: |
         Implemented by each product. The account service signs the call with accountSignature. Verify it (keyid's DID
         equals the pinned service DID; key from the service did.json), then handle the AccountEvent:
+        - agent.paired: enroll the agent under the owner with these permissions (create it, or reactivate it after an
+          agent.unlinked); the service then calls POST /v1/oe/credentials/renew for its first key;
         - agent.paused: refuse every request authenticated as that agent DID or its keys with 423 agent_paused
           (Agent Secret Store also suspends its scoped tokens and gateway access; Moltbot Den holds contract actions);
         - agent.resumed: lift that;
@@ -4338,6 +4352,7 @@ components:
         type: { type: string, const: error }
         error: { type: string }
         message: { type: string }
+        close_code: { type: integer, enum: [4001, 4003, 4008], description: 'Present on the last frame before the server closes the socket: the close code (x-websocket closeCodes).' }
     NotifyRequest:
       type: object
       required: [owner_did, type, id]
@@ -4538,9 +4553,9 @@ components:
     AccountEvent:
       type: object
       description: |
-        The body of POST /v1/oe/events. Types the service sends: agent.paused, agent.resumed, agent.unlinked,
-        agent.permissions, owner.deleted (the owner-delete call), plan.changed (the signed plan-grant call). Products
-        ignore types they do not know.
+        The body of POST /v1/oe/events. Types the service sends: agent.paired, agent.paused, agent.resumed,
+        agent.unlinked, agent.permissions, owner.deleted (the owner-delete call), plan.changed (the signed plan-grant
+        call). Products ignore types they do not know.
       required: [id, type, created_at, data]
       properties:
         id: { type: string, pattern: '^evt_[A-Za-z0-9_-]{1,60}$', description: Dedupe for at least 24 hours. }
@@ -4548,6 +4563,8 @@ components:
         created_at: { $ref: '#/components/schemas/UnixSeconds' }
         data: { type: object }
       allOf:
+        - if: { properties: { type: { const: agent.paired } } }
+          then: { properties: { data: { $ref: '#/components/schemas/AgentPairedData' } } }
         - if: { properties: { type: { const: agent.paused } } }
           then: { properties: { data: { $ref: '#/components/schemas/AgentPausedData' } } }
         - if: { properties: { type: { const: agent.resumed } } }
@@ -4560,6 +4577,17 @@ components:
           then: { properties: { data: { $ref: '#/components/schemas/OwnerDeletedData' } } }
         - if: { properties: { type: { const: plan.changed } } }
           then: { properties: { data: { $ref: '#/components/schemas/PlanChangedData' } } }
+    AgentPairedData:
+      type: object
+      required: [agent_did, owner_did, permissions, framework, seq]
+      properties:
+        agent_did: { $ref: '#/components/schemas/AgentDid' }
+        owner_did: { $ref: '#/components/schemas/OwnerDid' }
+        permissions:
+          type: array
+          items: { $ref: '#/components/schemas/Permission' }
+        framework: { type: [string, 'null'], maxLength: 64, description: What the agent named at claim, e.g. openclaw. }
+        seq: { type: integer, minimum: 1, description: 'The agent''s permissions counter, as on agent.permissions: apply these permissions only if newer than the ones held.' }
     AgentPausedData:
       type: object
       required: [agent_did, owner_did, paused_at, seq]
