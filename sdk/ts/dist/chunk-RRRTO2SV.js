@@ -2095,6 +2095,141 @@ function buildOpenEntityJson(did, publicKey, o) {
   };
 }
 
+// src/httpsig.ts
+import { ed25519 as ed255192 } from "@noble/curves/ed25519.js";
+var didWebKeys = /* @__PURE__ */ new Map();
+var DID_CACHE_MS = 6e5;
+var DID_REFETCH_MS = 3e4;
+async function didJson(url) {
+  const r = await fetch(url, { redirect: "error", signal: AbortSignal.timeout(5e3), headers: { accept: "application/did+json, application/json" } });
+  if (!r.ok) throw new Error(`${url} answered ${r.status}`);
+  return r.json();
+}
+function ed25519Methods(did, doc, relationship) {
+  if (doc?.id !== did) throw new OpenEntityError("verification_failed", `${did} document names ${doc?.id}`);
+  const abs = (id) => typeof id === "string" && id.startsWith("#") ? did + id : id;
+  const refs = relationship && new Set((Array.isArray(doc[relationship]) ? doc[relationship] : []).map((r) => abs(typeof r === "string" ? r : r?.id)));
+  const keys = /* @__PURE__ */ new Map();
+  for (const vm of Array.isArray(doc.verificationMethod) ? doc.verificationMethod : []) {
+    const id = abs(vm?.id), jwk = vm?.publicKeyJwk;
+    if (typeof id !== "string" || refs && !refs.has(id)) continue;
+    try {
+      const key = typeof vm.publicKeyMultibase === "string" ? publicKeyFromDidKey("did:key:" + vm.publicKeyMultibase) : jwk?.kty === "OKP" && jwk.crv === "Ed25519" && b64url(unb64url(jwk.x)) === jwk.x ? unb64url(jwk.x) : void 0;
+      if (key?.length === 32) keys.set(id, key);
+    } catch {
+    }
+  }
+  return keys;
+}
+async function didWebKey(keyid, fetchJson) {
+  const did = keyid.split("#")[0];
+  const hit = didWebKeys.get(did), age = hit ? Date.now() - hit.at : Infinity;
+  if (hit && age < DID_CACHE_MS && (hit.keys.has(keyid) || age < DID_REFETCH_MS)) return hit.keys.get(keyid);
+  const keys = ed25519Methods(did, await fetchJson(didWebUrl(did)), "authentication");
+  didWebKeys.set(did, { at: Date.now(), keys });
+  return keys.get(keyid);
+}
+var HTTPSIG_SKEW = 5;
+var contentDigest = (body) => `sha-256=:${b64(sha256Sync(body))}:`;
+function httpSigBase(method, url, components, digest, params) {
+  const value = { "@method": method.toUpperCase(), "@target-uri": url, "content-digest": digest };
+  return utf8([...components.map((c) => `"${c}": ${value[c]}`), `"@signature-params": ${params}`].join("\n"));
+}
+var fail = (code) => {
+  throw new HttpSigError(code);
+};
+var lower = (headers) => Object.fromEntries(Object.entries(headers).map(([k, v]) => [k.toLowerCase(), v]));
+function sig1(h) {
+  const m = /(?:^|,)\s*sig1=(\(([^)]*)\)((?:;[a-z]+=(?:\d+|"[^"]*"))*))/.exec(h["signature-input"] ?? "");
+  const s = /(?:^|,)\s*sig1=:([A-Za-z0-9+/]+={0,2}):/.exec(h["signature"] ?? "");
+  if (!m || !s) return fail("missing_headers");
+  const p = {};
+  for (const [, k, v] of m[3].matchAll(/;([a-z]+)=(\d+|"[^"]*")/g)) p[k] = v.startsWith('"') ? v.slice(1, -1) : Number(v);
+  if (p.alg !== "ed25519") fail("unknown_alg");
+  return { params: m[1], comps: [...m[2].matchAll(/"([^"]*)"/g)].map((x) => x[1]), p, sig: s[1], keyid: String(p.keyid ?? "") };
+}
+var allowedDidWeb = (keyid, allow) => /^did:web:[^#]+#[^#]+$/.test(keyid) && Array.isArray(allow) && allow.includes(keyid.split("#")[0]);
+var verifies = (sig, base2, pub) => {
+  try {
+    return ed255192.verify(unb64(sig), base2, pub);
+  } catch {
+    return false;
+  }
+};
+async function signRequest(o) {
+  const seed = o.privateKey instanceof Uint8Array ? o.privateKey : unb64url(o.privateKey.privateJwk.d);
+  const created = o.created ?? Math.floor(Date.now() / 1e3);
+  const nonce = o.nonce ?? b64url(crypto.getRandomValues(new Uint8Array(16)));
+  const out = {};
+  const comps = ["@method", "@target-uri"];
+  if (o.body?.length) {
+    out["Content-Digest"] = contentDigest(o.body);
+    comps.push("content-digest");
+  }
+  const params = `(${comps.map((c) => `"${c}"`).join(" ")});created=${created};expires=${created + (o.expiresIn ?? 60)};nonce="${nonce}";keyid="${o.did}";alg="ed25519"`;
+  const sig = ed255192.sign(httpSigBase(o.method, o.url, comps, out["Content-Digest"], params), seed);
+  out["Signature-Input"] = `sig1=${params}`;
+  out["Signature"] = `sig1=:${b64(sig)}:`;
+  return out;
+}
+async function verifyRequest(o) {
+  const h = lower(o.headers);
+  const maxAge = o.maxAge ?? 300;
+  const body = o.body ?? new Uint8Array();
+  const { params, comps, p, sig, keyid } = sig1(h);
+  const did = keyid.split("#")[0];
+  let pub;
+  if (keyid.startsWith("did:web:")) {
+    if (!allowedDidWeb(keyid, o.allowDidWeb)) fail("bad_keyid");
+  } else {
+    try {
+      pub = publicKeyFromDidKey(keyid);
+      if (didKeyFromPublicKey(pub) !== keyid) throw 0;
+    } catch {
+      return fail("bad_keyid");
+    }
+  }
+  if (typeof p.created !== "number" || typeof p.expires !== "number") fail("missing_headers");
+  const created = p.created, expires = p.expires;
+  const nonce = String(p.nonce ?? "");
+  if (nonce.length < 22) fail("missing_nonce");
+  if (comps[0] !== "@method" || comps[1] !== "@target-uri" || comps.length > 3 || comps.length === 3 && comps[2] !== "content-digest") fail("missing_headers");
+  let digest;
+  if (body.length || comps.includes("content-digest")) {
+    digest = h["content-digest"];
+    if (!comps.includes("content-digest") || digest !== contentDigest(body)) fail("digest_mismatch");
+  }
+  const now = o.now ?? Math.floor(Date.now() / 1e3);
+  if (created > now + HTTPSIG_SKEW) fail("created_in_future");
+  if (now - created > maxAge) fail("created_too_old");
+  if (expires < now) fail("expired");
+  if (expires - created > maxAge) fail("lifetime_too_long");
+  if (!pub) pub = await didWebKey(keyid, o.fetchJson ?? didJson).catch(() => void 0);
+  if (!pub) return fail("bad_keyid");
+  if (!verifies(sig, httpSigBase(o.method, o.url, comps, digest, params), pub)) fail("bad_signature");
+  return { did, keyid, created, expires, nonce };
+}
+async function verifyResponse(o) {
+  const h = lower(o.headers);
+  const { params, comps, p, sig, keyid } = sig1(h);
+  if (!allowedDidWeb(keyid, o.allowDidWeb)) fail("bad_keyid");
+  if (typeof p.created !== "number" || typeof p.expires !== "number") fail("missing_headers");
+  const created = p.created, expires = p.expires;
+  if (comps.length !== 2 || comps[0] !== "@status" || comps[1] !== "content-digest") fail("missing_headers");
+  const digest = h["content-digest"];
+  if (digest !== contentDigest(o.body)) fail("digest_mismatch");
+  const now = o.now ?? Math.floor(Date.now() / 1e3);
+  if (created > now + HTTPSIG_SKEW) fail("created_in_future");
+  if (expires < now) fail("expired");
+  if (expires - created > (o.maxAge ?? 60)) fail("lifetime_too_long");
+  const pub = await didWebKey(keyid, o.fetchJson ?? didJson).catch(() => void 0);
+  if (!pub) return fail("bad_keyid");
+  if (!verifies(sig, utf8(`"@status": ${o.status}
+"content-digest": ${digest}
+"@signature-params": ${params}`), pub)) fail("bad_signature");
+  return { did: keyid.split("#")[0], keyid, created, expires };
+}
+
 // src/registry.ts
 async function rotate(o) {
   const registry = (o.registry ?? "https://openentity.org").replace(/\/+$/, "");
@@ -2166,19 +2301,7 @@ var TRUST_CACHE_MS = 3e5;
 var trustCache = /* @__PURE__ */ new Map();
 var clearTrustCache = () => trustCache.clear();
 function didWebResolver(fetchJson = registryJson) {
-  return async (did) => {
-    if (!did.startsWith("did:web:")) return defaultResolver(did);
-    const doc = await fetchJson(didWebUrl(did));
-    if (doc.id !== did) throw new OpenEntityError("verification_failed", `${did} document names ${doc.id}`);
-    const ed255194 = [];
-    for (const vm of doc.verificationMethod ?? []) {
-      try {
-        ed255194.push(publicKeyFromDidKey("did:key:" + vm.publicKeyMultibase));
-      } catch {
-      }
-    }
-    return { ed25519: ed255194 };
-  };
+  return async (did) => did.startsWith("did:web:") ? { ed25519: [...ed25519Methods(did, await fetchJson(didWebUrl(did))).values()] } : defaultResolver(did);
 }
 async function trust(eid, o = {}) {
   const registry = (o.registry ?? "https://openentity.org").replace(/\/+$/, "");
@@ -2222,7 +2345,7 @@ async function readTrust(eid, base2, now, get, resolver) {
 }
 
 // src/merkle.ts
-import { ed25519 as ed255192 } from "@noble/curves/ed25519.js";
+import { ed25519 as ed255193 } from "@noble/curves/ed25519.js";
 var leafHashSync = (b) => sha256Sync(concat(Uint8Array.of(0), b));
 var nodeHashSync = (l, r) => sha256Sync(concat(Uint8Array.of(1), l, r));
 var split = (n) => {
@@ -2337,7 +2460,7 @@ async function verifyNote(note, keyName, publicKey) {
     } catch {
       continue;
     }
-    if (raw.length === 68 && equal(raw.slice(0, 4), id) && ed255192.verify(raw.slice(4), text, publicKey, { zip215: false }))
+    if (raw.length === 68 && equal(raw.slice(0, 4), id) && ed255193.verify(raw.slice(4), text, publicKey, { zip215: false }))
       return true;
   }
   return false;
@@ -2402,115 +2525,6 @@ async function present(kp, o) {
   return buildPresentation(kp, { audience: o.audience, nonce: o.nonce, attestations });
 }
 
-// src/httpsig.ts
-import { ed25519 as ed255193 } from "@noble/curves/ed25519.js";
-var didWebKeys = /* @__PURE__ */ new Map();
-var DID_CACHE_MS = 6e5;
-var DID_REFETCH_MS = 3e4;
-async function didJson(url) {
-  const r = await fetch(url, { redirect: "error", signal: AbortSignal.timeout(5e3), headers: { accept: "application/did+json, application/json" } });
-  if (!r.ok) throw new Error(`${url} answered ${r.status}`);
-  return r.json();
-}
-function ed25519Methods(did, doc) {
-  if (doc?.id !== did) throw new Error(`${did} document names ${doc?.id}`);
-  const keys = /* @__PURE__ */ new Map();
-  for (const vm of Array.isArray(doc.verificationMethod) ? doc.verificationMethod : []) {
-    if (typeof vm?.id !== "string") continue;
-    try {
-      const jwk = vm.publicKeyJwk;
-      const key = vm.type === "Multikey" ? publicKeyFromDidKey("did:key:" + vm.publicKeyMultibase) : vm.type === "JsonWebKey" && jwk?.kty === "OKP" && jwk.crv === "Ed25519" && b64url(unb64url(jwk.x)) === jwk.x ? unb64url(jwk.x) : void 0;
-      if (key?.length === 32) keys.set(vm.id.startsWith("#") ? did + vm.id : vm.id, key);
-    } catch {
-    }
-  }
-  return keys;
-}
-async function didWebKey(keyid, fetchJson) {
-  const did = keyid.split("#")[0];
-  const hit = didWebKeys.get(did), age = hit ? Date.now() - hit.at : Infinity;
-  if (hit && age < DID_CACHE_MS && (hit.keys.has(keyid) || age < DID_REFETCH_MS)) return hit.keys.get(keyid);
-  const keys = ed25519Methods(did, await fetchJson(didWebUrl(did)));
-  didWebKeys.set(did, { at: Date.now(), keys });
-  return keys.get(keyid);
-}
-var HTTPSIG_SKEW = 5;
-var contentDigest = (body) => `sha-256=:${b64(sha256Sync(body))}:`;
-function httpSigBase(method, url, components, digest, params) {
-  const value = { "@method": method.toUpperCase(), "@target-uri": url, "content-digest": digest };
-  return utf8([...components.map((c) => `"${c}": ${value[c]}`), `"@signature-params": ${params}`].join("\n"));
-}
-async function signRequest(o) {
-  const seed = o.privateKey instanceof Uint8Array ? o.privateKey : unb64url(o.privateKey.privateJwk.d);
-  const created = o.created ?? Math.floor(Date.now() / 1e3);
-  const nonce = o.nonce ?? b64url(crypto.getRandomValues(new Uint8Array(16)));
-  const out = {};
-  const comps = ["@method", "@target-uri"];
-  if (o.body?.length) {
-    out["Content-Digest"] = contentDigest(o.body);
-    comps.push("content-digest");
-  }
-  const params = `(${comps.map((c) => `"${c}"`).join(" ")});created=${created};expires=${created + (o.expiresIn ?? 60)};nonce="${nonce}";keyid="${o.did}";alg="ed25519"`;
-  const sig = ed255193.sign(httpSigBase(o.method, o.url, comps, out["Content-Digest"], params), seed);
-  out["Signature-Input"] = `sig1=${params}`;
-  out["Signature"] = `sig1=:${b64(sig)}:`;
-  return out;
-}
-async function verifyRequest(o) {
-  const fail2 = (code) => {
-    throw new HttpSigError(code);
-  };
-  const h = Object.fromEntries(Object.entries(o.headers).map(([k, v]) => [k.toLowerCase(), v]));
-  const maxAge = o.maxAge ?? 300;
-  const body = o.body ?? new Uint8Array();
-  if (!h["signature-input"] || !h["signature"]) fail2("missing_headers");
-  const m = /(?:^|,)\s*sig1=(\(([^)]*)\)((?:;[a-z]+=(?:\d+|"[^"]*"))*))/.exec(h["signature-input"]);
-  const s = /(?:^|,)\s*sig1=:([A-Za-z0-9+/]+={0,2}):/.exec(h["signature"]);
-  if (!m || !s) return fail2("missing_headers");
-  const params = m[1];
-  const comps = [...m[2].matchAll(/"([^"]*)"/g)].map((x) => x[1]);
-  const p = {};
-  for (const [, k, v] of m[3].matchAll(/;([a-z]+)=(\d+|"[^"]*")/g)) p[k] = v.startsWith('"') ? v.slice(1, -1) : Number(v);
-  if (p.alg !== "ed25519") fail2("unknown_alg");
-  const keyid = String(p.keyid ?? "");
-  const did = keyid.split("#")[0];
-  let pub;
-  if (keyid.startsWith("did:web:")) {
-    if (!/#[^#]+$/.test(keyid) || !(o.allowDidWeb ?? []).includes(did)) fail2("bad_keyid");
-  } else {
-    try {
-      pub = publicKeyFromDidKey(keyid);
-      if (didKeyFromPublicKey(pub) !== keyid) throw 0;
-    } catch {
-      return fail2("bad_keyid");
-    }
-  }
-  if (typeof p.created !== "number" || typeof p.expires !== "number") fail2("missing_headers");
-  const created = p.created, expires = p.expires;
-  const nonce = String(p.nonce ?? "");
-  if (nonce.length < 22) fail2("missing_nonce");
-  if (comps[0] !== "@method" || comps[1] !== "@target-uri" || comps.length > 3 || comps.length === 3 && comps[2] !== "content-digest") fail2("missing_headers");
-  let digest;
-  if (body.length || comps.includes("content-digest")) {
-    digest = h["content-digest"];
-    if (!comps.includes("content-digest") || digest !== contentDigest(body)) fail2("digest_mismatch");
-  }
-  const now = o.now ?? Math.floor(Date.now() / 1e3);
-  if (created > now + HTTPSIG_SKEW) fail2("created_in_future");
-  if (now - created > maxAge) fail2("created_too_old");
-  if (expires < now) fail2("expired");
-  if (expires - created > maxAge) fail2("lifetime_too_long");
-  if (!pub) pub = await didWebKey(keyid, o.fetchJson ?? didJson).catch(() => void 0);
-  if (!pub) return fail2("bad_keyid");
-  let ok = false;
-  try {
-    ok = ed255193.verify(unb64(s[1]), httpSigBase(o.method, o.url, comps, digest, params), pub);
-  } catch {
-  }
-  if (!ok) fail2("bad_signature");
-  return { did, keyid, created, expires, nonce };
-}
-
 // src/owner.ts
 import { p256 } from "@noble/curves/nist.js";
 var RP_ID = "account.openentity.org";
@@ -2529,7 +2543,7 @@ var Fail = class {
     this.message = message;
   }
 };
-var fail = (code, message) => {
+var fail2 = (code, message) => {
   throw new Fail(code, message);
 };
 var isObj = (v) => typeof v === "object" && v !== null && !Array.isArray(v);
@@ -2600,11 +2614,11 @@ function ecdsa(raw, msg, pub, prehash, lowS) {
   }
 }
 function checkSignature(cred, s, digest, o) {
-  if (s.form !== cred.type) fail("bad_signature", `a ${cred.type} key cannot present a ${String(s.form)} signature`);
+  if (s.form !== cred.type) fail2("bad_signature", `a ${cred.type} key cannot present a ${String(s.form)} signature`);
   const pub = jwkPoint(cred.jwk);
   const sig = b64u(s.signature);
   if (s.form === "p256") {
-    if (sig.length !== 64 || !ecdsa(sig, digest, pub, false, o.lowS)) fail("bad_signature", "p256 signature does not verify");
+    if (sig.length !== 64 || !ecdsa(sig, digest, pub, false, o.lowS)) fail2("bad_signature", "p256 signature does not verify");
     return 0;
   }
   const authData = b64u(s.authenticator_data), clientRaw = b64u(s.client_data_json);
@@ -2612,18 +2626,18 @@ function checkSignature(cred, s, digest, o) {
   try {
     client = parseJson(new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(clientRaw));
   } catch {
-    fail("bad_webauthn", "clientDataJSON is not JSON");
+    fail2("bad_webauthn", "clientDataJSON is not JSON");
   }
-  if (plainJson(client, false)) fail("bad_webauthn", "clientDataJSON has a lone surrogate");
-  if (!isObj(client) || client.type !== "webauthn.get") fail("bad_webauthn", "clientDataJSON type must be webauthn.get");
+  if (plainJson(client, false)) fail2("bad_webauthn", "clientDataJSON has a lone surrogate");
+  if (!isObj(client) || client.type !== "webauthn.get") fail2("bad_webauthn", "clientDataJSON type must be webauthn.get");
   const c = client;
-  if (c.challenge !== b64url(digest)) fail("bad_webauthn", "challenge is not the digest");
-  if (typeof c.origin !== "string" || !o.origins.includes(c.origin)) fail("bad_webauthn", `origin ${String(c.origin)} is not accepted`);
-  if (c.crossOrigin === true) fail("bad_webauthn", "cross-origin assertions are not accepted");
-  if (authData.length < 37 || !equal(authData.subarray(0, 32), sha256Sync(o.rpId))) fail("bad_webauthn", `rpIdHash is not SHA-256(${o.rpId})`);
-  if ((authData[32] & 5) !== 5) fail("bad_webauthn", "user presence and user verification flags must be set");
+  if (c.challenge !== b64url(digest)) fail2("bad_webauthn", "challenge is not the digest");
+  if (typeof c.origin !== "string" || !o.origins.includes(c.origin)) fail2("bad_webauthn", `origin ${String(c.origin)} is not accepted`);
+  if (c.crossOrigin === true) fail2("bad_webauthn", "cross-origin assertions are not accepted");
+  if (authData.length < 37 || !equal(authData.subarray(0, 32), sha256Sync(o.rpId))) fail2("bad_webauthn", `rpIdHash is not SHA-256(${o.rpId})`);
+  if ((authData[32] & 5) !== 5) fail2("bad_webauthn", "user presence and user verification flags must be set");
   const raw = derToRaw(sig);
-  if (!raw || !ecdsa(raw, concat(authData, sha256Sync(clientRaw)), pub, true, o.lowS)) fail("bad_signature", "webauthn signature does not verify");
+  if (!raw || !ecdsa(raw, concat(authData, sha256Sync(clientRaw)), pub, true, o.lowS)) fail2("bad_signature", "webauthn signature does not verify");
   return new DataView(authData.buffer, authData.byteOffset).getUint32(33);
 }
 function signedShape(s) {
@@ -2653,27 +2667,27 @@ function payloadDigest(summary) {
 }
 function verifyApproval(approval, o) {
   try {
-    if (!isObj(approval)) fail("malformed", "approval must be an object");
+    if (!isObj(approval)) fail2("malformed", "approval must be an object");
     const a = approval;
-    if (a.version !== "approval/2.0") fail("bad_version", `version ${String(a.version)} is not approval/2.0`);
+    if (a.version !== "approval/2.0") fail2("bad_version", `version ${String(a.version)} is not approval/2.0`);
     const shape = approvalFieldsError(a) ?? (typeof a.device_id === "string" ? signedShape(a) : "device_id must be a string");
-    if (shape) fail("malformed", shape);
+    if (shape) fail2("malformed", shape);
     const now = o.now ?? Math.floor(Date.now() / 1e3);
-    if (a.verifier_did !== o.verifierDid) fail("wrong_verifier", `approval is for ${String(a.verifier_did)}`);
-    if (a.owner_did !== o.ownerDid || a.owner_did !== o.keyLog.did) fail("wrong_owner", "approval names another owner");
-    if (o.keyLog.closed) fail("owner_closed", "the owner's key log is closed");
-    if (a.request_id !== o.requestId) fail("wrong_request", "the request changed; fetch a new one");
-    if (a.payload_digest !== o.payloadDigest) fail("wrong_payload", "payload digest does not match the action");
-    if (!(o.decisions ?? ["approve", "deny"]).includes(a.decision)) fail("bad_decision", `decision ${String(a.decision)} is not accepted here`);
+    if (a.verifier_did !== o.verifierDid) fail2("wrong_verifier", `approval is for ${String(a.verifier_did)}`);
+    if (a.owner_did !== o.ownerDid || a.owner_did !== o.keyLog.did) fail2("wrong_owner", "approval names another owner");
+    if (o.keyLog.closed) fail2("owner_closed", "the owner's key log is closed");
+    if (a.request_id !== o.requestId) fail2("wrong_request", "the request changed; fetch a new one");
+    if (a.payload_digest !== o.payloadDigest) fail2("wrong_payload", "payload digest does not match the action");
+    if (!(o.decisions ?? ["approve", "deny"]).includes(a.decision)) fail2("bad_decision", `decision ${String(a.decision)} is not accepted here`);
     const exp = a.expires_at;
-    if (now >= exp) fail("expired", "approval expired");
-    if (exp > now + MAX_TTL) fail("expiry_too_far", "expires_at is more than 600 seconds away");
+    if (now >= exp) fail2("expired", "approval expired");
+    if (exp > now + MAX_TTL) fail2("expiry_too_far", "expires_at is more than 600 seconds away");
     const cred = o.keyLog.approvers.find((c) => c.kid === a.device_id) ?? (o.allowRoot && o.keyLog.root?.kid === a.device_id ? o.keyLog.root : void 0);
-    if (!cred) fail("unknown_key", "device_id is not a current approver in the owner's key log");
+    if (!cred) fail2("unknown_key", "device_id is not a current approver in the owner's key log");
     const rpId = o.rpId ?? RP_ID;
     const counter = checkSignature(cred, a, approvalDigest(a), { origins: o.origins ?? [`https://${rpId}`], rpId, lowS: false });
     const stored = o.counter ?? 0;
-    if (a.form === "webauthn" && (counter || stored) && counter <= stored) fail("counter_replayed", "signature counter did not increase");
+    if (a.form === "webauthn" && (counter || stored) && counter <= stored) fail2("counter_replayed", "signature counter did not increase");
     return { ok: true, kid: cred.kid, counter };
   } catch (x) {
     if (x instanceof Fail) return { ok: false, error: x.code, message: x.message };
@@ -2690,62 +2704,62 @@ var BODY = {
   close: []
 };
 function credential(c, rpId, what) {
-  if (!isObj(c)) fail("malformed", `${what} must be a credential object`);
+  if (!isObj(c)) fail2("malformed", `${what} must be a credential object`);
   const k = c;
-  if (k.type !== "p256" && k.type !== "webauthn") fail("malformed", `${what}.type must be p256 or webauthn`);
-  if (!jwkPoint(k.jwk)) fail("malformed", `${what}.jwk must be exactly {kty: EC, crv: P-256, x, y} with a point on the curve`);
-  if (k.kid !== thumbprint(k.jwk)) fail("malformed", `${what}.kid must be the RFC 7638 thumbprint of its jwk`);
-  if (k.type === "webauthn" && (!b64u(k.credential_id)?.length || k.rp_id !== rpId)) fail("malformed", `${what} needs a credential_id and rp_id ${rpId}`);
+  if (k.type !== "p256" && k.type !== "webauthn") fail2("malformed", `${what}.type must be p256 or webauthn`);
+  if (!jwkPoint(k.jwk)) fail2("malformed", `${what}.jwk must be exactly {kty: EC, crv: P-256, x, y} with a point on the curve`);
+  if (k.kid !== thumbprint(k.jwk)) fail2("malformed", `${what}.kid must be the RFC 7638 thumbprint of its jwk`);
+  if (k.type === "webauthn" && (!b64u(k.credential_id)?.length || k.rp_id !== rpId)) fail2("malformed", `${what} needs a credential_id and rp_id ${rpId}`);
   return k;
 }
 function parseEntry(line, rpId, first) {
-  if (typeof line !== "string") fail("malformed", "entry must be a JSON line");
+  if (typeof line !== "string") fail2("malformed", "entry must be a JSON line");
   let e;
   try {
     e = parseJson(line);
   } catch (x2) {
-    fail("malformed", `not JSON: ${x2.message}`);
+    fail2("malformed", `not JSON: ${x2.message}`);
   }
   const bad = plainJson(e);
-  if (bad) fail("malformed", bad);
-  if (canonicalize(e) !== line) fail("malformed", "line is not the RFC 8785 form of its entry");
-  if (!isObj(e) || !exactKeys(e, ["v", "seq", "prev", "op", "ts", "body", "auth"])) fail("malformed", "entry must have exactly v, seq, prev, op, ts, body, auth");
+  if (bad) fail2("malformed", bad);
+  if (canonicalize(e) !== line) fail2("malformed", "line is not the RFC 8785 form of its entry");
+  if (!isObj(e) || !exactKeys(e, ["v", "seq", "prev", "op", "ts", "body", "auth"])) fail2("malformed", "entry must have exactly v, seq, prev, op, ts, body, auth");
   const x = e;
-  if (x.v !== 1) fail("malformed", "v must be 1");
-  if (!isUint(x.seq) || !isUint(x.ts)) fail("malformed", "seq and ts must be unsigned integers");
-  if (x.prev !== null && (typeof x.prev !== "string" || !HEX64.test(x.prev))) fail("malformed", "prev must be null or 64 lowercase hex");
-  if (typeof x.op !== "string" || !Object.hasOwn(BODY, x.op)) fail("malformed", `unknown op ${String(x.op)}`);
-  if (x.op === "genesis" !== first) fail("malformed", "genesis is the first entry and only the first");
-  if (!isObj(x.body) || !exactKeys(x.body, BODY[x.op])) fail("malformed", `${String(x.op)} body must have exactly: ${BODY[x.op].join(", ") || "nothing"}`);
+  if (x.v !== 1) fail2("malformed", "v must be 1");
+  if (!isUint(x.seq) || !isUint(x.ts)) fail2("malformed", "seq and ts must be unsigned integers");
+  if (x.prev !== null && (typeof x.prev !== "string" || !HEX64.test(x.prev))) fail2("malformed", "prev must be null or 64 lowercase hex");
+  if (typeof x.op !== "string" || !Object.hasOwn(BODY, x.op)) fail2("malformed", `unknown op ${String(x.op)}`);
+  if (x.op === "genesis" !== first) fail2("malformed", "genesis is the first entry and only the first");
+  if (!isObj(x.body) || !exactKeys(x.body, BODY[x.op])) fail2("malformed", `${String(x.op)} body must have exactly: ${BODY[x.op].join(", ") || "nothing"}`);
   const body = x.body;
   switch (x.op) {
     case "genesis":
-      if (credential(body.root, rpId, "root").type !== "webauthn") fail("malformed", "root must be a passkey (webauthn)");
+      if (credential(body.root, rpId, "root").type !== "webauthn") fail2("malformed", "root must be a passkey (webauthn)");
       if (body.approver !== null) credential(body.approver, rpId, "approver");
       break;
     case "add_approver":
       credential(body.approver, rpId, "approver");
       break;
     case "recover":
-      if (!Array.isArray(body.approvers) || !body.approvers.length) fail("malformed", "recover needs at least one approver");
+      if (!Array.isArray(body.approvers) || !body.approvers.length) fail2("malformed", "recover needs at least one approver");
       body.approvers.forEach((c, i) => credential(c, rpId, `approvers[${i}]`));
       break;
     case "replace_root":
-      if (credential(body.root, rpId, "root").type !== "webauthn") fail("malformed", "root must be a passkey (webauthn)");
+      if (credential(body.root, rpId, "root").type !== "webauthn") fail2("malformed", "root must be a passkey (webauthn)");
       break;
     case "cancel":
-      if (typeof body.target !== "string" || !HEX64.test(body.target)) fail("malformed", "target must be 64 lowercase hex");
+      if (typeof body.target !== "string" || !HEX64.test(body.target)) fail2("malformed", "target must be 64 lowercase hex");
       break;
     case "revoke":
-      if (typeof body.kid !== "string") fail("malformed", "kid must be a string");
+      if (typeof body.kid !== "string") fail2("malformed", "kid must be a string");
       break;
   }
   const auth = x.auth;
-  if (!isObj(auth) || typeof auth.kid !== "string") fail("malformed", "auth must be an object with a kid");
+  if (!isObj(auth) || typeof auth.kid !== "string") fail2("malformed", "auth must be an object with a kid");
   const a = auth;
   const keys = a.form === "webauthn" ? ["kid", "form", "signature", "authenticator_data", "client_data_json"] : ["kid", "form", "signature"];
   const shape = signedShape(a) ?? (exactKeys(a, keys) ? null : `auth must have exactly ${keys.join(", ")}`);
-  if (shape) fail("malformed", shape);
+  if (shape) fail2("malformed", shape);
   return x;
 }
 function verifyKeyLog(did, lines, firstSeenAt, opts = {}) {
@@ -2758,8 +2772,8 @@ function verifyKeyLog(did, lines, firstSeenAt, opts = {}) {
   });
   let seq = 1;
   try {
-    if (!Array.isArray(lines) || !lines.length) fail("malformed", "a key log starts with its genesis entry");
-    if (!Array.isArray(firstSeenAt) || firstSeenAt.length !== lines.length) fail("bad_first_seen", "one first_seen_at per entry");
+    if (!Array.isArray(lines) || !lines.length) fail2("malformed", "a key log starts with its genesis entry");
+    if (!Array.isArray(firstSeenAt) || firstSeenAt.length !== lines.length) fail2("bad_first_seen", "one first_seen_at per entry");
     let root, single = false, closed = false, head = "";
     let approvers = [], pending = [];
     const revoked = [];
@@ -2779,19 +2793,19 @@ function verifyKeyLog(did, lines, firstSeenAt, opts = {}) {
     };
     const fresh = (creds) => {
       for (const c of creds) {
-        if (seen.has(c.kid)) fail("key_reused", `key ${c.kid} is already in this log`);
+        if (seen.has(c.kid)) fail2("key_reused", `key ${c.kid} is already in this log`);
         seen.add(c.kid);
       }
     };
     for (let i = 0; i < lines.length; i++) {
       seq = i + 1;
       const t = firstSeenAt[i];
-      if (!isUint(t) || t > now || i > 0 && t < firstSeenAt[i - 1]) fail("bad_first_seen", "first_seen_at must be unix seconds, never decreasing, not after now");
+      if (!isUint(t) || t > now || i > 0 && t < firstSeenAt[i - 1]) fail2("bad_first_seen", "first_seen_at must be unix seconds, never decreasing, not after now");
       if (i > 0) due(t);
       const e = parseEntry(lines[i], rpId, i === 0);
-      if (closed) fail("closed", "the log is closed");
-      if (e.seq !== seq) fail("bad_seq", `seq must be ${seq}`);
-      if (e.prev !== (i ? head : null)) fail("bad_prev", i ? "prev is not the SHA-256 of the previous entry" : "genesis prev must be null");
+      if (closed) fail2("closed", "the log is closed");
+      if (e.seq !== seq) fail2("bad_seq", `seq must be ${seq}`);
+      if (e.prev !== (i ? head : null)) fail2("bad_prev", i ? "prev is not the SHA-256 of the previous entry" : "genesis prev must be null");
       const hash = toHex(sha256Sync(lines[i]));
       const { auth: _auth, ...unsigned } = e;
       const digest = sha256Sync(canonicalize(unsigned));
@@ -2799,7 +2813,7 @@ function verifyKeyLog(did, lines, firstSeenAt, opts = {}) {
       let signer;
       switch (e.op) {
         case "genesis": {
-          if (did !== `did:web:${rpId}:o:${base32(sha256Sync(lines[i]))}`) fail("did_mismatch", "the genesis hash does not match the DID suffix");
+          if (did !== `did:web:${rpId}:o:${base32(sha256Sync(lines[i]))}`) fail2("did_mismatch", "the genesis hash does not match the DID suffix");
           root = b.root;
           const first = b.approver;
           fresh(first ? [root, first] : [root]);
@@ -2822,19 +2836,19 @@ function verifyKeyLog(did, lines, firstSeenAt, opts = {}) {
           break;
         case "cancel": {
           const op = delayed.get(b.target);
-          if (!op) fail("bad_target", "target is not a recover or replace_root in this log");
+          if (!op) fail2("bad_target", "target is not a recover or replace_root in this log");
           signer = approver(kid) ?? revoked.find((r) => r.cred.kid === kid && t < r.at + WEEK)?.cred ?? (op === "recover" && root.kid === kid ? root : void 0);
           break;
         }
         case "revoke":
-          if (!approvers.some((c) => c.kid === b.kid)) fail("bad_target", "kid is not a current approver");
+          if (!approvers.some((c) => c.kid === b.kid)) fail2("bad_target", "kid is not a current approver");
           signer = root.kid === kid ? root : approver(kid);
           break;
         case "close":
           signer = services.find((c) => c.kid === kid);
           break;
       }
-      if (!signer) fail("unauthorized", `key ${kid} may not sign ${e.op} here`);
+      if (!signer) fail2("unauthorized", `key ${kid} may not sign ${e.op} here`);
       checkSignature(signer, e.auth, digest, sig);
       switch (e.op) {
         case "add_approver":
@@ -2944,6 +2958,10 @@ export {
   signRevocation,
   buildDidDocument,
   buildOpenEntityJson,
+  httpSigBase,
+  signRequest,
+  verifyRequest,
+  verifyResponse,
   rotate,
   CLIENTS,
   adopt,
@@ -2969,9 +2987,6 @@ export {
   dispute,
   find,
   present,
-  httpSigBase,
-  signRequest,
-  verifyRequest,
   approvalDigest,
   payloadDigest,
   verifyApproval,

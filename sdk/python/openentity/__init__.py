@@ -8,7 +8,7 @@ from .core import *  # noqa: F401,F403
 from .core import __all__ as _core
 from .errors import (REGISTRY_ERROR_CODES, HttpSigError, InvalidInputError, OpenEntityError, RegistryError,  # noqa: F401
                      VerificationError)
-from .httpsig import http_sig_base, sign_request, verify_request
+from .httpsig import http_sig_base, sign_request, verify_request, verify_response
 from .identity import Identity
 from .issuer import (A2A_EXTENSION_URI, a2a_extension, agent_card, build_did_document, build_openentity_json, sign_attestation,
                      sign_revocation)
@@ -22,7 +22,7 @@ __version__ = "1.0.0"
 __all__ = sorted([
     *_core, "CLIENTS", "DEFAULT_REGISTRY", "DISPUTE_REASONS", "adopt", "dispute", "find", "present", "record", "rotate", "withdraw",
     "REGISTRY_ERROR_CODES", "HttpSigError", "InvalidInputError", "OpenEntityError", "RegistryError", "VerificationError",
-    "http_sig_base", "sign_request", "verify_request", "Identity", "A2A_EXTENSION_URI", "a2a_extension", "agent_card", "build_did_document",
+    "http_sig_base", "sign_request", "verify_request", "verify_response", "Identity", "A2A_EXTENSION_URI", "a2a_extension", "agent_card", "build_did_document",
     "build_openentity_json", "sign_attestation", "sign_revocation", "TrustReport", "clear_trust_cache", "did_web_resolver", "trust",
     "validate", "approval_digest", "payload_digest", "verify_approval", "verify_key_log", "pair_sas",
 ])

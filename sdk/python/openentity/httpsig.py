@@ -1,6 +1,8 @@
 """RFC 9421 HTTP message signatures, Open Entity profile: ed25519, keyid = the signer's did:key, or did:web:<host>#<key> for a
 did:web signer the verifier allows (services such as the OpenEntity Account), covered ("@method" "@target-uri"
-"content-digest"), Content-Digest per RFC 9530, label sig1."""
+"content-digest"), Content-Digest per RFC 9530, label sig1. A did:web key is an Ed25519 method under `authentication` in the
+DID's did.json. A signed response (the account service's GET /v1/paused answer) covers ("@status" "content-digest"), has no
+nonce, lives at most 60 seconds and always has a did:web keyid."""
 import base64
 import hashlib
 import json
@@ -15,12 +17,12 @@ from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey, Ed25519PublicKey
 
 from . import core
-from .errors import HttpSigError, InvalidInputError
+from .errors import HttpSigError, InvalidInputError, VerificationError
 
 SKEW = 5  # seconds of clock skew allowed on `created`
 _DID_CACHE_S = 600  # the account service serves did.json with max-age=600
 _DID_REFETCH_S = 30  # an unknown key refetches, at most this often per DID
-_did_web_keys: dict[str, tuple[float, dict[str, bytes]]] = {}  # did -> (fetched at, Ed25519 keys by method id)
+_did_web_keys: dict[str, tuple[float, dict[str, bytes]]] = {}  # did -> (fetched at, Ed25519 `authentication` keys by method id)
 
 
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -40,18 +42,26 @@ def _did_web_url(did: str) -> str:
     return f"https://{host}/{'/'.join(path) if path else '.well-known'}/did.json"
 
 
-def _ed25519_methods(did: str, doc) -> dict[str, bytes]:
+def _ed25519_methods(did: str, doc, relationship: str | None = None) -> dict[str, bytes]:
+    """Ed25519 keys of a DID document by absolute method id (an Ed25519 publicKeyMultibase or OKP publicKeyJwk); with
+    `relationship`, only the methods it references."""
     if not isinstance(doc, dict) or doc.get("id") != did:
-        raise ValueError("the document names another DID")
+        raise VerificationError(f"{did} document names {doc.get('id') if isinstance(doc, dict) else None}")
+    absolute = lambda i: did + i if isinstance(i, str) and i.startswith("#") else i  # "#key-1" is relative to the DID
+    refs = None
+    if relationship:
+        rel = doc.get(relationship)
+        refs = {absolute(r.get("id") if isinstance(r, dict) else r) for r in (rel if isinstance(rel, list) else [])}
     keys = {}
     for vm in doc.get("verificationMethod") or []:
-        if not isinstance(vm, dict) or not isinstance(vm.get("id"), str):
+        vid = absolute(vm.get("id")) if isinstance(vm, dict) else None
+        if not isinstance(vid, str) or (refs is not None and vid not in refs):
             continue
+        mb, jwk = vm.get("publicKeyMultibase"), vm.get("publicKeyJwk")
         try:
-            jwk = vm.get("publicKeyJwk") or {}
-            if vm.get("type") == "Multikey":
-                key = core.public_key_from_did_key("did:key:" + vm["publicKeyMultibase"])
-            elif vm.get("type") == "JsonWebKey" and jwk.get("kty") == "OKP" and jwk.get("crv") == "Ed25519":
+            if isinstance(mb, str):
+                key = core.public_key_from_did_key("did:key:" + mb)
+            elif isinstance(jwk, dict) and jwk.get("kty") == "OKP" and jwk.get("crv") == "Ed25519":
                 key = base64.urlsafe_b64decode(jwk["x"] + "=" * (-len(jwk["x"]) % 4))
                 if _b64url(key) != jwk["x"]:
                     continue
@@ -60,7 +70,7 @@ def _ed25519_methods(did: str, doc) -> dict[str, bytes]:
         except (KeyError, TypeError, ValueError):
             continue
         if len(key) == 32:
-            keys[did + vm["id"] if vm["id"].startswith("#") else vm["id"]] = key
+            keys[vid] = key
     return keys
 
 
@@ -70,9 +80,44 @@ def _did_web_key(keyid: str, fetch) -> bytes | None:
     age = float("inf") if at is None else time.monotonic() - at
     if age < _DID_CACHE_S and (keyid in keys or age < _DID_REFETCH_S):
         return keys.get(keyid)
-    keys = _ed25519_methods(did, fetch(_did_web_url(did)))
+    keys = _ed25519_methods(did, fetch(_did_web_url(did)), "authentication")
     _did_web_keys[did] = (time.monotonic(), keys)
     return keys.get(keyid)
+
+
+def _allowed_did_web(keyid: str, allow) -> bool:
+    """A did:web:<host>#<key> keyid whose DID is allowed, so a message never makes the verifier fetch a URL of the sender's choosing."""
+    # Membership in a tuple is exact: an allow list passed as one str would otherwise match its substrings.
+    return bool(re.fullmatch(r"did:web:[^#]+#[^#]+", keyid)) and keyid.split("#")[0] in tuple(allow or ())
+
+
+def _did_web_public(keyid: str, fetch) -> bytes:
+    try:
+        public = _did_web_key(keyid, fetch or _did_json)
+    except Exception:
+        public = None
+    if public is None:
+        raise HttpSigError("bad_keyid")
+    return public
+
+
+def _sig1(h: Mapping[str, str]) -> tuple[str, list[str], dict, str]:
+    """The sig1 members of Signature-Input and Signature: the raw parameters, the covered components, the parameters, the signature."""
+    m = re.search(r"(?:^|,)\s*sig1=(\(([^)]*)\)((?:;[a-z]+=(?:\d+|\"[^\"]*\"))*))", h.get("signature-input", ""))
+    s = re.search(r"(?:^|,)\s*sig1=:([A-Za-z0-9+/]+={0,2}):", h.get("signature", ""))
+    if not m or not s:
+        raise HttpSigError("missing_headers")
+    p = {k: (v[1:-1] if v.startswith('"') else int(v)) for k, v in re.findall(r";([a-z]+)=(\d+|\"[^\"]*\")", m.group(3))}
+    if p.get("alg") != "ed25519":
+        raise HttpSigError("unknown_alg")
+    return m.group(1), re.findall(r'"([^"]*)"', m.group(2)), p, s.group(1)
+
+
+def _check_signature(public: bytes, sig: str, base: bytes) -> None:
+    try:
+        Ed25519PublicKey.from_public_bytes(public).verify(base64.b64decode(sig), base)
+    except (InvalidSignature, ValueError):
+        raise HttpSigError("bad_signature") from None
 
 
 def _b64url(b: bytes) -> str:
@@ -122,25 +167,15 @@ def verify_request(method: str, url: str, headers: Mapping[str, str], body: byte
                    max_age: int = 300, allow_did_web=(), fetch=None) -> dict:
     """Verify a request signed by sign_request. Raises HttpSigError with `.code`. Nonce replay tracking is the caller's job.
 
-    A did:key keyid verifies offline. A did:web:<host>#<key> keyid verifies only when its DID is in `allow_did_web`: the key
-    comes from the DID's did.json (Ed25519 Multikey or JsonWebKey), cached for ten minutes and refetched when it names an
+    A did:key keyid verifies offline. A did:web:<host>#<key> keyid verifies only when its DID is in `allow_did_web`: the key is
+    an Ed25519 method listed under `authentication` in the DID's did.json, cached for ten minutes and refetched when it names an
     unknown key. `fetch(url)` returns the parsed document; the default is HTTPS with a short timeout and no redirects."""
     h = {k.lower(): v for k, v in headers.items()}
-    if "signature-input" not in h or "signature" not in h:
-        raise HttpSigError("missing_headers")
-    m = re.search(r"(?:^|,)\s*sig1=(\(([^)]*)\)((?:;[a-z]+=(?:\d+|\"[^\"]*\"))*))", h["signature-input"])
-    s = re.search(r"(?:^|,)\s*sig1=:([A-Za-z0-9+/]+={0,2}):", h["signature"])
-    if not m or not s:
-        raise HttpSigError("missing_headers")
-    params, comps = m.group(1), re.findall(r'"([^"]*)"', m.group(2))
-    p = {k: (v[1:-1] if v.startswith('"') else int(v)) for k, v in re.findall(r";([a-z]+)=(\d+|\"[^\"]*\")", m.group(3))}
-    if p.get("alg") != "ed25519":
-        raise HttpSigError("unknown_alg")
-    keyid = p.get("keyid", "")
+    params, comps, p, sig = _sig1(h)
+    keyid = str(p.get("keyid", ""))
     did, public = keyid.split("#")[0], None
     if keyid.startswith("did:web:"):
-        # Allowed DIDs only, so a request never makes the verifier fetch a URL of the sender's choosing.
-        if not re.fullmatch(r"did:web:[^#]+#[^#]+", keyid) or did not in allow_did_web:
+        if not _allowed_did_web(keyid, allow_did_web):
             raise HttpSigError("bad_keyid")
     else:
         try:
@@ -151,7 +186,8 @@ def verify_request(method: str, url: str, headers: Mapping[str, str], body: byte
             raise HttpSigError("bad_keyid") from None
     if not (isinstance(p.get("created"), int) and isinstance(p.get("expires"), int)):
         raise HttpSigError("missing_headers")
-    if len(p.get("nonce", "")) < 22:  # 16 bytes in base64url
+    nonce = str(p.get("nonce", ""))
+    if len(nonce) < 22:  # 16 bytes in base64url
         raise HttpSigError("missing_nonce")
     if comps[:2] != ["@method", "@target-uri"] or comps[2:] not in ([], ["content-digest"]):
         raise HttpSigError("missing_headers")
@@ -170,14 +206,37 @@ def verify_request(method: str, url: str, headers: Mapping[str, str], body: byte
     if p["expires"] - p["created"] > max_age:
         raise HttpSigError("lifetime_too_long")
     if public is None:
-        try:
-            public = _did_web_key(keyid, fetch or _did_json)
-        except Exception:
-            public = None
-        if public is None:
-            raise HttpSigError("bad_keyid")
-    try:
-        Ed25519PublicKey.from_public_bytes(public).verify(base64.b64decode(s.group(1)), http_sig_base(method, url, comps, digest, params))
-    except (InvalidSignature, ValueError):
-        raise HttpSigError("bad_signature") from None
-    return {"did": did, "keyid": keyid, "created": p["created"], "expires": p["expires"], "nonce": p["nonce"]}
+        public = _did_web_public(keyid, fetch)
+    _check_signature(public, sig, http_sig_base(method, url, comps, digest, params))
+    return {"did": did, "keyid": keyid, "created": p["created"], "expires": p["expires"], "nonce": nonce}
+
+
+def verify_response(status: int, headers: Mapping[str, str], body: bytes, *, now: int | None = None, max_age: int = 60,
+                    allow_did_web=(), fetch=None) -> dict:
+    """Verify a response signed by a did:web service, such as the OpenEntity Account's signed paused list. Raises HttpSigError
+    with `.code`.
+
+    The signature covers `"@status"` and `"content-digest"`, lives at most `max_age` seconds (one minute by default), and its
+    keyid is a did:web:<host>#<key> of a DID in `allow_did_web`, resolved as `verify_request` resolves one."""
+    h = {k.lower(): v for k, v in headers.items()}
+    params, comps, p, sig = _sig1(h)
+    keyid = str(p.get("keyid", ""))
+    if not _allowed_did_web(keyid, allow_did_web):
+        raise HttpSigError("bad_keyid")
+    if not (isinstance(p.get("created"), int) and isinstance(p.get("expires"), int)):
+        raise HttpSigError("missing_headers")
+    if comps != ["@status", "content-digest"]:
+        raise HttpSigError("missing_headers")
+    digest = h.get("content-digest")
+    if digest != _digest(body):
+        raise HttpSigError("digest_mismatch")
+    now = int(time.time()) if now is None else now
+    if p["created"] > now + SKEW:
+        raise HttpSigError("created_in_future")
+    if p["expires"] < now:
+        raise HttpSigError("expired")
+    if p["expires"] - p["created"] > max_age:
+        raise HttpSigError("lifetime_too_long")
+    base = f'"@status": {status}\n"content-digest": {digest}\n"@signature-params": {params}'.encode()
+    _check_signature(_did_web_public(keyid, fetch), sig, base)
+    return {"did": keyid.split("#")[0], "keyid": keyid, "created": p["created"], "expires": p["expires"]}

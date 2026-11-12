@@ -1,5 +1,6 @@
 import { OpenEntityError, registryError } from "./errors.ts";
-import { SPEC, DECLARATION_VERSION, DECLARATION_SHA256, canonicalize, sha256Hex, nowSeconds, type KeyPair, generateKeyPair, publicKeyFromDidKey, type Resolver, defaultResolver, signObject, verifyObject, didWebUrl } from "./core.ts";
+import { SPEC, DECLARATION_VERSION, DECLARATION_SHA256, canonicalize, sha256Hex, nowSeconds, type KeyPair, generateKeyPair, type Resolver, defaultResolver, signObject, verifyObject, didWebUrl } from "./core.ts";
+import { ed25519Methods } from "./httpsig.ts";
 import { buildDocument, buildDeclaration, successorDocument, buildRotation, mintStamp } from "./objects.ts";
 /**
  * Rotate `previous` to a new key in one call: fetch the current document, build and sign the link, mint the stamp for the
@@ -96,22 +97,9 @@ export type FetchJson = (url: string) => Promise<any>;
 export const trustCache = new Map<string, { at: number; report: TrustReport }>();
 export const clearTrustCache = () => trustCache.clear();
 
-/** did:web through /.well-known/did.json (or <path>/did.json); everything else offline. */
+/** did:web through /.well-known/did.json (or <path>/did.json): any Ed25519 key of the document verifies; everything else offline. */
 export function didWebResolver(fetchJson: FetchJson = registryJson): Resolver {
-  return async (did) => {
-    if (!did.startsWith("did:web:")) return defaultResolver(did);
-    const doc = await fetchJson(didWebUrl(did));
-    if (doc.id !== did) throw new OpenEntityError("verification_failed", `${did} document names ${doc.id}`);
-    const ed25519: Uint8Array[] = [];
-    for (const vm of doc.verificationMethod ?? []) {
-      try {
-        ed25519.push(publicKeyFromDidKey("did:key:" + vm.publicKeyMultibase));
-      } catch {
-        /* not an Ed25519 Multikey */
-      }
-    }
-    return { ed25519 };
-  };
+  return async (did) => (did.startsWith("did:web:") ? { ed25519: [...ed25519Methods(did, await fetchJson(didWebUrl(did))).values()] } : defaultResolver(did));
 }
 
 /**

@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
-from openentity import HttpSigError, Identity, core, sign_request, verify_request
+from openentity import HttpSigError, Identity, core, sign_request, verify_request, verify_response
 from openentity.httpsig import _digest, http_sig_base
 
 VEC = json.loads((Path(__file__).resolve().parents[3] / "test-vectors/http-signature.json").read_text())
@@ -162,3 +162,38 @@ def test_did_web_cache_refetch_and_allow_list():
     with pytest.raises(HttpSigError) as e:  # a DID it was not told to allow: no fetch at all
         run(mk, fetch(W["document"]), allow=[])
     assert e.value.code == "bad_keyid" and len(calls) == 2
+
+
+R = VEC["responses"]
+
+
+def _response(case, **kw):
+    from openentity import httpsig
+    httpsig._did_web_keys.clear()
+    kw.setdefault("allow_did_web", [R["did"]])
+    kw.setdefault("fetch", lambda url: R["document"] if url == R["url"] else None)
+    return verify_response(case["status"], case["headers"], case["body"].encode(), now=case.get("now", R["now"]), **kw)
+
+
+@pytest.mark.parametrize("case", R["valid"], ids=lambda c: c["name"])
+def test_response_vectors_verify(case):
+    assert _response(case) == {"did": R["did"], "keyid": case["keyid"], "created": case["created"], "expires": case["expires"]}
+
+
+@pytest.mark.parametrize("case", R["invalid"], ids=lambda c: c["name"])
+def test_response_vectors_reject(case):
+    with pytest.raises(HttpSigError) as e:
+        _response(case)
+    assert e.value.code == case["code"]
+
+
+def test_response_max_age_and_allow_list():
+    case, calls = R["valid"][0], []
+    with pytest.raises(HttpSigError) as e:
+        _response(case, max_age=59)
+    assert e.value.code == "lifetime_too_long"
+    for allow in ([], R["did"]):  # a str is not an allow list
+        with pytest.raises(HttpSigError) as e:
+            _response(case, allow_did_web=allow, fetch=lambda url: (calls.append(url), R["document"])[1])
+        assert e.value.code == "bad_keyid"
+    assert calls == []  # a DID it was not told to allow is never fetched

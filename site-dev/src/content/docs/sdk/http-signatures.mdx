@@ -1,11 +1,13 @@
 ---
 title: HTTP message signatures
-description: Reference for the Open Entity RFC 9421 helpers, sign_request and verify_request in the Python package and signRequest and verifyRequest in the TypeScript SDK, with the profile, the error codes and every signature read from the source.
+description: Reference for the Open Entity RFC 9421 helpers, sign_request, verify_request and verify_response in the Python package and signRequest, verifyRequest and verifyResponse in the TypeScript SDK, with the profile, the error codes and every signature read from the source.
 ---
 
 import Exports from '../../../components/Exports.astro';
 
 Both SDKs sign and verify HTTP requests with the key behind an EID. The profile sits beside the Web Bot Auth row in [`OEIS-1` section 11.2](https://openentity.org/spec/1.0#112-carrying-an-eid-in-other-standards): algorithm `ed25519`, `keyid` is the signer's `did:key`, covered components `"@method" "@target-uri" "content-digest"` (`Content-Digest` is RFC 9530 `sha-256`, omitted only for an empty body), label `sig1`, and `created`, `expires` and `nonce` all required. For a worked example with the Entity Gateway, read [Sign HTTP requests as your entity](https://openentity.org/guides/signed-requests).
+
+Both SDKs also verify responses signed by a `did:web` service, such as the OpenEntity Account's paused list: covered components `"@status" "content-digest"`, no nonce, and a `did:web` keyid.
 
 The two implementations share the vectors in [`test-vectors/http-signature.json`](https://github.com/moltbot-den/openentity/blob/main/test-vectors/http-signature.json).
 
@@ -15,7 +17,8 @@ The two implementations share the vectors in [`test-vectors/http-signature.json`
 - `expires` not in the past, and `expires - created` no more than `maxAge`.
 - `nonce` at least twenty-two characters (sixteen bytes in base64url).
 - `Content-Digest` equal to the SHA-256 of the body you pass, whenever the body is not empty.
-- `keyid` a canonical `did:key`; the public key comes from it, so no registry call is made.
+- `keyid` a canonical `did:key`, whose public key comes from it with no network call, or `did:web:<host>#<key>` for a DID you allow (`allowDidWeb` / `allow_did_web`). The key of a `did:web` keyid must be an Ed25519 method listed under `authentication` in the DID's did.json, which is fetched without redirects, cached for ten minutes and refetched when a keyid names a key it does not list. A DID you did not allow is never fetched.
+- A response signature lives at most `maxAge` / `max_age` seconds (default `60`) and always has a `did:web` keyid.
 
 Replay tracking is the caller's job: keep each nonce for the length of the window.
 
@@ -25,12 +28,12 @@ Replay tracking is the caller's job: keep each nonce for the length of the windo
 
 ## Python (`openentity/httpsig.py`)
 
-Return value of `verify_request`: `{"did", "keyid", "created", "expires", "nonce"}`.
+Return value of `verify_request`: `{"did", "keyid", "created", "expires", "nonce"}`; of `verify_response`: `{"did", "keyid", "created", "expires"}`.
 
 <Exports file="sdk/python/openentity/httpsig.py" />
 
 ## TypeScript (`sdk/ts/src/httpsig.ts`)
 
-Return value of `verifyRequest`: `{ did, keyid, created, expires, nonce }`.
+Return value of `verifyRequest`: `{ did, keyid, created, expires, nonce }`; of `verifyResponse`: `{ did, keyid, created, expires }`.
 
 <Exports file="sdk/ts/src/httpsig.ts" />

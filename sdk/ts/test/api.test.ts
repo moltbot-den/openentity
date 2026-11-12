@@ -11,7 +11,7 @@ const SNAPSHOT = [
   "keyPairFromJwk keyPairFromSeed leafHash logLeaf merkleRoot mintStamp nodeHash normalizeEid noteVkey nowSeconds pairSas parseJson",
   "payloadDigest present publicKeyFromDidKey randomNonce record recordEntryHash recoverEip712 rotate sha256 sha256Hex signAttestation",
   "signNote signObject signProof signRequest signRevocation successorDocument trust validate verificationMethodId verifyApproval",
-  "verifyConsistency verifyInclusion verifyKeyLog verifyNote verifyObject verifyPresentation verifyProof verifyRequest withdraw",
+  "verifyConsistency verifyInclusion verifyKeyLog verifyNote verifyObject verifyPresentation verifyProof verifyRequest verifyResponse withdraw",
 ].join(" ");
 
 describe("public API", () => {

@@ -1,0 +1,421 @@
+{
+  "description": "did:web issuer resolution for OEIS-1 attestations. For each case, resolve with a fetch that returns `document` for `url` (and fails for any other URL), verify `attestation`, and compare with `expect`: {ok: true, signer} or {ok: false}. Every case fetches `url` exactly once. Throwaway keys: keys.json.",
+  "cases": [
+    {
+      "name": "multikey-absolute-id",
+      "description": "Signed by key-1, a Multikey method whose id is an absolute DID URL.",
+      "url": "https://issuer.example/.well-known/did.json",
+      "document": {
+        "@context": [
+          "https://www.w3.org/ns/did/v1",
+          "https://w3id.org/security/multikey/v1",
+          "https://w3id.org/security/jwk/v1"
+        ],
+        "id": "did:web:issuer.example",
+        "verificationMethod": [
+          {
+            "id": "did:web:issuer.example#key-1",
+            "type": "Multikey",
+            "controller": "did:web:issuer.example",
+            "publicKeyMultibase": "z6MkocqLjybwDNHX5Y8ZkTyP7cQm2oRRep5PSnSRXfSzMKR6"
+          },
+          {
+            "id": "#key-2",
+            "type": "JsonWebKey",
+            "controller": "did:web:issuer.example",
+            "publicKeyJwk": {
+              "kty": "OKP",
+              "crv": "Ed25519",
+              "x": "AgvUJ0RrcjQk2A0srTUro982SdDvj6rgyn6yVEOUGyk"
+            }
+          }
+        ],
+        "assertionMethod": [
+          "did:web:issuer.example#key-1",
+          "#key-2"
+        ]
+      },
+      "attestation": {
+        "spec": "openentity/1.0",
+        "type": "Attestation",
+        "issuer": "did:web:issuer.example",
+        "subject": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "claim_type": "trust_tier",
+        "claim": {
+          "tier": 2,
+          "platform": "issuer.example"
+        },
+        "created": "2026-10-24T19:05:00Z",
+        "expires": "2027-01-22T19:05:00Z",
+        "proof": {
+          "type": "DataIntegrityProof",
+          "cryptosuite": "eddsa-jcs-2022",
+          "created": "2026-10-24T19:05:00Z",
+          "verificationMethod": "did:web:issuer.example#key-1",
+          "proofPurpose": "assertionMethod",
+          "proofValue": "z5g2yYQJFAKZMsnbtcH5StUbdxfauTjL2q1inEc6fTRkw9DDKRubie147TNFBhRAhj8CxtsHtant327j3yxKRYENQ"
+        }
+      },
+      "expect": {
+        "ok": true,
+        "signer": "did:web:issuer.example"
+      }
+    },
+    {
+      "name": "jsonwebkey-relative-id",
+      "description": "Signed by key-2, a JsonWebKey (OKP Ed25519) method whose id is relative to the DID.",
+      "url": "https://issuer.example/.well-known/did.json",
+      "document": {
+        "@context": [
+          "https://www.w3.org/ns/did/v1",
+          "https://w3id.org/security/multikey/v1",
+          "https://w3id.org/security/jwk/v1"
+        ],
+        "id": "did:web:issuer.example",
+        "verificationMethod": [
+          {
+            "id": "did:web:issuer.example#key-1",
+            "type": "Multikey",
+            "controller": "did:web:issuer.example",
+            "publicKeyMultibase": "z6MkocqLjybwDNHX5Y8ZkTyP7cQm2oRRep5PSnSRXfSzMKR6"
+          },
+          {
+            "id": "#key-2",
+            "type": "JsonWebKey",
+            "controller": "did:web:issuer.example",
+            "publicKeyJwk": {
+              "kty": "OKP",
+              "crv": "Ed25519",
+              "x": "AgvUJ0RrcjQk2A0srTUro982SdDvj6rgyn6yVEOUGyk"
+            }
+          }
+        ],
+        "assertionMethod": [
+          "did:web:issuer.example#key-1",
+          "#key-2"
+        ]
+      },
+      "attestation": {
+        "spec": "openentity/1.0",
+        "type": "Attestation",
+        "issuer": "did:web:issuer.example",
+        "subject": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "claim_type": "trust_tier",
+        "claim": {
+          "tier": 2,
+          "platform": "issuer.example"
+        },
+        "created": "2026-10-24T19:05:00Z",
+        "expires": "2027-01-22T19:05:00Z",
+        "proof": {
+          "type": "DataIntegrityProof",
+          "cryptosuite": "eddsa-jcs-2022",
+          "created": "2026-10-24T19:05:00Z",
+          "verificationMethod": "did:web:issuer.example#key-2",
+          "proofPurpose": "assertionMethod",
+          "proofValue": "z2fBtXHRjXoPuxRC2CQEjeXzprziC1iVeYr4xGtHZbf3G1SsKvVZjoSNsQp8fXboFHBLKQhvRr7Y8mb4K4Gq4eizb"
+        }
+      },
+      "expect": {
+        "ok": true,
+        "signer": "did:web:issuer.example"
+      }
+    },
+    {
+      "name": "path-and-port",
+      "description": "A DID with a port (percent-encoded) and a path: its did.json is <path>/did.json on that host and port, not /.well-known.",
+      "url": "https://issuer.example:8443/teams/red/did.json",
+      "document": {
+        "@context": [
+          "https://www.w3.org/ns/did/v1",
+          "https://w3id.org/security/multikey/v1",
+          "https://w3id.org/security/jwk/v1"
+        ],
+        "id": "did:web:issuer.example%3A8443:teams:red",
+        "verificationMethod": [
+          {
+            "id": "did:web:issuer.example%3A8443:teams:red#key-1",
+            "type": "Multikey",
+            "controller": "did:web:issuer.example%3A8443:teams:red",
+            "publicKeyMultibase": "z6MkocqLjybwDNHX5Y8ZkTyP7cQm2oRRep5PSnSRXfSzMKR6"
+          },
+          {
+            "id": "#key-2",
+            "type": "JsonWebKey",
+            "controller": "did:web:issuer.example%3A8443:teams:red",
+            "publicKeyJwk": {
+              "kty": "OKP",
+              "crv": "Ed25519",
+              "x": "AgvUJ0RrcjQk2A0srTUro982SdDvj6rgyn6yVEOUGyk"
+            }
+          }
+        ],
+        "assertionMethod": [
+          "did:web:issuer.example%3A8443:teams:red#key-1",
+          "#key-2"
+        ]
+      },
+      "attestation": {
+        "spec": "openentity/1.0",
+        "type": "Attestation",
+        "issuer": "did:web:issuer.example%3A8443:teams:red",
+        "subject": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "claim_type": "trust_tier",
+        "claim": {
+          "tier": 2,
+          "platform": "issuer.example"
+        },
+        "created": "2026-10-24T19:05:00Z",
+        "expires": "2027-01-22T19:05:00Z",
+        "proof": {
+          "type": "DataIntegrityProof",
+          "cryptosuite": "eddsa-jcs-2022",
+          "created": "2026-10-24T19:05:00Z",
+          "verificationMethod": "did:web:issuer.example%3A8443:teams:red#key-1",
+          "proofPurpose": "assertionMethod",
+          "proofValue": "z3rCJgiCaBMUhWwQovKoTvysX5Y2V88ucif2RqX9H27VHsoG987qZ3dHNMPEA5gWmjbTS8xc6bbdd1MLrHWW6G7Pn"
+        }
+      },
+      "expect": {
+        "ok": true,
+        "signer": "did:web:issuer.example%3A8443:teams:red"
+      }
+    },
+    {
+      "name": "unlisted-key",
+      "description": "The proof names key-3, which the document does not list, and is signed by that key.",
+      "url": "https://issuer.example/.well-known/did.json",
+      "document": {
+        "@context": [
+          "https://www.w3.org/ns/did/v1",
+          "https://w3id.org/security/multikey/v1",
+          "https://w3id.org/security/jwk/v1"
+        ],
+        "id": "did:web:issuer.example",
+        "verificationMethod": [
+          {
+            "id": "did:web:issuer.example#key-1",
+            "type": "Multikey",
+            "controller": "did:web:issuer.example",
+            "publicKeyMultibase": "z6MkocqLjybwDNHX5Y8ZkTyP7cQm2oRRep5PSnSRXfSzMKR6"
+          },
+          {
+            "id": "#key-2",
+            "type": "JsonWebKey",
+            "controller": "did:web:issuer.example",
+            "publicKeyJwk": {
+              "kty": "OKP",
+              "crv": "Ed25519",
+              "x": "AgvUJ0RrcjQk2A0srTUro982SdDvj6rgyn6yVEOUGyk"
+            }
+          }
+        ],
+        "assertionMethod": [
+          "did:web:issuer.example#key-1",
+          "#key-2"
+        ]
+      },
+      "attestation": {
+        "spec": "openentity/1.0",
+        "type": "Attestation",
+        "issuer": "did:web:issuer.example",
+        "subject": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "claim_type": "trust_tier",
+        "claim": {
+          "tier": 2,
+          "platform": "issuer.example"
+        },
+        "created": "2026-10-24T19:05:00Z",
+        "expires": "2027-01-22T19:05:00Z",
+        "proof": {
+          "type": "DataIntegrityProof",
+          "cryptosuite": "eddsa-jcs-2022",
+          "created": "2026-10-24T19:05:00Z",
+          "verificationMethod": "did:web:issuer.example#key-3",
+          "proofPurpose": "assertionMethod",
+          "proofValue": "z4gphot2jTpR7WbRgx9PrxE2EXfPW9ignrMSHy5GuSwpP4me28CCGAz7tTwyUDNouQ7nuSLsLen6kAb4LNgVC3b3H"
+        }
+      },
+      "expect": {
+        "ok": false
+      }
+    },
+    {
+      "name": "document-names-another-did",
+      "description": "The document served at the issuer's URL has id did:web:other.example.",
+      "url": "https://issuer.example/.well-known/did.json",
+      "document": {
+        "@context": [
+          "https://www.w3.org/ns/did/v1",
+          "https://w3id.org/security/multikey/v1",
+          "https://w3id.org/security/jwk/v1"
+        ],
+        "id": "did:web:other.example",
+        "verificationMethod": [
+          {
+            "id": "did:web:other.example#key-1",
+            "type": "Multikey",
+            "controller": "did:web:other.example",
+            "publicKeyMultibase": "z6MkocqLjybwDNHX5Y8ZkTyP7cQm2oRRep5PSnSRXfSzMKR6"
+          },
+          {
+            "id": "#key-2",
+            "type": "JsonWebKey",
+            "controller": "did:web:other.example",
+            "publicKeyJwk": {
+              "kty": "OKP",
+              "crv": "Ed25519",
+              "x": "AgvUJ0RrcjQk2A0srTUro982SdDvj6rgyn6yVEOUGyk"
+            }
+          }
+        ],
+        "assertionMethod": [
+          "did:web:other.example#key-1",
+          "#key-2"
+        ]
+      },
+      "attestation": {
+        "spec": "openentity/1.0",
+        "type": "Attestation",
+        "issuer": "did:web:issuer.example",
+        "subject": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "claim_type": "trust_tier",
+        "claim": {
+          "tier": 2,
+          "platform": "issuer.example"
+        },
+        "created": "2026-10-24T19:05:00Z",
+        "expires": "2027-01-22T19:05:00Z",
+        "proof": {
+          "type": "DataIntegrityProof",
+          "cryptosuite": "eddsa-jcs-2022",
+          "created": "2026-10-24T19:05:00Z",
+          "verificationMethod": "did:web:issuer.example#key-1",
+          "proofPurpose": "assertionMethod",
+          "proofValue": "z5g2yYQJFAKZMsnbtcH5StUbdxfauTjL2q1inEc6fTRkw9DDKRubie147TNFBhRAhj8CxtsHtant327j3yxKRYENQ"
+        }
+      },
+      "expect": {
+        "ok": false
+      }
+    },
+    {
+      "name": "tampered-attestation",
+      "description": "The claim was changed after signing.",
+      "url": "https://issuer.example/.well-known/did.json",
+      "document": {
+        "@context": [
+          "https://www.w3.org/ns/did/v1",
+          "https://w3id.org/security/multikey/v1",
+          "https://w3id.org/security/jwk/v1"
+        ],
+        "id": "did:web:issuer.example",
+        "verificationMethod": [
+          {
+            "id": "did:web:issuer.example#key-1",
+            "type": "Multikey",
+            "controller": "did:web:issuer.example",
+            "publicKeyMultibase": "z6MkocqLjybwDNHX5Y8ZkTyP7cQm2oRRep5PSnSRXfSzMKR6"
+          },
+          {
+            "id": "#key-2",
+            "type": "JsonWebKey",
+            "controller": "did:web:issuer.example",
+            "publicKeyJwk": {
+              "kty": "OKP",
+              "crv": "Ed25519",
+              "x": "AgvUJ0RrcjQk2A0srTUro982SdDvj6rgyn6yVEOUGyk"
+            }
+          }
+        ],
+        "assertionMethod": [
+          "did:web:issuer.example#key-1",
+          "#key-2"
+        ]
+      },
+      "attestation": {
+        "spec": "openentity/1.0",
+        "type": "Attestation",
+        "issuer": "did:web:issuer.example",
+        "subject": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "claim_type": "trust_tier",
+        "claim": {
+          "tier": 4,
+          "platform": "issuer.example"
+        },
+        "created": "2026-10-24T19:05:00Z",
+        "expires": "2027-01-22T19:05:00Z",
+        "proof": {
+          "type": "DataIntegrityProof",
+          "cryptosuite": "eddsa-jcs-2022",
+          "created": "2026-10-24T19:05:00Z",
+          "verificationMethod": "did:web:issuer.example#key-1",
+          "proofPurpose": "assertionMethod",
+          "proofValue": "z5g2yYQJFAKZMsnbtcH5StUbdxfauTjL2q1inEc6fTRkw9DDKRubie147TNFBhRAhj8CxtsHtant327j3yxKRYENQ"
+        }
+      },
+      "expect": {
+        "ok": false
+      }
+    },
+    {
+      "name": "not-ed25519",
+      "description": "Both methods are X25519 keys (multicodec 0xec01, crv X25519) carrying the signer's Ed25519 public key bytes: a resolver that ignores the multicodec prefix or crv would accept it.",
+      "url": "https://issuer.example/.well-known/did.json",
+      "document": {
+        "@context": [
+          "https://www.w3.org/ns/did/v1",
+          "https://w3id.org/security/multikey/v1",
+          "https://w3id.org/security/jwk/v1"
+        ],
+        "id": "did:web:issuer.example",
+        "verificationMethod": [
+          {
+            "id": "did:web:issuer.example#key-1",
+            "type": "Multikey",
+            "controller": "did:web:issuer.example",
+            "publicKeyMultibase": "z6LSkqkTg3AMyHWo4RfdbYXVb75F4NggwY1BdkFBBr8W9UQU"
+          },
+          {
+            "id": "#key-2",
+            "type": "JsonWebKey",
+            "controller": "did:web:issuer.example",
+            "publicKeyJwk": {
+              "kty": "OKP",
+              "crv": "X25519",
+              "x": "iC0Oo7KGTnpYfz5pjOpEWZmDEuZV4F-l6LURnYuqyM0"
+            }
+          }
+        ],
+        "assertionMethod": [
+          "did:web:issuer.example#key-1",
+          "#key-2"
+        ]
+      },
+      "attestation": {
+        "spec": "openentity/1.0",
+        "type": "Attestation",
+        "issuer": "did:web:issuer.example",
+        "subject": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "claim_type": "trust_tier",
+        "claim": {
+          "tier": 2,
+          "platform": "issuer.example"
+        },
+        "created": "2026-10-24T19:05:00Z",
+        "expires": "2027-01-22T19:05:00Z",
+        "proof": {
+          "type": "DataIntegrityProof",
+          "cryptosuite": "eddsa-jcs-2022",
+          "created": "2026-10-24T19:05:00Z",
+          "verificationMethod": "did:web:issuer.example#key-1",
+          "proofPurpose": "assertionMethod",
+          "proofValue": "z5g2yYQJFAKZMsnbtcH5StUbdxfauTjL2q1inEc6fTRkw9DDKRubie147TNFBhRAhj8CxtsHtant327j3yxKRYENQ"
+        }
+      },
+      "expect": {
+        "ok": false
+      }
+    }
+  ]
+}
