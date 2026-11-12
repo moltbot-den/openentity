@@ -1,0 +1,111 @@
+import { verifyKeyLog } from "@openentity/sdk";
+import { expect, test } from "vitest";
+import { PRODUCT_DIDS } from "../src/app.ts";
+import { runDueDeletions } from "../src/deletion.ts";
+import { keyLogState } from "../src/keylog.ts";
+import { approvalHeader, approve, bearer, call, owner, stepUp, webApp } from "./owner.ts";
+
+const { d, app, out } = await webApp();
+const events = (type: string) => out.calls.filter((c) => c.url.endsWith("/v1/oe/events") && c.body.type === type);
+
+test("guard: no key log deletes after a fresh sign-in; a sign-in older than 5 minutes is refused", async () => {
+  const stale = await owner(d, { keyLog: false, authAgo: 600 });
+  expect((await call(app, "POST", "/v1/account/delete", undefined, bearer(stale))).body.error).toBe("reauth_required");
+  const fresh = await owner(d, { keyLog: false });
+  const r = await call(app, "POST", "/v1/account/delete", undefined, bearer(fresh));
+  expect(r.status).toBe(202);
+  expect(r.body.deleted_at).toBeGreaterThan(0);
+  expect(await d.db.first("SELECT 1 FROM methods WHERE account_id = $1", [fresh.accountId])).toBeNull();
+  expect((await d.db.first<any>("SELECT email, deleted_at FROM accounts WHERE id = $1", [fresh.accountId])).email).toBeNull();
+  expect((await call(app, "GET", "/v1/me", undefined, bearer(fresh))).status).toBe(401); // the session ended with the account
+});
+
+test("guard: with a key log the session alone cannot delete, nor an approval for another action", async () => {
+  const o = await owner(d);
+  expect((await call(app, "POST", "/v1/account/delete", undefined, bearer(o))).status).toBe(428);
+  const other = await stepUp(app, o, "method.remove", { method_id: "mth_x" }).catch(() => null); // no such method: 404 at step-up
+  expect(other).toBeNull();
+  const wrong = await stepUp(app, o, "email.change", { email: "new@example.com" });
+  expect((await call(app, "POST", "/v1/account/delete", undefined, wrong)).body.error).toBe("approval_invalid");
+  expect((await d.db.first<any>("SELECT deleted_at FROM accounts WHERE id = $1", [o.accountId])).deleted_at).toBeNull();
+});
+
+test("deletion with step-up: owner.deleted to every product, the key log closed by the service and still verifying", async () => {
+  const o = await owner(d);
+  const r = await call(app, "POST", "/v1/account/delete", undefined, await stepUp(app, o, "account.delete"));
+  expect(r.status).toBe(202);
+  const sent = events("owner.deleted").filter((e) => e.body.data.owner_did === o.ownerDid);
+  expect(sent.map((e) => new URL(e.url).host).sort()).toEqual(["api.agentsecretstore.com", "api.clawgrc.com", "api.moltbotden.com", "api.securemyagent.ai"]);
+  expect(sent.length).toBe(PRODUCT_DIDS.length);
+  expect(sent[0].body.data).toEqual({ owner_did: o.ownerDid, deleted_at: r.body.deleted_at });
+  expect(sent[0].headers["signature-input"]).toContain(`keyid="did:web:${d.host}#${d.keys.did.kid}"`);
+  // The log is closed by the close key and still verifies for anyone holding the service's close keys.
+  expect((await keyLogState(d, o.ownerDid))!.closed).toBe(true);
+  const lines = (await call(app, "GET", `/o/${o.ownerDid.split(":o:")[1]}/log`)).text.trim().split("\n");
+  expect(JSON.parse(lines.at(-1)!).op).toBe("close");
+  const v = verifyKeyLog(o.ownerDid, lines, lines.map(() => Math.floor(Date.now() / 1000)), { rpId: d.rp.id, origins: d.rp.origins, serviceKeys: [d.keys.close.jwk as any] });
+  expect(v.ok && v.state.closed).toBe(true);
+  expect((await call(app, "GET", "/v1/me", undefined, bearer(o))).status).toBe(401);
+});
+
+test("deletion request: needs a key log, waits 7 days, tells the owner, and one at a time", async () => {
+  const none = await owner(d, { keyLog: false });
+  expect((await call(app, "POST", "/v1/account/deletion-request", undefined, bearer(none))).body.error).toBe("no_key_log");
+  const o = await owner(d, { email: "wait@example.com" });
+  const r = await call(app, "POST", "/v1/account/deletion-request", undefined, bearer(o));
+  expect(r.status).toBe(202);
+  expect(r.body).toMatchObject({ state: "pending" });
+  expect(r.body.effective_at - r.body.requested_at).toBe(7 * 86_400);
+  expect(out.mail.at(-1)).toMatchObject({ to: "wait@example.com", subject: "Your OpenEntity account will be deleted in 7 days" });
+  expect((await call(app, "POST", "/v1/account/deletion-request", undefined, bearer(o))).body.error).toBe("deletion_pending");
+});
+
+test("guard: cancelling a deletion request needs an approval; the root passkey may sign it (allowRoot)", async () => {
+  const o = await owner(d);
+  await call(app, "POST", "/v1/account/deletion-request", undefined, bearer(o));
+  expect((await call(app, "POST", "/v1/account/deletion-request/cancel", undefined, bearer(o))).status).toBe(428);
+  const viaRoot = await stepUp(app, o, "deletion.cancel", {}, o.root);
+  const r = await call(app, "POST", "/v1/account/deletion-request/cancel", undefined, viaRoot);
+  expect([r.status, r.body.state]).toEqual([200, "cancelled"]);
+  expect((await call(app, "POST", "/v1/account/deletion-request/cancel", undefined, viaRoot)).body.error).toBe("not_found");
+  // The root passkey is not enough for deleting outright: account.delete never allows the root while approvers exist.
+  const rootDelete = await stepUp(app, o, "account.delete", {}, o.root);
+  expect((await call(app, "POST", "/v1/account/delete", undefined, rootDelete)).body.error).toBe("approval_invalid");
+});
+
+test("guard: an approval is single use", async () => {
+  const o = await owner(d);
+  await call(app, "POST", "/v1/account/deletion-request", undefined, bearer(o));
+  const h = await stepUp(app, o, "deletion.cancel");
+  expect((await call(app, "POST", "/v1/account/deletion-request/cancel", undefined, h)).status).toBe(200);
+  await call(app, "POST", "/v1/account/deletion-request", undefined, bearer(o));
+  expect((await call(app, "POST", "/v1/account/deletion-request/cancel", undefined, h)).body.error).toBe("approval_reused");
+});
+
+test("a deletion request runs after 7 days (jobs)", async () => {
+  const o = await owner(d);
+  await call(app, "POST", "/v1/account/deletion-request", undefined, bearer(o));
+  await d.db.run("UPDATE deletion_requests SET effective_at = 1 WHERE account_id = $1", [o.accountId]);
+  await runDueDeletions(d);
+  expect(Number((await d.db.first<any>("SELECT deleted_at FROM accounts WHERE id = $1", [o.accountId])).deleted_at)).toBeGreaterThan(0);
+  expect((await d.db.first<any>("SELECT state FROM deletion_requests WHERE account_id = $1", [o.accountId])).state).toBe("done");
+  expect((await keyLogState(d, o.ownerDid))!.closed).toBe(true);
+});
+
+test("guard: an approval signed by a key outside the owner's log is refused", async () => {
+  const o = await owner(d), stranger = await owner(d);
+  const r = await call(app, "POST", "/v1/step-up", { action: "account.delete", params: {} }, bearer(o));
+  const forged = approvalHeader(approve(stranger.approver!, r.body));
+  expect((await call(app, "POST", "/v1/account/delete", undefined, { ...bearer(o), ...forged })).body.error).toBe("approval_invalid");
+});
+
+test("a deletion stopped after the log closed finishes with a fresh sign-in (a closed log signs nothing)", async () => {
+  const { closeKeyLog } = await import("../src/keylog.ts");
+  const stale = await owner(d, { authAgo: 600 });
+  await closeKeyLog(d, stale.ownerDid);
+  expect((await call(app, "POST", "/v1/account/delete", undefined, bearer(stale))).body.error).toBe("reauth_required");
+  const fresh = await owner(d);
+  await closeKeyLog(d, fresh.ownerDid);
+  expect((await call(app, "POST", "/v1/account/delete", undefined, bearer(fresh))).status).toBe(202);
+  expect(events("owner.deleted").some((e) => e.body.data.owner_did === fresh.ownerDid)).toBe(true);
+});
