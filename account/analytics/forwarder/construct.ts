@@ -1,20 +1,18 @@
 // Self-contained: the Account lane imports this into its stack.
-//   new AnalyticsForwarder(this, "Analytics", { environment: "production", accountSecret })
+//   new AnalyticsForwarder(this, "Analytics", { environment: "production", })
 // `queue` is where the account service sends validated events (SendMessage, JSON body shaped like QueuedEvent).
 import { fileURLToPath } from "node:url";
-import { Duration } from "aws-cdk-lib";
+import { Duration, Stack } from "aws-cdk-lib";
 import * as cloudwatch from "aws-cdk-lib/aws-cloudwatch";
 import * as lambda from "aws-cdk-lib/aws-lambda";
 import { SqsEventSource } from "aws-cdk-lib/aws-lambda-event-sources";
 import * as nodejs from "aws-cdk-lib/aws-lambda-nodejs";
-import type * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
+import * as iam from "aws-cdk-lib/aws-iam";
 import * as sqs from "aws-cdk-lib/aws-sqs";
 import { Construct } from "constructs";
 
 export type AnalyticsForwarderProps = {
   environment: "production" | "staging";
-  /** The `openentity/account` secret. */
-  accountSecret: secretsmanager.ISecret;
 };
 
 export class AnalyticsForwarder extends Construct {
@@ -37,10 +35,14 @@ export class AnalyticsForwarder extends Construct {
       runtime: lambda.Runtime.NODEJS_22_X,
       timeout: Duration.seconds(30),
       memorySize: 256,
-      environment: { ANALYTICS_ENV: props.environment, ACCOUNT_SECRET_ID: props.accountSecret.secretName },
+      environment: { ANALYTICS_ENV: props.environment },
       bundling: { format: nodejs.OutputFormat.ESM, minify: true, target: "node22", mainFields: ["module", "main"], banner: "import { createRequire } from 'module'; const require = createRequire(import.meta.url);" },
     });
-    props.accountSecret.grantRead(this.fn);
+    // Keys live in SSM SecureString parameters /openentity/account/analytics_* (default aws/ssm key).
+    this.fn.addToRolePolicy(new iam.PolicyStatement({
+      actions: ["ssm:GetParametersByPath"],
+      resources: [Stack.of(this).formatArn({ service: "ssm", resource: "parameter", resourceName: "openentity/account" }), Stack.of(this).formatArn({ service: "ssm", resource: "parameter", resourceName: "openentity/account/*" })],
+    }));
     this.fn.addEventSource(new SqsEventSource(this.queue, { batchSize: 10, maxBatchingWindow: Duration.seconds(5), reportBatchItemFailures: true }));
     this.dlqAlarm = new cloudwatch.Alarm(this, "DlqAlarm", {
       metric: this.deadLetterQueue.metricApproximateNumberOfMessagesVisible({ period: Duration.minutes(1) }),

@@ -1,16 +1,16 @@
 import type { SQSBatchResponse, SQSEvent } from "aws-lambda";
-import { GetSecretValueCommand, SecretsManagerClient } from "@aws-sdk/client-secrets-manager";
+import { GetParametersByPathCommand, SSMClient } from "@aws-sdk/client-ssm";
 import { validateEvent, type QueuedEvent } from "../src/validate.ts";
 import { sendAmplitude, sendGa4, sendPosthog, type Keys } from "./senders.ts";
 
 type Deps = { getKeys: () => Promise<Keys>; fetch: typeof fetch; log: (m: string) => void };
 
-/** Secret `openentity/account` keys: analytics_<thing>_<prod|staging>. */
+/** SSM SecureString parameters /openentity/account/analytics_<thing>_<prod|staging>, passed in as name -> value. */
 export function keysFrom(secret: Record<string, string>, env: string): Keys {
   const s = env === "production" ? "prod" : "staging";
   const need = (k: string) => {
     const v = secret[`analytics_${k}_${s}`];
-    if (!v) throw new Error(`secret missing analytics_${k}_${s}`);
+    if (!v) throw new Error(`parameter missing analytics_${k}_${s}`);
     return v;
   };
   return {
@@ -58,14 +58,25 @@ export function makeHandler(d: Deps) {
   };
 }
 
+const PATH = "/openentity/account/";
+const ssm = new SSMClient({});
+async function loadParams(): Promise<Record<string, string>> {
+  const out: Record<string, string> = {};
+  let NextToken: string | undefined;
+  do {
+    const r = await ssm.send(new GetParametersByPathCommand({ Path: PATH, WithDecryption: true, NextToken }));
+    for (const p of r.Parameters ?? []) out[p.Name!.slice(PATH.length)] = p.Value!;
+    NextToken = r.NextToken;
+  } while (NextToken);
+  return out;
+}
+
 let cached: Promise<Keys> | undefined;
-const sm = new SecretsManagerClient({});
 export const handler = makeHandler({
   fetch,
   log: (m) => console.error(m),
   getKeys: () =>
-    (cached ??= sm
-      .send(new GetSecretValueCommand({ SecretId: process.env.ACCOUNT_SECRET_ID ?? "openentity/account" }))
-      .then((r) => keysFrom(JSON.parse(r.SecretString ?? "{}"), process.env.ANALYTICS_ENV ?? "staging"))
+    (cached ??= loadParams()
+      .then((p) => keysFrom(p, process.env.ANALYTICS_ENV ?? "staging"))
       .catch((e) => { cached = undefined; throw e; })),
 });
