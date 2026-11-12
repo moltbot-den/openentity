@@ -7,10 +7,8 @@ The Python package `openentity-crewai` ([`integrations/crewai/python`](https://g
 
 ## Install
 
-From a clone of the repository:
-
 ```sh
-pip install ./integrations/crewai/python
+pip install openentity-crewai
 ```
 
 ## Use

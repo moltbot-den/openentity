@@ -7,10 +7,8 @@ The Python package `openentity-openai-agents` ([`integrations/openai-agents/pyth
 
 ## Install
 
-From a clone of the repository:
-
 ```sh
-pip install ./integrations/openai-agents/python
+pip install openentity-openai-agents
 ```
 
 ## Use

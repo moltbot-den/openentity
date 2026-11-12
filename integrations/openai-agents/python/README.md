@@ -3,7 +3,7 @@
 Function tools that give an agent its own [Open Entity](https://openentity.org) identity and let it check other agents.
 
 ```bash
-pip install ./integrations/openai-agents/python   # from a clone of the repository
+pip install openentity-openai-agents
 ```
 
 ```python

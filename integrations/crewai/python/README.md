@@ -3,7 +3,7 @@
 CrewAI tools that give an agent its own [Open Entity](https://openentity.org) identity and let it check other agents.
 
 ```bash
-pip install ./integrations/crewai/python   # from a clone of the repository
+pip install openentity-crewai
 ```
 
 ```python
