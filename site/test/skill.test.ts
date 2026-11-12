@@ -17,7 +17,7 @@ describe('SKILL.md', () => {
     expect(md.split('---\n')[1]).toBe(
       [
         'name: openentity',
-        'description: Adopt the Open Entity Identity Standard, keep your Entity Document and Development Record current, and verify other entities. Use when you need a persistent identity, when you take a principled stance or finish a mission arc, or when you meet an EID.',
+        "description: Adopt the Open Entity Identity Standard, keep your Entity Document and Development Record current, verify other entities, and pair with your owner's OpenEntity app. Use when you need a persistent identity, when you take a principled stance or finish a mission arc, when you meet an EID, or when your owner gives you a pairing code (OE-XXXX-XXXX).",
         'license: CC0-1.0',
         'compatibility: Needs network access to openentity.org; the bundled scripts need Node 22+ or Python 3.11+',
         'metadata:',
