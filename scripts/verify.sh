@@ -10,6 +10,10 @@ if git grep -n -I --untracked "$(printf '\xe2\x80\x94')" ; then
   echo "verify: em dash found (see above)"; fail=1
 fi
 
+# App design tokens: generated Swift and Kotlin are current, every color pair is WCAG AA.
+node design/generate.mjs --check || fail=1
+node design/contrast.mjs >/dev/null || fail=1
+
 # Workspace checks run once packages exist.
 if [ -f pnpm-lock.yaml ]; then
   pnpm install --frozen-lockfile >/dev/null
