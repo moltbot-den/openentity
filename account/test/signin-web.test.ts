@@ -198,7 +198,7 @@ test("the web pages: / with its config and a hash-only CSP that allows Turnstile
   expect(csp).toContain(`script-src 'sha256-${createHash("sha256").update(script).digest("base64")}' https://challenges.cloudflare.com https://accounts.google.com/gsi/client`);
   expect(csp).toMatch(/frame-ancestors 'none'/);
   expect(csp).not.toMatch(/unsafe-inline|unsafe-eval/);
-  expect(JSON.parse(/<script type="application\/json" id="cfg">(.*?)<\/script>/.exec(html)![1])).toEqual({ serviceDid: `did:web:${HOST}`, rpId: HOST, turnstile: "site", google: null, error: null });
+  expect(JSON.parse(/<script type="application\/json" id="cfg">(.*?)<\/script>/.exec(html)![1])).toEqual({ serviceDid: `did:web:${HOST}`, rpId: HOST, turnstile: "site", google: null, error: null, testSignIn: false });
   expect(() => new Script(script)).not.toThrow();
   expect(script).not.toMatch(/__name|require\(/);
   const landing = await (await app.request(`${ORIGIN}/app/auth?error=<script>alert(1)</script>`)).text();

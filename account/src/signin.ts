@@ -21,6 +21,8 @@ export const NONCE_TTL = 600, CHALLENGE_TTL = 300, LOGIN_CODE_TTL = 120;
 /** A random id per browser, so a sign-in from a new browser can be told apart (PLAN 2.3, new install or browser). */
 export const BROWSER = "__Host-oe_browser", STATE = "__Host-oe_state";
 const TEST_KID = "oe-staging-test-idp";
+/** Staging test sign-in by email takes only this domain, so it can never reach a real person's account. */
+export const TEST_EMAIL_DOMAIN = "test.openentity.org";
 
 interface Client { platform: Platform; install_id: string | null; app_version: string | null; device_model: string | null }
 function client(v: any): Client {
@@ -342,14 +344,23 @@ export function routes(app: Hono, d: Deps) {
   });
 
   // The web pages: sign-in or the account at /, and /app/auth for the Apple return or an App Link opened in a browser.
-  app.get("/", (c) => homePage({ serviceDid: did, rpId: d.rp.id, turnstile: d.web.turnstile?.siteKey ?? null, google: d.web.googleWebClientId ?? null, error: c.req.query("error") ?? null }));
+  const home = (c: Context) => homePage({ serviceDid: did, rpId: d.rp.id, turnstile: d.web.turnstile?.siteKey ?? null, google: d.web.googleWebClientId ?? null, error: c.req.query("error") ?? null, testSignIn: !!test });
+  for (const path of ["/", "/signup", "/login"]) app.get(path, home);
   app.get("/app/auth", (c) => appAuthPage({ error: c.req.query("error"), login_code: c.req.query("login_code") }));
 
   // Staging only (testIdpOf): Apple-shaped and Google-shaped tokens for automated sign-in tests. Absent in production.
   if (test) {
     app.post("/v1/auth/test-idp", async (c) => {
       const b = await json(c);
-      const kind = b.kind === "apple" || b.kind === "google" ? b.kind : fail(400, "bad_request", "kind must be apple or google");
+      // An email code for a test address, returned instead of mailed: web tests sign in without a mailbox or Turnstile.
+      if (b.kind === "email") {
+        const email = normalizeEmail(str(b.email, "email", 254));
+        if (!email.endsWith(`@${TEST_EMAIL_DOMAIN}`)) fail(400, "bad_request", `test sign-in by email takes addresses @${TEST_EMAIL_DOMAIN} only`);
+        let code = "";
+        const r = await startEmail(d.db, { email, pepper: d.pepper, send: async (_e, sent) => { code = sent; }, human: true });
+        return c.json({ challenge_id: r.challengeId, code, expires_at: r.expiresAt });
+      }
+      const kind = b.kind === "apple" || b.kind === "google" ? b.kind : fail(400, "bad_request", "kind must be apple, google or email");
       const sub = `test-${typeof b.sub === "string" && /^[A-Za-z0-9._-]{1,64}$/.test(b.sub) ? b.sub : randomUUID()}`;
       const t = now();
       const id_token = await new SignJWT({ nonce: nonceHash(str(b.nonce, "nonce", 128)), ...(typeof b.email === "string" ? { email: b.email.toLowerCase(), email_verified: true } : {}) })
