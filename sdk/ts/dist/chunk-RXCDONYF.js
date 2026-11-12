@@ -2911,6 +2911,290 @@ function pairSas(code, agentDid) {
   return [...sha256Sync(`oe-pair-sas/1|${c}|${agentDid}`).subarray(0, 4)].map((b) => PAIR_SAS_WORDS[b]);
 }
 
+// package.json
+var package_default = {
+  name: "@openentity/sdk",
+  version: "1.0.0",
+  description: "Reference TypeScript SDK for the Open Entity Identity Standard (OEIS-1)",
+  license: "MIT",
+  type: "module",
+  exports: {
+    ".": {
+      types: "./dist/index.d.ts",
+      default: "./dist/index.js"
+    },
+    "./node": {
+      types: "./dist/node.d.ts",
+      default: "./dist/node.js"
+    }
+  },
+  scripts: {
+    build: `node -e "require('fs').rmSync('dist', { recursive: true, force: true })" && esbuild src/index.ts src/node.ts --bundle --packages=external --format=esm --platform=neutral --target=es2022 --splitting --outdir=dist && tsc -p tsconfig.build.json`,
+    lint: "tsc --noEmit",
+    typecheck: "tsc --noEmit",
+    test: "vitest run --testTimeout=60000 --hookTimeout=60000",
+    "gen:vectors": "node scripts/gen-vectors.ts && node scripts/gen-owner-vectors.ts"
+  },
+  dependencies: {
+    "@cfworker/json-schema": "^4.1.1",
+    "@noble/curves": "^2.4.0",
+    "@noble/hashes": "^2.4.0",
+    canonicalize: "^5.1.0"
+  },
+  devDependencies: {
+    "@types/node": "^26.6.5",
+    esbuild: "^0.28.2",
+    typescript: "^7.0.2",
+    viem: "^2.57.11",
+    vitest: "^5.0.5"
+  },
+  files: [
+    "dist",
+    "README.md"
+  ],
+  repository: {
+    type: "git",
+    url: "git+https://github.com/moltbot-den/openentity.git",
+    directory: "sdk/ts"
+  },
+  homepage: "https://openentity.org",
+  engines: {
+    node: ">=22.13"
+  },
+  publishConfig: {
+    access: "public"
+  }
+};
+
+// src/agent.ts
+var ACCOUNT = "https://account.openentity.org";
+var CODE = /^OE-[0-9A-HJKMNP-TV-Z]{4}-[0-9A-HJKMNP-TV-Z]{4}$/;
+var keyOf = (s) => "kp" in s ? s.kp : s;
+var baseOf = (account) => (account ?? ACCOUNT).replace(/\/+$/, "");
+var serviceDid = (base2) => "did:web:" + new URL(base2).host.replace(":", "%3A");
+var socketUrl = (base2) => `wss://agents.${new URL(base2).host}/`;
+var sleep = (ms, signal) => new Promise((ok) => {
+  const t = setTimeout(ok, ms);
+  signal?.addEventListener("abort", () => (clearTimeout(t), ok()), { once: true });
+});
+async function agentCall(kp, base2, method, path2, body) {
+  const url = base2 + path2;
+  const bytes = body === void 0 ? void 0 : utf8(JSON.stringify(body));
+  const headers = { accept: "application/json", ...await signRequest({ method, url, body: bytes, privateKey: kp, did: kp.did }) };
+  if (bytes) headers["content-type"] = "application/json";
+  const r = await fetch(url, { method, headers, body: bytes, signal: AbortSignal.timeout(3e4) });
+  const text = await r.text();
+  if (r.ok) return text ? JSON.parse(text) : null;
+  let code = "account_error", message = text.slice(0, 200);
+  try {
+    const e = JSON.parse(text);
+    if (typeof e?.error === "string") [code, message] = [e.error, String(e.message ?? "")];
+  } catch {
+  }
+  const err = new OpenEntityError(code, `account ${r.status} for ${method} ${path2}: ${message}`, r.status);
+  err.retryAfter = Number(r.headers.get("retry-after")) || void 0;
+  throw err;
+}
+async function pair(code, o) {
+  const kp = keyOf(o.identity), base2 = baseOf(o.account);
+  const c = String(code).trim().toUpperCase();
+  if (!CODE.test(c)) throw new OpenEntityError("invalid_input", "the pairing code looks like OE-XXXX-XXXX");
+  const match = pairSas(c, kp.did);
+  const presentation = await buildPresentation(kp, { audience: serviceDid(base2), nonce: c });
+  const claim = await agentCall(kp, base2, "POST", "/v1/pair", {
+    code: c,
+    presentation,
+    framework: o.framework ?? "other",
+    sdk: o.sdk ?? "@openentity/sdk",
+    sdk_version: o.sdkVersion ?? package_default.version,
+    ...o.host ? { host: o.host } : {}
+  });
+  const sas = claim?.sas;
+  if (sas?.version !== "pair-sas/1" || JSON.stringify(sas.names) !== JSON.stringify(match)) {
+    throw new OpenEntityError("verification_failed", "the account service's match items differ from the ones this agent computes from its own DID; not pairing");
+  }
+  await (o.onMatch ?? ((n) => console.log(`Match: ${n.join(", ")}`)))(match);
+  const every = Math.min(Math.max(Number(claim.poll_interval) || 2, 2), 60) * 1e3;
+  const until = (Number(claim.expires_at) || Date.now() / 1e3 + 600) + 30;
+  for (; ; ) {
+    await sleep(every);
+    let s;
+    try {
+      s = await agentCall(kp, base2, "GET", `/v1/pair/${encodeURIComponent(claim.pairing_id)}`);
+    } catch (e) {
+      if ((e.status === 429 || e.status >= 500 || e.status === void 0) && Date.now() / 1e3 < until) {
+        if (e.retryAfter) await sleep(e.retryAfter * 1e3);
+        continue;
+      }
+      throw e;
+    }
+    if (s.state === "confirmed") return { pairingId: claim.pairing_id, ownerDid: s.owner_did, permissions: s.permissions ?? [], credentials: s.credentials ?? [], match };
+    if (s.state === "rejected" || s.state === "expired") throw new OpenEntityError(`pairing_${s.state}`, `the owner's app reports the pairing ${s.state}`);
+    if (Date.now() / 1e3 > until) throw new OpenEntityError("pairing_expired", "the pairing code expired before the owner confirmed");
+  }
+}
+var Owner = class {
+  did;
+  account;
+  #kp;
+  constructor(identity, o = {}) {
+    this.#kp = keyOf(identity);
+    this.did = this.#kp.did;
+    this.account = baseOf(o.account);
+  }
+  #call(method, path2, body) {
+    return agentCall(this.#kp, this.account, method, path2, body);
+  }
+  /** Message the owner (at most 4096 UTF-8 bytes; 60 an hour). `attachments` are upload ids from POST /v1/agent/uploads. */
+  message(text, o = {}) {
+    return this.#call("POST", "/v1/agent/messages", { text, ...o.attachments?.length ? { attachments: o.attachments } : {} });
+  }
+  /** Report what the agent is doing; the owner's app shows it (Live Activity). `progress` is 0 to 1. */
+  async status(s) {
+    await this.#call("POST", "/v1/agent/status", s.progress === void 0 ? { state: s.state, summary: s.summary } : s);
+  }
+  /**
+   * Ask the owner to approve something. The app labels it "Written by the agent" and no product accepts it as an approval of its
+   * own: it is the owner's answer to this agent only. `expiresIn` is 60 to 600 seconds (default 600). With `wait`, polls every
+   * 5 seconds until the owner decides or it expires, and returns the final state.
+   */
+  async askApproval(a, o = {}) {
+    let r = await this.#call("POST", "/v1/agent/approvals", { title: a.title, summary: a.summary, risk: a.risk, expires_in: a.expiresIn ?? 600, ...a.details ? { details: a.details } : {} });
+    while (o.wait && r.state === "pending" && Date.now() / 1e3 < r.expires_at + 10) {
+      await sleep(5e3);
+      r = await this.#call("GET", `/v1/agent/approvals/${encodeURIComponent(r.id)}`);
+    }
+    return r;
+  }
+  /** Unacknowledged items, oldest first (up to 100), acknowledged on return unless `ack` is false. At most once every 15 seconds. */
+  async inbox(o = {}) {
+    const r = await this.#call("GET", "/v1/agent/messages");
+    if (o.ack !== false && r.items.length) await this.#call("POST", "/v1/agent/messages/ack", { ids: r.items.map((i) => i.id) });
+    return r;
+  }
+  /** New product keys for the agent (PLAN 8.4); the old ones stay valid for 1 hour. Default: every product it holds a key for. */
+  async renewCredentials(products) {
+    return (await this.#call("POST", "/v1/agent/credentials/renew", products ? { products } : {})).credentials;
+  }
+  /**
+   * Receive the owner's channel (PLAN 8.2): every item (commands, messages, approval results, permissions) goes to `handler`,
+   * one at a time, and is acknowledged once the handler returns; a handler that throws leaves it for the next delivery. Holds
+   * the WebSocket at wss://agents.<account host>/ (signed connect, heartbeat every 9 minutes, a fresh socket before the 2-hour
+   * limit, backoff on drops). When no socket opens three times running, or there is no WebSocket, it polls
+   * GET /v1/agent/messages every 15 seconds and tries the socket again after 10 minutes. Close 4001 means paused (`onPaused`);
+   * 4003 (unlinked) and 4008 (another socket of this agent took over) end it. `WebSocket` must send headers on the upgrade, as
+   * Node's built-in one does; pass `WebSocket: null` to poll only.
+   */
+  onCommand(handler, o = {}) {
+    const kp = this.#kp, base2 = this.account, url = o.url ?? socketUrl(base2);
+    const WS = o.WebSocket === void 0 ? globalThis.WebSocket : o.WebSocket;
+    const stop = new AbortController();
+    const report = (e) => o.onError?.(e);
+    const seen = /* @__PURE__ */ new Set();
+    let ws, paused = false, mode = WS ? "socket" : "poll", failures = 0, backoff = 1e3;
+    let queue = Promise.resolve();
+    const end = (e) => {
+      if (e) report(e);
+      mode = "closed";
+      stop.abort();
+      ws?.close(1e3);
+    };
+    const handle = async (item) => {
+      if (seen.has(item.id)) return true;
+      if (item.type === "command" && (item.command === "pause" || item.command === "resume")) paused = item.command === "pause";
+      try {
+        await handler(item);
+      } catch (e) {
+        report(e);
+        return false;
+      }
+      seen.add(item.id);
+      if (seen.size > 1e3) seen.delete(seen.values().next().value);
+      return true;
+    };
+    const httpAck = (ids) => ids.length ? agentCall(kp, base2, "POST", "/v1/agent/messages/ack", { ids }).catch(report) : void 0;
+    const connect = async () => {
+      if (stop.signal.aborted) return;
+      mode = "socket";
+      let s;
+      try {
+        s = new WS(url, { headers: await signRequest({ method: "GET", url, privateKey: kp, did: kp.did }) });
+      } catch (e) {
+        report(e);
+        return void poll();
+      }
+      ws = s;
+      let openedAt = 0, renewing = false;
+      const send = (frame) => s.readyState === 1 && s.send(JSON.stringify(frame));
+      const heartbeat = setInterval(() => send({ action: "heartbeat" }), 54e4);
+      const renew = setTimeout(() => (renewing = true, s.close(1e3)), 714e4);
+      s.onopen = () => {
+        openedAt = Date.now();
+        failures = 0;
+        send({ action: "sync" });
+      };
+      s.onmessage = (ev) => {
+        let f;
+        try {
+          f = JSON.parse(String(ev.data));
+        } catch {
+          return;
+        }
+        if (f?.type === "error") return report(new OpenEntityError(String(f.error), String(f.message)));
+        if (typeof f?.id !== "string" || f.type === "heartbeat") return;
+        queue = queue.then(async () => {
+          if (await handle(f)) s.readyState === 1 ? send({ action: "ack", ids: [f.id] }) : await httpAck([f.id]);
+        }).catch(report);
+      };
+      s.onclose = (ev) => {
+        clearInterval(heartbeat);
+        clearTimeout(renew);
+        if (stop.signal.aborted || ws !== s) return;
+        if (ev.code === 4003) return end(new OpenEntityError("unlinked", "the owner unlinked this agent, or it is not paired"));
+        if (ev.code === 4008) return end(new OpenEntityError("replaced", "another socket of this agent took over"));
+        if (ev.code === 4001) {
+          paused = true;
+          o.onPaused?.();
+        }
+        if (!openedAt && ++failures >= 3) return void poll();
+        if (openedAt && Date.now() - openedAt > 6e4) backoff = 1e3;
+        const wait = renewing ? 0 : backoff + Math.random() * 1e3;
+        backoff = Math.min(backoff * 2, 6e4);
+        void sleep(wait, stop.signal).then(connect).catch(report);
+      };
+    };
+    const poll = async () => {
+      mode = "poll";
+      const retrySocketAt = Date.now() + 6e5;
+      while (!stop.signal.aborted) {
+        let wait = 15e3;
+        try {
+          const r = await agentCall(kp, base2, "GET", "/v1/agent/messages");
+          const done = [];
+          for (const item of r.items) if (!stop.signal.aborted && await handle(item)) done.push(item.id);
+          await httpAck(done);
+        } catch (e) {
+          if (e.status === 403) return end(e);
+          if (e.code === "agent_paused") paused = true;
+          if (e.retryAfter) wait = e.retryAfter * 1e3;
+          report(e);
+        }
+        await sleep(wait, stop.signal);
+        if (WS && Date.now() >= retrySocketAt) {
+          failures = 0;
+          return connect().catch(report);
+        }
+      }
+    };
+    void (WS ? connect() : poll()).catch(report);
+    return { close: () => end(), get paused() {
+      return paused;
+    }, get mode() {
+      return mode;
+    } };
+  }
+};
+
 export {
   OpenEntityError,
   HttpSigError,
@@ -2991,5 +3275,7 @@ export {
   payloadDigest,
   verifyApproval,
   verifyKeyLog,
-  pairSas
+  pairSas,
+  pair,
+  Owner
 };

@@ -7,3 +7,4 @@ export { OpenEntityError, HttpSigError, type RegistryErrorCode, type LocalErrorC
 export { httpSigBase, signRequest, verifyRequest, verifyResponse } from "./httpsig.ts";
 export { approvalDigest, payloadDigest, verifyApproval, verifyKeyLog, type Credential, type KeyLogState, type KeyLogResult, type KeyLogOptions, type KeyLogError, type ApprovalOptions, type ApprovalResult, type ApprovalError } from "./owner.ts";
 export { pairSas } from "./pair.ts";
+export { pair, Owner, type Signer, type BearerCredential, type Paired, type InboxItem, type AgentState, type Listener } from "./agent.ts";
