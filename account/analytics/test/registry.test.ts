@@ -20,6 +20,7 @@ describe("RegistryMonitoring", () => {
     const alarms = Object.values(tpl.findResources("AWS::CloudWatch::Alarm")) as { Properties: { AlarmActions?: unknown[]; Namespace?: string } }[];
     expect(alarms.filter((a) => a.Properties.Namespace === "OpenEntity/Uptime")).toHaveLength(3);
     for (const a of alarms) expect(a.Properties.AlarmActions).toHaveLength(1);
+    expect(alarms.length).toBeGreaterThan(25); // registry alarms plus every PLAN 13.3 signal alarm
   });
   it("runs the probe every 5 minutes and creates no Synthetics canary", () => {
     const tpl = build();

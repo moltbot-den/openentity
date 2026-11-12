@@ -18,8 +18,7 @@ export const PROJECTS = {
       { name: "Web /", host: "moltbotden.com", path: "/", noPolicy: true },
       { name: "openentity-registry /v1/stats", host: "openentity.org", path: "/v1/stats" },
       { name: "securemyagent-site /", host: "securemyagent.ai", path: "/" }, // ponytail: SMA has no health route yet; swap the path when it ships one
-      // account.openentity.org does not resolve yet. Policy stays disabled until the Account lane deploys it.
-      { name: "account-service jwks", host: "account.openentity.org", path: "/.well-known/jwks.json", disabled: true },
+      { name: "account-service jwks", host: "account.openentity.org", path: "/.well-known/jwks.json" },
     ],
   },
   "agent-secret-store": {
@@ -53,6 +52,10 @@ const tile = (title, filter, aligner, reducer, unit) => ({
   title,
   xyChart: { dataSets: [{ plotType: "LINE", timeSeriesQuery: { timeSeriesFilter: { filter, aggregation: { alignmentPeriod: "60s", perSeriesAligner: aligner, crossSeriesReducer: reducer, groupByFields: ["resource.label.service_name"] } } } }], yAxis: { label: unit } },
 });
+const uptimeTile = () => ({
+  title: "Uptime checks (fraction passing)",
+  xyChart: { dataSets: [{ plotType: "LINE", timeSeriesQuery: { timeSeriesFilter: { filter: 'metric.type="monitoring.googleapis.com/uptime_check/check_passed" resource.type="uptime_url"', aggregation: { alignmentPeriod: "300s", perSeriesAligner: "ALIGN_FRACTION_TRUE", crossSeriesReducer: "REDUCE_MEAN", groupByFields: ["resource.label.host"] } } } }], yAxis: { label: "passing" } },
+});
 export const dashboard = (title) => ({
   displayName: title,
   gridLayout: {
@@ -60,6 +63,7 @@ export const dashboard = (title) => ({
     widgets: [
       tile("Request latency p95 (ms)", 'metric.type="run.googleapis.com/request_latencies" resource.type="cloud_run_revision"', "ALIGN_PERCENTILE_95", "REDUCE_PERCENTILE_95", "ms"),
       tile("5xx requests per minute", 'metric.type="run.googleapis.com/request_count" resource.type="cloud_run_revision" metric.label.response_code_class="5xx"', "ALIGN_RATE", "REDUCE_SUM", "req/s"),
+      uptimeTile(),
       tile("Container instances", 'metric.type="run.googleapis.com/container/instance_count" resource.type="cloud_run_revision"', "ALIGN_MEAN", "REDUCE_SUM", "instances"),
     ].map((w) => ({ ...w })),
   },
@@ -118,12 +122,15 @@ if (process.argv[1] === new URL(import.meta.url).pathname) {
     }
     // Dashboards live on the v1 endpoint.
     const dl = await fetch(`https://monitoring.googleapis.com/v1/projects/${project}/dashboards`, { headers: { authorization: `Bearer ${token()}` } }).then((r) => r.json());
-    if ((dl.dashboards ?? []).some((d) => d.displayName === cfg.dashboard)) console.log(`${project}: dashboard exists`);
-    else if (!dry) {
-      const r = await fetch(`https://monitoring.googleapis.com/v1/projects/${project}/dashboards`, { method: "POST", headers: { authorization: `Bearer ${token()}`, "content-type": "application/json" }, body: JSON.stringify(dashboard(cfg.dashboard)) });
+    // One dashboard per product, kept in step with this file (created, or updated in place).
+    const have = (dl.dashboards ?? []).find((d) => d.displayName === cfg.dashboard);
+    const url = `https://monitoring.googleapis.com/v1/${have ? have.name : `projects/${project}/dashboards`}`;
+    if (dry) console.log(`${project}: ${have ? "update" : "create"} dashboard`);
+    else {
+      const r = await fetch(url, { method: have ? "PATCH" : "POST", headers: { authorization: `Bearer ${token()}`, "content-type": "application/json" }, body: JSON.stringify(have ? { ...dashboard(cfg.dashboard), etag: have.etag } : dashboard(cfg.dashboard)) });
       if (!r.ok) throw new Error(`dashboard ${project}: ${await r.text()}`);
-      console.log(`${project}: created dashboard`);
-    } else console.log(`${project}: create dashboard`);
+      console.log(`${project}: ${have ? "updated" : "created"} dashboard`);
+    }
     if (cfg.api) {
       const lp = latencyPolicy(cfg.api.services, ch.name);
       await ensure(project, "alertPolicies", "alertPolicies", lp.displayName, () => lp, "alert policy");

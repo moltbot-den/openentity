@@ -67,6 +67,7 @@ export class AccountServiceMonitoring extends Construct {
     const action = new SnsAction(this.topic);
     const add = (alarmId: string, alarm: cloudwatch.Alarm) => {
       alarm.addAlarmAction(action);
+      alarm.addOkAction(action); // the relay mails "RESOLVED"
       this.alarms.push(alarm);
     };
     const base = { evaluationPeriods: 1, treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING, comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD } as const;
@@ -93,6 +94,6 @@ export class AccountServiceMonitoring extends Construct {
 
     (props.dlqs ?? []).forEach((q, i) =>
       add(`Dlq${i}`, new cloudwatch.Alarm(this, `Dlq${i}`, { ...base, metric: q.metricApproximateNumberOfMessagesVisible({ period: Duration.minutes(1) }), threshold: 1, alarmDescription: "Dead-letter queue is not empty" })));
-    (props.alarms ?? []).forEach((a) => a.addAlarmAction(action));
+    (props.alarms ?? []).forEach((a) => { a.addAlarmAction(action); a.addOkAction(action); });
   }
 }

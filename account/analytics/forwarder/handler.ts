@@ -1,10 +1,11 @@
 import type { SQSBatchResponse, SQSEvent } from "aws-lambda";
 import { GetParametersCommand, SSMClient } from "@aws-sdk/client-ssm";
 import { validateEvent, type QueuedEvent } from "../src/validate.ts";
+import { metricLines } from "./emf.ts";
 import { analyticsParamNames, SSM_PREFIX } from "./params.ts";
 import { sendAmplitude, sendGa4, sendPosthog, type Keys } from "./senders.ts";
 
-type Deps = { getKeys: () => Promise<Keys>; fetch: typeof fetch; log: (m: string) => void };
+type Deps = { getKeys: () => Promise<Keys>; fetch: typeof fetch; log: (m: string) => void; stage?: string; emit?: (line: object) => void };
 
 /**
  * SSM SecureString parameters /openentity/account/analytics_<thing>_<prod|staging>, passed in as name -> value. A tool
@@ -57,6 +58,8 @@ export function makeHandler(d: Deps) {
         tasks.push(sendGa4(d.fetch, keys, g.map((x) => x.e)).catch((err) => { d.log(`ga4: ${err}`); markAll(g.map((x) => x.id)); }));
       await Promise.all(tasks);
     }
+    // Metrics for the alarms: only records that reached all three tools, so an SQS retry cannot count twice.
+    if (d.emit) for (const line of metricLines(d.stage ?? "staging", valid.filter((x) => !failed.has(x.id)).map((x) => x.e))) d.emit(line);
     // A retried record is re-sent to all three tools. Amplitude (insert_id) and PostHog (uuid) dedupe; GA4 does not.
     // ponytail: GA4 may double count a retried record; add a per-destination queue if retries become common.
     return { batchItemFailures: [...failed].map((itemIdentifier) => ({ itemIdentifier })) };
@@ -74,6 +77,8 @@ let cached: Promise<Keys> | undefined;
 export const handler = makeHandler({
   fetch,
   log: (m) => console.error(m),
+  stage: process.env.ANALYTICS_ENV ?? "staging",
+  emit: (line) => console.log(JSON.stringify(line)), // EMF: CloudWatch reads it from the function log
   getKeys: () =>
     (cached ??= loadParams(process.env.ANALYTICS_ENV ?? "staging")
       .then((p) => keysFrom(p, process.env.ANALYTICS_ENV ?? "staging"))

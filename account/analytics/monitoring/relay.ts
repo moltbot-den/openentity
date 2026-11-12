@@ -58,6 +58,11 @@ export function formatMail(m: Sns, stage: string): Mail {
   return { subject: `${tag} Notice: ${(m.Subject || "message").slice(0, 120)}`, text: body, html: `<pre>${esc(body)}</pre>` };
 }
 
+/** A new alarm settling from INSUFFICIENT_DATA to OK is not news: no "RESOLVED" mail for it (a deploy would send one per alarm). */
+export function isNoise(m: Sns): boolean {
+  try { const a = JSON.parse(m.Message); return a.NewStateValue === "OK" && a.OldStateValue === "INSUFFICIENT_DATA"; } catch { return false; }
+}
+
 // ---- handler ----
 export type Deps = {
   stage: string;
@@ -74,6 +79,7 @@ export function makeRelay(d: Deps) {
       if (m.TopicArn !== d.topicArn) throw new Error(`unexpected topic ${m.TopicArn}`);
       if (!certUrlOk(m.SigningCertUrl)) throw new Error("bad SigningCertUrl");
       if (!signatureOk(m, await d.getCert(m.SigningCertUrl))) throw new Error("bad SNS signature"); // never email an unverified message
+      if (isNoise(m)) continue;
       await d.send({ ...formatMail(m, d.stage), to: d.to });
     }
   };

@@ -15,6 +15,7 @@ new RegistryMonitoring(stack, "Registry", {
   probeTargets: [
     { name: "registry /v1/stats", url: "https://openentity.org/v1/stats", expect: 200 },
     { name: "hub oeis.dev", url: "https://oeis.dev/", expect: 200 },
+    { name: "account jwks", url: "https://account.openentity.org/.well-known/jwks.json", expect: 200 },
     { name: "mcp", url: "https://mcp.openentity.org/", expect: "lt500" }, // answers 406 without the MCP Accept header
   ],
 });
