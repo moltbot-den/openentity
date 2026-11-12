@@ -504,9 +504,10 @@ paths:
       summary: WebAuthn options for passkey sign-in or root passkey registration
       description: |
         mode `authenticate`: no auth; a discoverable-credential request (empty allowCredentials), userVerification
-        required, timeout 300000 ms, RP ID of the environment. mode `register`: ownerBearer required; on Day 1 allowed
-        only for the onboarding root passkey (an account with no key log and no passkey); further passkeys need step-up
-        method.add (POST /v1/account/methods). The challenge is single use and valid 300 seconds.
+        required, timeout 300000 ms, RP ID of the environment. mode `register`: ownerBearer required; allowed for the
+        onboarding root passkey (an account with no key log and no passkey) and, from Day 5, for a passkey that is about
+        to be offered to the key log (POST /v1/keylog/enrollments: an approver passkey or a new root). A passkey only for
+        signing in is step-up method.add (POST /v1/account/methods). The challenge is single use and valid 300 seconds.
       x-available: day-1
       security:
         - {}
@@ -1173,12 +1174,137 @@ paths:
           description: 'error: attestation_invalid, integrity_failed'
         '429':
           $ref: '#/components/responses/RateLimited'
+  /v1/keylog/enrollments:
+    post:
+      operationId: createEnrollment
+      tags: [Key log]
+      summary: Offer a new credential to the owner's key log (Add an approver, Add a backup, Replace root)
+      description: |
+        Called by the device or browser that holds the new credential, signed in to the same account. Its key must
+        already exist:
+        - a device key (type p256) carries the receipt from POST /v1/keylog/attestations in `attestation.receipt`;
+        - a passkey (type webauthn) comes from POST /v1/auth/passkey/options and verify with mode register.
+
+        The service checks the credential (kid is the thumbprint of jwk; the kid is not already in the log; a valid
+        receipt for p256) and returns a pending enrollment with a 6-digit `code`, valid 10 minutes. The new device
+        shows the code.
+
+        The service pushes {"oe": {"product": "<service DID>", "type": "enrollment.pending", "id": "<enrollment_id>"}}
+        to every current approver device. The approver's app reads the enrollment (GET /v1/keylog/enrollments/{id}),
+        shows label, platform, attestation, key_storage, integrity, the fingerprint (kid) and the code, and asks the
+        owner to confirm that the code matches the new device. Then a key signs the entry that carries `credential`:
+        - purpose approver: add_approver {approver: credential}, signed by a current approver, which takes effect at
+          once. With no usable approver, the root passkey signs recover {approvers: [credential]} instead, which takes
+          effect 24 hours after first sight unless cancelled.
+        - purpose root: replace_root {root: credential}, signed by the root passkey or a current approver, which takes
+          effect 24 hours after first sight (at once in a single-credential log).
+
+        The signer appends the entry with POST /o/{id}/log {line}. The service matches the entry's credential kid to the
+        enrollment, sets its state, and pushes {"type": "enrollment.completed", "id"} to the enrolling install. The new
+        device polls GET /v1/keylog/enrollments/{id} every 2 seconds while its screen is open. The entry itself is the
+        step-up; no Approval2 is sent.
+
+        At most 3 pending enrollments per account.
+      x-available: day-5
+      security:
+        - ownerBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EnrollmentRequest'
+      responses:
+        '201':
+          description: Pending.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Enrollment'
+        '400':
+          $ref: '#/components/responses/Error'
+          description: 'error: bad_request'
+        '401':
+          $ref: '#/components/responses/Error'
+          description: 'error: unauthorized'
+        '403':
+          $ref: '#/components/responses/Error'
+          description: 'error: key_log_required, attestation_invalid (missing or bad receipt on a p256 credential)'
+        '409':
+          $ref: '#/components/responses/Error'
+          description: 'error: key_reused (the kid is already in the log), too_many_pending'
+    get:
+      operationId: listEnrollments
+      tags: [Key log]
+      summary: The account's pending and recent enrollments (an approver reads them after the enrollment.pending push)
+      x-available: day-5
+      security:
+        - ownerBearer: []
+      responses:
+        '200':
+          description: Enrollments, newest first, from the last 24 hours.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnrollmentList'
+        '401':
+          $ref: '#/components/responses/Error'
+          description: 'error: unauthorized'
+  /v1/keylog/enrollments/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { $ref: '#/components/schemas/OpaqueId' }
+    get:
+      operationId: getEnrollment
+      tags: [Key log]
+      summary: Read one enrollment (the approver before signing; the new device while it waits)
+      x-available: day-5
+      security:
+        - ownerBearer: []
+      responses:
+        '200':
+          description: The enrollment.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Enrollment'
+        '401':
+          $ref: '#/components/responses/Error'
+          description: 'error: unauthorized'
+        '404':
+          $ref: '#/components/responses/Error'
+          description: 'error: not_found'
+    delete:
+      operationId: cancelEnrollment
+      tags: [Key log]
+      summary: Withdraw a pending enrollment
+      x-available: day-5
+      security:
+        - ownerBearer: []
+      responses:
+        '204':
+          description: Cancelled.
+        '401':
+          $ref: '#/components/responses/Error'
+          description: 'error: unauthorized'
+        '404':
+          $ref: '#/components/responses/Error'
+          description: 'error: not_found'
+        '409':
+          $ref: '#/components/responses/Error'
+          description: 'error: not_pending'
   /o/{id}/log:
     get:
       operationId: readKeyLog
       tags: [Key log]
       summary: Read an owner key log
-      description: JSON Lines, one exact JCS entry line per line, from seq `from` (default 1; genesis is seq 1). A closed log stays readable.
+      description: |
+        JSON Lines, one exact JCS entry line per line, from seq `from` (default 1; genesis is seq 1). A closed log stays
+        readable. X-OE-First-Seen-At carries the account service's own first_seen_at for each returned line: the
+        server's view. The app passes it to verifyKeyLog to show when a pending recover or replace_root takes effect.
+        Products never use it: they record and run every delay from their own first_seen_at.
       x-available: day-2
       security: []
       parameters:
@@ -1194,6 +1320,9 @@ paths:
             X-OE-Log-Head:
               description: The seq of the last entry.
               schema: { type: integer, minimum: 1 }
+            X-OE-First-Seen-At:
+              description: The account service's first_seen_at (Unix seconds) for each returned line, in the same order, comma-separated with no spaces, for example `1794009600,1794016800`. One value per line of the body.
+              schema: { type: string, pattern: '^[0-9]+(,[0-9]+)*$' }
           content:
             application/jsonl:
               schema:
@@ -1206,7 +1335,7 @@ paths:
       tags: [Key log]
       summary: Append an entry (genesis creates the owner DID)
       description: |
-        The body carries the entry as its exact JCS line (`line`); the service stores and serves those bytes and never
+        The body is `{line}`, final: the entry as its exact JCS line. The service stores and serves those bytes and never
         re-encodes them. genesis (seq 1): ownerBearer of an account with no key log, and `{id}` must equal the
         lowercase base32 of SHA-256(line). Other ops are self-authenticating and need no auth; anyone may post a
         correctly signed entry. For approver and root changes the signed entry IS the step-up: no Approval2 is sent.
@@ -3509,6 +3638,7 @@ components:
     KeyLogAppendRequest:
       type: object
       required: [line]
+      additionalProperties: false
       properties:
         line:
           type: string
@@ -3559,6 +3689,39 @@ components:
         type: { type: string, enum: [app_attest, android_key, webauthn, none] }
         verified: { type: boolean, description: True only when the chain validated to a trusted root. }
         receipt: { $ref: '#/components/schemas/CompactJws', description: 'Device keys: the KeyAttestationReceipt from POST /v1/keylog/attestations, verifiable against the service did.json.' }
+    EnrollmentRequest:
+      type: object
+      required: [purpose, credential]
+      additionalProperties: false
+      properties:
+        purpose: { type: string, enum: [approver, root], description: 'approver: Add an approver or Add a backup; root: Replace root (credential type webauthn).' }
+        credential: { $ref: '#/components/schemas/Credential', description: 'The credential exactly as it will appear in the entry body. p256 needs attestation.receipt.' }
+    Enrollment:
+      type: object
+      required: [enrollment_id, purpose, code, credential, state, created_at, expires_at]
+      properties:
+        enrollment_id: { $ref: '#/components/schemas/OpaqueId' }
+        purpose: { type: string, enum: [approver, root] }
+        code: { type: string, pattern: '^[0-9]{6}$', description: Shown on the new device and on the approver; the owner confirms that they match before signing. }
+        credential: { $ref: '#/components/schemas/Credential' }
+        state:
+          type: string
+          enum: [pending, completed, waiting, expired, cancelled]
+          description: |
+            pending: no entry yet. waiting: a recover or replace_root carrying the credential was appended and takes
+            effect at `effective_at` unless cancelled. completed: the credential is in effect in the log. expired: nothing
+            was appended within 10 minutes. cancelled: withdrawn, or the waiting entry was cancelled.
+        seq: { type: [integer, 'null'], description: The seq of the entry that carries the credential. }
+        effective_at: { type: [integer, 'null'], description: 'When it takes effect, by the service''s first_seen_at; null while pending.' }
+        created_at: { $ref: '#/components/schemas/UnixSeconds' }
+        expires_at: { $ref: '#/components/schemas/UnixSeconds', description: created_at + 600; applies only while pending. }
+    EnrollmentList:
+      type: object
+      required: [enrollments]
+      properties:
+        enrollments:
+          type: array
+          items: { $ref: '#/components/schemas/Enrollment' }
     KeyAttestationRequest:
       type: object
       required: [nonce, platform, jwk]
