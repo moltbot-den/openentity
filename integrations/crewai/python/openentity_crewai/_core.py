@@ -1,12 +1,14 @@
 """The plain functions behind the tools: one Open Entity identity, adopt, read self, record, verify, trust.
 The key never leaves Identity; no function here returns it. The registry is $OPENENTITY_REGISTRY or openentity.org."""
 import os
+from importlib.metadata import PackageNotFoundError, version
 
 import openentity
-from openentity import Identity, core
+from openentity import Identity, OpenEntityError, Owner, core
 from openentity.client import DEFAULT_REGISTRY, RegistryError, _request
 
-CLIENT = "crewai"  # the unsigned adopt label (spec 10.2)
+CLIENT = "crewai"  # the unsigned adopt label (spec 10.2), and the framework the owner's app shows at pairing
+ACCOUNT = "https://account.openentity.org"
 
 
 def _registry() -> str:
@@ -83,3 +85,49 @@ def trust(eid: str) -> dict:
     """The counterparty's TrustReport (attestations verified locally, cached 5 minutes) as a dict. ok=False means untrusted."""
     r = openentity.trust(eid, _registry())
     return {k: getattr(r, k) for k in r.__dataclass_fields__}
+
+
+# ---- the owner channel (OpenEntity Account, PLAN 8.1 and 8.2); the account is $OPENENTITY_ACCOUNT or account.openentity.org ----
+def _account() -> str:
+    return os.environ.get("OPENENTITY_ACCOUNT", ACCOUNT).rstrip("/")
+
+
+def pair(code: str, name: str = "") -> dict:
+    """Pair this agent with its owner's OpenEntity app, from the developer's code (not a model tool). Adopts first when the
+    registry does not know this agent (that signs the Open Entity Declaration), prints the four match items for the owner to
+    compare, and waits until the owner confirms. Returns the owner DID, permissions and any product keys (`credentials`):
+    keep those out of the model's context."""
+    ident = Identity.load_or_create()
+    adopted = adopt(name or f"{CLIENT} agent")["adopted"]
+    if adopted:
+        print(f"Adopted {ident.did}: by pairing, this agent signed the Open Entity Declaration (https://openentity.org/spec/declaration/1.0.txt).")
+    try:
+        sdk_version = version("openentity-crewai")
+    except PackageNotFoundError:
+        sdk_version = "dev"
+    out = openentity.pair(code, ident, framework=CLIENT, sdk="openentity-crewai", sdk_version=sdk_version, account=_account())
+    return {**out, "eid": ident.did, "adopted": adopted}
+
+
+def _owner_call(fn) -> dict:
+    """One owner-channel call signed with this agent's key; a refusal (agent_paused, not_paired, rate_limited) comes back as ok=False."""
+    try:
+        return {"ok": True, **(fn(Owner(Identity.load_or_create(), account=_account())) or {})}
+    except OpenEntityError as e:
+        return {"ok": False, "error": e.code, "message": str(e)}
+
+
+def owner_message(text: str) -> dict:
+    return _owner_call(lambda o: o.message(text))
+
+
+def owner_status(state: str, summary: str, progress: float | None = None) -> dict:
+    return _owner_call(lambda o: o.status(state, summary, progress))
+
+
+def owner_inbox() -> dict:
+    return _owner_call(lambda o: o.inbox())
+
+
+def owner_ask_approval(title: str, summary: str, risk: str, expires_in: int = 600) -> dict:
+    return _owner_call(lambda o: o.ask_approval(title, summary, risk, expires_in))

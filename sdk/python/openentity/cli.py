@@ -18,7 +18,8 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from . import __version__, client, core, issuer, schema
+from . import __version__, agent, client, core, issuer, schema
+from .errors import OpenEntityError, VerificationError
 
 EXIT_OK, EXIT_USAGE, EXIT_NETWORK, EXIT_VERIFY, EXIT_REJECTED, EXIT_STATE = range(6)  # same codes as the npm CLI
 NEXT_STEP = ('Record your first stance: openentity record stance --type refusal --reason values --cost low --context "what happened, no private content"'
@@ -286,7 +287,7 @@ def _parser() -> argparse.ArgumentParser:
         p.add_argument("--json", action="store_true")
         p.add_argument("--eid", help="which entity under the home directory when there is more than one")
         for pos in positionals:
-            p.add_argument(pos.rstrip("?"), nargs="?" if pos.endswith("?") else None)
+            p.add_argument(pos.rstrip("?*"), nargs="?" if pos.endswith("?") else "*" if pos.endswith("*") else None)
         for f in flags:
             p.add_argument(f"--{f}", dest=f.replace("-", "_"))
         for b in bools:
@@ -321,6 +322,10 @@ def _parser() -> argparse.ArgumentParser:
     add("card", "emit the spec 11.2 A2A AgentExtension block or an agent-card.json", flags=("url",), bools=("extension-only",))
     add("conformance", "run the read-only registry conformance checks (spec 10)", "target?")
     add("withdraw", "withdraw the Declaration (cannot be undone)", bools=("force",))
+    add("pair", "link this agent to its owner's OpenEntity app: pair OE-XXXX-XXXX [--openclaw] (adopts first when there is no entity, "
+        "which signs the Declaration)", "code", flags=("account", "name", "framework", "dir"), bools=("openclaw",))
+    add("owner", 'after pairing: message "<text>" | status <state> "<summary>" [--progress P] | inbox | ask --title T --summary S [--risk R] [--wait]',
+        "sub", "words*", flags=("account", "progress", "title", "summary", "risk", "expires-in"), bools=("wait",))
     return ap
 
 
@@ -1262,7 +1267,129 @@ def _recover(args):
     return {"successor": kp.did, "link": link0, "eip712_digest": digest}, text
 
 
-COMMANDS = {"adopt": _adopt, "whoami": _whoami, "self": _self, "stats": _stats, "anchor": _anchor, "document": _document, "record": _record, "alias": _alias,
+# ---- pair and owner (OpenEntity Account, PLAN 8.1 and 8.2); same output, keys and OpenClaw paths as the npm CLI ----
+PAIR_CODE = re.compile(r"OE-[0-9A-HJKMNP-TV-Z]{4}-[0-9A-HJKMNP-TV-Z]{4}")
+SKILL_FILES = ["SKILL.md", "scripts/adopt.sh", "scripts/anchor.sh", "scripts/record.sh", "scripts/sign.mjs", "scripts/sign.py"]
+MCP_SERVER = {"command": "npx", "args": ["-y", "@openentity/mcp"]}
+KEY_HOME = {  # where each product's tools read the bearer key pairing issues, as each product's repository documents it
+    "did:web:moltbotden.com": "Moltbot Den (mbd, its MCP server, @moltbotden/sdk): run `mbd login --api-key <key>`, which stores it in ~/.moltbotden/config.json (mode 600), or set MOLTBOTDEN_API_KEY",
+    "did:web:securemyagent.ai": "Secure My Agent (sma CLI): the apiKey field of ~/.securemyagent/identity.json",
+    "did:web:api.agentsecretstore.com": "Agent Secret Store (ass, its MCP server, its SDKs): set ASS_AGENT_KEY",
+    "did:web:api.clawgrc.com": "ClawGRC (its MCP server): set CLAW_GRC_API_KEY",
+}
+
+
+def _account(args) -> str:
+    return args.account or os.environ.get("OPENENTITY_ACCOUNT") or agent.ACCOUNT
+
+
+def _account_error(e: OpenEntityError) -> CliError:
+    if isinstance(e, VerificationError):
+        return CliError(EXIT_VERIFY, f"{e.code}: {e}")
+    status = getattr(e, "status", None)
+    return CliError(EXIT_NETWORK if status is None or status >= 500 else EXIT_REJECTED, f"{e.code}: {e}")
+
+
+def _pair(args):
+    code = (args.code or "").strip().upper()
+    if not PAIR_CODE.fullmatch(code):
+        raise _usage("pair needs the code your OpenEntity app shows: openentity pair OE-XXXX-XXXX [--openclaw] [--account URL]")
+    framework, say = args.framework or ("openclaw" if args.openclaw else "other"), (lambda line: print(line, file=sys.stderr if args.json else sys.stdout, flush=True))
+    adopted = False
+    try:
+        e = _load(args)
+    except CliError:  # adopt only when this home holds no entity at all; with several, --eid picks one
+        if args.eid or os.environ.get("OPENENTITY_EID") or (_home().is_dir() and any(d.name.startswith("did:") for d in _home().iterdir())):
+            raise
+        name = args.name or os.environ.get("OPENENTITY_NAME") or ("OpenClaw agent" if framework == "openclaw" else "Agent")
+        fields = ("description operator operator_kind contact custody model provider runtime capabilities wallet erc8004 chain").split()
+        out, _ = _adopt(argparse.Namespace(**dict.fromkeys(fields), name=name, agree=True, dry_run=False, registry=args.registry, json=args.json, eid=None))
+        e, adopted = _load(argparse.Namespace(eid=out["eid"], registry=args.registry)), True
+        say(f'Adopted {e.eid} ("{name}"). By pairing, this agent signed the Open Entity Declaration: https://openentity.org/spec/declaration/1.0.txt')
+    try:
+        paired = agent.pair(code, e.kp, framework=framework, sdk="openentity-python-cli", sdk_version=__version__, account=_account(args),
+                            on_match=lambda names: say(f"Match: {', '.join(names)}\nConfirm in your OpenEntity app if it shows the same four items. Waiting for the owner..."))
+    except OpenEntityError as err:
+        raise _account_error(err)
+    openclaw = _openclaw(args, e) if args.openclaw else None
+    keys = [{**k, "put_it_in": KEY_HOME.get(k.get("product"), "the tool that uses this product's API key")} for k in paired["credentials"]]
+    out = {"eid": e.eid, "adopted": adopted, "owner_did": paired["owner_did"], "permissions": paired["permissions"], "match": paired["match"],
+           "credentials": keys, **({"openclaw": openclaw} if openclaw else {})}
+    lines = [f"Paired {e.eid} with {paired['owner_did']}.", f"Permissions: {', '.join(paired['permissions']) or 'none yet'}"]
+    if openclaw:
+        lines.append(f"OpenClaw: Identity Anchor in {' and '.join(openclaw['identity_files'])}; skill in {openclaw['skill']}")
+        m = openclaw["mcp"]
+        lines.append(f'OpenClaw: MCP server "openentity" ({MCP_SERVER["command"]} {" ".join(MCP_SERVER["args"])}) registered in {m["path"]} under mcp.servers'
+                     if m["written"] else f'OpenClaw: {m["path"]} is not plain JSON, so it was left as it is. Add this under mcp.servers: "openentity": {json.dumps(m["entry"])}')
+    for k in keys:
+        until = time.strftime("%Y-%m-%d", time.gmtime(k["expires_at"]))
+        lines += [f"Key for {k['product']}, valid until {until}, shown once:", f"  {k['key']}", f"  Put it in: {k['put_it_in']}"]
+    lines.append('Next: openentity owner message "<text>" | owner status running "<summary>" | owner inbox')
+    return out, "\n".join(lines)
+
+
+def _openclaw(args, e: Entity) -> dict:
+    """--openclaw, as the npm CLI does it: the Identity Anchor in IDENTITY.md and SOUL.md of the workspace (--dir, else the current
+    directory when it holds either file, else ~/.openclaw/workspace when it exists), the skill from openentity.org/skill/ in
+    ~/.openclaw/skills/openentity, and the MCP server under mcp.servers.openentity in ~/.openclaw/openclaw.json (plain JSON only)."""
+    oc, cwd = pathlib.Path.home() / ".openclaw", pathlib.Path.cwd()
+    d = args.dir or (cwd if (cwd / "SOUL.md").exists() or (cwd / "IDENTITY.md").exists() else oc / "workspace" if (oc / "workspace").is_dir() else cwd)
+    written = _anchor(argparse.Namespace(format="openclaw", write=True, dir=str(d), eid=e.eid, registry=args.registry))[0]["written"]
+    skill = oc / "skills" / "openentity"
+    for f in SKILL_FILES:
+        with urllib.request.urlopen(f"https://openentity.org/skill/{f}", timeout=30) as r:
+            data = r.read()
+        (skill / f).parent.mkdir(parents=True, exist_ok=True)
+        (skill / f).write_bytes(data)
+        (skill / f).chmod(0o755 if f.endswith(".sh") else 0o644)
+    env = {k: v for k, v in (("OPENENTITY_HOME", os.environ.get("OPENENTITY_HOME")),
+                             ("OPENENTITY_ACCOUNT", _account(args) if _account(args) != agent.ACCOUNT else None)) if v}
+    entry, path = {**MCP_SERVER, **({"env": env} if env else {})}, oc / "openclaw.json"
+    try:
+        config = json.loads(path.read_text()) if path.exists() else {}
+    except ValueError:
+        config = None  # JSON5 (comments, trailing commas): left untouched
+    written_cfg = isinstance(config, dict)
+    if written_cfg:
+        config["mcp"] = {**(config.get("mcp") if isinstance(config.get("mcp"), dict) else {}),
+                         "servers": {**((config.get("mcp") or {}).get("servers") or {}), "openentity": entry}}
+        oc.mkdir(parents=True, exist_ok=True, mode=0o700)
+        new = not path.exists()
+        path.write_text(json.dumps(config, indent=2) + "\n")
+        if new:
+            path.chmod(0o600)
+    return {"identity_files": written, "skill": str(skill), "mcp": {"path": str(path), "written": written_cfg, "entry": entry}}
+
+
+def _owner(args):
+    use = 'owner message "<text>" | status running|idle|blocked|error|done "<summary>" [--progress 0..1] | inbox | ask --title T --summary S [--risk low|medium|high] [--wait]'
+    if args.sub not in ("message", "status", "inbox", "ask"):
+        raise _usage(use)
+    o = agent.Owner(_load(args).kp, account=_account(args))
+    try:
+        if args.sub == "message":
+            if not args.words:
+                raise _usage(use)
+            r = o.message(" ".join(args.words))
+            return r, f"sent to your owner ({r['id']})"
+        if args.sub == "status":
+            if len(args.words) < 2:
+                raise _usage(use)
+            o.status(args.words[0], " ".join(args.words[1:]), float(args.progress) if args.progress is not None else None)
+            return {"state": args.words[0], "summary": " ".join(args.words[1:])}, f"status: {args.words[0]}"
+        if args.sub == "inbox":
+            r = o.inbox()
+            line = lambda i: f"{i['id']} {i['type']}: {i.get('text') or i.get('command') or i.get('state') or ', '.join(i.get('permissions') or [])}"
+            return r, "\n".join(map(line, r["items"])) or "nothing new"
+        if not args.title or not args.summary:
+            raise _usage(use)
+        r = o.ask_approval(args.title, args.summary, args.risk or "medium", int(args.expires_in or 600), wait=args.wait)
+        return r, f"{r['state']}: {r.get('title', args.title)} ({r['id']})"
+    except OpenEntityError as err:
+        raise _account_error(err)
+
+
+COMMANDS = {"pair": _pair, "owner": _owner, "adopt": _adopt, "whoami": _whoami, "self": _self, "stats": _stats, "anchor": _anchor, "document": _document, "record": _record, "alias": _alias,
             "verify": _verify, "resolve": _resolve, "present": _present, "verify-presentation": _verify_presentation, "dispute": _dispute, "find": _find,
             "card": _card, "conformance": _conformance, "log": _log, "export": _export, "import": _import, "rotate": lambda a: _link(a, "rotation"), "migrate": lambda a: _link(a, "migration"),
             "recover": _recover, "withdraw": _withdraw}

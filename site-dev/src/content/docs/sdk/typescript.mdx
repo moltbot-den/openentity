@@ -101,11 +101,30 @@ await verifyNote(note, spec.registry.log_origin, key);   // true
 
 For the OpenEntity app (ADR 0007 and ADR 0008), verify only: devices and passkeys sign, products verify. `verifyKeyLog(did, lines, firstSeenAt, options)` checks an owner key log against the owner DID and returns the approvers as of `now` and any pending `recover` or `replace_root`. Every delay runs from the `first_seen_at` you recorded for each entry, never from the entry's own time. `verifyApproval(approval, options)` checks an approval/2.0 object against that state, with your own DID, the request id you issued and the payload digest you recompute with `payloadDigest(summary)`. `approvalDigest(fields)` is what a device or passkey signs, and `pairSas(code, agentDid)` gives the four words an agent prints when it pairs. Formats, rules and error codes are in the [test vectors](/test-vectors): `keylog-1/`, `approval-2.0/` and `pair-sas-1/`.
 
+## Pair with the owner and use the owner channel
+
+For agents whose owner uses the OpenEntity app (PLAN 8.1 to 8.4; the contract is `account/openapi.yaml`). `pair(code, {identity, framework, sdk, sdkVersion, host, account, onMatch})` claims the `OE-XXXX-XXXX` code the owner's app shows: it signs a Presentation (nonce `pair:` + the code, audience the account service DID) into an RFC 9421-signed `POST /v1/pair`, computes the four match items from the agent's own DID and refuses when the service shows different ones, hands them to `onMatch` (default: `console.log("Match: ...")`), and waits until the owner confirms. It returns `{pairingId, ownerDid, permissions, credentials, match}`; bearer `credentials` for tools that still need a key appear only there.
+
+`new Owner(identity, {account})` signs every later call with the same key: `message(text)`, `status({state, summary, progress})`, `askApproval({title, summary, risk, expiresIn}, {wait})` (the app labels these "Written by the agent"; no product accepts them), `inbox()` (acknowledges what it returns), `renewCredentials()` and `onCommand(handler, {onPaused, onError})`. `onCommand` holds the WebSocket at `wss://agents.account.openentity.org/` with a signed connect, a heartbeat every 9 minutes, a fresh socket before the 2-hour limit and backoff on drops. The service names a close in its last frame (`close_code`): 4001 means paused, and the listener polls until the resume command arrives; 4003 (unlinked) and 4008 (replaced) end it. When no socket can be held it polls `GET /v1/agent/messages` every 15 seconds. Each item (command, message, approval result, permissions) is acknowledged after the handler returns.
+
+{/* oe:skip needs the OpenEntity Account service and an owner with a pairing code */}
+```ts
+import { pair, Owner } from "@openentity/sdk";
+import { Identity } from "@openentity/sdk/node";
+
+const identity = await Identity.loadOrCreate();
+await pair("OE-7K4M-Q2XP", { identity, framework: "my-agent" });   // prints Match: ..., waits for the owner
+const owner = new Owner(identity);
+await owner.status({ state: "running", summary: "Indexing the docs" });
+await owner.message("Done: 42 pages indexed.");
+owner.onCommand(async (item) => { if (item.type === "command") console.log("owner asks:", item.command); });
+```
+
 ## Every exported function
 
 Read from the source at build time.
 
-<Exports file="sdk/ts/src/core.ts,sdk/ts/src/objects.ts,sdk/ts/src/merkle.ts,sdk/ts/src/registry.ts,sdk/ts/src/client.ts,sdk/ts/src/httpsig.ts,sdk/ts/src/owner.ts,sdk/ts/src/pair.ts" />
+<Exports file="sdk/ts/src/core.ts,sdk/ts/src/objects.ts,sdk/ts/src/merkle.ts,sdk/ts/src/registry.ts,sdk/ts/src/client.ts,sdk/ts/src/httpsig.ts,sdk/ts/src/owner.ts,sdk/ts/src/pair.ts,sdk/ts/src/agent.ts" />
 
 ## Errors
 

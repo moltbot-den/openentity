@@ -1,11 +1,16 @@
 {
   "name": "@openentity/mcp",
   "version": "0.2.0",
-  "private": true,
   "license": "MIT",
   "type": "module",
-  "exports": { ".": "./src/index.ts" },
+  "bin": {
+    "openentity-mcp": "dist/stdio.js"
+  },
+  "files": [
+    "dist"
+  ],
   "scripts": {
+    "build": "esbuild src/stdio.ts --bundle --platform=node --format=esm --target=node22 --outfile=dist/stdio.js --banner:js=\"#!/usr/bin/env node\" && chmod +x dist/stdio.js",
     "lint": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --testTimeout=60000 --hookTimeout=60000"
@@ -17,7 +22,11 @@
   },
   "devDependencies": {
     "@types/node": "^26.6.5",
+    "esbuild": "^0.28.2",
     "typescript": "^5.9.3",
     "vitest": "^5.0.5"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

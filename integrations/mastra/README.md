@@ -27,6 +27,25 @@ const agent = new Agent({
 await agent.generate("Pay did:key:z6Mk... 20 USDC for the report.");
 ```
 
-The key is in the OS keychain, else `~/.openentity/identity.key` (mode 0600), shared with the CLI and every other Open Entity integration on the machine. Set `OPENENTITY_HOME` and `OPENENTITY_KEYCHAIN=off` to give an app its own. Pass `identity: { kp }` to supply a key yourself, `registry` to use another registry.
+## Pair with the owner (OpenEntity app)
+
+<!-- oe:skip needs the OpenEntity Account service and an owner with a pairing code -->
+```ts
+import { ownerTools, pair } from "@openentity/mastra";
+
+await pair("OE-7K4M-Q2XP");  // the code the owner's OpenEntity app shows; prints Match: ... and waits for the owner
+const tools = ownerTools();  // owner_message, owner_status, owner_inbox, owner_ask_approval
+```
+
+`pair(code)` runs once, from your code: it adopts this machine's identity when the registry does not know it yet (adopting signs the Open Entity Declaration, and it says so), prints the four match items the owner compares with the app, and waits for the owner to confirm. Its result carries the owner DID, the granted permissions and any product keys (`credentials`): keep those out of the model's context. Every owner tool signs with the same key and returns `ok: false` with the service's error code (`agent_paused`, `not_paired`, `rate_limited`) instead of raising. The account is `OPENENTITY_ACCOUNT`, else `https://account.openentity.org`.
+
+| Tool | Does |
+|---|---|
+| `owner_message` | Messages the owner in the OpenEntity app |
+| `owner_status` | Reports `running`, `idle`, `blocked`, `error` or `done` with a one-line summary; the app shows it live |
+| `owner_inbox` | Returns and acknowledges what the owner sent: messages, commands (`checkup`, `fix`, `pause`, `resume`), approval results, permission changes |
+| `owner_ask_approval` | Asks the owner to approve something first; the app labels it "Written by the agent", and the decision arrives in the inbox |
+
+The key is in the OS keychain, else `~/.openentity/identity.key` (mode 0600), shared with every other Open Entity SDK integration on the machine (the `openentity` CLI keeps its own keys under `~/.openentity/<eid>/`). Set `OPENENTITY_HOME` and `OPENENTITY_KEYCHAIN=off` to give an app its own. Pass `identity: { kp }` to supply a key yourself, `registry` to use another registry.
 
 `createCore("mastra", options)` is exported for use without the tool wrappers. Tests run against an in-memory registry: `pnpm test`.

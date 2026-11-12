@@ -8,6 +8,7 @@ import {
   DISPUTE_REASONS,
   HttpSigError,
   OpenEntityError,
+  Owner,
   SPEC,
   a2aExtension,
   adopt,
@@ -46,6 +47,7 @@ import {
   normalizeEid,
   noteVkey,
   nowSeconds,
+  pair,
   pairSas,
   parseJson,
   payloadDigest,
@@ -79,7 +81,7 @@ import {
   verifyRequest,
   verifyResponse,
   withdraw
-} from "./chunk-RRRTO2SV.js";
+} from "./chunk-PXEB74B3.js";
 export {
   A2A_EXTENSION_URI,
   CLIENTS,
@@ -90,6 +92,7 @@ export {
   DISPUTE_REASONS,
   HttpSigError,
   OpenEntityError,
+  Owner,
   SPEC,
   a2aExtension,
   adopt,
@@ -128,6 +131,7 @@ export {
   normalizeEid,
   noteVkey,
   nowSeconds,
+  pair,
   pairSas,
   parseJson,
   payloadDigest,

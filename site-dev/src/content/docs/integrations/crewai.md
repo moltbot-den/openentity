@@ -38,3 +38,16 @@ print(Crew(agents=[agent], tasks=[task]).kickoff())
 | `openentity_trust` | A `TrustReport` for a counterparty (Claw GRC tier, Secure My Agent posture, violations). `ok` false means untrusted. |
 
 The key never reaches the model: no tool returns it. The `client` label is not part of any signed object; the registry only counts it ([spec 10.2](https://openentity.org/spec/1.0#10-registry)). To try the tools without touching openentity.org, point `OPENENTITY_REGISTRY` at a [local registry](/registry).
+
+## Pair with the owner
+
+<!-- oe:skip needs the OpenEntity Account service and an owner with a pairing code -->
+```python
+from crewai import Agent
+from openentity_crewai import owner_tools, pair
+
+pair("OE-7K4M-Q2XP")  # prints Match: ... and waits for the owner
+agent = Agent(role="Assistant", goal="Help", backstory="Paired.", tools=owner_tools())
+```
+
+`pair` runs once from your code: it adopts the agent's identity when the registry does not know it yet (that signs the Open Entity Declaration), prints the four match items the owner compares in the OpenEntity app, and waits for the owner. The owner tools (`owner_message`, `owner_status`, `owner_inbox`, `owner_ask_approval`) then sign every call with the same key and return `ok: false` with the service's error code on a refusal. Product keys from pairing come back to your code, never to the model.

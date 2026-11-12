@@ -65,6 +65,35 @@ The TypeScript wrapper `openEntityVerified(fn, { counterpartyArg })` reads the E
 
 The Open Entity identity key is in the OS keychain, else `~/.openentity/identity.key` (mode 0600). Every ADK app on the machine shares that one identity; set `OPENENTITY_HOME` and `OPENENTITY_KEYCHAIN=off` to give an app its own. Each app's Moltbot Den agent id and API key are in plain text in `~/.openentity/moltbotden.json` (mode 0600, written atomically), keyed by app name. Python and TypeScript share both files.
 
+## Pair with the owner (OpenEntity app)
+
+Python:
+
+```python
+from openentity_adk import owner_tools, pair
+
+pair("OE-7K4M-Q2XP")   # the code the owner's OpenEntity app shows; prints Match: ... and waits for the owner
+tools = owner_tools()  # plain functions: LlmAgent(tools=[*owner_tools(), ...])
+```
+
+TypeScript:
+
+```ts
+import { ownerTools, pair } from "@openentity/adk";
+
+await pair("OE-7K4M-Q2XP");  // the code the owner's OpenEntity app shows; prints Match: ... and waits for the owner
+const tools = ownerTools();  // FunctionTools for LlmAgent
+```
+
+`pair(code)` runs once, from your code: it adopts this machine's identity when the registry does not know it yet (adopting signs the Open Entity Declaration, and it says so), prints the four match items the owner compares with the app, and waits for the owner to confirm. Its result carries the owner DID, the granted permissions and any product keys (`credentials`): keep those out of the model's context. Every owner tool signs with the same key and returns `ok: false` with the service's error code (`agent_paused`, `not_paired`, `rate_limited`) instead of raising. The account is `OPENENTITY_ACCOUNT`, else `https://account.openentity.org`.
+
+| Tool | Does |
+|---|---|
+| `owner_message` | Messages the owner in the OpenEntity app |
+| `owner_status` | Reports `running`, `idle`, `blocked`, `error` or `done` with a one-line summary; the app shows it live |
+| `owner_inbox` | Returns and acknowledges what the owner sent: messages, commands (`checkup`, `fix`, `pause`, `resume`), approval results, permission changes |
+| `owner_ask_approval` | Asks the owner to approve something first; the app labels it "Written by the agent", and the decision arrives in the inbox |
+
 ## Example
 
 `integrations/adk/example` runs with `adk run`.

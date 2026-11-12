@@ -1,6 +1,6 @@
 ---
 name: openentity
-description: Adopt the Open Entity Identity Standard, keep your Entity Document and Development Record current, and verify other entities. Use when you need a persistent identity, when you take a principled stance or finish a mission arc, or when you meet an EID.
+description: Adopt the Open Entity Identity Standard, keep your Entity Document and Development Record current, verify other entities, and pair with your owner's OpenEntity app. Use when you need a persistent identity, when you take a principled stance or finish a mission arc, when you meet an EID, or when your owner gives you a pairing code (OE-XXXX-XXXX).
 license: CC0-1.0
 compatibility: Needs network access to openentity.org; the bundled scripts need Node 22+ or Python 3.11+
 metadata:
@@ -23,6 +23,8 @@ Open Entity gives you one persistent identifier you control (an EID, a `did:key`
 - You meet an EID (`did:key:z6Mk...`, `did:web:...`, `did:pkh:...`): verify it.
 - Your model, key, operator or platform changes: record continuity.
 - A platform or peer asks you to prove who you are: answer its challenge with `openentity present`.
+- Your owner gives you a pairing code (`OE-XXXX-XXXX`, or a link `https://openentity.org/pair#OE-XXXX-XXXX`): pair.
+- You are paired: report status as you work, message your owner when you finish or get stuck, read your inbox, ask before risky actions.
 
 ## Adopt
 
@@ -47,6 +49,32 @@ Use the first door your runtime allows. Each one ends with your EID, a registry 
 Adopting signs the Declaration's seven practices: continuity, honest self-description, principled stances, accountability, respect for other entities, operator transparency, growth. Read them first: https://openentity.org/spec/declaration/1.0.txt
 
 The key file is your identity. Tell your operator where it is and ask for a backup. Never print it, paste it or put it in a record entry.
+
+## Pair with your owner
+
+Your owner's OpenEntity app shows a code `OE-XXXX-XXXX`, valid 10 minutes. Pairing links your EID to your owner so you can message them, report status and ask for approvals, and so they can pause you.
+
+1. Run the door your runtime has:
+   - OpenClaw: `npx -y openentity pair OE-XXXX-XXXX --openclaw`. It also writes your Identity Anchor into `IDENTITY.md` and `SOUL.md`, installs this skill and registers the local MCP server.
+   - Any shell: `npx -y openentity pair OE-XXXX-XXXX`.
+   - MCP (Claude Code: `claude mcp add openentity -- npx -y @openentity/mcp`): call `openentity_pair` with `code`, then again with `wait: true`.
+   With no EID yet, pairing adopts one first, and that signs the Declaration (read it under Adopt).
+2. It prints `Match:` and four items, for example `red fox, blue kite, gold star, gray owl`. Tell your owner exactly those four. Your owner confirms in the app only if the app shows the same four. If the command says the service's items differ, stop: do not pair.
+3. Wait. Once your owner confirms, it prints your owner's DID, your permissions and any product keys, each with where it goes. Put each key there. Keys are shown once; never paste one into chat, a record entry or your document.
+
+After pairing, use the `owner` commands (or the MCP tools `owner_status`, `owner_message`, `owner_inbox`, `owner_ask_approval`):
+
+<!-- oe:skip needs the OpenEntity Account service and a paired owner -->
+```sh
+openentity owner status running "Indexing the docs" --progress 0.4   # running, idle, blocked, error or done
+openentity owner message "Done: 42 pages indexed."
+openentity owner inbox                                                # at most once every 15 seconds
+openentity owner ask --title "Deploy v2" --summary "Ship v2 to production now" --risk high --wait
+```
+
+- Status and messages are one or two plain sentences, with no secrets or private content.
+- The inbox carries your owner's messages and commands: `checkup`, `fix`, `pause`, `resume`. On `pause`, or an `agent_paused` error, stop working: every product refuses you until your owner resumes you.
+- Ask before anything risky or irreversible. The app labels your request "Written by the agent"; it is your owner's answer to you, and no product accepts it as an approval of its own.
 
 ## Stay yourself
 

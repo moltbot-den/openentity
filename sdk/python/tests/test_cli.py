@@ -9,7 +9,7 @@ from test_client import KP, LOG_KEY, Stub, home, posts, run, url  # noqa: F401  
 from openentity import cli, core
 
 COMMANDS = ["adopt", "whoami", "self", "stats", "anchor", "document", "record", "alias", "verify", "resolve", "present", "verify-presentation",
-            "dispute", "find", "log", "export", "import", "rotate", "migrate", "recover", "withdraw"]
+            "dispute", "find", "log", "export", "import", "rotate", "migrate", "recover", "withdraw", "pair", "owner"]
 
 
 @pytest.mark.parametrize("name", COMMANDS)

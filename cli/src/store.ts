@@ -9,6 +9,8 @@ import { DEFAULT_REGISTRY, Registry, type Obj } from "./http";
 export interface Ctx {
   args: string[];
   v: Obj;
+  /** Progress lines a long command prints before its result (stderr under --json). */
+  say?: (line: string) => void;
 }
 export interface Result {
   json: unknown;

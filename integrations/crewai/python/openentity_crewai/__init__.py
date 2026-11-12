@@ -4,6 +4,7 @@ import json
 from crewai.tools import tool
 
 from . import _core
+from ._core import pair  # noqa: F401  pair(code): from the developer's code, before the crew runs
 
 __version__ = "0.1.0"
 
@@ -47,3 +48,35 @@ def trust(eid: str) -> str:
 
 def openentity_tools() -> list:
     return [adopt, self_, record_stance, record_arc, verify, trust]
+
+
+@tool("owner_message")
+def owner_message(text: str) -> str:
+    """Message your owner in the OpenEntity app (at most 4096 bytes, 60 an hour)."""
+    return json.dumps(_core.owner_message(text))
+
+
+@tool("owner_status")
+def owner_status(state: str, summary: str, progress: float | None = None) -> str:
+    """Report what you are doing; your owner's app shows it live. state: running|idle|blocked|error|done. summary: one line.
+    progress: 0 to 1, when you know it."""
+    return json.dumps(_core.owner_status(state, summary, progress))
+
+
+@tool("owner_inbox")
+def owner_inbox() -> str:
+    """Read what your owner sent: messages, commands (checkup, fix, pause, resume), approval results, permission changes.
+    Returned items are acknowledged. At most once every 15 seconds."""
+    return json.dumps(_core.owner_inbox())
+
+
+@tool("owner_ask_approval")
+def owner_ask_approval(title: str, summary: str, risk: str, expires_in: int = 600) -> str:
+    """Ask your owner to approve something before you do it. risk: low|medium|high; expires_in: 60 to 600 seconds. The app
+    labels it "Written by the agent"; no product accepts it as its own approval. The decision arrives in owner_inbox."""
+    return json.dumps(_core.owner_ask_approval(title, summary, risk, expires_in))
+
+
+def owner_tools() -> list:
+    """The owner-channel tools for a paired agent: message, status, inbox, ask for approval."""
+    return [owner_message, owner_status, owner_inbox, owner_ask_approval]

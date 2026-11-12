@@ -29,3 +29,5 @@ agent = create_agent("anthropic:claude-sonnet-4-6", tools=[get_pulls], middlewar
 ```
 
 Full documentation, the rule table and the ledger settings: <https://github.com/moltbot-den/openentity/tree/main/integrations/langchain>
+
+Pair with the owner's OpenEntity app, then give the model the owner tools: `pair("OE-XXXX-XXXX")` and `owner_tools()` (needs `pip install openentity`). Details: <https://github.com/moltbot-den/openentity/tree/main/integrations/langchain>

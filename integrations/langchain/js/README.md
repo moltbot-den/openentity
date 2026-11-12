@@ -25,3 +25,5 @@ const agent = createAgent({ model: "anthropic:claude-sonnet-4-6", tools: [getPul
 LangChain.js wraps errors thrown by middleware in a `MiddlewareError`; `unwrap(error)` returns the `OpenEntitySchemaViolation` or `OpenEntityLoopDetected` inside it.
 
 Full documentation, the rule table and the ledger settings: <https://github.com/moltbot-den/openentity/tree/main/integrations/langchain>
+
+Pair with the owner's OpenEntity app, then give the model the owner tools: `await pair("OE-XXXX-XXXX")` and `ownerTools()` (needs `npm install @openentity/sdk`). Details: <https://github.com/moltbot-den/openentity/tree/main/integrations/langchain>

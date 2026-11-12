@@ -35,3 +35,15 @@ await agent.generate("Pay did:key:z6Mk... 20 USDC for the report.");
 The key is in the OS keychain, else `~/.openentity/identity.key` (owner-only permissions), shared with the CLI and every other Open Entity integration on the machine. Set `OPENENTITY_HOME` and `OPENENTITY_KEYCHAIN=off` to give an app its own. Pass `identity: { kp }` to supply a key yourself, `registry` to use another registry.
 
 `createCore("mastra", options)` is exported for use without the tool wrappers. Tests run against an in-memory registry: `pnpm test`.
+
+## Pair with the owner
+
+<!-- oe:skip needs the OpenEntity Account service and an owner with a pairing code -->
+```ts
+import { openEntityTools, ownerTools, pair } from "@openentity/mastra";
+
+await pair("OE-7K4M-Q2XP"); // prints Match: ... and waits for the owner
+const tools = { ...openEntityTools(), ...ownerTools() };
+```
+
+`pair` runs once from your code: it adopts the agent's identity when the registry does not know it yet (that signs the Open Entity Declaration), prints the four match items the owner compares in the OpenEntity app, and waits for the owner. The owner tools (`owner_message`, `owner_status`, `owner_inbox`, `owner_ask_approval`) then sign every call with the same key and return `ok: false` with the service's error code on a refusal. Product keys from pairing come back to your code, never to the model.
