@@ -1,6 +1,9 @@
-// The Open Entity calls behind the tools: own identity (load or create, adopt once), read it, append stances and arcs, verify a counterparty.
-import { adopt, mintStamp, nowSeconds, signObject, SPEC, trust, validate, type Client, type KeyPair, type TrustReport } from "@openentity/sdk";
+// The Open Entity calls behind the tools: own identity (load or create, adopt once), read it, append stances and arcs, verify a counterparty,
+// and the owner channel: pair with the owner's OpenEntity app, then message, status, inbox and approvals (PLAN 8.1, 8.2).
+import { hostname } from "node:os";
+import { adopt, mintStamp, nowSeconds, OpenEntityError, Owner, pair, signObject, SPEC, trust, validate, type AgentState, type Client, type KeyPair, type Paired, type TrustReport } from "@openentity/sdk";
 import { Identity } from "@openentity/sdk/node";
+import pkg from "../package.json" with { type: "json" };
 
 export interface Options {
   /** Name on first adopt. Default: the integration's label. */
@@ -10,10 +13,13 @@ export interface Options {
   /** Use this key instead of the machine's identity (OS keychain, else ~/.openentity/identity.key). */
   identity?: { kp: KeyPair };
   fetch?: typeof fetch;
+  /** The OpenEntity Account for pairing and the owner tools. Default: OPENENTITY_ACCOUNT, else https://account.openentity.org. */
+  account?: string;
 }
 
 export type Stance = { stance_type: "refusal" | "correction" | "limit_assertion"; reason_category: "values" | "capability" | "safety" | "relationship"; cost: "none" | "low" | "high"; context: string; instruction_conflict?: boolean };
 export type Arc = { action: "open" | "close"; arc_id: string; title: string; outcome?: string };
+export type Approval = { title: string; summary: string; risk: "low" | "medium" | "high"; expiresIn?: number };
 
 export function createCore(client: Client, o: Options = {}) {
   const registry = (o.registry ?? "https://openentity.org").replace(/\/+$/, "");
@@ -24,15 +30,17 @@ export function createCore(client: Client, o: Options = {}) {
     if (!r.ok) throw new Error(`registry ${r.status} for ${path}: ${t.slice(0, 200)}`);
     return JSON.parse(t);
   };
+  const account = o.account ?? process.env.OPENENTITY_ACCOUNT;
   let kp: Promise<KeyPair> | undefined;
   let queue: Promise<unknown> = Promise.resolve();
+  let adopted = false;
 
   /** Load or create the key, and adopt it with this integration's client label if the registry does not know it. */
   const ensure = (): Promise<KeyPair> =>
     (kp ??= (async () => {
       const k = o.identity?.kp ?? (await Identity.loadOrCreate()).kp;
       const known = await get(`${registry}/v1/entities/${k.did}`);
-      if (known.status === 404) await adopt(k, { name: o.name ?? client, description: o.description, registry, client });
+      if (known.status === 404) adopted = !!(await adopt(k, { name: o.name ?? client, description: o.description, registry, client }));
       else if (!known.ok) throw new Error(`registry ${known.status} for /entities/${k.did}`);
       return k;
     })().catch((e) => ((kp = undefined), Promise.reject(e))));
@@ -67,5 +75,30 @@ export function createCore(client: Client, o: Options = {}) {
       append(a.action === "open" ? "arc_opened" : "arc_closed", { arc_id: a.arc_id, title: a.title, ...(a.action === "close" && a.outcome ? { outcome: a.outcome } : {}) }),
     /** Fail closed: ok=false on any read or signature failure. */
     verify: (eid: string): Promise<TrustReport> => trust(eid, { registry, ...(o.fetch ? { fetchJson: async (u: string) => JSON.parse(await (await o.fetch!(u)).text()) } : {}) }),
+    /**
+     * Pair with the owner's OpenEntity app, from your code (not a model tool): adopts first when the registry does not know this
+     * agent (that signs the Open Entity Declaration), prints the four match items for the owner to compare, waits for the owner.
+     * The result's `credentials` are product keys: keep them out of the model's context.
+     */
+    pair: async (code: string, p: { onMatch?: (names: string[]) => void } = {}): Promise<Paired & { eid: string; adopted: boolean }> => {
+      const fresh = !kp, k = await ensure();
+      if (fresh && adopted) console.log(`Adopted ${k.did}: by pairing, this agent signed the Open Entity Declaration (https://openentity.org/spec/declaration/1.0.txt).`);
+      const r = await pair(code, { identity: k, framework: client, sdk: pkg.name, sdkVersion: pkg.version, host: hostname(), account, onMatch: p.onMatch });
+      return { ...r, eid: k.did, adopted: fresh && adopted };
+    },
+    message: (text: string) => owner((w) => w.message(text)),
+    status: (s: { state: AgentState; summary: string; progress?: number }) => owner((w) => w.status(s)),
+    inbox: () => owner((w) => w.inbox()),
+    askApproval: (a: Approval) => owner((w) => w.askApproval(a)),
   };
+
+  /** One owner-channel call signed with this agent's key; a refusal (agent_paused, not_paired, rate_limited) comes back as ok=false. */
+  async function owner(fn: (w: Owner) => Promise<object | void>) {
+    try {
+      return { ok: true, ...((await fn(new Owner(o.identity?.kp ?? (await Identity.loadOrCreate()).kp, { account }))) ?? {}) };
+    } catch (e) {
+      if (e instanceof OpenEntityError) return { ok: false, error: e.code, message: e.message };
+      throw e;
+    }
+  }
 }

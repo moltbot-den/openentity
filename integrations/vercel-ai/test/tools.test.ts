@@ -2,8 +2,8 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { mkdtempSync, rmSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { generateKeyPair, recordEntryHash, verifyObject } from "@openentity/sdk";
-import { openEntityTools } from "../src/index.ts";
+import { generateKeyPair, pairSas, recordEntryHash, verifyObject, verifyRequest } from "@openentity/sdk";
+import { openEntityTools, ownerTools, pair } from "../src/index.ts";
 
 let home: string;
 beforeEach(() => { home = mkdtempSync(join(tmpdir(), "oe-vercel-ai-")); process.env.OPENENTITY_HOME = home; process.env.OPENENTITY_KEYCHAIN = "off"; });
@@ -96,4 +96,55 @@ test("verify fails closed for an unknown entity and passes a known one", async (
   const r: any = await run(t.openentity_verify, { eid: stranger.did });
   expect([r.ok, r.level, r.violations]).toEqual([true, "L1", []]);
   expect(((await run(t.openentity_verify, { eid: "not-a-did" })) as any).ok).toBe(false);
+});
+
+/** The fake registry plus an account service at https://account.example that checks each signature and answers from `routes`. */
+function withAccount(reg: ReturnType<typeof fakeRegistry>, routes: Record<string, (body: any) => object | null>) {
+  const calls: { did: string; method: string; path: string; body: any }[] = [];
+  vi.stubGlobal("fetch", (async (url: string, init: RequestInit = {}) => {
+    if (!url.startsWith("https://account.example/")) return reg.fetch(url, init);
+    const method = init.method ?? "GET", bytes = init.body as Uint8Array | undefined, path = new URL(url).pathname;
+    const { did } = await verifyRequest({ method, url, headers: init.headers as Record<string, string>, body: bytes });
+    const body = bytes ? JSON.parse(new TextDecoder().decode(bytes)) : undefined;
+    calls.push({ did, method, path, body });
+    const out = routes[`${method} ${path}`](body);
+    return out && "error" in out ? new Response(JSON.stringify(out), { status: 423 }) : new Response(out ? JSON.stringify(out) : null, { status: out ? 200 : 204 });
+  }) as typeof fetch);
+  return calls;
+}
+
+test("pair adopts first with the vercel-ai label, pairs under it and hands the match over before waiting", async () => {
+  const reg = fakeRegistry();
+  const calls = withAccount(reg, {
+    "POST /v1/pair": (b) => ({ pairing_id: "pr_1", sas: { version: "pair-sas/1", names: pairSas(b.code, b.presentation.eid) }, expires_at: 9e9, poll_interval: 2 }),
+    "GET /v1/pair/pr_1": () => ({ state: "confirmed", owner_did: "did:web:account.example:o:abc", permissions: ["owner.status"], credentials: [] }),
+  });
+  const log = vi.spyOn(console, "log").mockImplementation(() => {});
+  const shown: string[][] = [];
+  const r = await pair("OE-7K4M-Q2XP", { name: "Paired", account: "https://account.example", onMatch: (n) => void shown.push(n) });
+  expect([r.adopted, r.ownerDid, r.permissions, reg.adopts.length, reg.adopts[0].client]).toEqual([true, "did:web:account.example:o:abc", ["owner.status"], 1, "vercel-ai"]);
+  expect(shown).toEqual([pairSas("OE-7K4M-Q2XP", r.eid)]);
+  expect(log.mock.calls[0][0]).toContain("signed the Open Entity Declaration");
+  log.mockRestore();
+  expect(calls[0]).toMatchObject({ did: r.eid, path: "/v1/pair", body: { framework: "vercel-ai", sdk: "@openentity/vercel-ai" } });
+});
+
+test("the owner tools sign as this agent; a refusal comes back as ok=false", async () => {
+  const reg = fakeRegistry();
+  const calls = withAccount(reg, {
+    "POST /v1/agent/messages": () => ({ id: "m1" }),
+    "POST /v1/agent/status": () => null,
+    "GET /v1/agent/messages": () => ({ items: [], more: false }),
+    "POST /v1/agent/approvals": (b) => ({ id: "ap1", state: "pending", title: b.title }),
+  });
+  const t = ownerTools({ account: "https://account.example" });
+  expect(await run(t.owner_message, { text: "hello" })).toEqual({ ok: true, id: "m1" });
+  expect(await run(t.owner_status, { state: "running", summary: "indexing", progress: 0.5 })).toEqual({ ok: true });
+  expect(await run(t.owner_inbox, {})).toEqual({ ok: true, items: [], more: false });
+  expect(await run(t.owner_ask_approval, { title: "Deploy", summary: "Ship v2", risk: "high" })).toMatchObject({ ok: true, state: "pending" });
+  expect(calls.map((c) => c.body)).toEqual([{ text: "hello" }, { state: "running", summary: "indexing", progress: 0.5 }, undefined, { title: "Deploy", summary: "Ship v2", risk: "high", expires_in: 600 }]);
+  expect(new Set(calls.map((c) => c.did)).size).toBe(1);
+  expect(reg.adopts).toHaveLength(0); // the owner tools never adopt
+  withAccount(reg, { "POST /v1/agent/messages": () => ({ error: "agent_paused", message: "paused" }) });
+  expect(await run(t.owner_message, { text: "x" })).toMatchObject({ ok: false, error: "agent_paused" });
 });

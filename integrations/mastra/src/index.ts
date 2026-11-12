@@ -2,7 +2,7 @@ import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { createCore, type Options } from "./core.ts";
 
-export { createCore, type Options, type Stance, type Arc } from "./core.ts";
+export { createCore, type Options, type Stance, type Arc, type Approval } from "./core.ts";
 
 const stance = z.object({
   stance_type: z.enum(["refusal", "correction", "limit_assertion"]),
@@ -46,6 +46,53 @@ export function openEntityTools(o: Options = {}) {
       description: "Check another agent's Open Entity before you pay, hire or share data with it. Returns its trust tier, security posture and open violations; ok=false means untrusted.",
       inputSchema: z.object({ eid: z.string().describe("The counterparty's EID, e.g. did:key:z6Mk...") }),
       execute: ({ eid }) => core.verify(eid),
+    }),
+  };
+}
+
+const statusInput = z.object({
+  state: z.enum(["running", "idle", "blocked", "error", "done"]),
+  summary: z.string().max(200).describe("One line: what you are doing or why you stopped"),
+  progress: z.number().min(0).max(1).optional().describe("0 to 1, when you know it"),
+});
+const approvalInput = z.object({
+  title: z.string().min(1).max(120),
+  summary: z.string().min(1).max(2000).describe("What you will do and why, in plain words"),
+  risk: z.enum(["low", "medium", "high"]),
+  expiresIn: z.number().int().min(60).max(600).optional().describe("Seconds the owner has to decide (default 600)"),
+});
+
+/** Pair this agent with its owner's OpenEntity app, from your code before the agent runs (see createCore(...).pair). */
+export const pair = (code: string, o: Options & { onMatch?: (names: string[]) => void } = {}) => createCore("mastra", o).pair(code, { onMatch: o.onMatch });
+
+/** Four Mastra tools for a paired agent: `owner_message`, `owner_status`, `owner_inbox`, `owner_ask_approval`. Each signs as this
+ * agent's key; a refusal (agent_paused, not_paired, rate_limited) returns ok=false. */
+export function ownerTools(o: Options = {}) {
+  const core = createCore("mastra", o);
+  return {
+    owner_message: createTool({
+      id: "owner_message",
+      description: "Message your owner in the OpenEntity app (at most 4096 bytes, 60 an hour).",
+      inputSchema: z.object({ text: z.string().min(1).max(4096) }),
+      execute: ({ text }) => core.message(text),
+    }),
+    owner_status: createTool({
+      id: "owner_status",
+      description: "Report what you are doing; your owner's app shows it live.",
+      inputSchema: statusInput,
+      execute: (s) => core.status(s),
+    }),
+    owner_inbox: createTool({
+      id: "owner_inbox",
+      description: "Read what your owner sent: messages, commands (checkup, fix, pause, resume), approval results and permission changes. Returned items are acknowledged. At most once every 15 seconds.",
+      inputSchema: z.object({}),
+      execute: () => core.inbox(),
+    }),
+    owner_ask_approval: createTool({
+      id: "owner_ask_approval",
+      description: "Ask your owner to approve something before you do it. The app labels it \"Written by the agent\"; no product accepts it as its own approval. The decision arrives in owner_inbox as approval.result.",
+      inputSchema: approvalInput,
+      execute: (a) => core.askApproval(a),
     }),
   };
 }

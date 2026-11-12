@@ -98,6 +98,33 @@ On a 2xx response (and on tool output for registered tools) where JSON is expect
 
 HEAD requests and 206 partial responses are never checked. Streaming responses (`stream=True`, SSE, ndjson) are never read. Chunked aiohttp responses and bodies over 10 MB are not buffered, so they are not checked. Several guards can call `guard_http()` at once; each uninstalls on its own. A tool that returns a `Command` with a `ToolMessage` in its `update` is validated like a plain `ToolMessage`. `guard_http()` checks only calls made inside a running tool, so an LLM provider call or a tracing thread can never raise; pass `scope="all"` (`scope: "all"` in JS) to check every call in the process. Pass `ignore=("error_envelope",)` for an API whose 200s legitimately carry `errors` (GraphQL partial results), and `only_registered=True` to skip routes without a schema.
 
+## Pair with the owner (OpenEntity app)
+
+<!-- oe:skip needs the OpenEntity Account service and an owner with a pairing code -->
+```python
+from langchain_openentity import owner_tools, pair
+
+pair("OE-7K4M-Q2XP")   # the code the owner's OpenEntity app shows; prints Match: ... and waits for the owner
+tools = owner_tools()  # owner_message, owner_status, owner_inbox, owner_ask_approval: LangChain tools for create_agent
+```
+
+<!-- oe:skip needs the OpenEntity Account service and an owner with a pairing code -->
+```ts
+import { ownerTools, pair } from "@openentity/langchain";
+
+await pair("OE-7K4M-Q2XP");  // the code the owner's OpenEntity app shows; prints Match: ... and waits for the owner
+const tools = ownerTools();  // the same four tools for createAgent
+```
+
+`pair(code)` runs once, from your code: it adopts this machine's identity when the registry does not know it yet (adopting signs the Open Entity Declaration, and it says so), prints the four match items the owner compares with the app, and waits for the owner to confirm. Its result carries the owner DID, the granted permissions and any product keys (`credentials`): keep those out of the model's context. Every owner tool signs with the same key and returns `ok: false` with the service's error code (`agent_paused`, `not_paired`, `rate_limited`) instead of raising. The account is `OPENENTITY_ACCOUNT`, else `https://account.openentity.org`. Both need the Open Entity SDK, an optional dependency of this package: `pip install langchain-openentity openentity`, `npm install @openentity/langchain @openentity/sdk`.
+
+| Tool | Does |
+|---|---|
+| `owner_message` | Messages the owner in the OpenEntity app |
+| `owner_status` | Reports `running`, `idle`, `blocked`, `error` or `done` with a one-line summary; the app shows it live |
+| `owner_inbox` | Returns and acknowledges what the owner sent: messages, commands (`checkup`, `fix`, `pause`, `resume`), approval results, permission changes |
+| `owner_ask_approval` | Asks the owner to approve something first; the app labels it "Written by the agent", and the decision arrives in the inbox |
+
 ## Other features
 
 - Dead-loop breaker: the same tool with the same arguments failing `max_failures` times in a row (default 3) raises `OpenEntityLoopDetected`. An exception, an error `ToolMessage` and a violation all count; a success resets the count. It matters when an outer layer such as a retry middleware keeps catching the failure. Call `guard.reset()` between unrelated runs.
