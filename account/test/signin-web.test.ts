@@ -273,7 +273,7 @@ describe("gate fixes (Day 6 review)", () => {
     const install = randomUUID();
     const n = await appleWeb({ platform: "android", install_id: install }, {});
     const form = new URLSearchParams({ state: n.body.state, id_token: await appleToken({ aud: "org.openentity.web", sub: "apple-deleted-1", nonce: nonceHash(n.body.nonce) }) });
-    const r = await app.request(`${ORIGIN}/v1/auth/apple/callback`, { method: "POST", body: form, headers: { "content-type": "application/x-www-form-urlencoded" } });
+    const r = await app.request(`${ORIGIN}/v1/auth/apple/callback`, { method: "POST", body: form, headers: { "x-oe-viewer-address": VIEWER, "content-type": "application/x-www-form-urlencoded" } });
     const code = new URL(r.headers.get("location")!).searchParams.get("login_code")!;
     const accountId = (await d.db.first<{ account_id: string }>("SELECT account_id FROM login_codes WHERE hash = $1", [createHash("sha256").update(code).digest("hex")]))!.account_id;
     await d.db.run("UPDATE accounts SET deleted_at = $2 WHERE id = $1", [accountId, now()]);

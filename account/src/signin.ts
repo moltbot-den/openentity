@@ -9,9 +9,8 @@ import { createRemoteJWKSet, errors as joseErrors, jwtVerify, SignJWT, type JWTV
 import type { Deps } from "./app.ts";
 import { type AppleData, exchangeAppleCode } from "./apple.ts";
 import { newId, now } from "./db.ts";
-import { REAUTH_WINDOW } from "./deletion.ts";
 import { normalizeEmail, startEmail, verifyEmailCode } from "./email.ts";
-import { bearer, fail, ipOf, json, str } from "./http.ts";
+import { bearer, fail, freshSignIn, ipOf, json, str } from "./http.ts";
 import { type Identity, appleKeys, googleKeys, nonceHash, verifyApple, verifyGoogle } from "./idtoken.ts";
 import { notifyOwner } from "./notify.ts";
 import { authenticationOptions, registrationOptions, verifyAuthentication, verifyRegistration } from "./passkey.ts";
@@ -326,7 +325,7 @@ export function routes(app: Hono, d: Deps) {
       // verified here) or a sign-in method (POST /v1/account/methods with step-up).
       if (!a?.owner_did && mine.length) fail(409, "passkey_exists", "this account has its root passkey; turn on approvals (the genesis entry) first");
       // The root passkey decides who holds every step-up power: a stale session may not create it (gate M2).
-      if (!a?.owner_did && now() - caller.authTime > REAUTH_WINDOW) fail(401, "reauth_required", "sign in again, then turn on approvals within 5 minutes");
+      if (!a?.owner_did) freshSignIn(caller, "turn on approvals");
       options = await registrationOptions(d.rp, { accountId, userName: a?.email ?? accountId, exclude: mine.map((m) => ({ id: m.subject })) });
     } else {
       options = await authenticationOptions(d.rp);
@@ -347,7 +346,7 @@ export function routes(app: Hono, d: Deps) {
     if (ch!.mode === "register") {
       const caller = await bearer(c, d);
       if (caller.accountId !== ch!.account_id) fail(403, "forbidden", "this challenge belongs to another account");
-      if (!caller.ownerDid && now() - caller.authTime > REAUTH_WINDOW) fail(401, "reauth_required", "sign in again, then turn on approvals within 5 minutes");
+      if (!caller.ownerDid) freshSignIn(caller, "turn on approvals");
       const r = await verifyRegistration(d.rp, b.response, ch!.challenge);
       const methodId = newId("mth"), t = now();
       // With a key log this passkey is offered to the log (POST /v1/keylog/enrollments): kept, but `pending`, so it is
