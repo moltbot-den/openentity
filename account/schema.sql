@@ -154,3 +154,28 @@ CREATE TABLE IF NOT EXISTS outbox (
 CREATE INDEX IF NOT EXISTS outbox_due ON outbox (next_at);
 
 -- ---------------------------------------------------------------- web lane (appends below)
+
+-- Push tokens, one per app install (PUT /v1/push-tokens/{install_id}). Products reach installs with a live session;
+-- the service's own notices also reach an install signed out or removed in the last 7 days (notify.ts NOTICE_GRACE).
+CREATE TABLE IF NOT EXISTS push_tokens (
+  install_id text PRIMARY KEY,
+  account_id text NOT NULL REFERENCES accounts (id),
+  provider text NOT NULL CHECK (provider IN ('apns', 'fcm')),
+  token text NOT NULL,
+  environment text,                           -- apns only: sandbox or production
+  created_at bigint NOT NULL,
+  updated_at bigint NOT NULL,
+  removed_at bigint
+);
+CREATE INDEX IF NOT EXISTS push_tokens_account ON push_tokens (account_id);
+
+-- Deletion requests from accounts whose key log can no longer sign: 7 days, then deleted unless cancelled (deletion.ts).
+CREATE TABLE IF NOT EXISTS deletion_requests (
+  id text PRIMARY KEY,
+  account_id text NOT NULL REFERENCES accounts (id),
+  requested_at bigint NOT NULL,
+  effective_at bigint NOT NULL,
+  state text NOT NULL CHECK (state IN ('pending', 'cancelled', 'done'))
+);
+CREATE UNIQUE INDEX IF NOT EXISTS deletion_requests_pending ON deletion_requests (account_id) WHERE state = 'pending';
+CREATE INDEX IF NOT EXISTS deletion_requests_due ON deletion_requests (effective_at) WHERE state = 'pending';

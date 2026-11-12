@@ -22,6 +22,13 @@ function client(v: any): Client {
   return { platform, install_id: platform === "web" ? null : install, app_version: opt(v.app_version), device_model: opt(v.device_model) };
 }
 
+/** Consumes a nonce issued to this client. Single use; the platform and install must match. */
+export async function useNonce(d: Deps, raw: string, cl: { platform: string; install_id: string | null }) {
+  const row = await d.db.first<{ platform: string; install_id: string | null }>(
+    "UPDATE auth_nonces SET used_at = $2 WHERE hash = $1 AND used_at IS NULL AND expires_at > $2 RETURNING platform, install_id", [nonceHash(raw), now()]);
+  if (!row || row.platform !== cl.platform || (row.install_id ?? null) !== cl.install_id) fail(401, "nonce_invalid", "the nonce is unknown, expired, used, or was issued to another client");
+}
+
 export function routes(app: Hono, d: Deps) {
   const did = `did:web:${d.host}`, origin = `https://${d.host}`;
   /** The calling client; a browser must send our Origin (login CSRF). */
@@ -39,13 +46,6 @@ export function routes(app: Hono, d: Deps) {
       [nonceHash(raw), cl.platform, cl.install_id, "native", t, t + NONCE_TTL]);
     return c.json({ nonce: raw, expires_at: t + NONCE_TTL });
   });
-
-  /** Consumes a nonce issued to this client. Single use; the platform and install must match. */
-  async function useNonce(raw: string, cl: Client) {
-    const row = await d.db.first<{ platform: string; install_id: string | null }>(
-      "UPDATE auth_nonces SET used_at = $2 WHERE hash = $1 AND used_at IS NULL AND expires_at > $2 RETURNING platform, install_id", [nonceHash(raw), now()]);
-    if (!row || row.platform !== cl.platform || (row.install_id ?? null) !== cl.install_id) fail(401, "nonce_invalid", "the nonce is unknown, expired, used, or was issued to another client");
-  }
 
   /** The account for a verified identity, created on first sight. A verified email that already has an account is never merged silently. */
   async function accountFor(type: "apple" | "google" | "email" | "passkey", subject: string, email: string | null, emailPrivate: boolean) {
@@ -88,14 +88,14 @@ export function routes(app: Hono, d: Deps) {
   app.post("/v1/auth/apple", async (c) => {
     const b = await json(c);
     const cl = clientOf(c, b.client), nonce = str(b.nonce, "nonce", 128);
-    await useNonce(nonce, cl);
+    await useNonce(d, nonce, cl);
     return signInWith(c, await verifyApple(str(b.identity_token, "identity_token", 8192), { audience: cl.platform === "ios" ? d.apple.native : d.apple.web, nonce, keys: d.providerKeys?.apple }), cl);
   });
 
   app.post("/v1/auth/google", async (c) => {
     const b = await json(c);
     const cl = clientOf(c, b.client), nonce = str(b.nonce, "nonce", 128);
-    await useNonce(nonce, cl);
+    await useNonce(d, nonce, cl);
     return signInWith(c, await verifyGoogle(str(b.id_token, "id_token", 8192), { audience: d.google, nonce, keys: d.providerKeys?.google }), cl);
   });
 
@@ -123,10 +123,11 @@ export function routes(app: Hono, d: Deps) {
       const caller = await bearer(c, d);
       accountId = caller.accountId;
       const a = await d.db.first<{ owner_did: string | null; email: string | null }>("SELECT owner_did, email FROM accounts WHERE id = $1", [accountId]);
-      const has = await d.db.first("SELECT 1 FROM methods WHERE account_id = $1 AND type = 'passkey'", [accountId]);
-      // Day 1: only the onboarding root passkey. More passkeys are a step-up action (method.add) from Day 5.
-      if (a?.owner_did || has) fail(409, "passkey_exists", "this account has its root passkey; more passkeys are a step-up action (POST /v1/account/methods)");
-      options = await registrationOptions(d.rp, { accountId, userName: a?.email ?? accountId });
+      const mine = await d.db.all<{ subject: string }>("SELECT subject FROM methods WHERE account_id = $1 AND type = 'passkey'", [accountId]);
+      // Before the key log, one passkey: the onboarding root. After it, a new passkey is for the key log (an enrollment,
+      // verified here) or a sign-in method (POST /v1/account/methods with step-up).
+      if (!a?.owner_did && mine.length) fail(409, "passkey_exists", "this account has its root passkey; turn on approvals (the genesis entry) first");
+      options = await registrationOptions(d.rp, { accountId, userName: a?.email ?? accountId, exclude: mine.map((m) => ({ id: m.subject })) });
     } else {
       options = await authenticationOptions(d.rp);
     }
@@ -148,9 +149,13 @@ export function routes(app: Hono, d: Deps) {
       if (caller.accountId !== ch!.account_id) fail(403, "forbidden", "this challenge belongs to another account");
       const r = await verifyRegistration(d.rp, b.response, ch!.challenge);
       const methodId = newId("mth"), t = now();
-      await d.db.run("INSERT INTO methods (id, account_id, type, subject, data, created_at, last_used_at) VALUES ($1, $2, 'passkey', $3, $4, $5, $5)", [methodId, caller.accountId, r.credential.id, JSON.stringify({
+      // With a key log this passkey is offered to the log (POST /v1/keylog/enrollments): kept, but `pending`, so it is
+      // no sign-in method; adding one is step-up method.add. Without one it is the root passkey, which signs in.
+      const pending = !!caller.ownerDid;
+      await d.db.run("INSERT INTO methods (id, account_id, type, subject, data, created_at, last_used_at) VALUES ($1, $2, 'passkey', $3, $4, $5, $6)", [methodId, caller.accountId, r.credential.id, JSON.stringify({
         public_key: Buffer.from(r.credential.publicKey).toString("base64url"), counter: r.credential.counter, transports: r.credential.transports ?? [], aaguid: r.aaguid, backed_up: r.backedUp, jwk: r.jwk, key_id: r.keyId,
-      }), t]);
+        ...(pending ? { pending: true } : {}),
+      }), t, pending ? null : t]);
       // The root Credential exactly as the key log carries it (test-vectors/keylog-1): the app puts it into the genesis entry.
       return c.json({ method_id: methodId, credential: { kid: r.keyId, type: "webauthn", jwk: r.jwk, credential_id: r.credential.id, rp_id: d.rp.id, aaguid: r.aaguid, label: "Passkey", platform: cl.platform } });
     }
@@ -158,6 +163,7 @@ export function routes(app: Hono, d: Deps) {
     const m = await d.db.first<{ account_id: string; data: string }>("SELECT account_id, data FROM methods WHERE type = 'passkey' AND subject = $1", [credId]);
     if (!m) fail(401, "passkey_invalid", "this passkey is not registered with an OpenEntity account");
     const data = JSON.parse(m!.data);
+    if (data.pending) fail(401, "passkey_invalid", "this passkey is an approver key, not a sign-in method; add it with POST /v1/account/methods");
     const counter = await verifyAuthentication(d.rp, b.response, ch!.challenge, { id: credId, publicKey: Buffer.from(data.public_key, "base64url"), counter: data.counter, transports: data.transports });
     await d.db.run("UPDATE methods SET data = $2, last_used_at = $3 WHERE type = 'passkey' AND subject = $1", [credId, JSON.stringify({ ...data, counter }), now()]);
     return session(c, m!.account_id, false, cl, "passkey");

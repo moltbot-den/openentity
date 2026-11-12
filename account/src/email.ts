@@ -62,23 +62,23 @@ export async function verifyEmailCode(db: Db, o: { challengeId: string; code: st
   return out.email;
 }
 
+export type SendMail = (email: string, subject: string, text: string, html?: string) => Promise<void>;
+
 /**
  * Customer.io transactional email without a template (the App API's "uncategorized" message). The body is not retained
- * by Customer.io, so the code never sits in its delivery log. The person is identified by an HMAC of the address, not
+ * by Customer.io, so a code never sits in its delivery log. The person is identified by an HMAC of the address, not
  * the address, so sign-in recipients never join the newsletter audience.
  */
-export function customerIo(apiKey: string, pepper: string, fetchImpl: typeof fetch = fetch): SendCode {
-  return async (email, code) => {
-    const text = `Your Open Entity sign-in code is ${code}.\n\nIt expires in 10 minutes. If you did not ask for it, you can ignore this email.`;
-    const html = `<p>Your Open Entity sign-in code is</p><p style="font-size:28px;font-weight:600;letter-spacing:4px;font-family:monospace">${code}</p><p>It expires in 10 minutes. If you did not ask for it, you can ignore this email.</p>`;
+export function customerIoMail(apiKey: string, pepper: string, fetchImpl: typeof fetch = fetch): SendMail {
+  return async (email, subject, text, html) => {
     const res = await fetchImpl("https://api.customer.io/v1/send/email", {
       method: "POST",
       headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
       body: JSON.stringify({
         to: email,
         from: "Open Entity <updates@openentity.org>",
-        subject: "Your Open Entity sign-in code",
-        body: html,
+        subject,
+        body: html ?? `<p>${text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/\n\n/g, "</p><p>").replace(/\n/g, "<br>")}</p>`,
         plaintext_body: text,
         identifiers: { id: `oe_signin_${createHmac("sha256", pepper).update(`cio:${email}`).digest("hex").slice(0, 40)}` },
         disable_message_retention: true,
@@ -89,4 +89,12 @@ export function customerIo(apiKey: string, pepper: string, fetchImpl: typeof fet
     }).catch(() => fail(502, "email_unavailable", "the email provider could not be reached"));
     if (!res.ok) fail(502, "email_unavailable", `the email provider answered ${res.status}`);
   };
+}
+
+/** The 8-digit sign-in code email. */
+export function customerIo(apiKey: string, pepper: string, fetchImpl: typeof fetch = fetch): SendCode {
+  const send = customerIoMail(apiKey, pepper, fetchImpl);
+  return (email, code) => send(email, "Your Open Entity sign-in code",
+    `Your Open Entity sign-in code is ${code}.\n\nIt expires in 10 minutes. If you did not ask for it, you can ignore this email.`,
+    `<p>Your Open Entity sign-in code is</p><p style="font-size:28px;font-weight:600;letter-spacing:4px;font-family:monospace">${code}</p><p>It expires in 10 minutes. If you did not ask for it, you can ignore this email.</p>`);
 }

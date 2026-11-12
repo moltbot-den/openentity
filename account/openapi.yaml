@@ -4370,15 +4370,20 @@ components:
         queued: { type: boolean, const: true }
     PushPayload:
       type: object
-      description: 'The custom data in every APNs and FCM push: ids only. The visible text, if any, is fixed by the service per product and type.'
+      description: |
+        The custom data in every APNs and FCM push: ids only. The visible text, if any, is fixed by the service per sender
+        and type. `product` is the sender: a product DID for POST /v1/notify, or the service DID for the service's own
+        notices (enrollment.pending, enrollment.completed, signin.new, deletion.requested, keylog.revoke, keylog.recover,
+        keylog.replace_root, agent.muted). Apps ignore types they do not know. Silent (content-available) types:
+        approval.resolved, refresh, enrollment.completed.
       required: [oe]
       properties:
         oe:
           type: object
           required: [product, type, id]
           properties:
-            product: { $ref: '#/components/schemas/ProductDid' }
-            type: { type: string, enum: [approval.requested, approval.resolved, alert, refresh] }
+            product: { $ref: '#/components/schemas/Did' }
+            type: { type: string, maxLength: 64, examples: [approval.requested, approval.resolved, alert, refresh, enrollment.pending, signin.new] }
             id: { type: string }
             agent: { $ref: '#/components/schemas/AgentDid' }
     EventName:
@@ -4541,6 +4546,17 @@ components:
           type: array
           description: The owner's approver passkey credential ids (the root passkey in a single-credential log).
           items: { $ref: '#/components/schemas/Base64url' }
+        kids:
+          type: object
+          description: The key log kid of each credential in allow_credentials, by credential id. The page puts it in the Approval2 `device_id`.
+          additionalProperties: { $ref: '#/components/schemas/Thumbprint' }
+        challenges:
+          type: object
+          description: The WebAuthn challenge for each decision, base64url of the approval/2.0 digest computed by the service (approvalDigest in @openentity/sdk).
+          required: [approve, deny]
+          properties:
+            approve: { $ref: '#/components/schemas/Base64url' }
+            deny: { $ref: '#/components/schemas/Base64url' }
     ApproveReturnForm:
       type: object
       description: What the /approve page auto-submits to return_url as application/x-www-form-urlencoded. Either approval or error is present.

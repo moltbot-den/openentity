@@ -5,8 +5,10 @@
 import { createHash, randomBytes } from "node:crypto";
 import type { Deps } from "./app.ts";
 import { type Db, newId, now } from "./db.ts";
+import { deletionOf } from "./deletion.ts";
 import { HttpError, fail } from "./http.ts";
 import { signJwt } from "./keys.ts";
+import { methodList } from "./methods.ts";
 import { BUNDLE_ID } from "./wellknown.ts";
 
 export const APP_TTL = 90 * 86400; // sliding
@@ -30,12 +32,11 @@ export async function accessToken(d: Deps, accountId: string, aud: string, sid: 
 /** The Account object (openapi.yaml) for the signed-in owner. */
 export async function me(d: Deps, accountId: string) {
   const a = await d.db.first<any>("SELECT * FROM accounts WHERE id = $1", [accountId]);
-  const methods = await d.db.all<any>("SELECT id, type, subject, email, created_at, last_used_at FROM methods WHERE account_id = $1 ORDER BY created_at", [accountId]);
   return {
     id: a.id, owner_did: a.owner_did ?? null, email: a.email ?? null, email_private: !!a.email_private, created_at: Number(a.created_at),
     has_key_log: !!a.owner_did, backup_needed: !!a.owner_did, app_account_token: a.app_account_token,
-    methods: methods.map((m) => ({ id: m.id, type: m.type, label: m.type === "email" ? m.subject : m.email ?? m.type, created_at: Number(m.created_at), last_used_at: m.last_used_at === null ? null : Number(m.last_used_at) })),
-    deletion: null,
+    methods: await methodList(d, accountId),
+    deletion: await deletionOf(d, accountId),
   };
 }
 
