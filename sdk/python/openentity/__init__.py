@@ -12,6 +12,8 @@ from .httpsig import http_sig_base, sign_request, verify_request
 from .identity import Identity
 from .issuer import (A2A_EXTENSION_URI, a2a_extension, agent_card, build_did_document, build_openentity_json, sign_attestation,
                      sign_revocation)
+from .owner import approval_digest, payload_digest, verify_approval, verify_key_log
+from .pair import pair_sas
 from .report import TrustReport, clear_trust_cache, did_web_resolver, trust
 from .schema import validate
 
@@ -22,5 +24,5 @@ __all__ = sorted([
     "REGISTRY_ERROR_CODES", "HttpSigError", "InvalidInputError", "OpenEntityError", "RegistryError", "VerificationError",
     "http_sig_base", "sign_request", "verify_request", "Identity", "A2A_EXTENSION_URI", "a2a_extension", "agent_card", "build_did_document",
     "build_openentity_json", "sign_attestation", "sign_revocation", "TrustReport", "clear_trust_cache", "did_web_resolver", "trust",
-    "validate",
+    "validate", "approval_digest", "payload_digest", "verify_approval", "verify_key_log", "pair_sas",
 ])

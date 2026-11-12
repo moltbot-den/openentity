@@ -5,13 +5,13 @@ import * as node from "../src/node.ts";
 // The public surface. Changing it on purpose means editing this list in the same PR; a stray export or a rename fails here.
 const SNAPSHOT = [
   "A2A_EXTENSION_URI CLIENTS DECLARATION_SHA256 DECLARATION_TEXT DECLARATION_VERSION DEFAULT_REGISTRY DISPUTE_REASONS HttpSigError",
-  "OpenEntityError SPEC a2aExtension adopt agentCard base58btcDecode base58btcEncode buildDeclaration buildDidDocument buildDocument",
+  "OpenEntityError SPEC a2aExtension adopt agentCard approvalDigest base58btcDecode base58btcEncode buildDeclaration buildDidDocument buildDocument",
   "buildOpenEntityJson buildPresentation buildRotation canonicalize checkStamp checkTimestamp checkpointBody clearTrustCache",
   "consistencyProof didKeyFromPublicKey didWebResolver dispute eip712Digest find generateKeyPair hashData httpSigBase inclusionProof",
-  "keyPairFromJwk keyPairFromSeed leafHash logLeaf merkleRoot mintStamp nodeHash normalizeEid noteVkey nowSeconds parseJson present",
-  "publicKeyFromDidKey randomNonce record recordEntryHash recoverEip712 rotate sha256 sha256Hex signAttestation signNote signObject",
-  "signProof signRequest signRevocation successorDocument trust validate verificationMethodId verifyConsistency verifyInclusion",
-  "verifyNote verifyObject verifyPresentation verifyProof verifyRequest withdraw",
+  "keyPairFromJwk keyPairFromSeed leafHash logLeaf merkleRoot mintStamp nodeHash normalizeEid noteVkey nowSeconds pairSas parseJson",
+  "payloadDigest present publicKeyFromDidKey randomNonce record recordEntryHash recoverEip712 rotate sha256 sha256Hex signAttestation",
+  "signNote signObject signProof signRequest signRevocation successorDocument trust validate verificationMethodId verifyApproval",
+  "verifyConsistency verifyInclusion verifyKeyLog verifyNote verifyObject verifyPresentation verifyProof verifyRequest withdraw",
 ].join(" ");
 
 describe("public API", () => {

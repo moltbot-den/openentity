@@ -1,0 +1,40 @@
+{
+  "description": "Single-credential exception: the root passkey signs add_approver while it is the only credential; afterwards it is no longer an approver. Keys: keys.json (published throwaway seeds).",
+  "did": "did:web:account.openentity.org:o:k6ssewaczrf6i6svqxslfovw5biyk5mqngx5cy7mqgdw6264jtiq",
+  "log": [
+    "{\"auth\":{\"authenticator_data\":\"D3UMQg2RHUXdnWy7aJ1fAnM1wAzOoZElYIW5k5ZyV-MdAAAAAA\",\"client_data_json\":\"eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiU3I5MjNBVWtkSV82ekZoSWtxS21ZaHY1VFVlM2xidEQ3RVBhS2JqZ3RJOCIsIm9yaWdpbiI6Imh0dHBzOi8vYWNjb3VudC5vcGVuZW50aXR5Lm9yZyIsImNyb3NzT3JpZ2luIjpmYWxzZX0\",\"form\":\"webauthn\",\"kid\":\"07PAo82hd2JrvWLKn1nsgQpzIWE27VR0vNUbngCBKjE\",\"signature\":\"MEUCIQD6DIokD_inDkwUi_IV2nntBrZCQSwsLvDrd-NRr56sVgIgGQCGN13iIYNzb_V7W--hPNLVmoe5QbwFHNjTQu0rwY0\"},\"body\":{\"approver\":null,\"root\":{\"aaguid\":\"fbfc3007-154e-4ecc-8c0b-6e020557d7bd\",\"credential_id\":\"oyqZss9O8IhOEQPTLVCN0g\",\"jwk\":{\"crv\":\"P-256\",\"kty\":\"EC\",\"x\":\"9AOyameX8cAM87PhFX4TMKaZ3_Roj8ilnpR_d2ATKo0\",\"y\":\"wNLijrbZEO2MVCH-Km94ZiosJyVwpc7oTgeNYYX68Ng\"},\"kid\":\"07PAo82hd2JrvWLKn1nsgQpzIWE27VR0vNUbngCBKjE\",\"label\":\"Passkey\",\"platform\":\"ios\",\"rp_id\":\"account.openentity.org\",\"type\":\"webauthn\"}},\"op\":\"genesis\",\"prev\":null,\"seq\":1,\"ts\":1794009598,\"v\":1}",
+    "{\"auth\":{\"authenticator_data\":\"D3UMQg2RHUXdnWy7aJ1fAnM1wAzOoZElYIW5k5ZyV-MdAAAAAA\",\"client_data_json\":\"eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiWkNjVjNEWDViSUx6SmZCMWstVWZrQVlFakJsajBxb0YyNng5YjZLeS0tVSIsIm9yaWdpbiI6Imh0dHBzOi8vYWNjb3VudC5vcGVuZW50aXR5Lm9yZyIsImNyb3NzT3JpZ2luIjpmYWxzZX0\",\"form\":\"webauthn\",\"kid\":\"07PAo82hd2JrvWLKn1nsgQpzIWE27VR0vNUbngCBKjE\",\"signature\":\"MEUCIQCMo2-eYfQ-Qjn_JO1XDbBIzCJNHe3dYr6BLDz5DYEAPwIgdj7U5e0E7DfqZbiVzqg2jNbD2Hu7YnTknk16C25wgMY\"},\"body\":{\"approver\":{\"aaguid\":\"fbfc3007-154e-4ecc-8c0b-6e020557d7bd\",\"credential_id\":\"FIlBW6SWY3Jafi2NW3KgsA\",\"jwk\":{\"crv\":\"P-256\",\"kty\":\"EC\",\"x\":\"-xMoowGg93Z1aEQuJcIYfVAFu3Adg3hkRRRI2HfApqc\",\"y\":\"2iRpvaFX65qwOLwselP-hD-qndpn4md9DEo8TPo7SB8\"},\"kid\":\"mTluyYyMSPInd1g_ENjr016z9DqqE2ZUX845TdohRVE\",\"label\":\"MacBook\",\"platform\":\"web\",\"rp_id\":\"account.openentity.org\",\"type\":\"webauthn\"}},\"op\":\"add_approver\",\"prev\":\"57a5225802cc4be47a5585e4b2bab6e85185759069afd163ec81876f6bdc4cd1\",\"seq\":2,\"ts\":1794013198,\"v\":1}"
+  ],
+  "first_seen_at": [
+    1794009600,
+    1794013200
+  ],
+  "now": 1794016800,
+  "origins": [
+    "https://account.openentity.org",
+    "android:apk-key-hash:AXVh6-zFGB0QxD0cPn3sYa1YZcCsl0Kl3sbQg35wBSw"
+  ],
+  "service_keys": [
+    {
+      "kty": "EC",
+      "crv": "P-256",
+      "x": "zO9-ALge0GLr-7Z7jzMUvnNczTs2GN4XusWIeLb3FQE",
+      "y": "ea2bRUQB1nSBKjwjRCCvnQm8wUO5PTxVp5uYKzABOnI"
+    }
+  ],
+  "expect": {
+    "ok": true,
+    "state": {
+      "did": "did:web:account.openentity.org:o:k6ssewaczrf6i6svqxslfovw5biyk5mqngx5cy7mqgdw6264jtiq",
+      "seq": 2,
+      "head": "aa792631eac1fb31600ccbd284e461245eac8e9e8748553d1ef19a80c14ed115",
+      "root": "07PAo82hd2JrvWLKn1nsgQpzIWE27VR0vNUbngCBKjE",
+      "approvers": [
+        "mTluyYyMSPInd1g_ENjr016z9DqqE2ZUX845TdohRVE"
+      ],
+      "revoked": [],
+      "pending": [],
+      "closed": false
+    }
+  }
+}

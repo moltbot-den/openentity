@@ -1,0 +1,53 @@
+{
+  "description": "pair-sas/1: items = words[b] for the first 4 bytes b of SHA-256(UTF-8(\"oe-pair-sas/1|\" + CODE + \"|\" + agent_did)), CODE uppercased. The last case is typed in lowercase.",
+  "cases": [
+    {
+      "code": "OE-7K4M-Q2XP",
+      "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+      "preimage": "oe-pair-sas/1|OE-7K4M-Q2XP|did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+      "sha256": "0de557fb509a18c9469036f98693a8c3a969349edaa030d5651e668309d0f34b",
+      "items": [
+        "red shell",
+        "olive tree",
+        "purple moon",
+        "coral owl"
+      ]
+    },
+    {
+      "code": "OE-0000-0000",
+      "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+      "preimage": "oe-pair-sas/1|OE-0000-0000|did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+      "sha256": "10274d30de844e5136f7dbe1ec23295898c867965eff294429c5a00630ee188b",
+      "items": [
+        "orange fox",
+        "yellow moon",
+        "blue shell",
+        "green fox"
+      ]
+    },
+    {
+      "code": "OE-7K4M-Q2XP",
+      "agent_did": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+      "preimage": "oe-pair-sas/1|OE-7K4M-Q2XP|did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+      "sha256": "5ec21a82c6f7bd7b85c5e3889d047ef0eba675bfa263dd055296397464f39850",
+      "items": [
+        "purple crown",
+        "silver bear",
+        "orange lamp",
+        "black bear"
+      ]
+    },
+    {
+      "code": "oe-7k4m-q2xp",
+      "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+      "preimage": "oe-pair-sas/1|OE-7K4M-Q2XP|did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+      "sha256": "0de557fb509a18c9469036f98693a8c3a969349edaa030d5651e668309d0f34b",
+      "items": [
+        "red shell",
+        "olive tree",
+        "purple moon",
+        "coral owl"
+      ]
+    }
+  ]
+}

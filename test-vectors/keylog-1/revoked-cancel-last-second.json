@@ -1,0 +1,47 @@
+{
+  "description": "An approver revoked 7 days minus one second ago may still cancel a pending recover. Keys: keys.json (published throwaway seeds).",
+  "did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+  "log": [
+    "{\"auth\":{\"form\":\"p256\",\"kid\":\"tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU\",\"signature\":\"NjJzPZDhyVfeHZ-zqDEm_5AU2gMATujXqwSghEvuYtsKU8iKLZ4yjFh0MyuvnoKkZ813cZFIKMXVKia1tTBFog\"},\"body\":{\"approver\":{\"attestation\":{\"type\":\"app_attest\",\"verified\":true},\"jwk\":{\"crv\":\"P-256\",\"kty\":\"EC\",\"x\":\"I6qtUJaZ7ADAygJp9kdxRIoqiM5X1v5JwGbWyExwjcM\",\"y\":\"E8oX2arXfaoxhwmFzu7rBWSUGZ0ZjVaw4VHuCWUzfSM\"},\"key_storage\":\"secure_enclave\",\"kid\":\"tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU\",\"label\":\"iPhone\",\"platform\":\"ios\",\"type\":\"p256\"},\"root\":{\"aaguid\":\"fbfc3007-154e-4ecc-8c0b-6e020557d7bd\",\"credential_id\":\"oyqZss9O8IhOEQPTLVCN0g\",\"jwk\":{\"crv\":\"P-256\",\"kty\":\"EC\",\"x\":\"9AOyameX8cAM87PhFX4TMKaZ3_Roj8ilnpR_d2ATKo0\",\"y\":\"wNLijrbZEO2MVCH-Km94ZiosJyVwpc7oTgeNYYX68Ng\"},\"kid\":\"07PAo82hd2JrvWLKn1nsgQpzIWE27VR0vNUbngCBKjE\",\"label\":\"Passkey\",\"platform\":\"ios\",\"rp_id\":\"account.openentity.org\",\"type\":\"webauthn\"}},\"op\":\"genesis\",\"prev\":null,\"seq\":1,\"ts\":1794009598,\"v\":1}",
+    "{\"auth\":{\"authenticator_data\":\"D3UMQg2RHUXdnWy7aJ1fAnM1wAzOoZElYIW5k5ZyV-MdAAAAAA\",\"client_data_json\":\"eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiaDFTeXU4dVdrTDY0bS00NDB4RnVPZG01NlVrM2RpMzhBQXFJbmhsX3k3VSIsIm9yaWdpbiI6Imh0dHBzOi8vYWNjb3VudC5vcGVuZW50aXR5Lm9yZyIsImNyb3NzT3JpZ2luIjpmYWxzZX0\",\"form\":\"webauthn\",\"kid\":\"07PAo82hd2JrvWLKn1nsgQpzIWE27VR0vNUbngCBKjE\",\"signature\":\"MEUCIQDDm_3GUhVFGpaswd-8XyrDKe2Fzxglh5lc6d9yXjZmnAIgciA28ZDWOl4fU60anOjjvIuzufVtUnOeNAir2lP6VXk\"},\"body\":{\"kid\":\"tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU\"},\"op\":\"revoke\",\"prev\":\"71949eb3b6cfd378c7899920bbc5d96adcae3c005c18f7a2a68e8110227e4ef5\",\"seq\":2,\"ts\":1794013198,\"v\":1}",
+    "{\"auth\":{\"authenticator_data\":\"D3UMQg2RHUXdnWy7aJ1fAnM1wAzOoZElYIW5k5ZyV-MdAAAAAA\",\"client_data_json\":\"eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiT2JHUGZKWEs0SVJTM1NUd2ZHZWRudmFYd29vaTlUekFoSmtObWJ2eEQwayIsIm9yaWdpbiI6Imh0dHBzOi8vYWNjb3VudC5vcGVuZW50aXR5Lm9yZyIsImNyb3NzT3JpZ2luIjpmYWxzZX0\",\"form\":\"webauthn\",\"kid\":\"07PAo82hd2JrvWLKn1nsgQpzIWE27VR0vNUbngCBKjE\",\"signature\":\"MEUCIQDgphSqvhql6Lx8gV0gc3AADYYi_rm-Ad8WReIXFI5wiwIgbLJDF4iiRmsXuicvTrjt3kuwFVkECvt9_DOtJvspx2c\"},\"body\":{\"approvers\":[{\"attestation\":{\"type\":\"android_key\",\"verified\":true},\"integrity\":{\"device\":true,\"strong\":false},\"jwk\":{\"crv\":\"P-256\",\"kty\":\"EC\",\"x\":\"0ZjR8ao77k9GVrBg2mwsT1TPPfqWcY4_u35AOsml2jc\",\"y\":\"E97SxveRUL1VePv1Chj62WkCYh_OcVt4CoxBXeA4Hsc\"},\"key_storage\":\"tee\",\"kid\":\"Q4Mpqx25W-jQtHIEmVdL1sI1FnZhtJqguETOQ4mGCAU\",\"label\":\"Thief phone\",\"platform\":\"android\",\"type\":\"p256\"}]},\"op\":\"recover\",\"prev\":\"c8baa5bc83140f6502abe0f40585720d75ced4b2aaf7d51b3fd78f5630e8ade3\",\"seq\":3,\"ts\":1794614398,\"v\":1}",
+    "{\"auth\":{\"form\":\"p256\",\"kid\":\"tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU\",\"signature\":\"HZVjT92SOR3X1o6xBasvBV5wtMHpZepTvRxx1GcqcT1tlPFCh_LOWrRG7uRtSayEXFBd6_9oTwqF4mSmAtGMMg\"},\"body\":{\"target\":\"a9a568c5fcbd3571bcb4e551b3aa06b9dc28abd90a73b65b7f0bd8a4be75f05b\"},\"op\":\"cancel\",\"prev\":\"a9a568c5fcbd3571bcb4e551b3aa06b9dc28abd90a73b65b7f0bd8a4be75f05b\",\"seq\":4,\"ts\":1794617997,\"v\":1}"
+  ],
+  "first_seen_at": [
+    1794009600,
+    1794013200,
+    1794614400,
+    1794617999
+  ],
+  "now": 1794790800,
+  "origins": [
+    "https://account.openentity.org",
+    "android:apk-key-hash:AXVh6-zFGB0QxD0cPn3sYa1YZcCsl0Kl3sbQg35wBSw"
+  ],
+  "service_keys": [
+    {
+      "kty": "EC",
+      "crv": "P-256",
+      "x": "zO9-ALge0GLr-7Z7jzMUvnNczTs2GN4XusWIeLb3FQE",
+      "y": "ea2bRUQB1nSBKjwjRCCvnQm8wUO5PTxVp5uYKzABOnI"
+    }
+  ],
+  "expect": {
+    "ok": true,
+    "state": {
+      "did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+      "seq": 4,
+      "head": "2c774d54943eb3ab18ff3b7b8d7bed28e54c860aedc60597452d14023835dba4",
+      "root": "07PAo82hd2JrvWLKn1nsgQpzIWE27VR0vNUbngCBKjE",
+      "approvers": [],
+      "revoked": [
+        {
+          "kid": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+          "at": 1794013200
+        }
+      ],
+      "pending": [],
+      "closed": false
+    }
+  }
+}

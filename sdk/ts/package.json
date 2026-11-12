@@ -14,7 +14,7 @@
     "lint": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --testTimeout=60000 --hookTimeout=60000",
-    "gen:vectors": "node scripts/gen-vectors.ts"
+    "gen:vectors": "node scripts/gen-vectors.ts && node scripts/gen-owner-vectors.ts"
   },
   "dependencies": {
     "@cfworker/json-schema": "^4.1.1",

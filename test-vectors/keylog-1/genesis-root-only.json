@@ -1,0 +1,38 @@
+{
+  "description": "Single-credential log: genesis with no approver, signed by the root passkey from the Android app origin. The root passkey is the approver. Keys: keys.json (published throwaway seeds).",
+  "did": "did:web:account.openentity.org:o:2jxcecu6almdgyvwu67yjgnlmwvbxelxsg7a2jah3kr2ad65tliq",
+  "log": [
+    "{\"auth\":{\"authenticator_data\":\"D3UMQg2RHUXdnWy7aJ1fAnM1wAzOoZElYIW5k5ZyV-MdAAAAAA\",\"client_data_json\":\"eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiU3I5MjNBVWtkSV82ekZoSWtxS21ZaHY1VFVlM2xidEQ3RVBhS2JqZ3RJOCIsIm9yaWdpbiI6ImFuZHJvaWQ6YXBrLWtleS1oYXNoOkFYVmg2LXpGR0IwUXhEMGNQbjNzWWExWVpjQ3NsMEtsM3NiUWczNXdCU3ciLCJhbmRyb2lkUGFja2FnZU5hbWUiOiJvcmcub3BlbmVudGl0eS5hcHAifQ\",\"form\":\"webauthn\",\"kid\":\"07PAo82hd2JrvWLKn1nsgQpzIWE27VR0vNUbngCBKjE\",\"signature\":\"MEQCIB6FVWH6gyi5AKP21mCpJov5Scr5fqgvE2XqrvH4aFAzAiACSW_mzZ4LigMcV9WCJHWEthE02wioqdxfUSc-rWrNqg\"},\"body\":{\"approver\":null,\"root\":{\"aaguid\":\"fbfc3007-154e-4ecc-8c0b-6e020557d7bd\",\"credential_id\":\"oyqZss9O8IhOEQPTLVCN0g\",\"jwk\":{\"crv\":\"P-256\",\"kty\":\"EC\",\"x\":\"9AOyameX8cAM87PhFX4TMKaZ3_Roj8ilnpR_d2ATKo0\",\"y\":\"wNLijrbZEO2MVCH-Km94ZiosJyVwpc7oTgeNYYX68Ng\"},\"kid\":\"07PAo82hd2JrvWLKn1nsgQpzIWE27VR0vNUbngCBKjE\",\"label\":\"Passkey\",\"platform\":\"ios\",\"rp_id\":\"account.openentity.org\",\"type\":\"webauthn\"}},\"op\":\"genesis\",\"prev\":null,\"seq\":1,\"ts\":1794009598,\"v\":1}"
+  ],
+  "first_seen_at": [
+    1794009600
+  ],
+  "now": 1794009660,
+  "origins": [
+    "https://account.openentity.org",
+    "android:apk-key-hash:AXVh6-zFGB0QxD0cPn3sYa1YZcCsl0Kl3sbQg35wBSw"
+  ],
+  "service_keys": [
+    {
+      "kty": "EC",
+      "crv": "P-256",
+      "x": "zO9-ALge0GLr-7Z7jzMUvnNczTs2GN4XusWIeLb3FQE",
+      "y": "ea2bRUQB1nSBKjwjRCCvnQm8wUO5PTxVp5uYKzABOnI"
+    }
+  ],
+  "expect": {
+    "ok": true,
+    "state": {
+      "did": "did:web:account.openentity.org:o:2jxcecu6almdgyvwu67yjgnlmwvbxelxsg7a2jah3kr2ad65tliq",
+      "seq": 1,
+      "head": "d26e220a9e02d83362b6a7bf8499ab65aa1b917791be0d2407daa3a00fdd9ad1",
+      "root": "07PAo82hd2JrvWLKn1nsgQpzIWE27VR0vNUbngCBKjE",
+      "approvers": [
+        "07PAo82hd2JrvWLKn1nsgQpzIWE27VR0vNUbngCBKjE"
+      ],
+      "revoked": [],
+      "pending": [],
+      "closed": false
+    }
+  }
+}

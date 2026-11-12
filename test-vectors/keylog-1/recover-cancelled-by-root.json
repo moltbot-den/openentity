@@ -1,0 +1,42 @@
+{
+  "description": "The root passkey may cancel a pending recover. Keys: keys.json (published throwaway seeds).",
+  "did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+  "log": [
+    "{\"auth\":{\"form\":\"p256\",\"kid\":\"tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU\",\"signature\":\"NjJzPZDhyVfeHZ-zqDEm_5AU2gMATujXqwSghEvuYtsKU8iKLZ4yjFh0MyuvnoKkZ813cZFIKMXVKia1tTBFog\"},\"body\":{\"approver\":{\"attestation\":{\"type\":\"app_attest\",\"verified\":true},\"jwk\":{\"crv\":\"P-256\",\"kty\":\"EC\",\"x\":\"I6qtUJaZ7ADAygJp9kdxRIoqiM5X1v5JwGbWyExwjcM\",\"y\":\"E8oX2arXfaoxhwmFzu7rBWSUGZ0ZjVaw4VHuCWUzfSM\"},\"key_storage\":\"secure_enclave\",\"kid\":\"tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU\",\"label\":\"iPhone\",\"platform\":\"ios\",\"type\":\"p256\"},\"root\":{\"aaguid\":\"fbfc3007-154e-4ecc-8c0b-6e020557d7bd\",\"credential_id\":\"oyqZss9O8IhOEQPTLVCN0g\",\"jwk\":{\"crv\":\"P-256\",\"kty\":\"EC\",\"x\":\"9AOyameX8cAM87PhFX4TMKaZ3_Roj8ilnpR_d2ATKo0\",\"y\":\"wNLijrbZEO2MVCH-Km94ZiosJyVwpc7oTgeNYYX68Ng\"},\"kid\":\"07PAo82hd2JrvWLKn1nsgQpzIWE27VR0vNUbngCBKjE\",\"label\":\"Passkey\",\"platform\":\"ios\",\"rp_id\":\"account.openentity.org\",\"type\":\"webauthn\"}},\"op\":\"genesis\",\"prev\":null,\"seq\":1,\"ts\":1794009598,\"v\":1}",
+    "{\"auth\":{\"authenticator_data\":\"D3UMQg2RHUXdnWy7aJ1fAnM1wAzOoZElYIW5k5ZyV-MdAAAAAA\",\"client_data_json\":\"eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiT0ZDQ3I3a0Z6NjYyRVVkOVF1ejF4MUdsMG1LOEVCS1RpbGFYZU5vM0JiOCIsIm9yaWdpbiI6Imh0dHBzOi8vYWNjb3VudC5vcGVuZW50aXR5Lm9yZyIsImNyb3NzT3JpZ2luIjpmYWxzZX0\",\"form\":\"webauthn\",\"kid\":\"07PAo82hd2JrvWLKn1nsgQpzIWE27VR0vNUbngCBKjE\",\"signature\":\"MEQCIHH2abjGBTr1uPlg4h-anOeMEtvmJzbhvlQ8Dk_IRQPgAiBuD6uF6OJKGNWpUNgC0AKX3KxdwZdBSoyK0825p5egIg\"},\"body\":{\"approvers\":[{\"attestation\":{\"type\":\"android_key\",\"verified\":true},\"integrity\":{\"device\":true,\"strong\":false},\"jwk\":{\"crv\":\"P-256\",\"kty\":\"EC\",\"x\":\"0ZjR8ao77k9GVrBg2mwsT1TPPfqWcY4_u35AOsml2jc\",\"y\":\"E97SxveRUL1VePv1Chj62WkCYh_OcVt4CoxBXeA4Hsc\"},\"key_storage\":\"tee\",\"kid\":\"Q4Mpqx25W-jQtHIEmVdL1sI1FnZhtJqguETOQ4mGCAU\",\"label\":\"Thief phone\",\"platform\":\"android\",\"type\":\"p256\"}]},\"op\":\"recover\",\"prev\":\"71949eb3b6cfd378c7899920bbc5d96adcae3c005c18f7a2a68e8110227e4ef5\",\"seq\":2,\"ts\":1794013198,\"v\":1}",
+    "{\"auth\":{\"authenticator_data\":\"D3UMQg2RHUXdnWy7aJ1fAnM1wAzOoZElYIW5k5ZyV-MdAAAAAA\",\"client_data_json\":\"eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiTUFxak1tVk5QZGEzZGJDdThNVGVqOGV2N0kxckZJMGRnQ2ptSURidDFHdyIsIm9yaWdpbiI6Imh0dHBzOi8vYWNjb3VudC5vcGVuZW50aXR5Lm9yZyIsImNyb3NzT3JpZ2luIjpmYWxzZX0\",\"form\":\"webauthn\",\"kid\":\"07PAo82hd2JrvWLKn1nsgQpzIWE27VR0vNUbngCBKjE\",\"signature\":\"MEUCIQDG3aQI2dV5Q4I9ym5FOA-3E6uEcvXuwJTeGSDyKRJlRgIgGIq2SK2xnZpGb-c_fcPpbbczcPRPW--qhvSU4DHDXE0\"},\"body\":{\"target\":\"4e10bbe231b3658d7c070e37a9947eb8ee828a07e202cf6025e45a2ecbb887c8\"},\"op\":\"cancel\",\"prev\":\"4e10bbe231b3658d7c070e37a9947eb8ee828a07e202cf6025e45a2ecbb887c8\",\"seq\":3,\"ts\":1794020398,\"v\":1}"
+  ],
+  "first_seen_at": [
+    1794009600,
+    1794013200,
+    1794020400
+  ],
+  "now": 1794186000,
+  "origins": [
+    "https://account.openentity.org",
+    "android:apk-key-hash:AXVh6-zFGB0QxD0cPn3sYa1YZcCsl0Kl3sbQg35wBSw"
+  ],
+  "service_keys": [
+    {
+      "kty": "EC",
+      "crv": "P-256",
+      "x": "zO9-ALge0GLr-7Z7jzMUvnNczTs2GN4XusWIeLb3FQE",
+      "y": "ea2bRUQB1nSBKjwjRCCvnQm8wUO5PTxVp5uYKzABOnI"
+    }
+  ],
+  "expect": {
+    "ok": true,
+    "state": {
+      "did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+      "seq": 3,
+      "head": "601069f978536d86cbf7e487aa1c7eae4b455e619d87b019cdeba811f046baed",
+      "root": "07PAo82hd2JrvWLKn1nsgQpzIWE27VR0vNUbngCBKjE",
+      "approvers": [
+        "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU"
+      ],
+      "revoked": [],
+      "pending": [],
+      "closed": false
+    }
+  }
+}

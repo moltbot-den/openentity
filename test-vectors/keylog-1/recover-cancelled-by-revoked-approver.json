@@ -1,0 +1,55 @@
+{
+  "description": "Stolen root passkey: root revokes every approver, then signs recover; an approver revoked within 7 days cancels it, so it never takes effect. Keys: keys.json (published throwaway seeds).",
+  "did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+  "log": [
+    "{\"auth\":{\"form\":\"p256\",\"kid\":\"tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU\",\"signature\":\"NjJzPZDhyVfeHZ-zqDEm_5AU2gMATujXqwSghEvuYtsKU8iKLZ4yjFh0MyuvnoKkZ813cZFIKMXVKia1tTBFog\"},\"body\":{\"approver\":{\"attestation\":{\"type\":\"app_attest\",\"verified\":true},\"jwk\":{\"crv\":\"P-256\",\"kty\":\"EC\",\"x\":\"I6qtUJaZ7ADAygJp9kdxRIoqiM5X1v5JwGbWyExwjcM\",\"y\":\"E8oX2arXfaoxhwmFzu7rBWSUGZ0ZjVaw4VHuCWUzfSM\"},\"key_storage\":\"secure_enclave\",\"kid\":\"tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU\",\"label\":\"iPhone\",\"platform\":\"ios\",\"type\":\"p256\"},\"root\":{\"aaguid\":\"fbfc3007-154e-4ecc-8c0b-6e020557d7bd\",\"credential_id\":\"oyqZss9O8IhOEQPTLVCN0g\",\"jwk\":{\"crv\":\"P-256\",\"kty\":\"EC\",\"x\":\"9AOyameX8cAM87PhFX4TMKaZ3_Roj8ilnpR_d2ATKo0\",\"y\":\"wNLijrbZEO2MVCH-Km94ZiosJyVwpc7oTgeNYYX68Ng\"},\"kid\":\"07PAo82hd2JrvWLKn1nsgQpzIWE27VR0vNUbngCBKjE\",\"label\":\"Passkey\",\"platform\":\"ios\",\"rp_id\":\"account.openentity.org\",\"type\":\"webauthn\"}},\"op\":\"genesis\",\"prev\":null,\"seq\":1,\"ts\":1794009598,\"v\":1}",
+    "{\"auth\":{\"form\":\"p256\",\"kid\":\"tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU\",\"signature\":\"QQhlD80bxlVePO12-d2LOc2S3kTbREyziyZ2FHH8Yrhu3TELF_12Ef45jLylgT009jhocyTv85RHzs7FShurdQ\"},\"body\":{\"approver\":{\"attestation\":{\"type\":\"android_key\",\"verified\":true},\"integrity\":{\"device\":true,\"strong\":true},\"jwk\":{\"crv\":\"P-256\",\"kty\":\"EC\",\"x\":\"uePHpNhxP8SoU7vZPW5dRpscqOMgV3CbUoktm301jcI\",\"y\":\"b3fu-JI3EzZ8zMRdIEJTsndg8nWbfWdibzZNBTrpgRo\"},\"key_storage\":\"strongbox\",\"kid\":\"qksxx4pp3xaJwtii_IjmacMw6V_UouAqRrlwQeZXAVo\",\"label\":\"Pixel\",\"platform\":\"android\",\"type\":\"p256\"}},\"op\":\"add_approver\",\"prev\":\"71949eb3b6cfd378c7899920bbc5d96adcae3c005c18f7a2a68e8110227e4ef5\",\"seq\":2,\"ts\":1794013198,\"v\":1}",
+    "{\"auth\":{\"authenticator_data\":\"D3UMQg2RHUXdnWy7aJ1fAnM1wAzOoZElYIW5k5ZyV-MdAAAAAA\",\"client_data_json\":\"eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoid1Y5TW5wcFlNUDNHbFV0OV9PaldueGlwam5KMUhtVFcwUUZvdXRQQ1UwcyIsIm9yaWdpbiI6Imh0dHBzOi8vYWNjb3VudC5vcGVuZW50aXR5Lm9yZyIsImNyb3NzT3JpZ2luIjpmYWxzZX0\",\"form\":\"webauthn\",\"kid\":\"07PAo82hd2JrvWLKn1nsgQpzIWE27VR0vNUbngCBKjE\",\"signature\":\"MEUCIQDqU37w_lIK0ZCIha0CK0zg9ro5ZMyc29HZMA6KKovZ4gIgT5aNl_Uygd8Dx80TET0WEfOhG_9keyy1xBYfkBi2Hq0\"},\"body\":{\"kid\":\"tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU\"},\"op\":\"revoke\",\"prev\":\"fc2c4a731fc6b209c9d73ad3c6678993301d25af1bca44571a06a3e828ef1331\",\"seq\":3,\"ts\":1794016798,\"v\":1}",
+    "{\"auth\":{\"authenticator_data\":\"D3UMQg2RHUXdnWy7aJ1fAnM1wAzOoZElYIW5k5ZyV-MdAAAAAA\",\"client_data_json\":\"eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiNUNBbHFtRW4wVVNwUXFfZVM5ZGRrQTBNck1CdVlpSFhReF9qbXI2Tm5NcyIsIm9yaWdpbiI6Imh0dHBzOi8vYWNjb3VudC5vcGVuZW50aXR5Lm9yZyIsImNyb3NzT3JpZ2luIjpmYWxzZX0\",\"form\":\"webauthn\",\"kid\":\"07PAo82hd2JrvWLKn1nsgQpzIWE27VR0vNUbngCBKjE\",\"signature\":\"MEQCICsFHEOycB-q63q_fVe8aApgvqI_tzSZF8nmteRDGkstAiB3S9IVl3w537nbE0mNtEqdx1_gLbkCJWCtlFV1Uw2jcw\"},\"body\":{\"kid\":\"qksxx4pp3xaJwtii_IjmacMw6V_UouAqRrlwQeZXAVo\"},\"op\":\"revoke\",\"prev\":\"65440af365dc4a2816088f72a8a623a7e4e6d232a4a3c874d7bbc7d856c68218\",\"seq\":4,\"ts\":1794016799,\"v\":1}",
+    "{\"auth\":{\"authenticator_data\":\"D3UMQg2RHUXdnWy7aJ1fAnM1wAzOoZElYIW5k5ZyV-MdAAAAAA\",\"client_data_json\":\"eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiS0FQYlFpRTV4QjJOQW5JbERnYmI4ZENTOUlJNXR6d2RlWTVUaHlvc1l4dyIsIm9yaWdpbiI6Imh0dHBzOi8vYWNjb3VudC5vcGVuZW50aXR5Lm9yZyIsImNyb3NzT3JpZ2luIjpmYWxzZX0\",\"form\":\"webauthn\",\"kid\":\"07PAo82hd2JrvWLKn1nsgQpzIWE27VR0vNUbngCBKjE\",\"signature\":\"MEUCIQCI9T4krNMnks2N-MzVPzfquItN0sKaAKaAZPTEB-E-xgIgKHVQaUVcJ-WX_E0t1F2lGVqUNXpEnAZV6fvzrnK1vbw\"},\"body\":{\"approvers\":[{\"attestation\":{\"type\":\"android_key\",\"verified\":true},\"integrity\":{\"device\":true,\"strong\":false},\"jwk\":{\"crv\":\"P-256\",\"kty\":\"EC\",\"x\":\"0ZjR8ao77k9GVrBg2mwsT1TPPfqWcY4_u35AOsml2jc\",\"y\":\"E97SxveRUL1VePv1Chj62WkCYh_OcVt4CoxBXeA4Hsc\"},\"key_storage\":\"tee\",\"kid\":\"Q4Mpqx25W-jQtHIEmVdL1sI1FnZhtJqguETOQ4mGCAU\",\"label\":\"Thief phone\",\"platform\":\"android\",\"type\":\"p256\"}]},\"op\":\"recover\",\"prev\":\"c96b840b633bfe171f05351a720d607c1831bb0b9700bfcae03ebb7ceaeafd5c\",\"seq\":5,\"ts\":1794020398,\"v\":1}",
+    "{\"auth\":{\"form\":\"p256\",\"kid\":\"tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU\",\"signature\":\"P4k0znX_HeeObMZpxwWdVuz8wD_9k5CWVxW_z0emCQVHc0ac3zHLIL70ctb3kSIFry-oSq7K5pWaNL0ytm_dDQ\"},\"body\":{\"target\":\"13300ab89dfe2381b258f255175934a7a22e60c4126cd7945ede0e2d312ffe7a\"},\"op\":\"cancel\",\"prev\":\"13300ab89dfe2381b258f255175934a7a22e60c4126cd7945ede0e2d312ffe7a\",\"seq\":6,\"ts\":1794027598,\"v\":1}"
+  ],
+  "first_seen_at": [
+    1794009600,
+    1794013200,
+    1794016800,
+    1794016801,
+    1794020400,
+    1794027600
+  ],
+  "now": 1794193200,
+  "origins": [
+    "https://account.openentity.org",
+    "android:apk-key-hash:AXVh6-zFGB0QxD0cPn3sYa1YZcCsl0Kl3sbQg35wBSw"
+  ],
+  "service_keys": [
+    {
+      "kty": "EC",
+      "crv": "P-256",
+      "x": "zO9-ALge0GLr-7Z7jzMUvnNczTs2GN4XusWIeLb3FQE",
+      "y": "ea2bRUQB1nSBKjwjRCCvnQm8wUO5PTxVp5uYKzABOnI"
+    }
+  ],
+  "expect": {
+    "ok": true,
+    "state": {
+      "did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+      "seq": 6,
+      "head": "385dabaf67e065403a9a59bc617c3e50fa1f30745ff6e4bb73715d3ad10e8e7b",
+      "root": "07PAo82hd2JrvWLKn1nsgQpzIWE27VR0vNUbngCBKjE",
+      "approvers": [],
+      "revoked": [
+        {
+          "kid": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+          "at": 1794016800
+        },
+        {
+          "kid": "qksxx4pp3xaJwtii_IjmacMw6V_UouAqRrlwQeZXAVo",
+          "at": 1794016801
+        }
+      ],
+      "pending": [],
+      "closed": false
+    }
+  }
+}

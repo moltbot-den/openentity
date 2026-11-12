@@ -1,0 +1,28 @@
+{
+  "description": "A webauthn entry signature from an origin that is not accepted. Keys: keys.json (published throwaway seeds).",
+  "did": "did:web:account.openentity.org:o:cydziguobnz3smgrk3fqwumoa6y7ffpibmyzdfyetwno3dfhthiq",
+  "log": [
+    "{\"auth\":{\"authenticator_data\":\"D3UMQg2RHUXdnWy7aJ1fAnM1wAzOoZElYIW5k5ZyV-MdAAAAAA\",\"client_data_json\":\"eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoieE5PUzYzMmI5TFdSRW1ZaTlORU40X3RfUzhyUVV5RWF3U0F6U25tb1VTdyIsIm9yaWdpbiI6Imh0dHBzOi8vZXZpbC5leGFtcGxlIiwiY3Jvc3NPcmlnaW4iOmZhbHNlfQ\",\"form\":\"webauthn\",\"kid\":\"mTluyYyMSPInd1g_ENjr016z9DqqE2ZUX845TdohRVE\",\"signature\":\"MEUCIQDwzCmEFsqA4SH045ZZS9RueHpkhnJqxsgrZwLlgn9y3gIgC0GPWjJzjcp0HWRdgAcOSG0-TcDELaCbpRvWsSSeuDU\"},\"body\":{\"approver\":{\"aaguid\":\"fbfc3007-154e-4ecc-8c0b-6e020557d7bd\",\"credential_id\":\"FIlBW6SWY3Jafi2NW3KgsA\",\"jwk\":{\"crv\":\"P-256\",\"kty\":\"EC\",\"x\":\"-xMoowGg93Z1aEQuJcIYfVAFu3Adg3hkRRRI2HfApqc\",\"y\":\"2iRpvaFX65qwOLwselP-hD-qndpn4md9DEo8TPo7SB8\"},\"kid\":\"mTluyYyMSPInd1g_ENjr016z9DqqE2ZUX845TdohRVE\",\"label\":\"MacBook\",\"platform\":\"web\",\"rp_id\":\"account.openentity.org\",\"type\":\"webauthn\"},\"root\":{\"aaguid\":\"fbfc3007-154e-4ecc-8c0b-6e020557d7bd\",\"credential_id\":\"oyqZss9O8IhOEQPTLVCN0g\",\"jwk\":{\"crv\":\"P-256\",\"kty\":\"EC\",\"x\":\"9AOyameX8cAM87PhFX4TMKaZ3_Roj8ilnpR_d2ATKo0\",\"y\":\"wNLijrbZEO2MVCH-Km94ZiosJyVwpc7oTgeNYYX68Ng\"},\"kid\":\"07PAo82hd2JrvWLKn1nsgQpzIWE27VR0vNUbngCBKjE\",\"label\":\"Passkey\",\"platform\":\"ios\",\"rp_id\":\"account.openentity.org\",\"type\":\"webauthn\"}},\"op\":\"genesis\",\"prev\":null,\"seq\":1,\"ts\":1794009598,\"v\":1}"
+  ],
+  "first_seen_at": [
+    1794009600
+  ],
+  "now": 1794009660,
+  "origins": [
+    "https://account.openentity.org",
+    "android:apk-key-hash:AXVh6-zFGB0QxD0cPn3sYa1YZcCsl0Kl3sbQg35wBSw"
+  ],
+  "service_keys": [
+    {
+      "kty": "EC",
+      "crv": "P-256",
+      "x": "zO9-ALge0GLr-7Z7jzMUvnNczTs2GN4XusWIeLb3FQE",
+      "y": "ea2bRUQB1nSBKjwjRCCvnQm8wUO5PTxVp5uYKzABOnI"
+    }
+  ],
+  "expect": {
+    "ok": false,
+    "error": "bad_webauthn",
+    "seq": 1
+  }
+}

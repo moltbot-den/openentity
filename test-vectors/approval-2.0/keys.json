@@ -1,0 +1,110 @@
+{
+  "warning": "PUBLISHED THROWAWAY KEYS FOR TEST VECTORS ONLY. Every secret is SHA-256 of a published string (keys.json). Anyone can sign with them. Never use them for anything real.",
+  "derivation": "secret = SHA-256(UTF-8(\"openentity throwaway p256 \" + name)) as a big-endian P-256 scalar; kid = RFC 7638 thumbprint of the public JWK",
+  "keys": {
+    "root": {
+      "secret": "ea1b66003bacd7e73f26e72834f71552b709be1801a87cd0d741d9fd89a3c498",
+      "jwk": {
+        "kty": "EC",
+        "crv": "P-256",
+        "x": "9AOyameX8cAM87PhFX4TMKaZ3_Roj8ilnpR_d2ATKo0",
+        "y": "wNLijrbZEO2MVCH-Km94ZiosJyVwpc7oTgeNYYX68Ng"
+      },
+      "kid": "07PAo82hd2JrvWLKn1nsgQpzIWE27VR0vNUbngCBKjE"
+    },
+    "root2": {
+      "secret": "b096b5028fae82ba2129ba2d5ca66edf2d4a8453490ba65bc2b4c11b76410aaf",
+      "jwk": {
+        "kty": "EC",
+        "crv": "P-256",
+        "x": "tc451ZRt04jZOwlr9uAPReJNsBDpaxxACakkxidSCNQ",
+        "y": "VuUu8RyLGZ1fpdbgHilyQRHopWPvQmQQpFbE7j0zNk4"
+      },
+      "kid": "VvZW58UPLLD9ZANHpdrR-z1zZY2QGTgEgGI6pQp36oM"
+    },
+    "ios": {
+      "secret": "68edbbe646e87a75b7b8576c19531daa8fb416024b5a77e12450a77c81519475",
+      "jwk": {
+        "kty": "EC",
+        "crv": "P-256",
+        "x": "I6qtUJaZ7ADAygJp9kdxRIoqiM5X1v5JwGbWyExwjcM",
+        "y": "E8oX2arXfaoxhwmFzu7rBWSUGZ0ZjVaw4VHuCWUzfSM"
+      },
+      "kid": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU"
+    },
+    "new_ios": {
+      "secret": "650f68dd3c3e0e0cc18730f1f7fc915de2fa7bed49fcaff3b6cbeda99a38e54f",
+      "jwk": {
+        "kty": "EC",
+        "crv": "P-256",
+        "x": "cZD7N8yUZKsumsRBY0jicvlZVDtaDD2aw8xvvrWxlSw",
+        "y": "miHCQXU_T81C-E3qvZwEpjnmEnIzkQvcb1QHIzn5BS8"
+      },
+      "kid": "TtzjOqjZx6s7bc071sa6CpUoDjD9yKZr9hTmKSZKQpc"
+    },
+    "android": {
+      "secret": "1cfd22f0d254289ae091991229b124c28a9d596cecb30fb85d03b01dc888809e",
+      "jwk": {
+        "kty": "EC",
+        "crv": "P-256",
+        "x": "uePHpNhxP8SoU7vZPW5dRpscqOMgV3CbUoktm301jcI",
+        "y": "b3fu-JI3EzZ8zMRdIEJTsndg8nWbfWdibzZNBTrpgRo"
+      },
+      "kid": "qksxx4pp3xaJwtii_IjmacMw6V_UouAqRrlwQeZXAVo"
+    },
+    "android_tee": {
+      "secret": "1792515433c0f2a6cfb5d09429738abe0c3ff1451f1182417a0fa552d0a5e8e4",
+      "jwk": {
+        "kty": "EC",
+        "crv": "P-256",
+        "x": "mqseX9Hb11i03VdHQLDFSuFt3avrrnlA3SYxOzr9AJY",
+        "y": "Ocs9dJ7kDQ03X6cAz0IThKPzaGZRncJqVfvgkc_BNY8"
+      },
+      "kid": "Ca4-39jCuu9rnnwrDVAVpROiOdoZDVt14kVtSVfD5Wg"
+    },
+    "web": {
+      "secret": "f3805cfa55a495590e44fe2e9f1fa0a5c3a27672f77ad91d0111d191da03a5ab",
+      "jwk": {
+        "kty": "EC",
+        "crv": "P-256",
+        "x": "-xMoowGg93Z1aEQuJcIYfVAFu3Adg3hkRRRI2HfApqc",
+        "y": "2iRpvaFX65qwOLwselP-hD-qndpn4md9DEo8TPo7SB8"
+      },
+      "kid": "mTluyYyMSPInd1g_ENjr016z9DqqE2ZUX845TdohRVE"
+    },
+    "thief": {
+      "secret": "b210413afb94abffc79536422835ba48ed2c0d22e4a6405871e732452ce3a78a",
+      "jwk": {
+        "kty": "EC",
+        "crv": "P-256",
+        "x": "0ZjR8ao77k9GVrBg2mwsT1TPPfqWcY4_u35AOsml2jc",
+        "y": "E97SxveRUL1VePv1Chj62WkCYh_OcVt4CoxBXeA4Hsc"
+      },
+      "kid": "Q4Mpqx25W-jQtHIEmVdL1sI1FnZhtJqguETOQ4mGCAU"
+    },
+    "stranger": {
+      "secret": "19659bb5abf5074999639ff18896d7a8f59a5fb870f54e3d4c6f203e4b72ef61",
+      "jwk": {
+        "kty": "EC",
+        "crv": "P-256",
+        "x": "Ec9KW_1zJrqLKeoTdOMawcUEQlOWajy3KMMcX8oHSu0",
+        "y": "r-AN9tmQ9gFKJimXiTr7-165GbUCM6vI52xjLrlJO88"
+      },
+      "kid": "njSMcnFS8gLSI4-5PgIQeJTFQudLF6moiczrC46hNXU"
+    },
+    "service": {
+      "secret": "79df5ca589c22ed7b359ef9f5567c60b895e0cc856f31130b138c1bfecc8fb09",
+      "jwk": {
+        "kty": "EC",
+        "crv": "P-256",
+        "x": "zO9-ALge0GLr-7Z7jzMUvnNczTs2GN4XusWIeLb3FQE",
+        "y": "ea2bRUQB1nSBKjwjRCCvnQm8wUO5PTxVp5uYKzABOnI"
+      },
+      "kid": "Docs6T6LLafUtCIRMtHzZtieHnsy6zOYuTu0x4oGbzo"
+    }
+  },
+  "origins": {
+    "web": "https://account.openentity.org",
+    "android_example": "android:apk-key-hash:AXVh6-zFGB0QxD0cPn3sYa1YZcCsl0Kl3sbQg35wBSw"
+  }
+}

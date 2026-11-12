@@ -9,3 +9,5 @@ export { leafHash, nodeHash, merkleRoot, inclusionProof, verifyInclusion, consis
 export { DEFAULT_REGISTRY, DISPUTE_REASONS, type DisputeReason, withdraw, record, dispute, find, present } from "./client.ts";
 export { OpenEntityError, HttpSigError, type RegistryErrorCode, type LocalErrorCode } from "./errors.ts";
 export { httpSigBase, signRequest, verifyRequest } from "./httpsig.ts";
+export { approvalDigest, payloadDigest, verifyApproval, verifyKeyLog, type Credential, type KeyLogState, type KeyLogResult, type KeyLogOptions, type KeyLogError, type ApprovalOptions, type ApprovalResult, type ApprovalError } from "./owner.ts";
+export { pairSas } from "./pair.ts";

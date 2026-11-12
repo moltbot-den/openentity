@@ -1,0 +1,34 @@
+{
+  "description": "A revoked approver signs replace_root. Keys: keys.json (published throwaway seeds).",
+  "did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+  "log": [
+    "{\"auth\":{\"form\":\"p256\",\"kid\":\"tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU\",\"signature\":\"NjJzPZDhyVfeHZ-zqDEm_5AU2gMATujXqwSghEvuYtsKU8iKLZ4yjFh0MyuvnoKkZ813cZFIKMXVKia1tTBFog\"},\"body\":{\"approver\":{\"attestation\":{\"type\":\"app_attest\",\"verified\":true},\"jwk\":{\"crv\":\"P-256\",\"kty\":\"EC\",\"x\":\"I6qtUJaZ7ADAygJp9kdxRIoqiM5X1v5JwGbWyExwjcM\",\"y\":\"E8oX2arXfaoxhwmFzu7rBWSUGZ0ZjVaw4VHuCWUzfSM\"},\"key_storage\":\"secure_enclave\",\"kid\":\"tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU\",\"label\":\"iPhone\",\"platform\":\"ios\",\"type\":\"p256\"},\"root\":{\"aaguid\":\"fbfc3007-154e-4ecc-8c0b-6e020557d7bd\",\"credential_id\":\"oyqZss9O8IhOEQPTLVCN0g\",\"jwk\":{\"crv\":\"P-256\",\"kty\":\"EC\",\"x\":\"9AOyameX8cAM87PhFX4TMKaZ3_Roj8ilnpR_d2ATKo0\",\"y\":\"wNLijrbZEO2MVCH-Km94ZiosJyVwpc7oTgeNYYX68Ng\"},\"kid\":\"07PAo82hd2JrvWLKn1nsgQpzIWE27VR0vNUbngCBKjE\",\"label\":\"Passkey\",\"platform\":\"ios\",\"rp_id\":\"account.openentity.org\",\"type\":\"webauthn\"}},\"op\":\"genesis\",\"prev\":null,\"seq\":1,\"ts\":1794009598,\"v\":1}",
+    "{\"auth\":{\"form\":\"p256\",\"kid\":\"tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU\",\"signature\":\"QQhlD80bxlVePO12-d2LOc2S3kTbREyziyZ2FHH8Yrhu3TELF_12Ef45jLylgT009jhocyTv85RHzs7FShurdQ\"},\"body\":{\"approver\":{\"attestation\":{\"type\":\"android_key\",\"verified\":true},\"integrity\":{\"device\":true,\"strong\":true},\"jwk\":{\"crv\":\"P-256\",\"kty\":\"EC\",\"x\":\"uePHpNhxP8SoU7vZPW5dRpscqOMgV3CbUoktm301jcI\",\"y\":\"b3fu-JI3EzZ8zMRdIEJTsndg8nWbfWdibzZNBTrpgRo\"},\"key_storage\":\"strongbox\",\"kid\":\"qksxx4pp3xaJwtii_IjmacMw6V_UouAqRrlwQeZXAVo\",\"label\":\"Pixel\",\"platform\":\"android\",\"type\":\"p256\"}},\"op\":\"add_approver\",\"prev\":\"71949eb3b6cfd378c7899920bbc5d96adcae3c005c18f7a2a68e8110227e4ef5\",\"seq\":2,\"ts\":1794013198,\"v\":1}",
+    "{\"auth\":{\"form\":\"p256\",\"kid\":\"qksxx4pp3xaJwtii_IjmacMw6V_UouAqRrlwQeZXAVo\",\"signature\":\"S3D7ZMegrNNA-wHhLlLuHn9F4wGbgQTcLz7wP6x4uSpRnf91G37jN4Uioigw2FMiYlVd141fYO-Mi5HgMLWW-g\"},\"body\":{\"kid\":\"tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU\"},\"op\":\"revoke\",\"prev\":\"fc2c4a731fc6b209c9d73ad3c6678993301d25af1bca44571a06a3e828ef1331\",\"seq\":3,\"ts\":1794016798,\"v\":1}",
+    "{\"auth\":{\"form\":\"p256\",\"kid\":\"tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU\",\"signature\":\"NufD3FdHgZE3sgnuzWBk2wAmuogDgf-xaLrIb3-vctM2NZVDx8eBOS3GTZu7zxAhG5j3kItfy7i0fCd_GbQiXg\"},\"body\":{\"root\":{\"aaguid\":\"ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4\",\"credential_id\":\"oxJMHo7lQTrHXYj8ef1LMw\",\"jwk\":{\"crv\":\"P-256\",\"kty\":\"EC\",\"x\":\"tc451ZRt04jZOwlr9uAPReJNsBDpaxxACakkxidSCNQ\",\"y\":\"VuUu8RyLGZ1fpdbgHilyQRHopWPvQmQQpFbE7j0zNk4\"},\"kid\":\"VvZW58UPLLD9ZANHpdrR-z1zZY2QGTgEgGI6pQp36oM\",\"label\":\"New passkey\",\"platform\":\"android\",\"rp_id\":\"account.openentity.org\",\"type\":\"webauthn\"}},\"op\":\"replace_root\",\"prev\":\"e66b06fa83b5c25759dd5a5ea06e9fc9babd269baee3cedfb28631694db2086e\",\"seq\":4,\"ts\":1794020398,\"v\":1}"
+  ],
+  "first_seen_at": [
+    1794009600,
+    1794013200,
+    1794016800,
+    1794020400
+  ],
+  "now": 1794024000,
+  "origins": [
+    "https://account.openentity.org",
+    "android:apk-key-hash:AXVh6-zFGB0QxD0cPn3sYa1YZcCsl0Kl3sbQg35wBSw"
+  ],
+  "service_keys": [
+    {
+      "kty": "EC",
+      "crv": "P-256",
+      "x": "zO9-ALge0GLr-7Z7jzMUvnNczTs2GN4XusWIeLb3FQE",
+      "y": "ea2bRUQB1nSBKjwjRCCvnQm8wUO5PTxVp5uYKzABOnI"
+    }
+  ],
+  "expect": {
+    "ok": false,
+    "error": "unauthorized",
+    "seq": 4
+  }
+}
