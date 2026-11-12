@@ -1,6 +1,7 @@
 import type { SQSBatchResponse, SQSEvent } from "aws-lambda";
-import { GetParametersByPathCommand, SSMClient } from "@aws-sdk/client-ssm";
+import { GetParametersCommand, SSMClient } from "@aws-sdk/client-ssm";
 import { validateEvent, type QueuedEvent } from "../src/validate.ts";
+import { analyticsParamNames, SSM_PREFIX } from "./params.ts";
 import { sendAmplitude, sendGa4, sendPosthog, type Keys } from "./senders.ts";
 
 type Deps = { getKeys: () => Promise<Keys>; fetch: typeof fetch; log: (m: string) => void };
@@ -58,17 +59,11 @@ export function makeHandler(d: Deps) {
   };
 }
 
-const PATH = "/openentity/account/";
 const ssm = new SSMClient({});
-async function loadParams(): Promise<Record<string, string>> {
-  const out: Record<string, string> = {};
-  let NextToken: string | undefined;
-  do {
-    const r = await ssm.send(new GetParametersByPathCommand({ Path: PATH, WithDecryption: true, NextToken }));
-    for (const p of r.Parameters ?? []) out[p.Name!.slice(PATH.length)] = p.Value!;
-    NextToken = r.NextToken;
-  } while (NextToken);
-  return out;
+/** Explicit names only (GetParameters, never a path): the role cannot read any other parameter. */
+async function loadParams(env: string): Promise<Record<string, string>> {
+  const r = await ssm.send(new GetParametersCommand({ Names: analyticsParamNames(env).map((n) => SSM_PREFIX + n), WithDecryption: true }));
+  return Object.fromEntries((r.Parameters ?? []).map((p) => [p.Name!.slice(SSM_PREFIX.length), p.Value!]));
 }
 
 let cached: Promise<Keys> | undefined;
@@ -76,7 +71,7 @@ export const handler = makeHandler({
   fetch,
   log: (m) => console.error(m),
   getKeys: () =>
-    (cached ??= loadParams()
+    (cached ??= loadParams(process.env.ANALYTICS_ENV ?? "staging")
       .then((p) => keysFrom(p, process.env.ANALYTICS_ENV ?? "staging"))
       .catch((e) => { cached = undefined; throw e; })),
 });
