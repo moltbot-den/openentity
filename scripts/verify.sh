@@ -55,6 +55,19 @@ if [ -d integrations/goose ]; then
   uv run --quiet --with pyyaml --with pytest pytest -q integrations/goose || fail=1
 fi
 
+# Verify-only mobile SDKs (the apps build them from a pinned checkout) run the owner and OEIS vectors too.
+# OpenEntityKit uses CryptoKit, which exists only on Apple platforms.
+if [ -d sdk/kotlin ]; then
+  (cd sdk/kotlin && ./gradlew --quiet test) || fail=1
+fi
+if [ -d sdk/swift ]; then
+  if [ "$(uname)" = Darwin ]; then
+    (cd sdk/swift && swift test --quiet) || fail=1
+  else
+    echo "verify: sdk/swift skipped (CryptoKit needs macOS); it runs in the pre-push hook on the Mac"
+  fi
+fi
+
 # The skill passes the official Agent Skills validator (PRD Appendix B).
 if [ -d skill/openentity ]; then
   uvx --quiet --from skills-ref==0.1.1 agentskills validate skill/openentity || fail=1
