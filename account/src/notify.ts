@@ -21,6 +21,7 @@ const TEXT: Record<string, string> = {
   "enrollment.pending": "A new device asks to become an approver. Open OpenEntity to check its code.",
   "signin.new": "New sign-in to your account. Open OpenEntity to review it.",
   "deletion.requested": "Deletion of your account was requested. Open OpenEntity to review it.",
+  "keylog.genesis": "Approvers were set up on your account. Open OpenEntity to review it.",
   "keylog.revoke": "An approver was removed from your account. Open OpenEntity to review it.",
   "keylog.recover": "Approver recovery started on your account. Open OpenEntity to review it.",
   "keylog.replace_root": "Your root passkey is being replaced. Open OpenEntity to review it.",

@@ -13,6 +13,10 @@ curl -fsS "https://$host/.well-known/jwks.json" | grep -q '"kty":"EC"' || fail "
 curl -fsS "https://$host/.well-known/did.json" | grep -q "did:web:$host" || fail "did.json"
 # The web pages answer with their own CSP; /approve forms post only to the four product sites.
 curl -fsS -D - -o /dev/null "https://$host/approve" | grep -qi "^content-security-policy: default-src 'none'.*form-action 'self' https://moltbotden.com" || fail "/approve CSP"
+# Gate M3: the viewer-request function gives each request the viewer's address; without it ipOf answers 503.
+install=$(python3 -c 'import uuid; print(uuid.uuid4())')
+code=$(curl -sS -o /dev/null -w '%{http_code}' -X POST "https://$host/v1/installs" -H 'content-type: application/json' -d "{\"install_id\":\"$install\",\"platform\":\"ios\"}")
+[ "$code" = 201 ] || fail "POST /v1/installs answered $code: the viewer address did not reach the service"
 # PLAN 2.3, no test doors in production: production has no test identity provider (404, or 503 while sign-in is closed).
 if [ "$host" = account.openentity.org ]; then
   code=$(curl -sS -o /dev/null -w '%{http_code}' -X POST "https://$host/v1/auth/test-idp" -H 'content-type: application/json' -d '{"kind":"apple","nonce":"x"}')

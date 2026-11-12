@@ -9,7 +9,7 @@ import type { Hono } from "hono";
 import { unlinkAll } from "./agents.ts";
 import type { Deps } from "./app.ts";
 import { newId, now } from "./db.ts";
-import { bearer, fail } from "./http.ts";
+import { bearer, fail, freshSignIn } from "./http.ts";
 import { closeKeyLog, keyLogState } from "./keylog.ts";
 import { notifyOwner } from "./notify.ts";
 import { sendEvent } from "./outbound.ts";
@@ -18,7 +18,7 @@ import { TEST_EMAIL_DOMAIN } from "./signin.ts";
 import { requireApproval } from "./stepup.ts";
 import { PRODUCT_DIDS } from "./wellknown.ts";
 
-export const REAUTH_WINDOW = 300, DELETION_WAIT = 7 * 86_400;
+export const DELETION_WAIT = 7 * 86_400;
 
 interface Row { id: string; requested_at: number; effective_at: number; state: string }
 const shape = (r: Row) => ({ id: r.id, requested_at: Number(r.requested_at), effective_at: Number(r.effective_at), state: r.state });
@@ -102,7 +102,7 @@ export function routes(app: Hono, d: Deps) {
     const log = owner.ownerDid ? await keyLogState(d, owner.ownerDid) : null;
     // A closed log means this deletion was approved and stopped part way: a fresh sign-in finishes it.
     if (log && !log.closed) await requireApproval(c, d, { accountId: owner.accountId, ownerDid: owner.ownerDid, action: "account.delete", params: {} });
-    else if (now() - owner.authTime > REAUTH_WINDOW) fail(401, "reauth_required", "sign in again, then delete within 5 minutes");
+    else freshSignIn(owner, "delete");
     return c.json({ deleted_at: await deleteAccount(d, owner.accountId) }, 202);
   });
 

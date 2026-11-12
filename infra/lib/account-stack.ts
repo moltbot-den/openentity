@@ -29,6 +29,7 @@ import {
 import type { Construct } from "constructs";
 import { AnalyticsForwarder } from "../../account/analytics/forwarder/construct.ts";
 import { AccountServiceMonitoring } from "../../account/analytics/monitoring/aws.ts";
+import { paramNames } from "../../account/src/params.ts";
 import { ALERT_EMAIL } from "./stack.ts";
 
 export type AccountStage = "staging" | "production";
@@ -145,7 +146,6 @@ export class OpenEntityAccountStack extends Stack {
         WS_HOST: wsHost,
         ORIGIN_VERIFY: originVerify,
         PARAM_PATH,
-        PARAM_SUFFIX: suffix,
         DB_CLUSTER_ARN: db.clusterArn,
         DB_SECRET_ARN: db.secret!.secretArn,
         DB_NAME: "account",
@@ -169,8 +169,8 @@ export class OpenEntityAccountStack extends Stack {
     attachments.grantPut(fn, "uploads/*");
     attachments.grantRead(fn, "uploads/*");
     attachments.grantDelete(fn, "uploads/*"); // an unlinked agent's attachments
-    // Its own parameters only: never /openentity/app (the registry's keys), never the other stage's values.
-    fn.addToRolePolicy(new iam.PolicyStatement({ actions: ["ssm:GetParameters"], resources: [`arn:aws:ssm:${this.region}:${this.account}:parameter${PARAM_PATH}*`] }));
+    // Exactly its own parameters by name (params.ts): never /openentity/app (the registry's keys), never the other stage's values.
+    fn.addToRolePolicy(new iam.PolicyStatement({ actions: ["ssm:GetParameters"], resources: paramNames(stage).map((n) => `arn:aws:ssm:${this.region}:${this.account}:parameter${PARAM_PATH}${n}`) }));
     fn.addToRolePolicy(new iam.PolicyStatement({ effect: iam.Effect.DENY, actions: ["ssm:GetParameter*"], resources: [`arn:aws:ssm:${this.region}:${this.account}:parameter${PARAM_PATH}*_${other}`] }));
     fn.addToRolePolicy(new iam.PolicyStatement({
       actions: ["kms:Decrypt"], resources: [SSM_KEY_ARN], conditions: { StringEquals: { "kms:ViaService": `ssm.${this.region}.amazonaws.com` } },
@@ -204,6 +204,13 @@ export class OpenEntityAccountStack extends Stack {
         contentSecurityPolicy: { contentSecurityPolicy: ACCOUNT_CSP, override: false },
       },
     });
+    // The viewer's address for the per-address limits (http.ts ipOf): a function URL origin needs every viewer header
+    // but Host, and no origin request policy can add CloudFront-Viewer-Address to that set (allExcept takes no CloudFront
+    // headers; allViewerAndWhitelistCloudFront forwards Host). This sets its own header, overwriting any client value.
+    const viewerAddress = new cf.Function(this, "ViewerAddress", {
+      runtime: cf.FunctionRuntime.JS_2_0,
+      code: cf.FunctionCode.fromInline("function handler(event) { event.request.headers['x-oe-viewer-address'] = { value: event.viewer.ip }; return event.request; }"),
+    });
     const dist = new cf.Distribution(this, "Dist", {
       domainNames: [host],
       certificate: cert,
@@ -217,6 +224,7 @@ export class OpenEntityAccountStack extends Stack {
         cachePolicy: cf.CachePolicy.CACHING_DISABLED,
         // Every viewer header but Host (Authorization, cookies, the RFC 9421 headers, Apple's form posts): what a function URL needs.
         originRequestPolicy: cf.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
+        functionAssociations: [{ function: viewerAddress, eventType: cf.FunctionEventType.VIEWER_REQUEST }],
         responseHeadersPolicy: headers,
       },
     });

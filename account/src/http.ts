@@ -26,9 +26,19 @@ export const str = (v: unknown, name: string, max = 4096): string => {
   return v as string;
 };
 
-export const ipOf = (c: Context) => (c.req.header("cloudfront-viewer-address") ?? "").replace(/:\d+$/, "") || "0.0.0.0";
+/**
+ * The viewer's address, which the distribution's viewer-request function sets on every request (account-stack.ts
+ * ViewerAddress, overwriting any value a client sends). Without it every caller would share one per-address bucket,
+ * so its absence is refused rather than counted.
+ */
+export const ipOf = (c: Context) => c.req.header("x-oe-viewer-address") || fail(503, "unavailable", "the viewer address is missing");
 
 export interface Owner { accountId: string; sid: string; authTime: number; ownerDid: string | null }
+
+/** A sign-in at most 5 minutes old: deleting an account with no key log, and creating the key log (gate M2). */
+export const REAUTH_WINDOW = 300;
+export const freshSignIn = (o: Owner, then: string) =>
+  now() - o.authTime <= REAUTH_WINDOW || fail(401, "reauth_required", `sign in again, then ${then} within 5 minutes`);
 
 const verifyKeys = new WeakMap<object, ReturnType<typeof importJWK>>();
 

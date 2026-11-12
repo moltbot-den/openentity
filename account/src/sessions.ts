@@ -24,10 +24,11 @@ export type Platform = "ios" | "android" | "web";
 
 /** A 15-minute ES256 access token for one audience (PLAN 2.4). Product audiences need an owner DID (a key log). */
 export async function accessToken(d: Deps, accountId: string, aud: string, sid: string, platform: string, authTime: number, amr: string, t = now()) {
-  const a = await d.db.first<{ owner_did: string | null }>("SELECT owner_did FROM accounts WHERE id = $1", [accountId]);
-  if (aud !== `did:web:${d.host}` && !a?.owner_did) fail(403, "key_log_required", "product tokens need an owner DID; finish \"Turn on Face ID approvals\" first");
+  // A deleted account mints nothing: not through a session or login code that raced the deletion (gate lead).
+  const a = await d.db.first<{ owner_did: string | null }>("SELECT owner_did FROM accounts WHERE id = $1 AND deleted_at IS NULL", [accountId]) ?? fail(401, "invalid_grant", "this account was deleted");
+  if (aud !== `did:web:${d.host}` && !a.owner_did) fail(403, "key_log_required", "product tokens need an owner DID; finish \"Turn on Face ID approvals\" first");
   const token = await signJwt(d.keys.token, { typ: "at+jwt" }, {
-    iss: `https://${d.host}`, sub: a?.owner_did ?? accountId, aud, iat: t, exp: t + ACCESS_TTL, jti: newId("at"), sid,
+    iss: `https://${d.host}`, sub: a.owner_did ?? accountId, aud, iat: t, exp: t + ACCESS_TTL, jti: newId("at"), sid,
     client_id: platform === "web" ? "web" : BUNDLE_ID, auth_time: authTime, amr: [amr],
   });
   return { audience: aud, access_token: token, expires_at: t + ACCESS_TTL };
@@ -109,6 +110,7 @@ export async function rotate(db: Db, token: string, t = now()): Promise<Rotated>
     if (!row) return { error: "invalid_grant" };
     const s = await tx.first<Session & { revoked_at: number | null }>("SELECT * FROM sessions WHERE id = $1 FOR UPDATE", [row.session_id]);
     if (!s || s.revoked_at !== null || Number(s.expires_at) <= t) return { error: "invalid_grant" };
+    if (!(await tx.first("SELECT 1 FROM accounts WHERE id = $1 AND deleted_at IS NULL", [s.account_id]))) return { error: "invalid_grant" }; // gate lead
     if (row.used_at !== null) {
       const next = row.successor ? await tx.first<{ used_at: number | null }>("SELECT used_at FROM refresh_tokens WHERE hash = $1", [row.successor]) : null;
       const retry = t - Number(row.used_at) <= RETRY_GRACE && next && next.used_at === null;

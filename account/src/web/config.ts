@@ -11,14 +11,7 @@ import type { PlayApi } from "../store.ts";
 import { open, seal } from "../seal.ts";
 import { APP_ID, BUNDLE_ID } from "../wellknown.ts";
 
-export const WEB_PARAMS = [
-  "apns_auth_key", "apns_key_id", "apns_team_id",
-  "apple_siwa_key_id", "apple_siwa_private_key",
-  "turnstile_site_key", "turnstile_secret",
-  "app_review_email", "app_review_code", "app_review_open",
-  "test_idp_key", "test_product_keys",
-  "play_push_audience", "play_push_service_account",
-];
+export { WEB_PARAMS } from "../params.ts"; // listed with the core names, so the stack grants exactly these
 
 export interface WebConfig {
   /** APNs through the team's auth key; absent: no iOS pushes (tokens are still stored). */
