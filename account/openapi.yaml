@@ -38,11 +38,19 @@ info:
     did:web:securemyagent.ai lists only a secp256k1 key and did:web:api.agentsecretstore.com does not resolve yet; both
     add an Ed25519 key.
 
+    ## Normative vectors
+
+    The SDK lane's vectors win over this file wherever they differ: `test-vectors/keylog-1/` (owner key log entries,
+    credentials, signatures, verifier checks in order and their error names), `test-vectors/approval-2.0/` (Approval2,
+    its digest and verifier checks) and `test-vectors/pair-sas-1/` (the pairing match string). The RP ID and the owner
+    DID host follow the environment: verifiers take the RP ID as an option.
+
     ## Service keys and rotation
 
     The service has two keys, both in AWS KMS, neither ever leaving it:
-    - the token key, ECC_NIST_P256, ES256: signs access tokens; published in /.well-known/jwks.json and, as a
-      JsonWebKey under `assertionMethod`, in /.well-known/did.json (fragment = JWT `kid` = RFC 7638 thumbprint);
+    - the token key, ECC_NIST_P256, ES256: signs access tokens and key log `close` entries; published in
+      /.well-known/jwks.json and, as a JsonWebKey under `assertionMethod`, in /.well-known/did.json (fragment = JWT
+      `kid` = RFC 7638 thumbprint). Key log verifiers pass the jwks.json keys as `serviceKeys`;
     - the service key, ECC_NIST_EDWARDS25519, ED25519_SHA_512: signs every call the service makes to a product and
       the GET /v1/paused response (scheme accountSignature); published in /.well-known/did.json as a Multikey under
       `authentication` and `assertionMethod` (fragment = RFC 7638 thumbprint of its OKP JWK).
@@ -74,8 +82,7 @@ info:
 
     ## Decisions made in this file
 
-    - Every `*_at` field and `expires_at` is integer Unix seconds. Event `time` is Unix milliseconds. Key log `ts` is
-      RFC 3339 UTC.
+    - Every `*_at` field and `expires_at` is integer Unix seconds. Event `time` is Unix milliseconds.
     - Ids other than DIDs are opaque, matching `^[A-Za-z0-9_-]{1,64}$`. Account ids are `acct_` plus 26 alphanumeric
       characters; event ids start with `evt_`.
     - RFC 9421 failures are 401 signature_invalid (the message names the failed check) or 401 signature_replayed. An
@@ -105,13 +112,12 @@ info:
       is 409 deletion_pending.
     - `vault.request:<path>` names one path pattern; grant several paths with several strings. `contract.accept<=$N`
       takes a whole or two-decimal dollar amount.
-    - A key log `public_key_jwk` holds exactly kty, crv, x and y. The owner did.json lists the approvers (and the root
-      passkey in a root-only log) under authentication and assertionMethod; products verify approvals from the log
-      through the packages, never from did.json.
+    - The owner did.json lists the current approvers (the root passkey alone in a single-credential log) under
+      authentication and assertionMethod, fragment = kid; products verify approvals from the log through the
+      packages, never from did.json.
     - GET /v1/sessions marks the caller's session `current: true`. POST /v1/revoke answers 200 with an empty body.
     - Polling GET /v1/pair/{pairing_id} more often than every 2 seconds is 429 rate_limited.
     - x-websocket references the frame schemas in components/schemas.
-    - The close entry is signed by the service key: LogSignature form `ed25519`, key_id = the service DID URL.
     - `seq` on agent.paused, agent.resumed and GET /v1/paused is the agent's pause-state counter; agent.permissions
       has its own counter.
     - PairStatus.owner_did is null until the owner confirms.
@@ -285,8 +291,8 @@ paths:
       summary: The service DID document (did:web:account.openentity.org)
       description: |
         Holds the Ed25519 service key as a Multikey under `authentication` and `assertionMethod` (the accountSignature
-        key), and the ES256 token key as a JsonWebKey under `assertionMethod` (fragment = JWT kid). Cache at most 10
-        minutes.
+        key), and the P-256 token keys as JsonWebKey verification methods under `assertionMethod` (fragment = JWT kid):
+        the same keys as /.well-known/jwks.json, and the signers of key log `close` entries. Cache at most 10 minutes.
       x-available: day-1
       security: []
       responses:
@@ -549,9 +555,7 @@ paths:
           content:
             application/json:
               schema:
-                oneOf:
-                  - $ref: '#/components/schemas/Session'
-                  - $ref: '#/components/schemas/PasskeyRegistered'
+                $ref: '#/components/schemas/PasskeyVerifyResponse'
         '400':
           $ref: '#/components/responses/Error'
           description: 'error: bad_request'
@@ -1076,7 +1080,7 @@ paths:
       operationId: readKeyLog
       tags: [Key log]
       summary: Read an owner key log
-      description: JSON Lines, one KeyLogEntry per line, from seq `from` (default 0). A closed log stays readable.
+      description: JSON Lines, one exact JCS entry line per line, from seq `from` (default 1; genesis is seq 1). A closed log stays readable.
       x-available: day-2
       security: []
       parameters:
@@ -1084,19 +1088,18 @@ paths:
         - name: from
           in: query
           required: false
-          schema: { type: integer, minimum: 0, default: 0 }
+          schema: { type: integer, minimum: 1, default: 1 }
       responses:
         '200':
           description: Entries.
           headers:
             X-OE-Log-Head:
               description: The seq of the last entry.
-              schema: { type: integer, minimum: 0 }
+              schema: { type: integer, minimum: 1 }
           content:
             application/jsonl:
               schema:
-                type: string
-                description: One KeyLogEntry (components/schemas/KeyLogEntry) per line, LF separated.
+                $ref: '#/components/schemas/KeyLogLines'
         '404':
           $ref: '#/components/responses/Error'
           description: 'error: not_found'
@@ -1105,11 +1108,13 @@ paths:
       tags: [Key log]
       summary: Append an entry (genesis creates the owner DID)
       description: |
-        genesis: ownerBearer of an account with no key log, and `{id}` must equal the genesis hash (KeyLogEntry). Other
-        ops are self-authenticating and need no auth; anyone may post a correctly signed entry. The service records
-        `first_seen_at` for every entry; `effective_at` is first_seen_at + 24 hours for recover and replace_root (at
-        once for replace_root in a root-only log) and first_seen_at otherwise. Approver ops (add_approver, recover,
-        replace_root, cancel, revoke) land on Day 5.
+        The body carries the entry as its exact JCS line (`line`); the service stores and serves those bytes and never
+        re-encodes them. genesis (seq 1): ownerBearer of an account with no key log, and `{id}` must equal the
+        lowercase base32 of SHA-256(line). Other ops are self-authenticating and need no auth; anyone may post a
+        correctly signed entry. For approver and root changes the signed entry IS the step-up: no Approval2 is sent.
+        The service records `first_seen_at` for every entry; `effective_at` is first_seen_at + 86400 for recover and
+        replace_root (at once for replace_root in a single-credential log) and first_seen_at otherwise. close is
+        written only by the service. Approver ops (add_approver, recover, replace_root, cancel, revoke) land on Day 5.
       x-available: day-2
       security:
         - {}
@@ -1121,7 +1126,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/KeyLogEntry'
+              $ref: '#/components/schemas/KeyLogAppendRequest'
       responses:
         '201':
           description: Appended.
@@ -1155,8 +1160,9 @@ paths:
       tags: [Key log]
       summary: The owner DID document, derived from the key log
       description: |
-        Verification methods are JsonWebKey entries for the current credentials (fragment = credential id). Approvers,
-        and the root passkey in a root-only log, are listed under authentication and assertionMethod. service:
+        Verification methods are JsonWebKey entries for the current credentials (fragment = kid). The current
+        approvers (the root passkey alone in a single-credential log) are listed under authentication and
+        assertionMethod. service:
         {id "#keylog", type "OpenEntityKeyLog", serviceEndpoint "https://<host>/o/<id>/log"}. A closed log serves no
         verification methods. Products verify approvals from the log through the packages, never from this document.
       x-available: day-2
@@ -2374,7 +2380,8 @@ paths:
           description: The page.
           content:
             text/html:
-              schema: { type: string }
+              schema:
+                $ref: '#/components/schemas/ApprovePage'
   /v1/approve/check:
     post:
       operationId: checkApproveEnvelope
@@ -2459,8 +2466,10 @@ paths:
       summary: Receive owner key log entries from any source
       description: |
         Implemented by each product. No auth: entries are self-authenticating. The app sends revoke and cancel entries
-        here directly, so a hidden entry still arrives. Verify through the openentity packages; fetch missing earlier
-        entries from GET /o/{id}/log; record `first_seen_at` for every entry and run every delay from it.
+        here directly, so a hidden entry still arrives. Entries arrive as their exact JCS lines (`lines`); keep and
+        hash those bytes, never a re-encoding. Verify through the openentity packages (verifyKeyLog with the
+        environment's rpId and origins, and serviceKeys = the keys of /.well-known/jwks.json); fetch missing earlier
+        lines from GET /o/{id}/log; record `first_seen_at` for every entry and run every delay from it.
       x-available: day-5
       servers:
         - url: https://{product_api}
@@ -2695,7 +2704,7 @@ components:
             tries_left: { type: integer, minimum: 0, maximum: 4 }
     Did:
       type: string
-      pattern: '^did:[a-z0-9]+:[A-Za-z0-9._:%-]+$'
+      pattern: '^did:[a-z0-9]+:[A-Za-z0-9._%:-]*[A-Za-z0-9._%-]$'
       maxLength: 512
     ServiceDid:
       type: string
@@ -3035,7 +3044,7 @@ components:
       required: [method_id, credential]
       properties:
         method_id: { $ref: '#/components/schemas/OpaqueId' }
-        credential: { $ref: '#/components/schemas/Credential', description: 'The root passkey Credential (role root, kind passkey) for the genesis entry.' }
+        credential: { $ref: '#/components/schemas/Credential', description: The root passkey Credential (type webauthn) for the genesis entry. }
     EmailStartRequest:
       type: object
       required: [email, client]
@@ -3222,13 +3231,18 @@ components:
     Approval2:
       type: object
       description: |
-        approval/2.0 (ADR 0008). digest = SHA-256(UTF-8("approval/2.0|" verifier_did "|" owner_did "|" request_id "|"
-        payload_digest "|" decision "|" expires_at)), expires_at in decimal ASCII. Form p256: the key signs that UTF-8
-        preimage with ECDSA-SHA-256 and `signature` is the raw 64-byte r||s. Form webauthn: the assertion challenge is
-        base64url(digest), the RP ID is the environment RP ID, the accepted origins are https://<environment host> and
-        the OpenEntity Android app's android:apk-key-hash:<base64url SHA-256 of the signing certificate> origin, and
-        `signature` is DER. Normative verification: the openentity packages and test-vectors/approval-2.0/.
-      required: [version, verifier_did, owner_did, request_id, payload_digest, decision, expires_at, key_id, form, signature]
+        approval/2.0 (ADR 0008). Normative: test-vectors/approval-2.0/README.md (SDK lane), including the verifier
+        checks in order and their error names (malformed, bad_version, wrong_verifier, wrong_owner, owner_closed,
+        wrong_request, wrong_payload, bad_decision, expired, expiry_too_far, unknown_key, bad_signature, bad_webauthn,
+        counter_replayed). digest = SHA-256(UTF-8("approval/2.0|" verifier_did "|" owner_did "|" request_id "|"
+        payload_digest "|" decision "|" expires_at)), expires_at in decimal ASCII. Form p256: `signature` is the raw
+        64-byte r||s of ECDSA P-256 over the 32-byte digest with no further hashing (CryptoKit signs the UTF-8 preimage
+        with SHA-256, which gives exactly that). Form webauthn: the assertion challenge is base64url(digest), the RP ID
+        is the environment RP ID, the accepted origins are https://<environment host> and the OpenEntity Android app's
+        android:apk-key-hash:<base64url SHA-256 of the signing certificate> origin, and `signature` is strict DER over
+        authenticatorData followed by SHA-256(clientDataJSON). Approvals accept a high or a low s; key log entries
+        accept only a low s (KeyLogAuth). All binary fields are strict base64url without padding.
+      required: [version, verifier_did, owner_did, request_id, payload_digest, decision, expires_at, device_id, form, signature]
       properties:
         version: { type: string, const: approval/2.0 }
         verifier_did: { $ref: '#/components/schemas/Did' }
@@ -3236,8 +3250,8 @@ components:
         request_id: { $ref: '#/components/schemas/RequestId' }
         payload_digest: { $ref: '#/components/schemas/Hex64' }
         decision: { type: string, enum: [approve, deny] }
-        expires_at: { $ref: '#/components/schemas/UnixSeconds' }
-        key_id: { $ref: '#/components/schemas/Thumbprint', description: The key log credential id. }
+        expires_at: { type: integer, minimum: 0, maximum: 9007199254740991 }
+        device_id: { $ref: '#/components/schemas/Thumbprint', description: The kid of the signing key in the owner key log. }
         form: { type: string, enum: [p256, webauthn] }
         signature: { $ref: '#/components/schemas/Base64url' }
         authenticator_data: { $ref: '#/components/schemas/Base64url' }
@@ -3251,30 +3265,52 @@ components:
     KeyLogEntry:
       type: object
       description: |
-        One line of an owner key log (ADR 0007). Entry digest = SHA-256(JCS(entry without auth)); every LogSignature
-        signs it. `prev` = lowercase hex SHA-256(JCS(full previous entry, auth included)), null at seq 0. Owner id =
-        lowercase RFC 4648 base32, no padding, of SHA-256(JCS(full genesis entry, auth included)): 52 characters; the
-        owner DID is did:web:<host>:o:<id>. Semantics and delays: ADR 0007. The key log vectors in test-vectors/keylog/
-        (SDK lane) are normative for verification; this schema is the wire shape.
+        One owner key log entry (ADR 0007). Normative: test-vectors/keylog-1/README.md (SDK lane), including the
+        verifier checks in order and their error names; this schema is the wire shape.
+
+        Encoding: an entry travels as its exact RFC 8785 (JCS) line (KeyLogLine), byte for byte, never re-encoded; a
+        verifier rejects a line that is not exactly the JCS form of what it parses to. Every number is an integer
+        between -(2^53 - 1) and 2^53 - 1; strings carry no lone surrogates; objects have no duplicate keys. `prev` is
+        the lowercase hex SHA-256 of the previous line's UTF-8 bytes (`auth` included), null at genesis. The signed
+        digest is SHA-256 of the JCS form of the entry without `auth`. Owner id = lowercase RFC 4648 base32, no padding,
+        of SHA-256(genesis line): 52 characters. The owner DID is did:web:<RP ID>:o:<id>, with the environment's RP ID
+        (account.openentity.org or staging.account.openentity.org).
+
+        Who signs: genesis, the first approver (the root passkey when `approver` is null); add_approver, a current
+        approver; recover, the root passkey; replace_root, the root passkey or a current approver; cancel of a recover,
+        a current approver, an approver revoked less than 604800 seconds before, or the root passkey; cancel of a
+        replace_root, a current approver or an approver revoked less than 604800 seconds before; revoke, a current
+        approver or the root passkey; close, an account service P-256 token key.
+
+        Semantics:
+        - Every delay runs from the verifier's own first_seen_at, never from `ts`: recover and replace_root take
+          effect at first_seen_at + 86400 unless cancelled first (replace_root at once in a single-credential log).
+        - Single-credential (root-only) means the genesis `approver` was null and no approver has taken effect since:
+          the root passkey is then the approver. Revoking every approver never makes the root an approver again.
+        - A recover that takes effect replaces the approver set; the replaced approvers count as revoked from that
+          moment (they may sign cancel for 7 days and are notified).
+        - A kid enters a log once, even after it is revoked or its entry is cancelled.
+        - A pending recover or replace_root stays valid if its signer is revoked later. A cancel whose target already
+          took effect, or was already cancelled, is accepted as a no-op.
+        - For approver and root changes (add_approver, recover, replace_root, revoke, cancel), the signed entry IS the
+          step-up: no separate Approval2.
+        - No entry is accepted after close.
       required: [v, seq, prev, op, ts, body, auth]
       additionalProperties: false
       properties:
         v: { type: integer, const: 1 }
-        seq: { type: integer, minimum: 0 }
+        seq: { type: integer, minimum: 1, maximum: 9007199254740991, description: '1 for genesis, then the previous seq plus 1.' }
         prev:
           anyOf:
             - $ref: '#/components/schemas/Hex64'
             - type: 'null'
         op: { type: string, enum: [genesis, add_approver, recover, replace_root, cancel, revoke, close] }
-        ts: { type: string, format: date-time, pattern: '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$' }
+        ts: { type: integer, minimum: 0, maximum: 9007199254740991, description: 'Unix seconds the signer claims. Informational: no delay or window runs from it.' }
         body: { type: object }
-        auth:
-          type: array
-          minItems: 1
-          items: { $ref: '#/components/schemas/LogSignature' }
+        auth: { $ref: '#/components/schemas/KeyLogAuth' }
       allOf:
         - if: { properties: { op: { const: genesis } } }
-          then: { properties: { seq: { const: 0 }, prev: { type: 'null' }, body: { $ref: '#/components/schemas/GenesisBody' } } }
+          then: { properties: { seq: { const: 1 }, prev: { type: 'null' }, body: { $ref: '#/components/schemas/GenesisBody' } } }
         - if: { properties: { op: { const: add_approver } } }
           then: { properties: { body: { $ref: '#/components/schemas/AddApproverBody' } } }
         - if: { properties: { op: { const: recover } } }
@@ -3287,44 +3323,83 @@ components:
           then: { properties: { body: { $ref: '#/components/schemas/RevokeBody' } } }
         - if: { properties: { op: { const: close } } }
           then: { properties: { body: { $ref: '#/components/schemas/CloseBody' } } }
-    LogSignature:
+    KeyLogAuth:
       type: object
       description: |
-        A signature over the entry digest. p256: ECDSA-SHA-256 over the JCS preimage (entry without auth), `signature`
-        raw 64-byte r||s. webauthn: assertion challenge base64url(entry digest), `signature` DER. ed25519: only on a
-        close entry, by the service key (key_id = the service DID URL), `signature` the 64-byte Ed25519 signature over
-        the JCS preimage.
-      required: [key_id, form, signature]
+        The one signature that authorizes an entry, over the entry digest. p256: `signature` is the 64-byte raw r||s
+        of ECDSA P-256 over the digest with no further hashing (CryptoKit and the Android Keystore sign the JCS bytes
+        with SHA-256, which gives the same value). webauthn: a WebAuthn get() assertion whose challenge is
+        base64url(digest), checked as approval/2.0 checks one; `signature` is DER over authenticatorData followed by
+        SHA-256(clientDataJSON). Signatures in entries are canonical: low s only (s <= n/2 for the P-256 order n; a
+        signer whose platform returns a high s sends n - s), strict DER (short-form lengths, minimal positive
+        INTEGERs, nothing after the sequence), strict base64url (no padding, no non-zero trailing bits). The form must
+        match the key's type. close is signed in the p256 form by an account service P-256 token key, kid = its RFC
+        7638 thumbprint; verifiers pass the keys of /.well-known/jwks.json as serviceKeys.
+      required: [kid, form, signature]
+      additionalProperties: false
       properties:
-        key_id: { type: string, maxLength: 256, description: 'A credential id (RFC 7638 thumbprint), or the service DID URL on close.' }
-        form: { type: string, enum: [p256, webauthn, ed25519] }
+        kid: { $ref: '#/components/schemas/Thumbprint' }
+        form: { type: string, enum: [p256, webauthn] }
         signature: { $ref: '#/components/schemas/Base64url' }
         authenticator_data: { $ref: '#/components/schemas/Base64url' }
         client_data_json: { $ref: '#/components/schemas/Base64url' }
+      allOf:
+        - if: { properties: { form: { const: webauthn } } }
+          then:
+            required: [authenticator_data, client_data_json]
+          else:
+            not:
+              anyOf:
+                - required: [authenticator_data]
+                - required: [client_data_json]
+    KeyLogLine:
+      type: string
+      maxLength: 65536
+      contentMediaType: application/json
+      contentSchema: { $ref: '#/components/schemas/KeyLogEntry' }
+      description: One entry as its exact RFC 8785 (JCS) line, UTF-8, no trailing newline. Hashes and signatures cover these bytes.
+    KeyLogLines:
+      type: string
+      description: The log as JSON Lines, one KeyLogLine per line, LF separated, lowest seq first.
+    KeyLogAppendRequest:
+      type: object
+      required: [line]
+      properties:
+        line:
+          type: string
+          maxLength: 65536
+          contentMediaType: application/json
+          contentSchema: { $ref: '#/components/schemas/KeyLogEntry' }
+          description: The entry as its exact JCS line.
     Credential:
       type: object
-      required: [id, kind, role, public_key_jwk]
+      description: |
+        A key in an owner key log: a device P-256 key (type p256: Secure Enclave, StrongBox or TEE) or a passkey (type
+        webauthn). The root is always webauthn. `kid` is the RFC 7638 thumbprint of `jwk`: base64url of
+        SHA-256(`{"crv":"P-256","kty":"EC","x":"<x>","y":"<y>"}`); the app shows it as the key fingerprint. A webauthn
+        credential has a non-empty `credential_id` and `rp_id` equal to the environment RP ID. label, platform,
+        key_storage, attestation, integrity and aaguid are signed with the entry and shown to people, but no verifier
+        interprets them; the account service checks App Attest, Android Key Attestation and Play Integrity at
+        enrollment and records the result here.
+      required: [kid, type, jwk]
       properties:
-        id: { $ref: '#/components/schemas/Thumbprint', description: RFC 7638 thumbprint of public_key_jwk. }
-        kind: { type: string, enum: [passkey, device] }
-        role: { type: string, enum: [root, approver] }
-        public_key_jwk: { $ref: '#/components/schemas/PublicKeyJwk' }
+        kid: { $ref: '#/components/schemas/Thumbprint' }
+        type: { type: string, enum: [p256, webauthn] }
+        jwk: { $ref: '#/components/schemas/PublicKeyJwk' }
         label: { type: string, maxLength: 80 }
-        credential_id: { $ref: '#/components/schemas/Base64url', description: Passkey only. }
-        rp_id: { type: string, description: Passkey only. }
-        aaguid: { type: string, format: uuid, description: Passkey only. }
-        platform: { type: string, enum: [ios, android], description: Device only. }
-        storage: { type: string, enum: [secure_enclave, strongbox, tee], description: Device only. }
+        platform: { type: string, enum: [ios, android, web] }
+        key_storage: { type: string, enum: [secure_enclave, strongbox, tee] }
         attestation: { $ref: '#/components/schemas/CredentialAttestation' }
+        integrity: { $ref: '#/components/schemas/CredentialIntegrity' }
+        aaguid: { type: string, format: uuid }
+        credential_id: { $ref: '#/components/schemas/Base64url', minLength: 1, description: webauthn only. }
+        rp_id: { type: string, description: webauthn only. The environment RP ID. }
       allOf:
-        - if: { properties: { kind: { const: passkey } } }
-          then: { required: [credential_id, rp_id, aaguid] }
-        - if: { properties: { kind: { const: device } } }
-          then: { required: [platform, storage, attestation] }
-        - if: { properties: { role: { const: root } } }
-          then: { properties: { kind: { const: passkey } } }
+        - if: { properties: { type: { const: webauthn } } }
+          then: { required: [credential_id, rp_id] }
     PublicKeyJwk:
       type: object
+      description: Exactly kty, crv, x and y; x and y are the 32-byte coordinates in strict base64url, and the point is on P-256.
       required: [kty, crv, x, y]
       additionalProperties: false
       properties:
@@ -3338,27 +3413,36 @@ components:
       properties:
         type: { type: string, enum: [app_attest, android_key, webauthn, none] }
         verified: { type: boolean, description: True only when the chain validated to a trusted root. }
-        device_integrity: { type: boolean, description: Android. Play Integrity MEETS_DEVICE_INTEGRITY. }
-        strong_integrity: { type: boolean, description: Android. Play Integrity MEETS_STRONG_INTEGRITY. }
+    CredentialIntegrity:
+      type: object
+      description: Android. The Play Integrity verdict at enrollment.
+      required: [device, strong]
+      properties:
+        device: { type: boolean, description: MEETS_DEVICE_INTEGRITY. }
+        strong: { type: boolean, description: MEETS_STRONG_INTEGRITY. }
     GenesisBody:
       type: object
-      required: [root]
+      required: [root, approver]
       additionalProperties: false
       properties:
-        root: { $ref: '#/components/schemas/Credential', description: 'Role root, kind passkey.' }
-        approver: { $ref: '#/components/schemas/Credential', description: Role approver. Absent in a root-only log. }
+        root: { $ref: '#/components/schemas/Credential', description: The root passkey (type webauthn). }
+        approver:
+          description: The first approver, or null for a single-credential log.
+          anyOf:
+            - $ref: '#/components/schemas/Credential'
+            - type: 'null'
     AddApproverBody:
       type: object
-      required: [key]
+      required: [approver]
       additionalProperties: false
       properties:
-        key: { $ref: '#/components/schemas/Credential' }
+        approver: { $ref: '#/components/schemas/Credential' }
     RecoverBody:
       type: object
-      required: [keys]
+      required: [approvers]
       additionalProperties: false
       properties:
-        keys:
+        approvers:
           type: array
           minItems: 1
           items: { $ref: '#/components/schemas/Credential' }
@@ -3367,44 +3451,43 @@ components:
       required: [root]
       additionalProperties: false
       properties:
-        root: { $ref: '#/components/schemas/Credential' }
+        root: { $ref: '#/components/schemas/Credential', description: The new root passkey (type webauthn). }
     CancelBody:
       type: object
       required: [target]
       additionalProperties: false
       properties:
-        target: { $ref: '#/components/schemas/Hex64', description: The hash (as in prev) of the pending recover or replace_root entry. }
+        target: { $ref: '#/components/schemas/Hex64', description: The entry hash (as prev uses it) of a recover or replace_root in this log. }
     RevokeBody:
       type: object
-      required: [key_id]
+      required: [kid]
       additionalProperties: false
       properties:
-        key_id: { $ref: '#/components/schemas/Thumbprint' }
+        kid: { $ref: '#/components/schemas/Thumbprint', description: The kid of a current approver. }
     CloseBody:
       type: object
-      required: [reason, receipt_id]
-      additionalProperties: false
-      properties:
-        reason: { type: string, const: account_deleted }
-        receipt_id: { $ref: '#/components/schemas/OpaqueId' }
+      maxProperties: 0
+      description: Always the empty object.
     LogAppendResponse:
       type: object
       required: [seq, hash, first_seen_at, effective_at]
       properties:
-        seq: { type: integer, minimum: 0 }
-        hash: { $ref: '#/components/schemas/Hex64' }
+        seq: { type: integer, minimum: 1 }
+        hash: { $ref: '#/components/schemas/Hex64', description: SHA-256 of the line, the value the next entry's prev holds. }
         first_seen_at: { $ref: '#/components/schemas/UnixSeconds' }
         effective_at: { $ref: '#/components/schemas/UnixSeconds' }
     PairSas:
       type: object
       description: |
-        The pairing match string. indexes = the first 4 bytes of SHA-256(UTF-8("oe-pair-sas/1|" + code + "|" +
-        agent_did)), one byte per item. names = the entries at those indexes in the 256-entry named-symbol list the SDK
-        lane owns, with its vectors (spec/ or test-vectors/pair-sas-1/). The agent prints the names; the app renders
-        the symbols by index and shows the names.
+        The pairing match string, pair-sas/1. Normative: test-vectors/pair-sas-1/ (README.md, words.json and
+        vectors.json; SDK lane). h = SHA-256(UTF-8("oe-pair-sas/1|" + CODE + "|" + agent_did)), where CODE is the
+        pairing code trimmed and upper-cased before hashing and agent_did is the agent's did:key exactly as it signs.
+        indexes = the first four bytes of h; names = words[index] from words.json, each two lowercase words (for
+        example "red shell"). The agent prints the names joined by ", "; the app renders the symbols by index and
+        shows the names.
       required: [version, indexes, names]
       properties:
-        version: { type: string, const: oe-pair-sas/1 }
+        version: { type: string, const: pair-sas/1 }
         indexes:
           type: array
           minItems: 4
@@ -3414,7 +3497,7 @@ components:
           type: array
           minItems: 4
           maxItems: 4
-          items: { type: string, maxLength: 32 }
+          items: { type: string, pattern: '^[a-z]+ [a-z]+$' }
     PairingCode:
       type: string
       pattern: '^OE-[0-9A-HJKMNP-TV-Z]{4}-[0-9A-HJKMNP-TV-Z]{4}$'
@@ -4023,7 +4106,7 @@ components:
         rp_id: { type: string }
         allow_credentials:
           type: array
-          description: The owner's approver passkey credential ids (the root passkey in a root-only log).
+          description: The owner's approver passkey credential ids (the root passkey in a single-credential log).
           items: { $ref: '#/components/schemas/Base64url' }
     ApproveReturnForm:
       type: object
@@ -4110,20 +4193,24 @@ components:
         store_transaction_id: { type: string, maxLength: 128, description: The original transaction id (App Store) or purchase token (Play). }
     OeKeylogRequest:
       type: object
-      required: [owner_did, entries]
+      required: [owner_did, lines]
       properties:
         owner_did: { $ref: '#/components/schemas/OwnerDid' }
-        entries:
+        lines:
           type: array
           minItems: 1
           maxItems: 100
-          description: Consecutive entries, lowest seq first.
-          items: { $ref: '#/components/schemas/KeyLogEntry' }
+          description: Consecutive entries, lowest seq first, each as its exact JCS line.
+          items:
+            type: string
+            maxLength: 65536
+            contentMediaType: application/json
+            contentSchema: { $ref: '#/components/schemas/KeyLogEntry' }
     OeKeylogResponse:
       type: object
       required: [head]
       properties:
-        head: { type: integer, minimum: 0, description: The seq of the product's newest entry for this owner. }
+        head: { type: integer, minimum: 1, description: The seq of the product's newest entry for this owner. }
     MethodAddRequest:
       type: object
       required: [type, proof]
@@ -4188,3 +4275,11 @@ components:
       allOf:
         - if: { properties: { provider: { const: apns } } }
           then: { required: [environment] }
+    PasskeyVerifyResponse:
+      description: A Session for mode authenticate; PasskeyRegistered for mode register.
+      oneOf:
+        - $ref: '#/components/schemas/Session'
+        - $ref: '#/components/schemas/PasskeyRegistered'
+    ApprovePage:
+      type: string
+      description: The HTML page.
