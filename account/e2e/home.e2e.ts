@@ -19,7 +19,9 @@ afterAll(() => browser.close());
 const serve = async (route: Route) => {
   const req = route.request();
   const body = req.postDataBuffer();
-  const r = await app.fetch(new Request(req.url(), { method: req.method(), headers: await req.allHeaders(), body: body?.length ? new Uint8Array(body) : undefined }));
+  // CloudFront's viewer-request function sets the viewer address in front of the real service (http.ts ipOf).
+  const headers = { ...(await req.allHeaders()), "x-oe-viewer-address": "127.0.0.1" };
+  const r = await app.fetch(new Request(req.url(), { method: req.method(), headers, body: body?.length ? new Uint8Array(body) : undefined }));
   await route.fulfill({ status: r.status, headers: Object.fromEntries(r.headers), body: Buffer.from(await r.arrayBuffer()) });
 };
 

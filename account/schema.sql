@@ -351,3 +351,11 @@ CREATE TABLE IF NOT EXISTS entitlements (
   PRIMARY KEY (source, store_transaction_id)
 );
 CREATE INDEX IF NOT EXISTS entitlements_account ON entitlements (account_id);
+
+-- A grant is pending until its product took the plan.changed for its latest state (store.ts sendGrants): the event id,
+-- and when it was delivered. A lost or refused event is resent under the same id with backoff.
+ALTER TABLE entitlements ADD COLUMN IF NOT EXISTS event_id text;
+ALTER TABLE entitlements ADD COLUMN IF NOT EXISTS delivered_at bigint;
+ALTER TABLE entitlements ADD COLUMN IF NOT EXISTS send_attempts integer NOT NULL DEFAULT 0;
+ALTER TABLE entitlements ADD COLUMN IF NOT EXISTS next_send_at bigint;
+CREATE INDEX IF NOT EXISTS entitlements_pending ON entitlements (next_send_at) WHERE delivered_at IS NULL;

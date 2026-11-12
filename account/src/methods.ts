@@ -69,7 +69,7 @@ export function routes(app: Hono, d: Deps) {
     const b = await json(c);
     const id = await proven(c, d, owner, b.type, b.proof);
     if (await d.db.first("SELECT 1 FROM methods WHERE type = $1 AND subject = $2", [b.type, id.subject])) fail(409, "method_exists", "this sign-in is already linked to an OpenEntity account");
-    await requireApproval(c, d, { accountId: owner.accountId, ownerDid: owner.ownerDid, action: "method.add", params: { type: b.type } });
+    await requireApproval(c, d, { accountId: owner.accountId, ownerDid: owner.ownerDid, action: "method.add", params: { type: b.type, subject: id.subject } });
     const t = now(), methodId = newId("mth");
     await d.db.run("INSERT INTO methods (id, account_id, type, subject, email, data, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7)",
       [methodId, owner.accountId, b.type, id.subject, id.email, JSON.stringify(id.data), t]);

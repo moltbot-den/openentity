@@ -30,19 +30,19 @@ test("guard: adding a sign-in method needs step-up method.add; a session alone a
   expect((await call(app, "POST", "/v1/account/methods", { type: "email", proof: await emailProof("a1@example.com") }, bearer(none))).body.error).toBe("key_log_required");
   const o = await owner(d);
   expect((await call(app, "POST", "/v1/account/methods", { type: "email", proof: await emailProof("a2@example.com") }, bearer(o))).status).toBe(428);
-  const r = await call(app, "POST", "/v1/account/methods", { type: "google", proof: await googleProof(o, "g-123") }, await stepUp(app, o, "method.add", { type: "google" }));
+  const r = await call(app, "POST", "/v1/account/methods", { type: "google", proof: await googleProof(o, "g-123") }, await stepUp(app, o, "method.add", { type: "google", subject: "g-123" }));
   expect(r.status).toBe(201);
   expect(r.body).toMatchObject({ type: "google" });
   expect((await call(app, "GET", "/v1/account/methods", undefined, bearer(o))).body.methods.map((m: any) => m.type)).toEqual(["google"]);
   // The same Google account cannot join a second account: accounts never merge.
   const other = await owner(d);
-  const again = await call(app, "POST", "/v1/account/methods", { type: "google", proof: await googleProof(other, "g-123") }, await stepUp(app, other, "method.add", { type: "google" }));
+  const again = await call(app, "POST", "/v1/account/methods", { type: "google", proof: await googleProof(other, "g-123") }, await stepUp(app, other, "method.add", { type: "google", subject: "g-123" }));
   expect(again.body.error).toBe("method_exists");
 });
 
 test("guard: an approval for one method type does not add another", async () => {
   const o = await owner(d);
-  const forGoogle = await stepUp(app, o, "method.add", { type: "google" });
+  const forGoogle = await stepUp(app, o, "method.add", { type: "google", subject: "a3@example.com" });
   expect((await call(app, "POST", "/v1/account/methods", { type: "email", proof: await emailProof("a3@example.com") }, forGoogle)).body.error).toBe("approval_invalid");
 });
 
@@ -50,7 +50,7 @@ test("guard: removing a method needs step-up method.remove for that method; neve
   const o = await owner(d);
   const keep = await emailMethod(o);
   expect((await call(app, "DELETE", `/v1/account/methods/${keep}`, undefined, bearer(o))).body.error).toBe("last_method");
-  await call(app, "POST", "/v1/account/methods", { type: "google", proof: await googleProof(o, "g-remove") }, await stepUp(app, o, "method.add", { type: "google" }));
+  await call(app, "POST", "/v1/account/methods", { type: "google", proof: await googleProof(o, "g-remove") }, await stepUp(app, o, "method.add", { type: "google", subject: "g-remove" }));
   expect((await call(app, "DELETE", `/v1/account/methods/${keep}`, undefined, bearer(o))).status).toBe(428);
   expect((await call(app, "DELETE", "/v1/account/methods/mth_nope", undefined, bearer(o))).status).toBe(404);
   const r = await call(app, "DELETE", `/v1/account/methods/${keep}`, undefined, await stepUp(app, o, "method.remove", { method_id: keep }));
@@ -124,4 +124,14 @@ test("guard matrix (PLAN 2.4): every web step-up action refuses a session alone 
   }
   const cancel = await call(app, "POST", "/v1/account/deletion-request/cancel", undefined, bearer(withLog));
   expect(cancel.body.error).toBe("not_found"); // nothing to cancel; with a request waiting it is 428 (deletion.test.ts)
+});
+
+test("gate hardening: the method.add approval names the new sign-in; a proof for another one is refused", async () => {
+  const o = await owner(d);
+  const forA = await stepUp(app, o, "method.add", { type: "google", subject: "g-approved" });
+  const r = await call(app, "POST", "/v1/account/methods", { type: "google", proof: await googleProof(o, "g-other") }, forA);
+  expect([r.status, r.body.error]).toEqual([403, "approval_invalid"]);
+  expect((await call(app, "POST", "/v1/step-up", { action: "method.add", params: { type: "google" } }, bearer(o))).status).toBe(400); // no subject
+  const ok = await call(app, "POST", "/v1/account/methods", { type: "google", proof: await googleProof(o, "g-approved") }, await stepUp(app, o, "method.add", { type: "google", subject: "g-approved" }));
+  expect(ok.status).toBe(201);
 });

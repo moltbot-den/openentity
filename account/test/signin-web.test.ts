@@ -1,9 +1,9 @@
 import { createHash, generateKeyPairSync, randomUUID } from "node:crypto";
 import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT } from "jose";
-import { expect, test, vi } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { createApp } from "../src/app.ts";
 import { nonceHash } from "../src/idtoken.ts";
-import { appReviewWatch, redeemLoginCode, testIdpKey } from "../src/signin.ts";
+import { DECOY_FLOOR_MS, appReviewWatch, redeemLoginCode, testIdpKey } from "../src/signin.ts";
 import { webConfig } from "../src/web/config.ts";
 import { HOST, ORIGIN, call, webApp } from "./owner.ts";
 import { VIEWER } from "./helpers.ts";
@@ -80,7 +80,7 @@ test("Apple on the web: authorize URL, state cookie, form_post return with the s
   expect([ok.status, ok.headers.get("location")]).toEqual([303, `${ORIGIN}/approve`]);
   expect(cookieOf(ok, "__Host-oe_session")).toMatch(/^__Host-oe_session=oert_.*SameSite=Strict$/);
   const m = await d.db.first<any>("SELECT data FROM methods WHERE type = 'apple' AND subject = 'apple-web-1'");
-  expect(JSON.parse(m.data)).toEqual({ apple_refresh: "sealed:apple-refresh:rt-c1", apple_client_id: "org.openentity.web" });
+  expect(JSON.parse(m.data)).toEqual({ apple_refresh: "sealed:apple-refresh:rt-c1", apple_client_id: "org.openentity.web", apple_token_at: expect.any(Number) });
   expect((await post(`__Host-oe_state=${n2.body.state}`)).headers.get("location")).toBe(`${ORIGIN}/app/auth?error=state_invalid`);
 });
 
@@ -237,4 +237,66 @@ test("device binding at sign-in (production): an app's email sign-in fetches a n
   expect(r.status).toBe(200);
   const s = await d.db.first<{ binding: string }>("SELECT binding FROM sessions WHERE install_id = $1 ORDER BY created_at DESC LIMIT 1", [client.install_id]);
   expect(JSON.parse(s!.binding)).toMatchObject({ type: "app_attest", key_id: att.key_id });
+});
+
+describe("gate fixes (Day 6 review)", () => {
+  test("hardening: Apple server notices apply in order; a late consent-revoked does not end a newer session", async () => {
+    await d.db.run("DELETE FROM rate_events");
+    const client = ios();
+    const n = await call(app, "POST", "/v1/auth/nonce", { client });
+    const r = await call(app, "POST", "/v1/auth/apple", { client, nonce: n.body.nonce, identity_token: await appleToken({ aud: "org.openentity.app", sub: "apple-order", nonce: nonceHash(n.body.nonce) }) });
+    const auth = { authorization: `Bearer ${r.body.access_token}` };
+    const note = async (events: object) => call(app, "POST", "/v1/auth/apple/notifications", { payload: await appleToken({ aud: "org.openentity.app", events: JSON.stringify(events) }) });
+    expect((await note({ type: "consent-revoked", sub: "apple-order", event_time: (now() - 120) * 1000 })).status).toBe(200);
+    expect((await call(app, "GET", "/v1/me", undefined, auth)).status).toBe(200); // the session is newer than the revocation
+    await note({ type: "email-enabled", sub: "apple-order", event_time: (now() - 10) * 1000 });
+    await note({ type: "email-disabled", sub: "apple-order", event_time: (now() - 60) * 1000 }); // older: ignored
+    expect(JSON.parse((await d.db.first<{ data: string }>("SELECT data FROM methods WHERE subject = 'apple-order'"))!.data).email_disabled).toBe(false);
+    await note({ type: "consent-revoked", sub: "apple-order", event_time: now() + 1 }); // seconds, as in Apple's documented example
+    expect((await call(app, "GET", "/v1/me", undefined, auth)).status).toBe(401); // a current revocation still ends it
+  });
+
+  test("M2: a session older than 5 minutes cannot register the root passkey before the key log", async () => {
+    const { owner: makeOwner, bearer: auth } = await import("./owner.ts");
+    const stale = await makeOwner(d, { keyLog: false, authAgo: 600 });
+    const opts = await call(app, "POST", "/v1/auth/passkey/options", { mode: "register", client: { platform: "ios", install_id: stale.install } }, auth(stale));
+    expect([opts.status, opts.body.error]).toEqual([401, "reauth_required"]);
+    const fresh = await makeOwner(d, { keyLog: false });
+    expect((await call(app, "POST", "/v1/auth/passkey/options", { mode: "register", client: { platform: "ios", install_id: fresh.install } }, auth(fresh))).status).toBe(200);
+    // A challenge issued while fresh cannot be finished once the session is stale.
+    await d.db.run("INSERT INTO passkey_challenges (id, challenge, mode, account_id, created_at, expires_at) VALUES ('pkc_stale', 'c', 'register', $1, $2, $3)", [stale.accountId, now(), now() + 300]);
+    const verify = await call(app, "POST", "/v1/auth/passkey/verify", { challenge_id: "pkc_stale", response: { id: "x" }, client: { platform: "ios", install_id: stale.install } }, auth(stale));
+    expect(verify.body.error).toBe("reauth_required");
+  });
+
+  test("lead: a login code of a deleted account is refused, and deletion removes its codes", async () => {
+    const install = randomUUID();
+    const n = await appleWeb({ platform: "android", install_id: install }, {});
+    const form = new URLSearchParams({ state: n.body.state, id_token: await appleToken({ aud: "org.openentity.web", sub: "apple-deleted-1", nonce: nonceHash(n.body.nonce) }) });
+    const r = await app.request(`${ORIGIN}/v1/auth/apple/callback`, { method: "POST", body: form, headers: { "x-oe-viewer-address": VIEWER, "content-type": "application/x-www-form-urlencoded" } });
+    const code = new URL(r.headers.get("location")!).searchParams.get("login_code")!;
+    const accountId = (await d.db.first<{ account_id: string }>("SELECT account_id FROM login_codes WHERE hash = $1", [createHash("sha256").update(code).digest("hex")]))!.account_id;
+    await d.db.run("UPDATE accounts SET deleted_at = $2 WHERE id = $1", [accountId, now()]);
+    await expect(redeemLoginCode(d, code, install)).rejects.toMatchObject({ code: "invalid_grant" });
+    const { deleteAccount } = await import("../src/deletion.ts");
+    await d.db.run("UPDATE accounts SET deleted_at = NULL WHERE id = $1", [accountId]);
+    await deleteAccount(d, accountId);
+    expect(await d.db.first("SELECT 1 FROM login_codes WHERE account_id = $1", [accountId])).toBeNull();
+  });
+
+  test("lead: a web email start without Turnstile answers alike for an address with and without an account", async () => {
+    await d.db.run("DELETE FROM rate_events"); // this file's calls share one address
+    const pass = async (email: string) => {
+      const t0 = Date.now();
+      const s = await call(app, "POST", "/v1/auth/email/start", { email, client: web }, fromUs);
+      const slow = Date.now() - t0 >= DECOY_FLOOR_MS; // mailing or not, the same least time
+      const v1 = await call(app, "POST", "/v1/auth/email/verify", { challenge_id: s.body.challenge_id, code: "00000000", client: web }, fromUs);
+      const v2 = await call(app, "POST", "/v1/auth/email/verify", { challenge_id: s.body.challenge_id, code: "00000000", client: web, turnstile_token: "ok" }, fromUs);
+      return [s.status, slow, v1.status, v1.body.error, v2.status, v2.body.error];
+    };
+    const k = await call(app, "POST", "/v1/auth/email/start", { email: "known-web@example.com", client: web, turnstile_token: "ok" }, fromUs);
+    await call(app, "POST", "/v1/auth/email/verify", { challenge_id: k.body.challenge_id, code: out.codes.at(-1), client: web }, fromUs);
+    expect(await pass("known-web@example.com")).toEqual(await pass("unknown-web@example.com"));
+    expect(await pass("unknown-web-2@example.com")).toEqual([202, true, 403, "turnstile_required", 401, "code_invalid"]);
+  });
 });

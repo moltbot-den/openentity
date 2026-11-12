@@ -7,9 +7,9 @@ import { X509Certificate, verify } from "node:crypto";
 import type { Hono } from "hono";
 import { createRemoteJWKSet, errors as joseErrors, jwtVerify } from "jose";
 import type { Deps } from "./app.ts";
-import { now } from "./db.ts";
+import { newId, now } from "./db.ts";
 import { bearer, fail, json, str } from "./http.ts";
-import { sendEvent } from "./outbound.ts";
+import { callProduct, reaches } from "./outbound.ts";
 import { BUNDLE_ID } from "./wellknown.ts";
 
 const SMA = "did:web:securemyagent.ai", ASS = "did:web:api.agentsecretstore.com", CGRC = "did:web:api.clawgrc.com", DEN = "did:web:moltbotden.com";
@@ -117,22 +117,50 @@ export async function grant(d: Deps, p: Purchase, accountId?: string): Promise<b
   if (!a) return (console.warn(`store: no account for ${p.source} ${p.storeTransactionId}`), false);
   const review = d.web.appReview?.openSince && a.email === d.web.appReview.email;
   if (d.stage === "production" ? p.sandbox && !review : !p.sandbox) return (console.warn(`store: ${p.sandbox ? "sandbox" : "production"} purchase refused in ${d.stage}`), false);
-  // Notifications can arrive out of order: a row only moves forward in time.
+  // Notifications can arrive out of order: a row only moves forward in time. Each change gets a new plan.changed
+  // event id and is pending (delivered_at null) in the same write, so a lost or refused grant is resent (sendGrants).
   const t = now();
   const r = await d.db.first<{ changed: boolean }>(
-    `INSERT INTO entitlements (source, store_transaction_id, account_id, product, plan, sku, status, period_end, signed_at, price, currency, created_at, updated_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $12)
-     ON CONFLICT (source, store_transaction_id) DO UPDATE SET plan = $5, sku = $6, status = $7, period_end = $8, signed_at = $9, updated_at = $12
+    `INSERT INTO entitlements (source, store_transaction_id, account_id, product, plan, sku, status, period_end, signed_at, price, currency, created_at, updated_at, event_id, send_attempts, next_send_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $12, $13, 0, $12)
+     ON CONFLICT (source, store_transaction_id) DO UPDATE SET plan = $5, sku = $6, status = $7, period_end = $8, signed_at = $9, updated_at = $12,
+       event_id = $13, delivered_at = NULL, send_attempts = 0, next_send_at = $12
        WHERE entitlements.signed_at <= $9 AND (entitlements.status, entitlements.plan, COALESCE(entitlements.period_end, -1)) IS DISTINCT FROM ($7, $5, COALESCE($8, -1))
      RETURNING true AS changed`,
-    [p.source, p.storeTransactionId, a.id, sku.product, sku.plan, p.sku, p.status, p.periodEnd, p.signedAt, p.price, p.currency, t]);
-  if (!r) return true; // older or unchanged: the product already has it
-  // ponytail: an account without a key log has no owner DID, so no product can map it; the app sells only after onboarding.
-  if (!a.owner_did) return (console.warn(`store: account ${a.id} bought ${p.sku} before its key log; nothing sent`), true);
-  await sendEvent(d, sku.product, "plan.changed", {
-    owner_did: a.owner_did, product: sku.product, plan: sku.plan, status: p.status, source: p.source, period_end: p.periodEnd, store_transaction_id: p.storeTransactionId,
-  });
+    [p.source, p.storeTransactionId, a.id, sku.product, sku.plan, p.sku, p.status, p.periodEnd, p.signedAt, p.price, p.currency, t, newId("evt")]);
+  if (r) await sendGrants(d, { source: p.source, id: p.storeTransactionId });
   return true;
+}
+
+/**
+ * Sends pending plan.changed events (a grant's product has not taken its latest state yet), oldest first: one row when
+ * `one` names it (right after the grant), else every due row (jobs.ts). A failure, a refusal included, is retried
+ * with backoff (1 minute doubling, at most an hour) under the same event id, which products dedupe. An owner with no
+ * key log yet has no DID, so its grant waits until it has one; a deleted owner's grant, or one for a product this stage
+ * never calls (outbound.ts reaches), is dropped.
+ */
+export async function sendGrants(d: Deps, one?: { source: string; id: string }): Promise<void> {
+  const t = now();
+  const rows = await d.db.all<any>(
+    `SELECT e.*, a.owner_did, a.deleted_at FROM entitlements e JOIN accounts a ON a.id = e.account_id
+      WHERE e.delivered_at IS NULL AND e.event_id IS NOT NULL AND ${one ? "e.source = $1 AND e.store_transaction_id = $2" : "e.next_send_at <= $1"}
+      ORDER BY e.next_send_at LIMIT 50`, one ? [one.source, one.id] : [t]);
+  for (const g of rows) {
+    const done = (at: number | null) => d.db.run(
+      "UPDATE entitlements SET delivered_at = $3, send_attempts = send_attempts + 1, next_send_at = $4 WHERE store_transaction_id = $1 AND event_id = $2",
+      [g.store_transaction_id, g.event_id, at, at ?? t + Math.min(60 * 2 ** Number(g.send_attempts), 3600)]);
+    if (g.deleted_at !== null || !reaches(d, g.product)) { await done(t); continue; } // owner.deleted already told the product
+    if (!g.owner_did) { await done(null); continue; }
+    const r = await callProduct(d, g.product, "/v1/oe/events", {
+      id: g.event_id, type: "plan.changed", created_at: Number(g.updated_at),
+      data: { owner_did: g.owner_did, product: g.product, plan: g.plan, status: g.status, source: g.source, period_end: g.period_end === null ? null : Number(g.period_end), store_transaction_id: g.store_transaction_id },
+    });
+    if (r.status >= 200 && r.status < 300) await done(t);
+    else {
+      console.warn(`store: ${g.product} did not take plan.changed ${g.event_id} (${r.status}); retrying`);
+      await done(null);
+    }
+  }
 }
 
 /** The account's store-bought plans (EntitlementList). */
@@ -164,6 +192,10 @@ export interface PlayApi {
 /** A Play purchase from the Play Developer API (subscriptionsv2.get or products.get), reduced to a Purchase. */
 export function fromPlay(sku: string, token: string, r: any, at = Date.now()): Purchase {
   const sub = CATALOG[sku]?.kind === "subscription";
+  // Google answers a subscription by its token alone, so the product it names must be the one claimed (gate M7); a
+  // one-time product is asked for by SKU, and an answer naming another product is refused all the same.
+  const named = sub ? r?.lineItems?.[0]?.productId : r?.productId ?? sku;
+  if (named !== sku) fail(422, "transaction_invalid", "the Play purchase is for another product");
   const end = sub ? Date.parse(r.lineItems?.[0]?.expiryTime ?? "") : NaN;
   const state = String(r.subscriptionState ?? "");
   const status = sub
