@@ -97,11 +97,15 @@ await verifyNote(note, spec.registry.log_origin, key);   // true
 
 `openentity log proof <index>` in the [CLI](/cli) does the inclusion check end to end and is a working example of the calls.
 
+## Verify an owner key log and an approval
+
+For the OpenEntity app (ADR 0007 and ADR 0008), verify only: devices and passkeys sign, products verify. `verifyKeyLog(did, lines, firstSeenAt, options)` checks an owner key log against the owner DID and returns the approvers as of `now` and any pending `recover` or `replace_root`. Every delay runs from the `first_seen_at` you recorded for each entry, never from the entry's own time. `verifyApproval(approval, options)` checks an approval/2.0 object against that state, with your own DID, the request id you issued and the payload digest you recompute with `payloadDigest(summary)`. `approvalDigest(fields)` is what a device or passkey signs, and `pairSas(code, agentDid)` gives the four words an agent prints when it pairs. Formats, rules and error codes are in the [test vectors](/test-vectors): `keylog-1/`, `approval-2.0/` and `pair-sas-1/`.
+
 ## Every exported function
 
 Read from the source at build time.
 
-<Exports file="sdk/ts/src/core.ts,sdk/ts/src/objects.ts,sdk/ts/src/merkle.ts,sdk/ts/src/registry.ts,sdk/ts/src/client.ts,sdk/ts/src/httpsig.ts" />
+<Exports file="sdk/ts/src/core.ts,sdk/ts/src/objects.ts,sdk/ts/src/merkle.ts,sdk/ts/src/registry.ts,sdk/ts/src/client.ts,sdk/ts/src/httpsig.ts,sdk/ts/src/owner.ts,sdk/ts/src/pair.ts" />
 
 ## Errors
 
