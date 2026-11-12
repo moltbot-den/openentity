@@ -11,7 +11,22 @@ const JOBS: [string, (d: Deps) => Promise<unknown>][] = [
   ["deletions", runDueDeletions],
   ["app_review", appReviewWatch],
   ["login_codes", (d) => d.db.run("DELETE FROM login_codes WHERE expires_at < $1", [now() - 3600])],
-  ["push_tokens", (d) => d.db.run("DELETE FROM push_tokens WHERE removed_at < $1", [now() - 8 * 86_400])],
+  // Sign-in rows past any use: codes (they name an address), nonces and passkey challenges after a day.
+  ["signin_rows", async (d) => {
+    const t = now() - 86_400;
+    await d.db.run("DELETE FROM email_codes WHERE expires_at < $1", [t]);
+    await d.db.run("DELETE FROM auth_nonces WHERE expires_at < $1", [t]);
+    await d.db.run("DELETE FROM passkey_challenges WHERE expires_at < $1", [t]);
+  }],
+  // Rate counters (some keyed by a hashed address) after a day. Windows are minute or hour numbers (db.ts bump):
+  // ponytail: told apart by size (minutes since 1970 are past 10 million, hours are not); add a column if a third unit comes.
+  ["rate_events", (d) => {
+    const m = Math.floor(now() / 60), h = Math.floor(now() / 3600);
+    return d.db.run("DELETE FROM rate_events WHERE window_start ~ '^[0-9]+$' AND ((window_start::bigint >= 10000000 AND window_start::bigint < $1) OR (window_start::bigint < 10000000 AND window_start::bigint < $2))", [m - 1440, h - 48]);
+  }],
+  // Push tokens removed 8 days ago, and tokens of installs with no session alive or ended in the last 8 days.
+  ["push_tokens", (d) => d.db.run(`DELETE FROM push_tokens p WHERE p.removed_at < $1 OR NOT EXISTS (SELECT 1 FROM sessions s
+    WHERE s.account_id = p.account_id AND s.install_id = p.install_id AND COALESCE(s.revoked_at, s.expires_at) > $1)`, [now() - 8 * 86_400])],
   ["sig_nonces", (d) => d.db.run("DELETE FROM sig_nonces WHERE expires_at < $1", [now() - 60])],
   // Agent channel rows past any use: acknowledged items after 7 days, pairings and step-up requests after a day, and
   // enrollments past their 24-hour listing window plus a week.

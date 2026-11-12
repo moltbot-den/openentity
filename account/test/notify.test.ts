@@ -158,3 +158,14 @@ test("removing a push token stops product pushes at once", async () => {
   await notify({ owner_did: o.ownerDid, type: "alert", id: "a3" });
   expect(sent.length).toBe(before);
 });
+
+test("jobs drop a push token 8 days after its install's last session ended, even if the app never removed it", async () => {
+  const { runJobs } = await import("../src/jobs.ts");
+  const o = await owner(d);
+  await call(app, "PUT", `/v1/push-tokens/${o.install}`, { provider: "apns", token: "tok-stale", environment: "production" }, auth(o));
+  await runJobs(d);
+  expect(await d.db.first("SELECT 1 FROM push_tokens WHERE install_id = $1", [o.install])).not.toBeNull(); // live session
+  await d.db.run("UPDATE sessions SET revoked_at = $2 WHERE id = $1", [o.sid, Math.floor(Date.now() / 1000) - 9 * 86_400]);
+  await runJobs(d);
+  expect(await d.db.first("SELECT 1 FROM push_tokens WHERE install_id = $1", [o.install])).toBeNull();
+});

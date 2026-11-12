@@ -46,7 +46,9 @@ export async function deleteAccount(d: Deps, accountId: string): Promise<number>
   const t = now();
   await d.db.tx(async (tx) => {
     await tx.run("UPDATE accounts SET deleted_at = $2, email = NULL WHERE id = $1", [accountId, t]);
-    await tx.run("UPDATE sessions SET revoked_at = $2, revoke_reason = 'account_deleted' WHERE account_id = $1 AND revoked_at IS NULL", [accountId, t]);
+    // Sessions go with the account (they hold install ids and device models), refresh token hashes first.
+    await tx.run("DELETE FROM refresh_tokens WHERE session_id IN (SELECT id FROM sessions WHERE account_id = $1)", [accountId]);
+    await tx.run("DELETE FROM sessions WHERE account_id = $1", [accountId]);
     await tx.run("DELETE FROM methods WHERE account_id = $1", [accountId]); // the same Apple ID, Google account or email may start a new account
     await tx.run("DELETE FROM push_tokens WHERE account_id = $1", [accountId]);
     await tx.run("UPDATE deletion_requests SET state = 'done' WHERE account_id = $1 AND state = 'pending'", [accountId]);

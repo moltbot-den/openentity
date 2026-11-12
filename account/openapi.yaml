@@ -34,9 +34,8 @@ info:
     Only the four product DIDs (did:web:moltbotden.com, did:web:securemyagent.ai, did:web:api.agentsecretstore.com,
     did:web:api.clawgrc.com) may call POST /v1/notify, POST /v1/events/ingest and GET /v1/paused, or sign /approve
     envelopes. Each product's DID document must list an Ed25519 key (Multikey `z6Mk...`, or JsonWebKey with kty OKP and
-    crv Ed25519) under `authentication` (RFC 9421 requests) and `assertionMethod` (envelopes). On 2026-11-11
-    did:web:securemyagent.ai lists only a secp256k1 key and did:web:api.agentsecretstore.com does not resolve yet; both
-    add an Ed25519 key.
+    crv Ed25519) under `authentication` (RFC 9421 requests) and `assertionMethod` (envelopes). Other keys in the same
+    document (did:web:securemyagent.ai also lists a secp256k1 issuer key) are ignored.
 
     ## Normative vectors
 
