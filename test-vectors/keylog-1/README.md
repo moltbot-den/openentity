@@ -62,7 +62,7 @@ The signed digest is SHA-256 of the JCS form of the entry without `auth`.
 - DER is strict: short-form lengths, minimal positive INTEGERs (a 33-byte INTEGER starts with 0x00 followed by a byte of 0x80 or more), nothing after the sequence.
 - base64url is strict: no padding and no non-zero trailing bits.
 
-The form must match the key type: a `webauthn` credential never presents a `p256` signature. `close` is signed in the `p256` form by an account service key; verifiers take those keys as input (`serviceKeys`).
+The form must match the key type: a `webauthn` credential never presents a `p256` signature. `close` is signed in the `p256` form by an account service close key: a dedicated P-256 KMS key, separate from the rotating token key and never deleted. `did:web:account.openentity.org` lists every close key it has used, current and retired, under `assertionMethod` in its `did.json`, permanently. Verifiers pass those P-256 keys as `serviceKeys` (`service_keys` in Python), never the token keys in `jwks.json`, so a log closed years ago still verifies (`close-retired-key.json`).
 
 **The signed entry is the step-up.** Adding, recovering or revoking an approver and replacing the root are step-up actions (ADR 0007). The approver's signature over the entry is that step-up: the account service accepts the signed entry and needs no separate approval/2.0 object for it.
 
@@ -142,6 +142,6 @@ or `"expect": {"ok": false, "error": "unauthorized", "seq": 2}`. In `expect.stat
 | replace_root after 24 hours, whoever signs | `replace-root-pending`, `replace-root-effective`, `replace-root-by-approver` | `replace-root-not-yet`, `root-cancels-replace-root` |
 | revoked approvers cancel, for 7 days only | `recover-cancelled-by-revoked-approver`, `replace-root-cancelled-by-revoked-approver`, `revoked-cancel-last-second` | `revoked-cancel-after-7-days`, `revoked-signs-add-approver`, `revoked-signs-revoke`, `revoked-signs-replace-root` |
 | revoke | `revoke`, `revoke-by-root` | `revoke-root` |
-| close | `close` | `close-by-approver`, `entry-after-close` |
+| close | `close`, `close-retired-key` | `close-by-approver`, `entry-after-close` |
 | chain and encoding | | `bad-prev`, `bad-seq`, `not-canonical`, `duplicate-key`, `fractional-number`, `unknown-op`, `kid-not-thumbprint`, `key-reused`, `cancel-unknown-target`, `first-seen-decreasing` |
 | signatures | | `high-s`, `webauthn-high-s`, `webauthn-der-wide-r`, `webauthn-wrong-origin`, `webauthn-wrong-rp`, `webauthn-no-uv`, `form-mismatch`, `tampered-body` |

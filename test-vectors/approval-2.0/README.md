@@ -63,7 +63,7 @@ The first failing check names the error:
 7. `wrong_request`, then `wrong_payload`: the verifier's own `request_id` and its recomputed payload digest, never the client's.
 8. `bad_decision`: a decision this action does not accept.
 9. `expired` (now >= expires_at), then `expiry_too_far` (expires_at > now + 600).
-10. `unknown_key`: `device_id` is not a current approver in the owner's key log. The root passkey is an approver only in a single-credential log.
+10. `unknown_key`: `device_id` is not a current approver in the owner's key log. The root passkey is an approver only in a single-credential log, or when the verifier opts in with `allowRoot` (`allow_root` in Python). Only account-service flows turn that on, the first being the cancellation of a deletion request. Revoked approvers never sign approvals; they sign only the key log `cancel` op.
 11. `bad_signature`: the form does not match the key type (a passkey cannot present `p256`).
 12. `bad_webauthn` (webauthn only): clientDataJSON is not JSON, its `type` is not `webauthn.get`, the challenge is not base64url(digest), the origin is not accepted, `crossOrigin` is true, rpIdHash is not SHA-256(`account.openentity.org`), or the user present (0x01) and user verified (0x04) flags are not both set.
 13. `bad_signature`: the signature does not verify (for webauthn, also a DER encoding that is not strict).
@@ -80,8 +80,8 @@ Replay protection is the verifier's (ADR 0004): a request id names one state of 
 | `digests` | The preimage and digest for `approve` and for `deny` |
 | `payloads` | Summaries with their JCS form and digest (non-ASCII, UTF-16 key order, escapes) |
 | `payloads_invalid` | Summaries every SDK must refuse |
-| `key_states` | Owner key states by name: `{did, approvers, closed}` |
+| `key_states` | Owner key states by name: `{did, root, approvers, closed}` |
 | `key_logs` | The key log behind each key state; verifying it (keylog-1 rules, the service key from `keys.json`, `now` from the cases) gives that state |
-| `cases` | `{name, description, approval, context, expect}`: verify `approval` with `context` (`verifier_did`, `owner_did`, `request_id`, `payload_digest`, `now`, `origins`, optional `decisions` and `counter`) against `key_states[context.key_state]`. `expect` is `{ok: true, kid, counter}` or `{ok: false, error}` |
+| `cases` | `{name, description, approval, context, expect}`: verify `approval` with `context` (`verifier_did`, `owner_did`, `request_id`, `payload_digest`, `now`, `origins`, optional `decisions`, `counter` and `allow_root`) against `key_states[context.key_state]`. `expect` is `{ok: true, kid, counter}` or `{ok: false, error}` |
 
-Cases cover both decisions, the p256 form (with low and high `s`), WebAuthn from both origins, the single-credential root, the 600-second limit at and past its edge, and one failure per check above: approval/1.0 from a key-log key, the wrong verifier, an agent-written approval, the wrong owner, expiry, a stale request, a changed payload, a key outside the log, the root passkey once approvers exist, tampering, the WebAuthn checks and a replayed counter.
+Cases cover both decisions, the p256 form (with low and high `s`), WebAuthn from both origins, the single-credential root, the 600-second limit at and past its edge, and one failure per check above: approval/1.0 from a key-log key, the wrong verifier, an agent-written approval, the wrong owner, expiry, a stale request, a changed payload, a key outside the log, the root passkey once approvers exist (accepted only with `allowRoot`), a revoked approver, tampering, the WebAuthn checks and a replayed counter.

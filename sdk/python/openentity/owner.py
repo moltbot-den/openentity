@@ -204,10 +204,13 @@ def payload_digest(summary) -> str:
 
 
 def verify_approval(approval, *, key_log: dict, verifier_did: str, owner_did: str, request_id: str, payload_digest: str,
-                    now: int | None = None, decisions=("approve", "deny"), origins=None, rp_id: str = RP_ID, counter: int = 0) -> dict:
-    """Verify an approval/2.0 object against the owner's verified key log (verify_key_log's state, or a dict with did,
+                    now: int | None = None, decisions=("approve", "deny"), origins=None, rp_id: str = RP_ID, counter: int = 0,
+                    allow_root: bool = False) -> dict:
+    """Verify an approval/2.0 object against the owner's verified key log (verify_key_log's state, or a dict with did, root,
     approvers and closed). request_id and payload_digest are what this verifier issued and recomputes, never the client's.
-    Returns {"ok": True, "kid", "counter"} (store the counter) or {"ok": False, "error", "message"}. Rejects approval/1.0."""
+    allow_root also accepts the log's root passkey: off by default, only for account-service flows such as cancelling a
+    deletion request; revoked approvers never sign approvals. Returns {"ok": True, "kid", "counter"} (store the counter)
+    or {"ok": False, "error", "message"}. Rejects approval/1.0."""
     try:
         if not isinstance(approval, dict):
             raise _Fail("malformed", "approval must be an object")
@@ -235,6 +238,8 @@ def verify_approval(approval, *, key_log: dict, verifier_did: str, owner_did: st
         if a["expires_at"] > now + _MAX_TTL:
             raise _Fail("expiry_too_far", "expires_at is more than 600 seconds away")
         cred = next((c for c in key_log["approvers"] if c["kid"] == a["device_id"]), None)
+        if cred is None and allow_root and (key_log.get("root") or {}).get("kid") == a["device_id"]:
+            cred = key_log["root"]
         if cred is None:
             raise _Fail("unknown_key", "device_id is not a current approver in the owner's key log")
         got = _check_signature(cred, a, approval_digest(a), origins or [f"https://{rp_id}"], rp_id, False)
@@ -317,7 +322,8 @@ def verify_key_log(did: str, lines: list[str], first_seen_at: list[int], *, now:
     """Verify an owner key log (JSON Lines, one RFC 8785 entry per line) against the owner DID it must hash to.
 
     first_seen_at[i] is when this verifier first held entry i with its whole chain (unix seconds, never decreasing): every
-    delay runs from it, never from the entry's ts. service_keys are the account service's P-256 public JWKs (they sign close).
+    delay runs from it, never from the entry's ts. service_keys are the account service's close keys: every P-256
+    assertionMethod key in did:web:account.openentity.org's did.json, current and retired (never the jwks.json token keys).
     Returns {"ok": True, "state": {...}} as of `now`, or {"ok": False, "error", "seq", "message"} for the first failing entry."""
     now = int(time.time()) if now is None else now
     origins = origins or [f"https://{rp_id}"]

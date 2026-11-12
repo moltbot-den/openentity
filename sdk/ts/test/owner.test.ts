@@ -65,7 +65,7 @@ describe("approval/2.0", () => {
       const x = c.context;
       const r = oe.verifyApproval(c.approval, {
         keyLog: A.key_states[x.key_state], verifierDid: x.verifier_did, ownerDid: x.owner_did, requestId: x.request_id,
-        payloadDigest: x.payload_digest, now: x.now, decisions: x.decisions, origins: x.origins, counter: x.counter,
+        payloadDigest: x.payload_digest, now: x.now, decisions: x.decisions, origins: x.origins, counter: x.counter, allowRoot: x.allow_root,
       });
       expect(r.ok ? { ok: true, kid: r.kid, counter: r.counter } : { ok: false, error: r.error }, r.ok ? "" : r.message).toEqual(c.expect);
     });
@@ -74,7 +74,7 @@ describe("approval/2.0", () => {
     for (const [name, l] of Object.entries(A.key_logs) as [string, { did: string; log: string[]; first_seen_at: number[] }][]) {
       const r = oe.verifyKeyLog(l.did, l.log, l.first_seen_at, { now: A.cases[0].context.now, origins: A.cases[0].context.origins, serviceKeys: [keys.keys.service.jwk] });
       if (!r.ok) throw new Error(`${name}: ${r.message}`);
-      expect({ did: r.state.did, approvers: r.state.approvers, closed: r.state.closed }, name).toEqual(A.key_states[name]);
+      expect({ did: r.state.did, root: r.state.root, approvers: r.state.approvers, closed: r.state.closed }, name).toEqual(A.key_states[name]);
     }
   });
 });

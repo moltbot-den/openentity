@@ -75,7 +75,8 @@ def test_approval(c):
     x = c["context"]
     r = openentity.verify_approval(c["approval"], key_log=A["key_states"][x["key_state"]], verifier_did=x["verifier_did"],
                                    owner_did=x["owner_did"], request_id=x["request_id"], payload_digest=x["payload_digest"], now=x["now"],
-                                   decisions=x.get("decisions", ("approve", "deny")), origins=x["origins"], counter=x.get("counter", 0))
+                                   decisions=x.get("decisions", ("approve", "deny")), origins=x["origins"], counter=x.get("counter", 0),
+                                   allow_root=x.get("allow_root", False))
     got = {"ok": True, "kid": r["kid"], "counter": r["counter"]} if r["ok"] else {"ok": False, "error": r["error"]}
     assert got == c["expect"], r.get("message")
 
@@ -86,7 +87,7 @@ def test_key_states_come_from_their_logs():
     for name, log in A["key_logs"].items():
         r = openentity.verify_key_log(log["did"], log["log"], log["first_seen_at"], now=ctx["now"], origins=ctx["origins"], service_keys=[service])
         assert r["ok"], r.get("message")
-        assert {k: r["state"][k] for k in ("did", "approvers", "closed")} == A["key_states"][name]
+        assert {k: r["state"][k] for k in ("did", "root", "approvers", "closed")} == A["key_states"][name]
 
 
 def test_pair_sas():

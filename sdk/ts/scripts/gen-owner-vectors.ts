@@ -44,7 +44,7 @@ function key(name: string): Key {
   const jwk = { kty: "EC" as const, crv: "P-256" as const, x: b64url(pub.slice(1, 33)), y: b64url(pub.slice(33)) };
   return { name, secret, jwk, kid: b64url(sha(`{"crv":"P-256","kty":"EC","x":"${jwk.x}","y":"${jwk.y}"}`)) };
 }
-const K = Object.fromEntries(["root", "root2", "ios", "new_ios", "android", "android_tee", "web", "thief", "stranger", "service"].map((n) => [n, key(n)])) as Record<string, Key>;
+const K = Object.fromEntries(["root", "root2", "ios", "new_ios", "android", "android_tee", "web", "thief", "stranger", "service", "service_retired"].map((n) => [n, key(n)])) as Record<string, Key>;
 
 const ICLOUD = "fbfc3007-154e-4ecc-8c0b-6e020557d7bd";
 const GOOGLE_PM = "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4";
@@ -128,7 +128,8 @@ function keylogCase(description: string, log: Log, now: number, expect: State | 
     first_seen_at: log.seen,
     now,
     origins: ORIGINS,
-    service_keys: [K.service.jwk],
+    // Every close key did:web:account.openentity.org has used, current and retired, from its did.json assertionMethod.
+    service_keys: [K.service.jwk, K.service_retired.jwk],
     expect: "error" in expect
       ? { ok: false, error: expect.error, seq: expect.seq }
       : {
@@ -209,6 +210,8 @@ function keylogVectors(): Record<string, object> {
     { root: K.root, approvers: [K.new_ios], revoked: [[K.ios, T0 + H + DAY]] });
   add("close", "close signed by the account service key: the log is closed.",
     basic().add("close", {}, { key: K.service }, T0 + H), T0 + 2 * H, { root: K.root, approvers: [K.ios], closed: true });
+  add("close-retired-key", "close signed by a retired account service close key still verifies: did.json keeps every close key under assertionMethod.",
+    basic().add("close", {}, { key: K.service_retired }, T0 + H), T0 + 2 * H, { root: K.root, approvers: [K.ios], closed: true });
 
   // Failure cases: each breaks exactly one rule.
   add("unjustified-key-self-signed", "A key the chain does not justify: add_approver signed by the new key itself (what a compromised server would forge).",
@@ -280,11 +283,13 @@ function approvalVectors(): object {
   const single = genesis(null, { key: K.root });
   const closedLog = basic().add("add_approver", { approver: C.web }, { key: K.ios }, T0 + H).add("close", {}, { key: K.service }, T0 + 90 * 60);
   const logOf = (l: Log) => ({ did: l.did, log: l.lines, first_seen_at: l.seen });
-  const key_logs = { owner: logOf(owner), single: logOf(single), closed: logOf(closedLog) };
+  const revokedLog = basic().add("add_approver", { approver: C.web }, { key: K.ios }, T0 + H).add("revoke", { kid: K.ios.kid }, { key: K.web }, T0 + 90 * 60);
+  const key_logs = { owner: logOf(owner), single: logOf(single), closed: logOf(closedLog), revoked: logOf(revokedLog) };
   const key_states = {
-    owner: { did: owner.did, approvers: [C.ios, C.web], closed: false },
-    single: { did: single.did, approvers: [C.root], closed: false },
-    closed: { did: owner.did, approvers: [C.ios, C.web], closed: true },
+    owner: { did: owner.did, root: C.root, approvers: [C.ios, C.web], closed: false },
+    single: { did: single.did, root: C.root, approvers: [C.root], closed: false },
+    closed: { did: owner.did, root: C.root, approvers: [C.ios, C.web], closed: true },
+    revoked: { did: owner.did, root: C.root, approvers: [C.web], closed: false },
   };
   const ASS = "did:web:api.agentsecretstore.com", DEN = "did:web:moltbotden.com", ACCOUNT = `did:web:${RP}`;
   const summary = { action: "secret.read", agent: AGENT, secret: "stripe/live", scope: "read", ttl_seconds: 300 };
@@ -304,7 +309,7 @@ function approvalVectors(): object {
     const sig = form === "p256" ? { signature: b64url(rawSign(k, d, m.high)) } : assertion(k, d, m.assert);
     return { version: "approval/2.0", ...fields, device_id: m.deviceId ?? k.kid, form, ...sig };
   }
-  const ctx = (o: Partial<{ verifier_did: string; owner_did: string; request_id: string; payload_digest: string; now: number; decisions: string[]; counter: number; key_state: string }> = {}) => ({
+  const ctx = (o: Partial<{ verifier_did: string; owner_did: string; request_id: string; payload_digest: string; now: number; decisions: string[]; counter: number; key_state: string; allow_root: boolean }> = {}) => ({
     verifier_did: ASS, owner_did: owner.did, request_id: base.request_id, payload_digest: payload, now: NOW, origins: ORIGINS, key_state: "owner", ...o,
   });
   const ok = (k: Key, counter = 0) => ({ ok: true, kid: k.kid, counter });
@@ -337,7 +342,11 @@ function approvalVectors(): object {
     c("expired", "now equals expires_at.", approval(), ctx({ now: EXP }), no("expired")),
     c("expiry-too-far", "expires_at 601 seconds after now.", approval({ fields: { expires_at: NOW + 601 } }), ctx(), no("expiry_too_far")),
     c("unknown-key", "Signed by a key that is not an approver in the owner's key log.", approval({ key: K.stranger }), ctx(), no("unknown_key")),
-    c("root-not-approver", "The root passkey is not an approver once another approver exists.", approval({ key: K.root }), ctx(), no("unknown_key")),
+    c("root-not-approver", "allowRoot off (the default): the root passkey is not an approver once another approver exists.", approval({ key: K.root }), ctx(), no("unknown_key")),
+    c("root-allow-root", "allowRoot on (account-service flows such as cancelling a deletion request): the root passkey's WebAuthn approval is accepted.",
+      approval({ key: K.root }), ctx({ allow_root: true }), ok(K.root)),
+    c("revoked-approver", "A revoked approver never signs an approval, even with allowRoot on (it may only sign the key log cancel op).",
+      approval({ key: K.ios }), ctx({ key_state: "revoked", allow_root: true }), no("unknown_key")),
     c("tampered-decision", "Signed approve, presented as deny.", approval({ fields: { decision: "deny" }, signed: { decision: "approve" } }), ctx(), no("bad_signature")),
     c("form-mismatch", "A passkey key presenting a raw p256 signature.", approval({ key: K.web, form: "p256" }), ctx(), no("bad_signature")),
     c("webauthn-wrong-origin", "Origin https://evil.example.", approval({ key: K.web, assert: { origin: "https://evil.example" } }), ctx(), no("bad_webauthn")),

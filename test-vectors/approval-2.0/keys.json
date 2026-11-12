@@ -101,6 +101,16 @@
         "y": "ea2bRUQB1nSBKjwjRCCvnQm8wUO5PTxVp5uYKzABOnI"
       },
       "kid": "Docs6T6LLafUtCIRMtHzZtieHnsy6zOYuTu0x4oGbzo"
+    },
+    "service_retired": {
+      "secret": "b207bc2bfbf64b412ee6ae0c54e727a4d10f5c01dd3c5882419480fd09dae718",
+      "jwk": {
+        "kty": "EC",
+        "crv": "P-256",
+        "x": "4hrBjSYjPrg-bzQv2vABKW8Lqm3XoxGKUJGKSuMK3C8",
+        "y": "896A0UMta_FTzfMi8XvYHiyd-cwo12IFrF27NfIfFiw"
+      },
+      "kid": "GD5jmfdbaCLKJod8PGh35qbYMFbx-pB-H-dgKQqFrNI"
     }
   },
   "origins": {

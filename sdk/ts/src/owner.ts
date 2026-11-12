@@ -192,8 +192,8 @@ export function payloadDigest(summary: unknown): string {
 }
 
 export interface ApprovalOptions {
-  /** The owner's verified key log (from verifyKeyLog), or at least its did, approvers and closed flag. */
-  keyLog: Pick<KeyLogState, "did" | "approvers" | "closed">;
+  /** The owner's verified key log (from verifyKeyLog), or at least its did, root, approvers and closed flag. */
+  keyLog: Pick<KeyLogState, "did" | "root" | "approvers" | "closed">;
   /** This verifier's own DID. */
   verifierDid: string;
   /** The principal that owns the action. */
@@ -210,6 +210,8 @@ export interface ApprovalOptions {
   rpId?: string;
   /** The WebAuthn signature counter stored for this key; store the returned one. */
   counter?: number;
+  /** Also accept the log's root passkey (WebAuthn). Off by default; only account-service flows turn it on, such as cancelling a deletion request. Revoked approvers never sign approvals. */
+  allowRoot?: boolean;
 }
 
 /** Verifies an approval/2.0 object against the owner's key log. Rejects approval/1.0. */
@@ -230,7 +232,7 @@ export function verifyApproval(approval: unknown, o: ApprovalOptions): ApprovalR
     const exp = a.expires_at as number;
     if (now >= exp) fail("expired", "approval expired");
     if (exp > now + MAX_TTL) fail("expiry_too_far", "expires_at is more than 600 seconds away");
-    const cred = o.keyLog.approvers.find((c) => c.kid === a.device_id);
+    const cred = o.keyLog.approvers.find((c) => c.kid === a.device_id) ?? (o.allowRoot && o.keyLog.root?.kid === a.device_id ? o.keyLog.root : undefined);
     if (!cred) fail("unknown_key", "device_id is not a current approver in the owner's key log");
     const rpId = o.rpId ?? RP_ID;
     const counter = checkSignature(cred!, a as unknown as Signed, approvalDigest(a as never), { origins: o.origins ?? [`https://${rpId}`], rpId, lowS: false });
@@ -321,7 +323,7 @@ function parseEntry(line: unknown, rpId: string, first: boolean): Entry {
 export interface KeyLogOptions {
   /** Unix seconds; defaults to the clock. Pending operations whose 24 hours have run by `now` take effect. */
   now?: number;
-  /** The account service's P-256 public JWKs, which sign `close`. */
+  /** The account service's close keys, which sign `close`: every P-256 assertionMethod key in did:web:account.openentity.org's did.json, current and retired. Never the token keys in jwks.json. */
   serviceKeys?: { kty: "EC"; crv: "P-256"; x: string; y: string }[];
   /** Accepted WebAuthn origins; default `https://<rpId>`. Add the Android app's `android:apk-key-hash:` origin. */
   origins?: string[];

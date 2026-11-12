@@ -28,6 +28,12 @@
       "crv": "P-256",
       "x": "zO9-ALge0GLr-7Z7jzMUvnNczTs2GN4XusWIeLb3FQE",
       "y": "ea2bRUQB1nSBKjwjRCCvnQm8wUO5PTxVp5uYKzABOnI"
+    },
+    {
+      "kty": "EC",
+      "crv": "P-256",
+      "x": "4hrBjSYjPrg-bzQv2vABKW8Lqm3XoxGKUJGKSuMK3C8",
+      "y": "896A0UMta_FTzfMi8XvYHiyd-cwo12IFrF27NfIfFiw"
     }
   ],
   "expect": {
