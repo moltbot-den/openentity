@@ -57,19 +57,35 @@ export function httpSigBase(method: string, url: string, components: string[], d
 const fail = (code: string): never => { throw new HttpSigError(code); };
 const lower = (headers: Record<string, string>) => Object.fromEntries(Object.entries(headers).map(([k, v]) => [k.toLowerCase(), v]));
 
-/** The sig1 members of Signature-Input and Signature: the raw parameters, the covered components, the parameters, the signature. */
+/**
+ * The sig1 members of Signature-Input and Signature: the raw parameters, the covered components, the parameters, the signature.
+ * Exactly one sig1 member in each header and no repeated parameter: parsers resolve a duplicate differently.
+ */
 function sig1(h: Record<string, string>) {
-  const m = /(?:^|,)\s*sig1=(\(([^)]*)\)((?:;[a-z]+=(?:\d+|"[^"]*"))*))/.exec(h["signature-input"] ?? "");
-  const s = /(?:^|,)\s*sig1=:([A-Za-z0-9+/]+={0,2}):/.exec(h["signature"] ?? "");
+  const input = h["signature-input"] ?? "", signature = h["signature"] ?? "";
+  const members = (v: string) => (v.match(/(?:^|,)\s*sig1=/g) ?? []).length;
+  if (members(input) !== 1 || members(signature) !== 1) fail("missing_headers");
+  const m = /(?:^|,)\s*sig1=(\(([^)]*)\)((?:;[a-z]+=(?:\d+|"[^"]*"))*))/.exec(input);
+  const s = /(?:^|,)\s*sig1=:([A-Za-z0-9+/]+={0,2}):/.exec(signature);
   if (!m || !s) return fail("missing_headers");
   const p: Record<string, string | number> = {};
-  for (const [, k, v] of m[3].matchAll(/;([a-z]+)=(\d+|"[^"]*")/g)) p[k] = v.startsWith('"') ? v.slice(1, -1) : Number(v);
+  for (const [, k, v] of m[3].matchAll(/;([a-z]+)=(\d+|"[^"]*")/g)) {
+    if (Object.hasOwn(p, k)) fail("missing_headers");
+    p[k] = v.startsWith('"') ? v.slice(1, -1) : Number(v);
+  }
   if (p.alg !== "ed25519") fail("unknown_alg");
   return { params: m[1], comps: [...m[2].matchAll(/"([^"]*)"/g)].map((x) => x[1]), p, sig: s[1], keyid: String(p.keyid ?? "") };
 }
 
 /** A `did:web:<host>#<key>` keyid whose DID is allowed, so a message never makes the verifier fetch a URL of the sender's choosing. */
 const allowedDidWeb = (keyid: string, allow: unknown) => /^did:web:[^#]+#[^#]+$/.test(keyid) && Array.isArray(allow) && allow.includes(keyid.split("#")[0]);
+
+/** Refuses a signer outside `expectDid` (one DID or a list) before any key is read; returns the did:web DIDs that may be resolved. */
+function pinned(did: string, expectDid: string | string[] | undefined, allowDidWeb: unknown): string[] {
+  const pin = expectDid === undefined ? undefined : typeof expectDid === "string" ? [expectDid] : [...expectDid];
+  if (pin && !pin.includes(did)) fail("unexpected_signer");
+  return [...(Array.isArray(allowDidWeb) ? allowDidWeb : []), ...(pin ?? [])];
+}
 
 const verifies = (sig: string, base: Uint8Array, pub: Uint8Array) => {
   try { return ed25519.verify(unb64(sig), base, pub); } catch { return false; } // malformed signature
@@ -98,21 +114,26 @@ export async function signRequest(o: {
 
 /**
  * Verify a request signed by signRequest. Throws HttpSigError with `.code`. Nonce replay tracking is the caller's job.
- * A did:key keyid verifies offline. A `did:web:<host>#<key>` keyid verifies only when its DID is in `allowDidWeb`: the key is an
- * Ed25519 method listed under `authentication` in the DID's did.json, cached for ten minutes and refetched when it names an unknown key.
+ * `expectDid` (one DID or a list) pins the signer: any other keyid, a did:key included, fails with `unexpected_signer` before any key
+ * is read. Pass it whenever only known services may call. `allowDidWeb` alone is not a pin: it only lets those did:web DIDs be
+ * resolved, and any did:key signer still verifies.
+ * A did:key keyid verifies offline. A `did:web:<host>#<key>` keyid verifies only when its DID is in `expectDid` or `allowDidWeb`: the
+ * key is an Ed25519 method listed under `authentication` in the DID's did.json, cached for ten minutes and refetched when it names an
+ * unknown key.
  */
 export async function verifyRequest(o: {
   method: string; url: string; headers: Record<string, string>; body?: Uint8Array; now?: number; maxAge?: number;
-  allowDidWeb?: string[]; fetchJson?: (url: string) => Promise<unknown>;
+  expectDid?: string | string[]; allowDidWeb?: string[]; fetchJson?: (url: string) => Promise<unknown>;
 }): Promise<{ did: string; keyid: string; created: number; expires: number; nonce: string }> {
   const h = lower(o.headers);
   const maxAge = o.maxAge ?? 300;
   const body = o.body ?? new Uint8Array();
   const { params, comps, p, sig, keyid } = sig1(h);
   const did = keyid.split("#")[0];
+  const resolvable = pinned(did, o.expectDid, o.allowDidWeb);
   let pub: Uint8Array | undefined;
   if (keyid.startsWith("did:web:")) {
-    if (!allowedDidWeb(keyid, o.allowDidWeb)) fail("bad_keyid");
+    if (!allowedDidWeb(keyid, resolvable)) fail("bad_keyid");
   } else {
     try {
       pub = publicKeyFromDidKey(keyid);
@@ -143,15 +164,16 @@ export async function verifyRequest(o: {
 /**
  * Verify a response signed by a did:web service, such as the OpenEntity Account's signed paused list. Throws HttpSigError with `.code`.
  * The signature covers `"@status"` and `"content-digest"`, lives at most `maxAge` seconds (one minute by default), and its keyid is a
- * `did:web:<host>#<key>` of a DID in `allowDidWeb`, resolved as verifyRequest resolves one.
+ * `did:web:<host>#<key>` of a DID in `expectDid` (the signer pin, which refuses any other signer with `unexpected_signer`) or
+ * `allowDidWeb`, resolved as verifyRequest resolves one.
  */
 export async function verifyResponse(o: {
   status: number; headers: Record<string, string>; body: Uint8Array; now?: number; maxAge?: number;
-  allowDidWeb: string[]; fetchJson?: (url: string) => Promise<unknown>;
+  expectDid?: string | string[]; allowDidWeb?: string[]; fetchJson?: (url: string) => Promise<unknown>;
 }): Promise<{ did: string; keyid: string; created: number; expires: number }> {
   const h = lower(o.headers);
   const { params, comps, p, sig, keyid } = sig1(h);
-  if (!allowedDidWeb(keyid, o.allowDidWeb)) fail("bad_keyid");
+  if (!allowedDidWeb(keyid, pinned(keyid.split("#")[0], o.expectDid, o.allowDidWeb))) fail("bad_keyid");
   if (typeof p.created !== "number" || typeof p.expires !== "number") fail("missing_headers");
   const created = p.created as number, expires = p.expires as number;
   if (comps.length !== 2 || comps[0] !== "@status" || comps[1] !== "content-digest") fail("missing_headers");

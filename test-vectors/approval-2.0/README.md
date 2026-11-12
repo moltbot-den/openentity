@@ -22,7 +22,7 @@ digest = SHA-256( UTF-8( "approval/2.0" "|" verifier_did "|" owner_did "|" reque
 | `decision` | `approve` or `deny` |
 | `expires_at` | Unix seconds as decimal ASCII: no sign, no leading zeros. In JSON, an integer |
 
-**Payload summaries** hold strings, booleans, null, arrays, objects and integers between -(2^53 - 1) and 2^53 - 1. Send amounts in minor units or as strings. Every SDK refuses a fractional number or a larger integer, so the verifier and the app always hash the same bytes. For such summaries JCS equals ADR 0004's "keys sorted, no whitespace, non-ASCII as UTF-8", except that JCS sorts keys by UTF-16 code units (`payloads[2]` shows the one difference from Python's `sort_keys`).
+**Payload summaries** nest at most 64 containers deep and hold strings, booleans, null, arrays, objects and integers between -(2^53 - 1) and 2^53 - 1. Send amounts in minor units or as strings. Every SDK refuses a fractional number or a larger integer, so the verifier and the app always hash the same bytes. For such summaries JCS equals ADR 0004's "keys sorted, no whitespace, non-ASCII as UTF-8", except that JCS sorts keys by UTF-16 code units (`payloads[2]` shows the one difference from Python's `sort_keys`).
 
 ## Approval object
 
@@ -65,7 +65,7 @@ The first failing check names the error:
 9. `expired` (now >= expires_at), then `expiry_too_far` (expires_at > now + 600).
 10. `unknown_key`: `device_id` is not a current approver in the owner's key log. The root passkey is an approver only in a single-credential log, or when the verifier opts in with `allowRoot` (`allow_root` in Python). Only account-service flows turn that on, the first being the cancellation of a deletion request. Revoked approvers never sign approvals; they sign only the key log `cancel` op.
 11. `bad_signature`: the form does not match the key type (a passkey cannot present `p256`).
-12. `bad_webauthn` (webauthn only): clientDataJSON is not JSON, its `type` is not `webauthn.get`, the challenge is not base64url(digest), the origin is not accepted, `crossOrigin` is true, rpIdHash is not SHA-256(`account.openentity.org`), or the user present (0x01) and user verified (0x04) flags are not both set.
+12. `bad_webauthn` (webauthn only): clientDataJSON is not JSON (NaN and Infinity are not JSON), nests deeper than 64 containers or has a lone surrogate, its `type` is not `webauthn.get`, the challenge is not base64url(digest), the origin is not accepted, `crossOrigin` is true, rpIdHash is not SHA-256(`account.openentity.org`), or the user present (0x01) and user verified (0x04) flags are not both set.
 13. `bad_signature`: the signature does not verify (for webauthn, also a DER encoding that is not strict).
 14. `counter_replayed` (webauthn only): the stored and presented signature counters are not both zero and the presented one is not greater (WebAuthn section 7.2). Store the returned counter.
 

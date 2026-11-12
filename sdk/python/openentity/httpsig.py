@@ -91,6 +91,14 @@ def _allowed_did_web(keyid: str, allow) -> bool:
     return bool(re.fullmatch(r"did:web:[^#]+#[^#]+", keyid)) and keyid.split("#")[0] in tuple(allow or ())
 
 
+def _pinned(did: str, expect_did, allow_did_web) -> tuple:
+    """Refuse a signer outside `expect_did` (one DID or several) before any key is read; return the did:web DIDs that may be resolved."""
+    pin = None if expect_did is None else (expect_did,) if isinstance(expect_did, str) else tuple(expect_did)
+    if pin is not None and did not in pin:
+        raise HttpSigError("unexpected_signer")
+    return tuple(allow_did_web or ()) + (pin or ())
+
+
 def _did_web_public(keyid: str, fetch) -> bytes:
     try:
         public = _did_web_key(keyid, fetch or _did_json)
@@ -102,12 +110,19 @@ def _did_web_public(keyid: str, fetch) -> bytes:
 
 
 def _sig1(h: Mapping[str, str]) -> tuple[str, list[str], dict, str]:
-    """The sig1 members of Signature-Input and Signature: the raw parameters, the covered components, the parameters, the signature."""
-    m = re.search(r"(?:^|,)\s*sig1=(\(([^)]*)\)((?:;[a-z]+=(?:\d+|\"[^\"]*\"))*))", h.get("signature-input", ""))
-    s = re.search(r"(?:^|,)\s*sig1=:([A-Za-z0-9+/]+={0,2}):", h.get("signature", ""))
+    """The sig1 members of Signature-Input and Signature: the raw parameters, the covered components, the parameters, the signature.
+    Exactly one sig1 member in each header and no repeated parameter: parsers resolve a duplicate differently."""
+    si, sg = h.get("signature-input", ""), h.get("signature", "")
+    if len(re.findall(r"(?:^|,)\s*sig1=", si)) != 1 or len(re.findall(r"(?:^|,)\s*sig1=", sg)) != 1:
+        raise HttpSigError("missing_headers")
+    m = re.search(r"(?:^|,)\s*sig1=(\(([^)]*)\)((?:;[a-z]+=(?:\d+|\"[^\"]*\"))*))", si)
+    s = re.search(r"(?:^|,)\s*sig1=:([A-Za-z0-9+/]+={0,2}):", sg)
     if not m or not s:
         raise HttpSigError("missing_headers")
-    p = {k: (v[1:-1] if v.startswith('"') else int(v)) for k, v in re.findall(r";([a-z]+)=(\d+|\"[^\"]*\")", m.group(3))}
+    pairs = re.findall(r";([a-z]+)=(\d+|\"[^\"]*\")", m.group(3))
+    if len({k for k, _ in pairs}) != len(pairs):
+        raise HttpSigError("missing_headers")
+    p = {k: (v[1:-1] if v.startswith('"') else int(v)) for k, v in pairs}
     if p.get("alg") != "ed25519":
         raise HttpSigError("unknown_alg")
     return m.group(1), re.findall(r'"([^"]*)"', m.group(2)), p, s.group(1)
@@ -164,18 +179,24 @@ def sign_request(method: str, url: str, body: bytes, private_key, did: str, *, c
 
 
 def verify_request(method: str, url: str, headers: Mapping[str, str], body: bytes, *, now: int | None = None,
-                   max_age: int = 300, allow_did_web=(), fetch=None) -> dict:
+                   max_age: int = 300, allow_did_web=(), expect_did=None, fetch=None) -> dict:
     """Verify a request signed by sign_request. Raises HttpSigError with `.code`. Nonce replay tracking is the caller's job.
 
-    A did:key keyid verifies offline. A did:web:<host>#<key> keyid verifies only when its DID is in `allow_did_web`: the key is
-    an Ed25519 method listed under `authentication` in the DID's did.json, cached for ten minutes and refetched when it names an
-    unknown key. `fetch(url)` returns the parsed document; the default is HTTPS with a short timeout and no redirects."""
+    `expect_did` (one DID or several) pins the signer: any other keyid, a did:key included, fails with `unexpected_signer`
+    before any key is read. Pass it whenever only known services may call. `allow_did_web` alone is not a pin: it only lets
+    those did:web DIDs be resolved, and any did:key signer still verifies.
+
+    A did:key keyid verifies offline. A did:web:<host>#<key> keyid verifies only when its DID is in `expect_did` or
+    `allow_did_web`: the key is an Ed25519 method listed under `authentication` in the DID's did.json, cached for ten minutes
+    and refetched when it names an unknown key. `fetch(url)` returns the parsed document; the default is HTTPS with a short
+    timeout and no redirects."""
     h = {k.lower(): v for k, v in headers.items()}
     params, comps, p, sig = _sig1(h)
     keyid = str(p.get("keyid", ""))
     did, public = keyid.split("#")[0], None
+    resolvable = _pinned(did, expect_did, allow_did_web)
     if keyid.startswith("did:web:"):
-        if not _allowed_did_web(keyid, allow_did_web):
+        if not _allowed_did_web(keyid, resolvable):
             raise HttpSigError("bad_keyid")
     else:
         try:
@@ -212,16 +233,17 @@ def verify_request(method: str, url: str, headers: Mapping[str, str], body: byte
 
 
 def verify_response(status: int, headers: Mapping[str, str], body: bytes, *, now: int | None = None, max_age: int = 60,
-                    allow_did_web=(), fetch=None) -> dict:
+                    allow_did_web=(), expect_did=None, fetch=None) -> dict:
     """Verify a response signed by a did:web service, such as the OpenEntity Account's signed paused list. Raises HttpSigError
     with `.code`.
 
     The signature covers `"@status"` and `"content-digest"`, lives at most `max_age` seconds (one minute by default), and its
-    keyid is a did:web:<host>#<key> of a DID in `allow_did_web`, resolved as `verify_request` resolves one."""
+    keyid is a did:web:<host>#<key> of a DID in `expect_did` (the signer pin, which also refuses any other signer with
+    `unexpected_signer`) or `allow_did_web`, resolved as `verify_request` resolves one."""
     h = {k.lower(): v for k, v in headers.items()}
     params, comps, p, sig = _sig1(h)
     keyid = str(p.get("keyid", ""))
-    if not _allowed_did_web(keyid, allow_did_web):
+    if not _allowed_did_web(keyid, _pinned(keyid.split("#")[0], expect_did, allow_did_web)):
         raise HttpSigError("bad_keyid")
     if not (isinstance(p.get("created"), int) and isinstance(p.get("expires"), int)):
         raise HttpSigError("missing_headers")

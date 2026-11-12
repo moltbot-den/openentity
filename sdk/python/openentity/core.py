@@ -103,13 +103,20 @@ def _num(x) -> str:
 
 
 def parse_json(text: str):
-    """Spec 4.3: JSON with no duplicate keys (json.loads keeps the last one silently)."""
+    """Spec 4.3: JSON with no duplicate keys (json.loads keeps the last one silently). NaN and Infinity are not JSON, and input
+    nested too deeply for the parser is refused: every failure is an InvalidInputError, never another exception."""
     def pairs(items):
         keys = [k for k, _ in items]
         if len(keys) != len(set(keys)):
             raise InvalidInputError(f"duplicate key {next(k for k in keys if keys.count(k) > 1)!r}")
         return dict(items)
-    return json.loads(text, object_pairs_hook=pairs)
+
+    def constant(name):
+        raise InvalidInputError(f"{name} is not JSON")
+    try:
+        return json.loads(text, object_pairs_hook=pairs, parse_constant=constant)
+    except RecursionError:
+        raise InvalidInputError("JSON nested too deeply") from None
 
 
 def bad_number(v):

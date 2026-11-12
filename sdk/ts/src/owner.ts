@@ -76,12 +76,15 @@ function base32(b: Uint8Array): string {
   return bits ? out + A[(value << (5 - bits)) & 31] : out;
 }
 
-/** Only safe integers (unless `ints` is false) and well-formed strings, so all four SDKs read an entry, a summary or client data the same way. */
-function plainJson(v: unknown, ints = true): string | null {
+const MAX_DEPTH = 64; // containers on one path, in an entry, a payload summary or clientDataJSON (all four SDKs)
+
+/** Only safe integers (unless `ints` is false), well-formed strings and at most 64 nested containers, so all four SDKs read an entry, a summary or client data the same way. */
+function plainJson(v: unknown, ints = true, depth = 0): string | null {
   if (typeof v === "number") return !ints || Number.isSafeInteger(v) ? null : `number ${v} is not an integer within 2^53`;
   if (typeof v === "string") return /[\uD800-\uDFFF]/u.test(v) ? "string has a lone surrogate" : null;
-  if (Array.isArray(v)) for (const x of v) { const e = plainJson(x, ints); if (e) return e; }
-  else if (isObj(v)) for (const [k, x] of Object.entries(v)) { const e = plainJson(k, ints) ?? plainJson(x, ints); if (e) return e; }
+  if ((Array.isArray(v) || isObj(v)) && depth >= MAX_DEPTH) return `nested deeper than ${MAX_DEPTH} levels`;
+  if (Array.isArray(v)) for (const x of v) { const e = plainJson(x, ints, depth + 1); if (e) return e; }
+  else if (isObj(v)) for (const [k, x] of Object.entries(v)) { const e = plainJson(k, ints) ?? plainJson(x, ints, depth + 1); if (e) return e; }
   return null;
 }
 
@@ -146,7 +149,8 @@ function checkSignature(cred: Credential, s: Signed, digest: Uint8Array, o: SigO
   } catch {
     fail("bad_webauthn", "clientDataJSON is not JSON");
   }
-  if (plainJson(client, false)) fail("bad_webauthn", "clientDataJSON has a lone surrogate");
+  const odd = plainJson(client, false);
+  if (odd) fail("bad_webauthn", `clientDataJSON: ${odd}`);
   if (!isObj(client) || client.type !== "webauthn.get") fail("bad_webauthn", "clientDataJSON type must be webauthn.get");
   const c = client as Obj;
   if (c.challenge !== b64url(digest)) fail("bad_webauthn", "challenge is not the digest");

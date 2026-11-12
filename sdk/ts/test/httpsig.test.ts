@@ -87,6 +87,40 @@ describe("signed responses", () => {
   });
 });
 
+describe("signer pin (expectDid)", () => {
+  const E = VEC.expect_did, enc2 = (c: any) => enc.encode(c.body);
+  // A fetch that answers only the vector's document and counts calls: a refused signer must never cause one.
+  const fetches: string[] = [];
+  const fetchJson = async (url: string) => (fetches.push(url), url === E.url ? E.document : null);
+  const request = (c: any) => oe.verifyRequest({ method: c.method, url: c.url, headers: c.headers, body: enc2(c), now: E.now, expectDid: c.expect_did, fetchJson });
+  const response = (c: any) => oe.verifyResponse({ status: c.status, headers: c.headers, body: enc2(c), now: E.now, expectDid: c.expect_did, fetchJson });
+  it.each(E.requests.valid as { name: string }[])("request $name verifies to its pinned DID", async (c: any) => {
+    didWebKeys.clear();
+    expect((await request(c)).did).toBe(c.did);
+  });
+  it.each(E.requests.invalid as { name: string; code: string }[])("request $name is refused with $code and no fetch", async (c: any) => {
+    didWebKeys.clear();
+    fetches.length = 0;
+    expect((await request(c).catch((x) => x)).code).toBe(c.code);
+    expect(fetches).toEqual([]);
+  });
+  it.each(E.responses.valid as { name: string }[])("response $name verifies to its pinned DID", async (c: any) => {
+    didWebKeys.clear();
+    expect((await response(c)).did).toBe(c.did);
+  });
+  it.each(E.responses.invalid as { name: string; code: string }[])("response $name is refused with $code and no fetch", async (c: any) => {
+    didWebKeys.clear();
+    fetches.length = 0;
+    expect((await response(c).catch((x) => x)).code).toBe(c.code);
+    expect(fetches).toEqual([]);
+  });
+  it("allowDidWeb alone is not a pin: a did:key signer still verifies under it (why expectDid exists)", async () => {
+    const c = E.requests.invalid.find((x: any) => x.name === "did-key-under-did-web-pin");
+    const v = await oe.verifyRequest({ method: c.method, url: c.url, headers: c.headers, body: enc2(c), now: E.now, allowDidWeb: c.expect_did, fetchJson });
+    expect(v.did.startsWith("did:key:")).toBe(true);
+  });
+});
+
 describe("http message signatures", () => {
   it.each(VEC.valid as { name: string }[])("vector $name signs byte-identically and verifies", async (c: any) => {
     const h = await oe.signRequest({ method: c.method, url: c.url, body: enc.encode(c.body), privateKey: SEED, did: VEC.did, created: c.created, expiresIn: c.expires_in, nonce: c.nonce });

@@ -1,0 +1,36 @@
+{
+  "description": "An entry nested 65 containers deep is malformed in every SDK. Keys: keys.json (published throwaway seeds).",
+  "did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+  "log": [
+    "{\"auth\":{\"form\":\"p256\",\"kid\":\"tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU\",\"signature\":\"NjJzPZDhyVfeHZ-zqDEm_5AU2gMATujXqwSghEvuYtsKU8iKLZ4yjFh0MyuvnoKkZ813cZFIKMXVKia1tTBFog\"},\"body\":{\"approver\":{\"attestation\":{\"type\":\"app_attest\",\"verified\":true},\"jwk\":{\"crv\":\"P-256\",\"kty\":\"EC\",\"x\":\"I6qtUJaZ7ADAygJp9kdxRIoqiM5X1v5JwGbWyExwjcM\",\"y\":\"E8oX2arXfaoxhwmFzu7rBWSUGZ0ZjVaw4VHuCWUzfSM\"},\"key_storage\":\"secure_enclave\",\"kid\":\"tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU\",\"label\":\"iPhone\",\"platform\":\"ios\",\"type\":\"p256\"},\"root\":{\"aaguid\":\"fbfc3007-154e-4ecc-8c0b-6e020557d7bd\",\"credential_id\":\"oyqZss9O8IhOEQPTLVCN0g\",\"jwk\":{\"crv\":\"P-256\",\"kty\":\"EC\",\"x\":\"9AOyameX8cAM87PhFX4TMKaZ3_Roj8ilnpR_d2ATKo0\",\"y\":\"wNLijrbZEO2MVCH-Km94ZiosJyVwpc7oTgeNYYX68Ng\"},\"kid\":\"07PAo82hd2JrvWLKn1nsgQpzIWE27VR0vNUbngCBKjE\",\"label\":\"Passkey\",\"platform\":\"ios\",\"rp_id\":\"account.openentity.org\",\"type\":\"webauthn\"}},\"op\":\"genesis\",\"prev\":null,\"seq\":1,\"ts\":1794009598,\"v\":1}",
+    "{\"auth\":{\"form\":\"p256\",\"kid\":\"tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU\",\"signature\":\"0njQbLNhTHHjEnAirvBLNXf37KFr79_LO1r8GG4BMuV8wgJlQ7fkkM0OxUsJUcXxTi4dZqmn6P58cLeYky6HUg\"},\"body\":{\"approver\":{\"attestation\":{\"type\":\"android_key\",\"verified\":true},\"extra\":[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]],\"integrity\":{\"device\":true,\"strong\":true},\"jwk\":{\"crv\":\"P-256\",\"kty\":\"EC\",\"x\":\"uePHpNhxP8SoU7vZPW5dRpscqOMgV3CbUoktm301jcI\",\"y\":\"b3fu-JI3EzZ8zMRdIEJTsndg8nWbfWdibzZNBTrpgRo\"},\"key_storage\":\"strongbox\",\"kid\":\"qksxx4pp3xaJwtii_IjmacMw6V_UouAqRrlwQeZXAVo\",\"label\":\"Pixel\",\"platform\":\"android\",\"type\":\"p256\"}},\"op\":\"add_approver\",\"prev\":\"71949eb3b6cfd378c7899920bbc5d96adcae3c005c18f7a2a68e8110227e4ef5\",\"seq\":2,\"ts\":1794013198,\"v\":1}"
+  ],
+  "first_seen_at": [
+    1794009600,
+    1794013200
+  ],
+  "now": 1794016800,
+  "origins": [
+    "https://account.openentity.org",
+    "android:apk-key-hash:AXVh6-zFGB0QxD0cPn3sYa1YZcCsl0Kl3sbQg35wBSw"
+  ],
+  "service_keys": [
+    {
+      "kty": "EC",
+      "crv": "P-256",
+      "x": "zO9-ALge0GLr-7Z7jzMUvnNczTs2GN4XusWIeLb3FQE",
+      "y": "ea2bRUQB1nSBKjwjRCCvnQm8wUO5PTxVp5uYKzABOnI"
+    },
+    {
+      "kty": "EC",
+      "crv": "P-256",
+      "x": "4hrBjSYjPrg-bzQv2vABKW8Lqm3XoxGKUJGKSuMK3C8",
+      "y": "896A0UMta_FTzfMi8XvYHiyd-cwo12IFrF27NfIfFiw"
+    }
+  ],
+  "expect": {
+    "ok": false,
+    "error": "malformed",
+    "seq": 2
+  }
+}

@@ -102,12 +102,17 @@ private fun base32(b: ByteArray): String {
 private fun safeInteger(d: Double) = d.isFinite() && d == Math.floor(d) && Math.abs(d) <= MAX_SAFE.toDouble()
 private fun uint(v: JsonValue?): Long? = (v as? JsonValue.Num)?.value?.takeIf { safeInteger(it) && it >= 0.0 }?.toLong()
 
-/** Only safe integers and well-formed strings, so every SDK reads an entry or a summary the same way. */
-private fun plainJson(v: JsonValue): String? = when (v) {
-    is JsonValue.Num -> if (safeInteger(v.value)) null else "number ${v.value} is not an integer within 2^53"
+/** Containers on one path, in an entry, a payload summary or clientDataJSON: the same limit in all four SDKs. */
+private const val OWNER_MAX_DEPTH = 64
+
+/** Only safe integers (unless [ints] is false), well-formed strings and at most 64 nested containers, so every SDK reads an entry, a summary or client data the same way. */
+private fun plainJson(v: JsonValue, ints: Boolean = true, depth: Int = 0): String? = when (v) {
+    is JsonValue.Num -> if (!ints || safeInteger(v.value)) null else "number ${v.value} is not an integer within 2^53"
     is JsonValue.Str -> if (hasLoneSurrogate(v.value)) "string has a lone surrogate" else null
-    is JsonValue.Arr -> v.items.firstNotNullOfOrNull { plainJson(it) }
-    is JsonValue.Obj -> v.fields.entries.firstNotNullOfOrNull { (k, x) -> (if (hasLoneSurrogate(k)) "key has a lone surrogate" else null) ?: plainJson(x) }
+    is JsonValue.Arr -> if (depth >= OWNER_MAX_DEPTH) "nested deeper than $OWNER_MAX_DEPTH levels"
+        else v.items.firstNotNullOfOrNull { plainJson(it, ints, depth + 1) }
+    is JsonValue.Obj -> if (depth >= OWNER_MAX_DEPTH) "nested deeper than $OWNER_MAX_DEPTH levels"
+        else v.fields.entries.firstNotNullOfOrNull { (k, x) -> (if (hasLoneSurrogate(k)) "key has a lone surrogate" else null) ?: plainJson(x, ints, depth + 1) }
     else -> null
 }
 
@@ -195,6 +200,7 @@ private fun checkSignature(cred: Credential, s: JsonValue.Obj, signed: ByteArray
     } catch (e: IllegalArgumentException) {
         fail("bad_webauthn", "clientDataJSON is not JSON")
     }
+    plainJson(client, ints = false)?.let { fail("bad_webauthn", "clientDataJSON: $it") }
     if (client["type"].str() != "webauthn.get") fail("bad_webauthn", "clientDataJSON type must be webauthn.get")
     if (client["challenge"].str() != b64url(sha256(signed))) fail("bad_webauthn", "challenge is not the digest")
     if (client["origin"].str().let { it == null || it !in origins }) fail("bad_webauthn", "origin is not accepted")

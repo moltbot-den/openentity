@@ -79,6 +79,137 @@
       },
       "canonical": "{\"agent\":\"Zo\u00eb\",\"lines\":\"one\\ntwo\\t\\\"quoted\\\" \\\\ back\",\"note\":\"Caf\u00e9 \u2615 f\u00fcr J\u00fcrgen \ud83d\ude80\"}",
       "digest": "f5d49ce11e3c65c1f09254db1db6aef007f33e2fba35000ad468a67df0604103"
+    },
+    {
+      "summary": {
+        "n": [
+          [
+            [
+              [
+                [
+                  [
+                    [
+                      [
+                        [
+                          [
+                            [
+                              [
+                                [
+                                  [
+                                    [
+                                      [
+                                        [
+                                          [
+                                            [
+                                              [
+                                                [
+                                                  [
+                                                    [
+                                                      [
+                                                        [
+                                                          [
+                                                            [
+                                                              [
+                                                                [
+                                                                  [
+                                                                    [
+                                                                      [
+                                                                        [
+                                                                          [
+                                                                            [
+                                                                              [
+                                                                                [
+                                                                                  [
+                                                                                    [
+                                                                                      [
+                                                                                        [
+                                                                                          [
+                                                                                            [
+                                                                                              [
+                                                                                                [
+                                                                                                  [
+                                                                                                    [
+                                                                                                      [
+                                                                                                        [
+                                                                                                          [
+                                                                                                            [
+                                                                                                              [
+                                                                                                                [
+                                                                                                                  [
+                                                                                                                    [
+                                                                                                                      [
+                                                                                                                        [
+                                                                                                                          [
+                                                                                                                            [
+                                                                                                                              [
+                                                                                                                                [
+                                                                                                                                  [
+                                                                                                                                    []
+                                                                                                                                  ]
+                                                                                                                                ]
+                                                                                                                              ]
+                                                                                                                            ]
+                                                                                                                          ]
+                                                                                                                        ]
+                                                                                                                      ]
+                                                                                                                    ]
+                                                                                                                  ]
+                                                                                                                ]
+                                                                                                              ]
+                                                                                                            ]
+                                                                                                          ]
+                                                                                                        ]
+                                                                                                      ]
+                                                                                                    ]
+                                                                                                  ]
+                                                                                                ]
+                                                                                              ]
+                                                                                            ]
+                                                                                          ]
+                                                                                        ]
+                                                                                      ]
+                                                                                    ]
+                                                                                  ]
+                                                                                ]
+                                                                              ]
+                                                                            ]
+                                                                          ]
+                                                                        ]
+                                                                      ]
+                                                                    ]
+                                                                  ]
+                                                                ]
+                                                              ]
+                                                            ]
+                                                          ]
+                                                        ]
+                                                      ]
+                                                    ]
+                                                  ]
+                                                ]
+                                              ]
+                                            ]
+                                          ]
+                                        ]
+                                      ]
+                                    ]
+                                  ]
+                                ]
+                              ]
+                            ]
+                          ]
+                        ]
+                      ]
+                    ]
+                  ]
+                ]
+              ]
+            ]
+          ]
+        ]
+      },
+      "canonical": "{\"n\":[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]}",
+      "digest": "e8811acaf9acb73754a848b43a4136b6e028af5091d83c1a40946f4c1912ee40"
     }
   ],
   "payloads_invalid": [
@@ -93,6 +224,138 @@
         "amount": 9007199254740992
       },
       "reason": "integers must be within 2^53 - 1"
+    },
+    {
+      "summary": {
+        "n": [
+          [
+            [
+              [
+                [
+                  [
+                    [
+                      [
+                        [
+                          [
+                            [
+                              [
+                                [
+                                  [
+                                    [
+                                      [
+                                        [
+                                          [
+                                            [
+                                              [
+                                                [
+                                                  [
+                                                    [
+                                                      [
+                                                        [
+                                                          [
+                                                            [
+                                                              [
+                                                                [
+                                                                  [
+                                                                    [
+                                                                      [
+                                                                        [
+                                                                          [
+                                                                            [
+                                                                              [
+                                                                                [
+                                                                                  [
+                                                                                    [
+                                                                                      [
+                                                                                        [
+                                                                                          [
+                                                                                            [
+                                                                                              [
+                                                                                                [
+                                                                                                  [
+                                                                                                    [
+                                                                                                      [
+                                                                                                        [
+                                                                                                          [
+                                                                                                            [
+                                                                                                              [
+                                                                                                                [
+                                                                                                                  [
+                                                                                                                    [
+                                                                                                                      [
+                                                                                                                        [
+                                                                                                                          [
+                                                                                                                            [
+                                                                                                                              [
+                                                                                                                                [
+                                                                                                                                  [
+                                                                                                                                    [
+                                                                                                                                      []
+                                                                                                                                    ]
+                                                                                                                                  ]
+                                                                                                                                ]
+                                                                                                                              ]
+                                                                                                                            ]
+                                                                                                                          ]
+                                                                                                                        ]
+                                                                                                                      ]
+                                                                                                                    ]
+                                                                                                                  ]
+                                                                                                                ]
+                                                                                                              ]
+                                                                                                            ]
+                                                                                                          ]
+                                                                                                        ]
+                                                                                                      ]
+                                                                                                    ]
+                                                                                                  ]
+                                                                                                ]
+                                                                                              ]
+                                                                                            ]
+                                                                                          ]
+                                                                                        ]
+                                                                                      ]
+                                                                                    ]
+                                                                                  ]
+                                                                                ]
+                                                                              ]
+                                                                            ]
+                                                                          ]
+                                                                        ]
+                                                                      ]
+                                                                    ]
+                                                                  ]
+                                                                ]
+                                                              ]
+                                                            ]
+                                                          ]
+                                                        ]
+                                                      ]
+                                                    ]
+                                                  ]
+                                                ]
+                                              ]
+                                            ]
+                                          ]
+                                        ]
+                                      ]
+                                    ]
+                                  ]
+                                ]
+                              ]
+                            ]
+                          ]
+                        ]
+                      ]
+                    ]
+                  ]
+                ]
+              ]
+            ]
+          ]
+        ]
+      },
+      "reason": "nested deeper than 64 containers"
     }
   ],
   "key_states": {
@@ -1438,6 +1701,109 @@
         "signature": "MEQCIFQ2JIJosgAeR_NIJqeBwQ7XXb21g-crNj0zB8hm9yXtAiAWuwIRvUEzU7-2V83h_NxUPVsXMwtIenFxO3AncpaZWA",
         "authenticator_data": "D3UMQg2RHUXdnWy7aJ1fAnM1wAzOoZElYIW5k5ZyV-MdAAAAAA",
         "client_data_json": "eyJvcmlnaW4iICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDoiaHR0cHM6Ly9ldmlsLmV4YW1wbGUiLCJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiS2Q3SVZLQ3pPQjFfLXpsWkRWaTJvU0Vvak1udG1OX3lCWjNGSE5GbzRjcyIsIm9yaWdpbiI6Imh0dHBzOi8vYWNjb3VudC5vcGVuZW50aXR5Lm9yZyIsImNyb3NzT3JpZ2luIjpmYWxzZX0"
+      },
+      "context": {
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "now": 1794016800,
+        "origins": [
+          "https://account.openentity.org",
+          "android:apk-key-hash:AXVh6-zFGB0QxD0cPn3sYa1YZcCsl0Kl3sbQg35wBSw"
+        ],
+        "key_state": "owner"
+      },
+      "expect": {
+        "ok": false,
+        "error": "bad_webauthn"
+      }
+    },
+    {
+      "name": "webauthn-nan",
+      "description": "clientDataJSON with a NaN literal is not JSON.",
+      "approval": {
+        "version": "approval/2.0",
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "decision": "approve",
+        "expires_at": 1794017100,
+        "device_id": "mTluyYyMSPInd1g_ENjr016z9DqqE2ZUX845TdohRVE",
+        "form": "webauthn",
+        "signature": "MEUCIQCPgotahc_7NlonCUhsYnAGFp-LD_czN6qJ_8JIVZ2FOgIgb95nku0N--ybNXr_yY_eTmpY6BTCZSVg0wf1GvGIcxk",
+        "authenticator_data": "D3UMQg2RHUXdnWy7aJ1fAnM1wAzOoZElYIW5k5ZyV-MdAAAAAA",
+        "client_data_json": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiS2Q3SVZLQ3pPQjFfLXpsWkRWaTJvU0Vvak1udG1OX3lCWjNGSE5GbzRjcyIsIm9yaWdpbiI6Imh0dHBzOi8vYWNjb3VudC5vcGVuZW50aXR5Lm9yZyIsImNyb3NzT3JpZ2luIjpmYWxzZSwibiI6TmFOfQ"
+      },
+      "context": {
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "now": 1794016800,
+        "origins": [
+          "https://account.openentity.org",
+          "android:apk-key-hash:AXVh6-zFGB0QxD0cPn3sYa1YZcCsl0Kl3sbQg35wBSw"
+        ],
+        "key_state": "owner"
+      },
+      "expect": {
+        "ok": false,
+        "error": "bad_webauthn"
+      }
+    },
+    {
+      "name": "webauthn-client-data-depth-limit",
+      "description": "clientDataJSON nested exactly 64 containers deep is accepted.",
+      "approval": {
+        "version": "approval/2.0",
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "decision": "approve",
+        "expires_at": 1794017100,
+        "device_id": "mTluyYyMSPInd1g_ENjr016z9DqqE2ZUX845TdohRVE",
+        "form": "webauthn",
+        "signature": "MEQCIEaQW6_D3AI0Xv6i0HlBhe6Oy5v9njTUkPz8th6pl3zFAiArxTTYBttSsf7a56YTrAhirRz2sFi9WpQrozu4aRgbsQ",
+        "authenticator_data": "D3UMQg2RHUXdnWy7aJ1fAnM1wAzOoZElYIW5k5ZyV-MdAAAAAA",
+        "client_data_json": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiS2Q3SVZLQ3pPQjFfLXpsWkRWaTJvU0Vvak1udG1OX3lCWjNGSE5GbzRjcyIsIm9yaWdpbiI6Imh0dHBzOi8vYWNjb3VudC5vcGVuZW50aXR5Lm9yZyIsImNyb3NzT3JpZ2luIjpmYWxzZSwibiI6W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dfQ"
+      },
+      "context": {
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "now": 1794016800,
+        "origins": [
+          "https://account.openentity.org",
+          "android:apk-key-hash:AXVh6-zFGB0QxD0cPn3sYa1YZcCsl0Kl3sbQg35wBSw"
+        ],
+        "key_state": "owner"
+      },
+      "expect": {
+        "ok": true,
+        "kid": "mTluyYyMSPInd1g_ENjr016z9DqqE2ZUX845TdohRVE",
+        "counter": 0
+      }
+    },
+    {
+      "name": "webauthn-client-data-too-deep",
+      "description": "clientDataJSON nested 65 containers deep is refused.",
+      "approval": {
+        "version": "approval/2.0",
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "decision": "approve",
+        "expires_at": 1794017100,
+        "device_id": "mTluyYyMSPInd1g_ENjr016z9DqqE2ZUX845TdohRVE",
+        "form": "webauthn",
+        "signature": "MEUCIQCmiBASJZcr8-QErCeU90Y3gSCcdD2YWWfUjVg7pU79nQIgY5fBTCvmljE6l8K-2wXdP9BiB6_n_zEV-QrhDs88Ku8",
+        "authenticator_data": "D3UMQg2RHUXdnWy7aJ1fAnM1wAzOoZElYIW5k5ZyV-MdAAAAAA",
+        "client_data_json": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiS2Q3SVZLQ3pPQjFfLXpsWkRWaTJvU0Vvak1udG1OX3lCWjNGSE5GbzRjcyIsIm9yaWdpbiI6Imh0dHBzOi8vYWNjb3VudC5vcGVuZW50aXR5Lm9yZyIsImNyb3NzT3JpZ2luIjpmYWxzZSwibiI6W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW11dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV19"
       },
       "context": {
         "verifier_did": "did:web:api.agentsecretstore.com",

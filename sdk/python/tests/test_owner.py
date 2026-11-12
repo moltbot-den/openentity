@@ -99,3 +99,40 @@ def test_pair_sas():
     for code, did in (("OE-123", "did:key:z6Mk"), ("OE-1234-5678", "not a did"), ("OE-1234-5678", "did:key:z6Mk\n")):
         with pytest.raises(openentity.InvalidInputError):
             openentity.pair_sas(code, did)
+
+
+def test_hostile_input_is_refused_never_raised():
+    """Review gate: deep JSON, NaN and truncated DER give a verifier failure (a 422), never an exception (a 500)."""
+    from openentity.owner import _der_to_raw
+    deep = "[" * 100_000 + "]" * 100_000
+    for bad in ('{"n": NaN}', '{"n": Infinity}', '[-Infinity]'):
+        with pytest.raises(openentity.InvalidInputError):
+            openentity.parse_json(bad)
+    # Whether the parser itself runs out of stack on deep JSON depends on the platform (macOS does, Linux CI does not): either way
+    # parse_json returns a value or raises InvalidInputError, never another exception, and the owner checks below refuse it.
+    try:
+        openentity.parse_json(deep)
+    except openentity.InvalidInputError:
+        pass
+    v = json.loads((VEC / "keylog-1" / "genesis-device.json").read_text())
+    r = openentity.verify_key_log(v["did"], [deep], v["first_seen_at"], now=v["now"])
+    assert (r["ok"], r["error"]) == (False, "malformed")
+    case = next(c for c in A["cases"] if c["name"] == "webauthn-web-origin")
+    x = case["context"]
+    import base64
+    for client in (deep, '{"type":"webauthn.get","n":NaN}'):
+        approval = {**case["approval"], "client_data_json": base64.urlsafe_b64encode(client.encode()).rstrip(b"=").decode()}
+        r = openentity.verify_approval(approval, key_log=A["key_states"][x["key_state"]], verifier_did=x["verifier_did"], owner_did=x["owner_did"],
+                                       request_id=x["request_id"], payload_digest=x["payload_digest"], now=x["now"], origins=x["origins"])
+        assert (r["ok"], r["error"]) == (False, "bad_webauthn")
+    summary = []
+    for _ in range(100_000):
+        summary = [summary]
+    with pytest.raises(openentity.InvalidInputError):
+        openentity.payload_digest({"n": summary})
+    good = bytes.fromhex("3006020101020101")
+    assert _der_to_raw(good) is not None
+    for n in range(len(good)):  # every truncation, and a length byte that points past the end
+        assert _der_to_raw(good[:n]) is None
+    for der in (bytes.fromhex("3006020401020304"), bytes.fromhex("30060201010204ff"), bytes.fromhex("3008020101020201ff")):
+        assert _der_to_raw(der) is None

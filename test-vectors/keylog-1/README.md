@@ -20,7 +20,7 @@ A log is JSON Lines. Each line is the RFC 8785 (JCS) form of one entry, byte for
 | `body` | Exactly the fields listed for the op below |
 | `auth` | The one signature that authorizes the entry |
 
-Every number anywhere in an entry is an integer between -(2^53 - 1) and 2^53 - 1. Strings carry no lone surrogates. JSON objects have no duplicate keys.
+Every number anywhere in an entry is an integer between -(2^53 - 1) and 2^53 - 1. Strings carry no lone surrogates. No value nests deeper than 64 containers (the entry itself is the first): `depth-limit.json` is accepted, `too-deep.json` is not. JSON objects have no duplicate keys.
 
 ### Bodies
 
@@ -104,7 +104,7 @@ Before checking entry n, a verifier applies every pending operation whose effect
 For each entry, the first failing check names the error:
 
 1. `bad_first_seen`: the first_seen_at list does not match the entries, decreases, or is after `now`.
-2. `malformed`: not JSON, duplicate key, not the JCS form, a number that is not a safe integer, a lone surrogate, missing or extra fields, wrong types, unknown `op`, genesis anywhere but first or a first entry that is not genesis, a bad credential (JWK, kid, passkey fields, a root that is not a passkey), or a bad `auth` shape.
+2. `malformed`: not JSON, duplicate key, not the JCS form, a number that is not a safe integer, a lone surrogate, nesting deeper than 64 containers, missing or extra fields, wrong types, unknown `op`, genesis anywhere but first or a first entry that is not genesis, a bad credential (JWK, kid, passkey fields, a root that is not a passkey), or a bad `auth` shape.
 3. `closed`: the log was closed by an earlier entry.
 4. `bad_seq`, then `bad_prev`.
 5. `did_mismatch` (genesis only).
