@@ -1,39 +1,11 @@
-import { createHash, generateKeyPairSync, randomBytes, sign as nodeSign } from "node:crypto";
-import { isoCBOR } from "@simplewebauthn/server/helpers";
+import { createHash } from "node:crypto";
 import { expect, test } from "vitest";
 import { authenticationOptions, registrationOptions, rpFor, verifyAuthentication, verifyRegistration } from "../src/passkey.ts";
+import { authenticator } from "./helpers.ts";
 
 const RP = rpFor("account.openentity.org");
 const sha = (b: Uint8Array | string) => new Uint8Array(createHash("sha256").update(b).digest());
 const b64u = (b: Uint8Array) => Buffer.from(b).toString("base64url");
-const u32 = (n: number) => { const b = new Uint8Array(4); new DataView(b.buffer).setUint32(0, n); return b; };
-const cat = (...p: Uint8Array[]) => { const o = new Uint8Array(p.reduce((n, x) => n + x.length, 0)); let i = 0; for (const x of p) { o.set(x, i); i += x.length; } return o; };
-
-/** A software platform authenticator: P-256, user verification, fmt "none". Fresh throwaway keys per run. */
-function authenticator(rpId = RP.id) {
-  const { privateKey, publicKey } = generateKeyPairSync("ec", { namedCurve: "P-256" });
-  const jwk = publicKey.export({ format: "jwk" });
-  const credId = new Uint8Array(randomBytes(32));
-  let counter = 0;
-  const client = (type: string, challenge: string, origin: string) => new TextEncoder().encode(JSON.stringify({ type, challenge, origin, crossOrigin: false }));
-  return {
-    jwk,
-    register(challenge: string, origin = `https://${rpId}`, flags = 0x45) {
-      const coseKey = isoCBOR.encode(new Map<number, number | Uint8Array>([[1, 2], [3, -7], [-1, 1], [-2, Buffer.from(jwk.x!, "base64url")], [-3, Buffer.from(jwk.y!, "base64url")]]));
-      const authData = cat(sha(rpId), Uint8Array.of(flags), u32(0), new Uint8Array(16), Uint8Array.of(0, credId.length), credId, coseKey);
-      const attestationObject = isoCBOR.encode(new Map<string, unknown>([["fmt", "none"], ["attStmt", new Map()], ["authData", authData]]) as never);
-      return { id: b64u(credId), rawId: b64u(credId), type: "public-key" as const, clientExtensionResults: {}, authenticatorAttachment: "platform" as const,
-        response: { clientDataJSON: b64u(client("webauthn.create", challenge, origin)), attestationObject: b64u(attestationObject), transports: ["internal" as const] } };
-    },
-    assert(challenge: string, o: { origin?: string; flags?: number; count?: number } = {}) {
-      const c = client("webauthn.get", challenge, o.origin ?? `https://${rpId}`);
-      const authData = cat(sha(rpId), Uint8Array.of(o.flags ?? 0x05), u32(o.count ?? ++counter));
-      const signature = nodeSign("sha256", cat(authData, sha(c)), privateKey);
-      return { id: b64u(credId), rawId: b64u(credId), type: "public-key" as const, clientExtensionResults: {},
-        response: { clientDataJSON: b64u(c), authenticatorData: b64u(authData), signature: b64u(signature), userHandle: b64u(new TextEncoder().encode("acct_x")) } };
-    },
-  };
-}
 const err = async (p: Promise<unknown>) => p.then(() => "ok", (e) => e.code);
 
 test("options: RP ID account.openentity.org, user verification required, ES256 only, discoverable credentials", async () => {

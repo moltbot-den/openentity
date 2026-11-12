@@ -1,6 +1,7 @@
 import { createLocalJWKSet, exportJWK, generateKeyPair, jwtVerify, SignJWT, importJWK } from "jose";
 import { expect, test } from "vitest";
 import { nonceHash } from "../src/idtoken.ts";
+import { authenticator } from "./helpers.ts";
 import { SERVICE, approvalHeader, approve, bearer, call, owner, stepUp, webApp, type Owner } from "./owner.ts";
 
 // A throwaway RSA key stands in for Google's published keys.
@@ -134,4 +135,25 @@ test("gate hardening: the method.add approval names the new sign-in; a proof for
   expect((await call(app, "POST", "/v1/step-up", { action: "method.add", params: { type: "google" } }, bearer(o))).status).toBe(400); // no subject
   const ok = await call(app, "POST", "/v1/account/methods", { type: "google", proof: await googleProof(o, "g-approved") }, await stepUp(app, o, "method.add", { type: "google", subject: "g-approved" }));
   expect(ok.status).toBe(201);
+});
+
+test("passkey sign-in method: register options need no approval; the finish (POST /v1/account/methods) carries one naming the new credential id", async () => {
+  const o = await owner(d);
+  const client = { platform: "ios", install_id: o.install };
+  const created = async () => {
+    const opts = await call(app, "POST", "/v1/auth/passkey/options", { mode: "register", client }, bearer(o));
+    expect(opts.status).toBe(200); // no approval at the options call
+    const response = authenticator(d.rp.id).register(opts.body.options.challenge, `https://${d.rp.id}`);
+    return { proof: { challenge_id: opts.body.challenge_id, response }, credentialId: response.id };
+  };
+  const finish = (proof: object, headers: Record<string, string>) => call(app, "POST", "/v1/account/methods", { type: "passkey", proof }, headers);
+  const a = await created();
+  expect(await finish(a.proof, bearer(o)).then((r) => [r.status, r.body.error])).toEqual([428, "approval_required"]);
+  const b = await created();
+  const forA = await stepUp(app, o, "method.add", { type: "passkey", subject: a.credentialId });
+  expect(await finish(b.proof, forA).then((r) => [r.status, r.body.error])).toEqual([403, "approval_invalid"]); // an approval for another credential
+  const c = await created();
+  const ok = await finish(c.proof, await stepUp(app, o, "method.add", { type: "passkey", subject: c.credentialId }));
+  expect([ok.status, ok.body.type, ok.body.label]).toEqual([201, "passkey", "Passkey"]);
+  expect((await d.db.first<{ subject: string }>("SELECT subject FROM methods WHERE id = $1", [ok.body.id]))!.subject).toBe(c.credentialId);
 });
