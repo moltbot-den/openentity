@@ -250,6 +250,23 @@ CREATE TABLE IF NOT EXISTS agent_approvals (
 );
 CREATE INDEX IF NOT EXISTS agent_approvals_account ON agent_approvals (account_id, created_at);
 
+-- Approver and root enrollments (POST /v1/keylog/enrollments): a new credential waits for an approver to sign it in.
+-- state: pending, completed, waiting or cancelled; expired is read from expires_at.
+CREATE TABLE IF NOT EXISTS enrollments (
+  id text PRIMARY KEY,
+  account_id text NOT NULL REFERENCES accounts (id),
+  purpose text NOT NULL CHECK (purpose IN ('approver', 'root')),
+  kid text NOT NULL,
+  credential text NOT NULL,                   -- JSON Credential exactly as the entry will carry it
+  code text NOT NULL,                         -- 6 digits, shown on the new device and the approver
+  state text NOT NULL,
+  seq integer,
+  effective_at bigint,
+  created_at bigint NOT NULL,
+  expires_at bigint NOT NULL
+);
+CREATE INDEX IF NOT EXISTS enrollments_account ON enrollments (account_id, created_at);
+
 -- ---------------------------------------------------------------- web lane (appends below)
 
 -- Push tokens, one per app install (PUT /v1/push-tokens/{install_id}). Products reach installs with a live session;
