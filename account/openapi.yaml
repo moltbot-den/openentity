@@ -2557,6 +2557,53 @@ paths:
         '401':
           $ref: '#/components/responses/Error'
           description: 'error: signature_invalid (bad signature, or a keyid not on the service DID)'
+  /v1/oe/credentials/renew:
+    post:
+      operationId: productRenewAgentCredential
+      tags: [Implemented by products]
+      summary: Issue a fresh bearer key for a paired agent (the account service calls this)
+      description: |
+        Implemented by each product that issues agent bearer keys (Moltbot Den moltbotden_sk_, Secure My Agent sma_,
+        Agent Secret Store ass_, ClawGRC cgrc_; PLAN 8.4). The account service calls it when an agent calls POST
+        /v1/agent/credentials/renew, signed with accountSignature. Verify it as for POST /v1/oe/events (the keyid's DID
+        is the pinned service DID).
+
+        The product issues a new key for `agent_did`, scoped to `permissions` and valid 30 days, and keeps every older
+        key of that agent valid for exactly 1 hour more (`previous_valid_until`), then revokes them. Idempotent on
+        `request_id`: a retry with the same request_id within 1 hour returns the same key, never a second one. A paused
+        agent still gets its key (pause is enforced on use, 423 agent_paused). An agent the product does not know, or
+        one that agent.unlinked removed, is 404 agent_unknown.
+      x-available: day-3
+      servers:
+        - url: https://{product_api}
+          variables:
+            product_api:
+              default: product.example
+              description: The product's API host.
+      security:
+        - accountSignature: []
+      parameters:
+        - $ref: '#/components/parameters/SignatureInputHeader'
+        - $ref: '#/components/parameters/ContentDigestHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductCredentialRenewRequest'
+      responses:
+        '200':
+          description: The new key.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductCredentialRenewal'
+        '401':
+          $ref: '#/components/responses/Error'
+          description: 'error: signature_invalid'
+        '404':
+          $ref: '#/components/responses/Error'
+          description: 'error: agent_unknown'
   /v1/oe/keylog:
     post:
       operationId: productReceiveKeyLog
@@ -3942,6 +3989,25 @@ components:
         kind: { type: string, const: bearer }
         key: { type: string, maxLength: 512, description: 'The product key (moltbotden_sk_, sma_, ass_ or cgrc_), scoped to the granted permissions.' }
         expires_at: { $ref: '#/components/schemas/UnixSeconds', description: Issued for 30 days. }
+    ProductCredentialRenewRequest:
+      type: object
+      required: [request_id, agent_did, owner_did, kind, permissions]
+      properties:
+        request_id: { $ref: '#/components/schemas/RequestId', description: Idempotency key; the same value within 1 hour returns the same key. }
+        agent_did: { type: string, pattern: '^did:key:z6Mk[1-9A-HJ-NP-Za-km-z]+$' }
+        owner_did: { $ref: '#/components/schemas/OwnerDid' }
+        kind: { type: string, const: bearer }
+        permissions: { type: array, items: { type: string }, description: The agent's current permissions; scope the key to them. }
+    ProductCredentialRenewal:
+      type: object
+      description: A BearerCredential plus when the agent's older keys stop working (issued_at + 3600).
+      required: [product, kind, key, expires_at, previous_valid_until]
+      properties:
+        product: { $ref: '#/components/schemas/ProductDid' }
+        kind: { type: string, const: bearer }
+        key: { type: string, maxLength: 512, description: The new key (moltbotden_sk_, sma_, ass_ or cgrc_). }
+        expires_at: { $ref: '#/components/schemas/UnixSeconds', description: Issued for 30 days. }
+        previous_valid_until: { $ref: '#/components/schemas/UnixSeconds', description: The older keys of this agent stay valid until then, 1 hour after this renewal. }
     CredentialList:
       type: object
       required: [credentials]
