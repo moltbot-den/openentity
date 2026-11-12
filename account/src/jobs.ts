@@ -3,6 +3,7 @@
 import type { Deps } from "./app.ts";
 import { now } from "./db.ts";
 import { purgeTestAccounts, runDueDeletions } from "./deletion.ts";
+import { emitMetrics } from "./metrics.ts";
 import { retryOutbox } from "./outbound.ts";
 import { appReviewWatch } from "./signin.ts";
 
@@ -11,6 +12,17 @@ const JOBS: [string, (d: Deps) => Promise<unknown>][] = [
   ["deletions", runDueDeletions],
   ["test_accounts", (d) => purgeTestAccounts(d)], // staging only (deletion.ts)
   ["app_review", appReviewWatch],
+  // PendingRecoveriesMax, every tick (0 included): the most recoveries one owner started in the last 24 hours that have
+  // neither taken effect nor been cancelled (a cancel names its target's hash). The Monitoring lane alarms above 3.
+  ["recoveries", async (d) => {
+    const t = now();
+    const r = await d.db.first<{ n: number | null }>(
+      `SELECT MAX(n) AS n FROM (SELECT count(*) AS n FROM keylog_entries r
+         WHERE r.op = 'recover' AND r.first_seen_at > $1 AND r.effective_at > $2
+           AND NOT EXISTS (SELECT 1 FROM keylog_entries c WHERE c.owner_id = r.owner_id AND c.op = 'cancel' AND (c.line::jsonb -> 'body' ->> 'target') = r.hash)
+         GROUP BY r.owner_id) x`, [t - 86_400, t]);
+    emitMetrics(d.stage, { PendingRecoveriesMax: Number(r?.n ?? 0) });
+  }],
   ["login_codes", (d) => d.db.run("DELETE FROM login_codes WHERE expires_at < $1", [now() - 3600])],
   // Sign-in rows past any use: codes (they name an address), nonces and passkey challenges after a day.
   ["signin_rows", async (d) => {

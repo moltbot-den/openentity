@@ -5,7 +5,7 @@
 import { execFileSync } from "node:child_process";
 import { createHash, createHmac, generateKeyPairSync, randomBytes, randomUUID, sign as nodeSign } from "node:crypto";
 import { GetParametersCommand, SSMClient } from "@aws-sdk/client-ssm";
-import { buildPresentation, canonicalize, generateKeyPair, pairSas, signRequest } from "@openentity/sdk";
+import { buildPresentation, canonicalize, generateKeyPair, keyPairFromSeed, pairSas, signRequest } from "@openentity/sdk";
 import { isoCBOR } from "@simplewebauthn/server/helpers";
 import { dataApiDb } from "../src/db.ts";
 import { lowS } from "../src/keylog.ts";
@@ -14,8 +14,13 @@ const HOST = "staging.account.openentity.org", BASE = `https://${HOST}`, WSS = `
 const outputs = JSON.parse(execFileSync("aws", ["cloudformation", "describe-stacks", "--stack-name", "OpenEntityAccountStaging", "--region", "us-east-1", "--output", "json"], { encoding: "utf8" })).Stacks[0].Outputs;
 const out = (k: string) => outputs.find((o: any) => o.OutputKey === k).OutputValue;
 const db = dataApiDb({ resourceArn: out("DbClusterArn"), secretArn: out("DbSecretArn"), database: "account" });
-const ssm = await new SSMClient({ region: "us-east-1" }).send(new GetParametersCommand({ Names: ["/openentity/account/code_pepper", "/openentity/account/code_pepper_staging"], WithDecryption: true }));
-const pepper = (ssm.Parameters!.find((p) => p.Name!.endsWith("_staging")) ?? ssm.Parameters![0]).Value!;
+const ssm = await new SSMClient({ region: "us-east-1" }).send(new GetParametersCommand({ Names: ["/openentity/account/code_pepper", "/openentity/account/code_pepper_staging", "/openentity/account/test_product_sma_seed_staging"], WithDecryption: true }));
+const param = (n: string) => ssm.Parameters!.find((p) => p.Name === `/openentity/account/${n}`)?.Value;
+const pepper = (param("code_pepper_staging") ?? param("code_pepper"))!;
+/** Sum of PushFailed (OpenEntity/Account, Stage staging) since `from` (ms), from the embedded metric lines. */
+const pushFailedSince = (from: number) => (JSON.parse(execFileSync("aws", ["cloudwatch", "get-metric-statistics", "--region", "us-east-1", "--output", "json", "--namespace", "OpenEntity/Account", "--metric-name", "PushFailed",
+  "--dimensions", "Name=Stage,Value=staging", "--start-time", new Date(from - 60_000).toISOString(), "--end-time", new Date(Date.now() + 60_000).toISOString(), "--period", "60", "--statistics", "Sum"], { encoding: "utf8" })).Datapoints as { Sum: number }[])
+  .reduce((n, p) => n + p.Sum, 0);
 
 const step = (what: string) => console.log(`ok  ${what}`);
 async function call(method: string, path: string, body?: unknown, headers: Record<string, string> = {}) {
@@ -147,6 +152,17 @@ try {
   if (await db.first("SELECT 1 FROM messages WHERE agent_did = $1 UNION ALL SELECT 1 FROM uploads WHERE agent_did = $1", [kp.did])) throw new Error("unlink left the thread or uploads");
   if ((await fetch(fileUrl)).ok) throw new Error("unlink left the attachment in S3");
   step("unlinked: thread, uploads and the S3 object gone");
+
+  // PushFailed (the Monitoring lane's push alarm): the install registers a token APNs refuses, then one product
+  // notification, signed as the staging test product sma, makes one delivery attempt.
+  await call("PUT", `/v1/push-tokens/${install}`, { provider: "apns", token: "0".repeat(64), environment: "sandbox" }, auth);
+  const sma = await keyPairFromSeed(new Uint8Array(Buffer.from(param("test_product_sma_seed_staging")!, "base64url")));
+  const note = JSON.stringify({ owner_did: ownerDid, type: "alert", id: "e2e-push" }), pushed = Date.now();
+  await call("POST", "/v1/notify", note, await signRequest({ method: "POST", url: `${BASE}/v1/notify`, body: new TextEncoder().encode(note), privateKey: sma, did: `did:web:${HOST}:test-products:sma#key-1` }));
+  for (let i = 0; i < 24 && pushFailedSince(pushed) < 1; i++) await new Promise((r) => setTimeout(r, 10_000));
+  if (pushFailedSince(pushed) < 1) throw new Error("no PushFailed data point in CloudWatch within 4 minutes");
+  if (await db.first("SELECT 1 FROM push_tokens WHERE install_id = $1", [install])) throw new Error("the refused token was kept");
+  step("push: APNs refused the token, which is gone; PushFailed counted in CloudWatch (OpenEntity/Account, Stage staging)");
 } catch (e) {
   console.error(`FAILED: ${(e as Error).message}`);
   process.exitCode = 1;
