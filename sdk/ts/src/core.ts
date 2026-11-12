@@ -194,6 +194,11 @@ export function verificationMethodId(did: string): string {
   if (!did.startsWith("did:key:")) throw new OpenEntityError("invalid_input", "verificationMethodId is defined for did:key only");
   return `${did}#${did.slice("did:key:".length)}`;
 }
+/** @internal The did.json URL of a did:web DID: /.well-known/did.json, or <path>/did.json for a DID with a path. */
+export function didWebUrl(did: string): string {
+  const [host, ...path] = did.slice("did:web:".length).split(":").map(decodeURIComponent);
+  return `https://${host}/${path.length ? path.join("/") : ".well-known"}/did.json`;
+}
 export function normalizeEid(id: string): string {
   return id.startsWith("eid:base:") ? "did:pkh:eip155:8453:" + id.slice("eid:base:".length) : id;
 }

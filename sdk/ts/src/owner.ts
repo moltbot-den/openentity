@@ -76,12 +76,12 @@ function base32(b: Uint8Array): string {
   return bits ? out + A[(value << (5 - bits)) & 31] : out;
 }
 
-/** Only safe integers and well-formed strings, so all four SDKs read an entry or a summary the same way. */
-function plainJson(v: unknown): string | null {
-  if (typeof v === "number") return Number.isSafeInteger(v) ? null : `number ${v} is not an integer within 2^53`;
+/** Only safe integers (unless `ints` is false) and well-formed strings, so all four SDKs read an entry, a summary or client data the same way. */
+function plainJson(v: unknown, ints = true): string | null {
+  if (typeof v === "number") return !ints || Number.isSafeInteger(v) ? null : `number ${v} is not an integer within 2^53`;
   if (typeof v === "string") return /[\uD800-\uDFFF]/u.test(v) ? "string has a lone surrogate" : null;
-  if (Array.isArray(v)) for (const x of v) { const e = plainJson(x); if (e) return e; }
-  else if (isObj(v)) for (const [k, x] of Object.entries(v)) { const e = plainJson(k) ?? plainJson(x); if (e) return e; }
+  if (Array.isArray(v)) for (const x of v) { const e = plainJson(x, ints); if (e) return e; }
+  else if (isObj(v)) for (const [k, x] of Object.entries(v)) { const e = plainJson(k, ints) ?? plainJson(x, ints); if (e) return e; }
   return null;
 }
 
@@ -142,10 +142,11 @@ function checkSignature(cred: Credential, s: Signed, digest: Uint8Array, o: SigO
   const authData = b64u(s.authenticator_data)!, clientRaw = b64u(s.client_data_json)!;
   let client: unknown;
   try {
-    client = parseJson(new TextDecoder("utf-8", { fatal: true }).decode(clientRaw));
+    client = parseJson(new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(clientRaw)); // a BOM is not JSON
   } catch {
     fail("bad_webauthn", "clientDataJSON is not JSON");
   }
+  if (plainJson(client, false)) fail("bad_webauthn", "clientDataJSON has a lone surrogate");
   if (!isObj(client) || client.type !== "webauthn.get") fail("bad_webauthn", "clientDataJSON type must be webauthn.get");
   const c = client as Obj;
   if (c.challenge !== b64url(digest)) fail("bad_webauthn", "challenge is not the digest");

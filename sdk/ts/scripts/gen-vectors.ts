@@ -1,6 +1,7 @@
 // Generates test-vectors/*.json from PUBLISHED THROWAWAY seeds. Never use these keys for anything real.
 // Run: pnpm --filter @openentity/sdk gen:vectors
 import { readFileSync, writeFileSync } from "node:fs";
+import { sha256 as nobleSha256 } from "@noble/hashes/sha2.js";
 import {
   canonicalize,
   sha256Hex,
@@ -27,6 +28,8 @@ import {
 } from "../src/index.ts";
 
 const seq = (start: number) => Uint8Array.from({ length: 32 }, (_, i) => start + i);
+const b64url = (b: Uint8Array) => Buffer.from(b).toString("base64url");
+const sha256Text = (s: string) => nobleSha256(new TextEncoder().encode(s));
 const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
 const nonce = (start: number) => base58btcEncode(Uint8Array.from({ length: 16 }, (_, i) => start + i));
 
@@ -192,6 +195,39 @@ export async function buildVectors(): Promise<Record<string, object>> {
       bad("too-late", "expired", { ...post, now: CREATED + 61 }),
       bad("created-in-future", "created_in_future", { ...post, now: CREATED - 6 }),
     ],
+    // did:web signers (a service such as the OpenEntity Account): the keyid is a verification method of the DID's did.json,
+    // an Ed25519 Multikey (second key) or JsonWebKey (log key, relative id), named by its RFC 7638 thumbprint.
+    did_web: await (async () => {
+      const did = "did:web:service.example";
+      const thumb = (k: { publicKey: Uint8Array }) => b64url(sha256Text(`{"crv":"Ed25519","kty":"OKP","x":"${b64url(k.publicKey)}"}`));
+      const multikey = `${did}#${thumb(b)}`, jwk = `${did}#${thumb(logKey)}`;
+      const document = {
+        "@context": ["https://www.w3.org/ns/did/v1", "https://w3id.org/security/multikey/v1", "https://w3id.org/security/jwk/v1"],
+        id: did,
+        verificationMethod: [
+          { id: multikey, type: "Multikey", controller: did, publicKeyMultibase: b.did.slice("did:key:".length) },
+          { id: `#${thumb(logKey)}`, type: "JsonWebKey", controller: did, publicKeyJwk: { kty: "OKP", crv: "Ed25519", x: b64url(logKey.publicKey) } },
+        ],
+        authentication: [multikey, jwk],
+        assertionMethod: [multikey, jwk],
+      };
+      const webCase = async (name: string, keyid: string, key: Uint8Array) => ({
+        name, method: "POST", url: "https://gateway.example.com/v1/oe/events", body: '{"type":"agent.paused"}', created: CREATED, expires_in: 60, nonce: "ICEiIyQlJicoKSorLC0uLw", keyid,
+        headers: await signRequest({ method: "POST", url: "https://gateway.example.com/v1/oe/events", body: new TextEncoder().encode('{"type":"agent.paused"}'), privateKey: key, did: keyid, created: CREATED, nonce: "ICEiIyQlJicoKSorLC0uLw" }),
+      });
+      const mk = await webCase("multikey", multikey, SEEDS.second), jk = await webCase("jsonwebkey-relative-id", jwk, SEEDS.log);
+      return {
+        description: "did:web keyids. Verify with allow_did_web = [did] and a fetch that returns `document` for `url` (no network). `valid` verify to did = `did`; each `invalid` fails with `code`. Signed with the second and log throwaway seeds from keys.json.",
+        did, url: "https://service.example/.well-known/did.json", document, now: CREATED + 10,
+        valid: [mk, jk],
+        invalid: [
+          bad("unknown-key", "bad_keyid", await webCase("unknown-key", `${did}#not-in-the-document`, SEEDS.second)),
+          bad("key-mismatch", "bad_signature", await webCase("key-mismatch", multikey, SEEDS.entity)),
+          bad("did-not-allowed", "bad_keyid", await webCase("did-not-allowed", `did:web:other.example#${thumb(b)}`, SEEDS.second)),
+          bad("no-fragment", "bad_keyid", await webCase("no-fragment", did, SEEDS.second)),
+        ],
+      };
+    })(),
   };
 
   const leafHashes: Uint8Array[] = [];

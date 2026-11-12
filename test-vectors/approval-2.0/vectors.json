@@ -1355,6 +1355,105 @@
       }
     },
     {
+      "name": "webauthn-bom",
+      "description": "clientDataJSON starting with a UTF-8 byte order mark is not JSON.",
+      "approval": {
+        "version": "approval/2.0",
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "decision": "approve",
+        "expires_at": 1794017100,
+        "device_id": "mTluyYyMSPInd1g_ENjr016z9DqqE2ZUX845TdohRVE",
+        "form": "webauthn",
+        "signature": "MEQCIAXCgWdFwINviiro0zr3lDyV_ao0C9Pbm1Ch1H8opYPlAiAAs1hPkJppHlaEZrRKLu5aGCtzGaBMcGANsufvkz3nlA",
+        "authenticator_data": "D3UMQg2RHUXdnWy7aJ1fAnM1wAzOoZElYIW5k5ZyV-MdAAAAAA",
+        "client_data_json": "77u_eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiS2Q3SVZLQ3pPQjFfLXpsWkRWaTJvU0Vvak1udG1OX3lCWjNGSE5GbzRjcyIsIm9yaWdpbiI6Imh0dHBzOi8vYWNjb3VudC5vcGVuZW50aXR5Lm9yZyIsImNyb3NzT3JpZ2luIjpmYWxzZX0"
+      },
+      "context": {
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "now": 1794016800,
+        "origins": [
+          "https://account.openentity.org",
+          "android:apk-key-hash:AXVh6-zFGB0QxD0cPn3sYa1YZcCsl0Kl3sbQg35wBSw"
+        ],
+        "key_state": "owner"
+      },
+      "expect": {
+        "ok": false,
+        "error": "bad_webauthn"
+      }
+    },
+    {
+      "name": "webauthn-lone-surrogate",
+      "description": "clientDataJSON with a lone surrogate in any string.",
+      "approval": {
+        "version": "approval/2.0",
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "decision": "approve",
+        "expires_at": 1794017100,
+        "device_id": "mTluyYyMSPInd1g_ENjr016z9DqqE2ZUX845TdohRVE",
+        "form": "webauthn",
+        "signature": "MEMCHykBBKN-wH8rqkagk2Hn6agPBqgkf6dTV8SpB-E3NXMCID4r8j6u92f8x_yW8AQTV1qiNgYRoSiD6_usDCKbjcGX",
+        "authenticator_data": "D3UMQg2RHUXdnWy7aJ1fAnM1wAzOoZElYIW5k5ZyV-MdAAAAAA",
+        "client_data_json": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiS2Q3SVZLQ3pPQjFfLXpsWkRWaTJvU0Vvak1udG1OX3lCWjNGSE5GbzRjcyIsIm9yaWdpbiI6Imh0dHBzOi8vYWNjb3VudC5vcGVuZW50aXR5Lm9yZyIsImNyb3NzT3JpZ2luIjpmYWxzZSwibm90ZSI6Ilx1ZDgwMCJ9"
+      },
+      "context": {
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "now": 1794016800,
+        "origins": [
+          "https://account.openentity.org",
+          "android:apk-key-hash:AXVh6-zFGB0QxD0cPn3sYa1YZcCsl0Kl3sbQg35wBSw"
+        ],
+        "key_state": "owner"
+      },
+      "expect": {
+        "ok": false,
+        "error": "bad_webauthn"
+      }
+    },
+    {
+      "name": "webauthn-no-origins",
+      "description": "An empty origins list accepts no origin.",
+      "approval": {
+        "version": "approval/2.0",
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "decision": "approve",
+        "expires_at": 1794017100,
+        "device_id": "mTluyYyMSPInd1g_ENjr016z9DqqE2ZUX845TdohRVE",
+        "form": "webauthn",
+        "signature": "MEUCIQDz_RQtXAbeP-nVjVpVoaMSe64YqFoHCrdXGWrl4ggURAIgBb9eREogYpTNXeGst6TBupQMgS5cYB-Pn4zdie1BLOw",
+        "authenticator_data": "D3UMQg2RHUXdnWy7aJ1fAnM1wAzOoZElYIW5k5ZyV-MdAAAAAA",
+        "client_data_json": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiS2Q3SVZLQ3pPQjFfLXpsWkRWaTJvU0Vvak1udG1OX3lCWjNGSE5GbzRjcyIsIm9yaWdpbiI6Imh0dHBzOi8vYWNjb3VudC5vcGVuZW50aXR5Lm9yZyIsImNyb3NzT3JpZ2luIjpmYWxzZX0"
+      },
+      "context": {
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "now": 1794016800,
+        "origins": [],
+        "key_state": "owner"
+      },
+      "expect": {
+        "ok": false,
+        "error": "bad_webauthn"
+      }
+    },
+    {
       "name": "webauthn-counter-replayed",
       "description": "The signature counter did not increase.",
       "approval": {

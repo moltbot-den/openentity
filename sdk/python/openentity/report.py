@@ -3,9 +3,9 @@ locally against its issuer's key; any failure returns an untrusted report (fail 
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from urllib.parse import unquote
 
 from . import client, core
+from .httpsig import _did_web_url
 from .errors import InvalidInputError, VerificationError
 
 MOLTBOTDEN, CLAWGRC = "did:web:moltbotden.com", "did:web:api.clawgrc.com"
@@ -34,8 +34,7 @@ def did_web_resolver(fetch=client._request):
     def resolve(did: str) -> dict:
         if not did.startswith("did:web:"):
             return core.default_resolver(did)
-        host, *path = [unquote(p) for p in did[8:].split(":")]
-        doc = fetch(f"https://{host}/{'/'.join(path) if path else '.well-known'}/did.json")
+        doc = fetch(_did_web_url(did))
         if doc.get("id") != did:
             raise VerificationError(f"{did} document names {doc.get('id')}")
         keys = []

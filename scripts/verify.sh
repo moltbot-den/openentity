@@ -16,6 +16,10 @@ if [ -f pnpm-lock.yaml ]; then
   pnpm -r --if-present run lint
   pnpm -r --if-present run typecheck
   pnpm -r --if-present run build  # deploy.yml builds every package; a missing build tool fails here first
+  # sdk/ts/dist is committed so the package installs from a git commit; it must equal a fresh build.
+  if ! git diff --quiet -- sdk/ts/dist || [ -n "$(git ls-files --others --exclude-standard sdk/ts/dist)" ]; then
+    echo "verify: sdk/ts/dist differs from a fresh build; commit the rebuilt files"; fail=1
+  fi
   pnpm -r --if-present run test
 fi
 

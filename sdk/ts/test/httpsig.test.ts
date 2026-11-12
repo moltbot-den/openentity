@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { ed25519 } from "@noble/curves/ed25519.js";
 import * as oe from "../src/index.ts";
+import { didWebKeys } from "../src/httpsig.ts";
 
 const VEC = JSON.parse(readFileSync(new URL("../../../test-vectors/http-signature.json", import.meta.url), "utf8"));
 const SEED = Uint8Array.from({ length: 32 }, (_, i) => i + 1); // published throwaway seed, test-vectors/keys.json
@@ -25,6 +26,43 @@ const params = (o: { created?: number; expires?: number; nonce?: string | null; 
   const { created = NOW, expires = NOW + 60, nonce = NONCE, keyid = kp.did, alg = "ed25519", comps = '"@method" "@target-uri" "content-digest"' } = o;
   return `(${comps});created=${created};expires=${expires}${nonce ? `;nonce="${nonce}"` : ""};keyid="${keyid}";alg="${alg}"`;
 };
+
+describe("did:web signers", () => {
+  const W = VEC.did_web, enc2 = (c: any) => enc.encode(c.body);
+  const fetchDoc = (calls: string[] = [], doc = W.document) => async (url: string) => (calls.push(url), doc);
+  const verify = (c: any, o: Record<string, unknown> = {}) =>
+    oe.verifyRequest({ method: c.method, url: c.url, headers: c.headers, body: enc2(c), now: W.now, allowDidWeb: [W.did], fetchJson: fetchDoc(), ...o });
+  it.each(W.valid as { name: string }[])("vector $name verifies through the DID document", async (c: any) => {
+    didWebKeys.clear();
+    expect(await verify(c)).toEqual({ did: W.did, keyid: c.keyid, created: c.created, expires: c.created + 60, nonce: c.nonce });
+  });
+  it.each(W.invalid as { name: string; code: string }[])("vector $name rejects with $code", async (c: any) => {
+    didWebKeys.clear();
+    const e = await verify(c).catch((x) => x);
+    expect([e instanceof oe.HttpSigError, e.code]).toEqual([true, c.code]);
+  });
+  it("caches the document for 10 minutes, refetches on an unknown key, never fetches a DID it was not told to allow", async () => {
+    didWebKeys.clear();
+    const calls: string[] = [];
+    const [mk, jk] = W.valid;
+    const noJwk = { ...W.document, verificationMethod: [W.document.verificationMethod[0]] };
+    await verify(mk, { fetchJson: fetchDoc(calls, noJwk) });
+    await verify(mk, { fetchJson: fetchDoc(calls, noJwk) });
+    expect(calls).toEqual([W.url]); // cached
+    // A key the cached document does not name: rejected without a refetch for 30 seconds, then refetched (a rotation).
+    expect((await verify(jk, { fetchJson: fetchDoc(calls) }).catch((x) => x)).code).toBe("bad_keyid");
+    didWebKeys.get(W.did)!.at -= 31_000;
+    expect((await verify(jk, { fetchJson: fetchDoc(calls) })).did).toBe(W.did);
+    expect(calls.length).toBe(2);
+    didWebKeys.get(W.did)!.at -= 600_001; // stale after 10 minutes
+    await verify(mk, { fetchJson: fetchDoc(calls) });
+    expect(calls.length).toBe(3);
+    const before = calls.length;
+    expect((await verify(mk, { allowDidWeb: [] }).catch((x) => x)).code).toBe("bad_keyid");
+    expect((await verify(mk, { fetchJson: async () => { throw new Error("down"); } , allowDidWeb: ["did:web:service.example"] }).then(() => "ok", (x) => x.code))).toBe("ok"); // cached key still serves
+    expect(calls.length).toBe(before);
+  });
+});
 
 describe("http message signatures", () => {
   it.each(VEC.valid as { name: string }[])("vector $name signs byte-identically and verifies", async (c: any) => {

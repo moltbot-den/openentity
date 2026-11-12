@@ -1,5 +1,5 @@
 import { OpenEntityError, registryError } from "./errors.ts";
-import { SPEC, DECLARATION_VERSION, DECLARATION_SHA256, canonicalize, sha256Hex, nowSeconds, type KeyPair, generateKeyPair, publicKeyFromDidKey, type Resolver, defaultResolver, signObject, verifyObject } from "./core.ts";
+import { SPEC, DECLARATION_VERSION, DECLARATION_SHA256, canonicalize, sha256Hex, nowSeconds, type KeyPair, generateKeyPair, publicKeyFromDidKey, type Resolver, defaultResolver, signObject, verifyObject, didWebUrl } from "./core.ts";
 import { buildDocument, buildDeclaration, successorDocument, buildRotation, mintStamp } from "./objects.ts";
 /**
  * Rotate `previous` to a new key in one call: fetch the current document, build and sign the link, mint the stamp for the
@@ -100,8 +100,7 @@ export const clearTrustCache = () => trustCache.clear();
 export function didWebResolver(fetchJson: FetchJson = registryJson): Resolver {
   return async (did) => {
     if (!did.startsWith("did:web:")) return defaultResolver(did);
-    const [host, ...path] = did.slice(8).split(":").map(decodeURIComponent);
-    const doc = await fetchJson(`https://${host}/${path.length ? path.join("/") : ".well-known"}/did.json`);
+    const doc = await fetchJson(didWebUrl(did));
     if (doc.id !== did) throw new OpenEntityError("verification_failed", `${did} document names ${doc.id}`);
     const ed25519: Uint8Array[] = [];
     for (const vm of doc.verificationMethod ?? []) {

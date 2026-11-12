@@ -1,5 +1,7 @@
 node_modules/
 dist/
+# @openentity/sdk ships its build in git, so a lane can pin a commit (scripts/verify.sh checks it is fresh).
+!sdk/ts/dist/
 .astro/
 .wrangler/
 .dev.vars

@@ -37,8 +37,13 @@ class _Fail(Exception):
         self.code = code
 
 
+def _int(v) -> bool:
+    """A JSON number with an integer value within 2^53, as JavaScript reads it: 5 and 5.0 alike, never a bool."""
+    return not isinstance(v, bool) and (isinstance(v, int) or isinstance(v, float) and v.is_integer()) and abs(v) <= _MAX_SAFE
+
+
 def _uint(v) -> bool:
-    return isinstance(v, int) and not isinstance(v, bool) and 0 <= v <= _MAX_SAFE
+    return _int(v) and v >= 0
 
 
 def _sha(b: str | bytes) -> bytes:
@@ -57,20 +62,19 @@ def _b64u(s) -> bytes | None:
     return b if _b64u_encode(b) == s else None
 
 
-def _plain(v) -> str | None:
-    """Only integers within 2^53 and well-formed strings, so all four SDKs read an entry or a summary the same way."""
+def _plain(v, ints: bool = True) -> str | None:
+    """Only integers within 2^53 (unless `ints` is False) and well-formed strings, so all four SDKs read an entry, a
+    summary or client data the same way."""
     if isinstance(v, bool) or v is None:
         return None
-    if isinstance(v, int):
-        return None if abs(v) <= _MAX_SAFE else f"number {v} is not an integer within 2^53"
-    if isinstance(v, float):
-        return f"number {v} is not an integer within 2^53"
+    if isinstance(v, (int, float)):
+        return None if not ints or _int(v) else f"number {v} is not an integer within 2^53"
     if isinstance(v, str):
         return "string has a lone surrogate" if _SURROGATE.search(v) else None
     if isinstance(v, list):
-        return next((e for e in map(_plain, v) if e), None)
+        return next((e for x in v if (e := _plain(x, ints))), None)
     if isinstance(v, dict):
-        return next((e for k, x in v.items() for e in (_plain(k), _plain(x)) if e), None)
+        return next((e for k, x in v.items() for e in (_plain(k, ints), _plain(x, ints)) if e), None)
     return f"not JSON: {type(v).__name__}"
 
 
@@ -139,6 +143,8 @@ def _check_signature(cred: dict, s: dict, digest: bytes, origins, rp_id: str, lo
         client = parse_json(client_raw.decode("utf-8"))
     except (ValueError, UnicodeDecodeError):
         raise _Fail("bad_webauthn", "clientDataJSON is not JSON")
+    if _plain(client, False):
+        raise _Fail("bad_webauthn", "clientDataJSON has a lone surrogate")
     if not isinstance(client, dict) or client.get("type") != "webauthn.get":
         raise _Fail("bad_webauthn", "clientDataJSON type must be webauthn.get")
     if client.get("challenge") != _b64u_encode(digest):
@@ -191,7 +197,7 @@ def approval_digest(a: dict) -> bytes:
     if e:
         raise InvalidInputError(e)
     return _sha("|".join(["approval/2.0", a["verifier_did"], a["owner_did"], a["request_id"], a["payload_digest"], a["decision"],
-                          str(a["expires_at"])]))
+                          str(int(a["expires_at"]))]))
 
 
 def payload_digest(summary) -> str:
@@ -242,7 +248,7 @@ def verify_approval(approval, *, key_log: dict, verifier_did: str, owner_did: st
             cred = key_log["root"]
         if cred is None:
             raise _Fail("unknown_key", "device_id is not a current approver in the owner's key log")
-        got = _check_signature(cred, a, approval_digest(a), origins or [f"https://{rp_id}"], rp_id, False)
+        got = _check_signature(cred, a, approval_digest(a), [f"https://{rp_id}"] if origins is None else origins, rp_id, False)
         if a["form"] == "webauthn" and (got or counter) and got <= counter:
             raise _Fail("counter_replayed", "signature counter did not increase")
         return {"ok": True, "kid": cred["kid"], "counter": got}
@@ -326,7 +332,7 @@ def verify_key_log(did: str, lines: list[str], first_seen_at: list[int], *, now:
     assertionMethod key in did:web:account.openentity.org's did.json, current and retired (never the jwks.json token keys).
     Returns {"ok": True, "state": {...}} as of `now`, or {"ok": False, "error", "seq", "message"} for the first failing entry."""
     now = int(time.time()) if now is None else now
-    origins = origins or [f"https://{rp_id}"]
+    origins = [f"https://{rp_id}"] if origins is None else origins
     services = []
     for jwk in service_keys:
         if _point(jwk) is None:
