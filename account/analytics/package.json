@@ -1,0 +1,25 @@
+{
+  "name": "@openentity/account-analytics",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "gen": "node gen.mjs",
+    "lint": "node gen.mjs --check && tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --testTimeout=60000"
+  },
+  "dependencies": {
+    "@aws-sdk/client-ssm": "^3.1156.0",
+    "yaml": "^2.8.1"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.150",
+    "@types/node": "^26.6.5",
+    "aws-cdk-lib": "^2.274.0",
+    "constructs": "^10.8.1",
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.5"
+  }
+}

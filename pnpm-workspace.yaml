@@ -13,6 +13,7 @@ packages:
   - integrations/mastra
   - redirects
   - infra
+  - account/analytics
 onlyBuiltDependencies:
   - esbuild
   - workerd
