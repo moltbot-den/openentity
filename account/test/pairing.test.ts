@@ -52,12 +52,12 @@ const claim = async (kp: KeyPair, code: string) =>
 const later = (s: number) => { vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(Date.now() + s * 1000); };
 
 /** The whole pairing: code, claim, owner confirms with the approver. */
-async function paired(o: Owner, permissions = ["owner.message", "owner.status", "owner.approval"]) {
-  const kp = await generateKeyPair();
+async function paired(o: Owner, permissions = ["owner.message", "owner.status", "owner.approval"], kp?: KeyPair) {
+  kp ??= await generateKeyPair();
   const p = (await call("POST", "/v1/pairings", undefined, o.auth)).body;
   const c = await claim(kp, p.code);
   expect(c.status).toBe(201);
-  const detail = (await call("GET", `/v1/pairings/${p.id}`, undefined, o.auth)).body;
+  const detail = (await call("GET", `/v1/pairings/${p.id}?permissions=${permissions.join(",")}`, undefined, o.auth)).body;
   const r = await call("POST", `/v1/pairings/${p.id}/confirm`, { permissions }, { ...o.auth, ...approvalHeader(approval(o.approver, detail.approval_request)) });
   expect(r.status).toBe(200);
   return { kp, pairing: p, claim: c.body, detail, agent: r.body };
@@ -72,21 +72,24 @@ test("M1 path: code, claim with a Presentation, the same match string on both si
   const c = await claim(kp, p.body.code.toLowerCase());
   expect(c.status).toBe(201);
   expect(c.body).toMatchObject({ pairing_id: p.body.id, poll_interval: 2, sas: { version: "pair-sas/1", names: pairSas(p.body.code, kp.did) } });
-  const detail = (await call("GET", `/v1/pairings/${p.body.id}`, undefined, o.auth)).body;
+  const bare = (await call("GET", `/v1/pairings/${p.body.id}`, undefined, o.auth)).body;
+  const detail = (await call("GET", `/v1/pairings/${p.body.id}?permissions=owner.status,owner.message`, undefined, o.auth)).body;
   expect(detail).toMatchObject({ state: "claimed", agent: { did: kp.did, framework: "openclaw", host: "laptop" }, sas: c.body.sas });
-  expect(detail.approval_request).toMatchObject({ verifier_did: SERVICE_DID, owner_did: o.did, action: "pairing.confirm", payload: { agent_did: kp.did, match: c.body.sas.names } });
+  expect(detail.approval_request).toMatchObject({ verifier_did: SERVICE_DID, owner_did: o.did, action: "pairing.confirm", payload: { agent_did: kp.did, match: c.body.sas.names, permissions: ["owner.message", "owner.status"] } });
   expect((await asAgent(kp, "GET", `/v1/pair/${p.body.id}`)).body).toEqual({ state: "claimed", owner_did: null, permissions: [] });
 
   calls.length = 0;
   const confirm = (h: Record<string, string>) => call("POST", `/v1/pairings/${p.body.id}/confirm`, { permissions: ["owner.status", "owner.message"] }, { ...o.auth, ...h });
   expect((await confirm({})).status).toBe(428);
   expect((await confirm(approvalHeader(approval(o.approver, { ...detail.approval_request, payload_digest: "0".repeat(64) })))).body.error).toBe("approval_invalid");
+  // Gate lead: the owner's approval covers the permission list, so one signed for none does not grant two.
+  expect((await confirm(approvalHeader(approval(o.approver, bare.approval_request)))).body.error).toBe("approval_invalid");
   const ok = await confirm(approvalHeader(approval(o.approver, detail.approval_request)));
   expect(ok.status).toBe(200);
   expect(ok.body).toMatchObject({ did: kp.did, state: "active", permissions: ["owner.message", "owner.status"], products: [...PRODUCTS].sort() });
   expect((await confirm(approvalHeader(approval(o.approver, detail.approval_request)))).body.error).toBe("not_claimed");
   expect(calls.map((x) => [x.product, x.path, x.body.type])).toEqual(PRODUCTS.map((pr) => [pr, "/v1/oe/events", "agent.paired"]));
-  expect(calls[0].body.data).toEqual({ agent_did: kp.did, owner_did: o.did, permissions: ["owner.message", "owner.status"], framework: "openclaw", seq: 1 });
+  expect(calls[0].body.data).toEqual({ agent_did: kp.did, owner_did: o.did, permissions: ["owner.message", "owner.status"], framework: "openclaw", seq: 1, link_epoch: 1 });
 
   later(2);
   const first = (await asAgent(kp, "GET", `/v1/pair/${p.body.id}`)).body;
@@ -262,4 +265,18 @@ test("housekeeping: acknowledged inbox items, old pairings and step-up requests 
   expect((await d.db.all<{ id: string }>("SELECT id FROM inbox WHERE id IN ('itm_old', 'itm_live')")).map((r) => r.id)).toEqual(["itm_live"]);
   expect(await d.db.first("SELECT 1 FROM pairings WHERE account_id = $1", [o.accountId])).toBeNull();
   expect((await asAgent(kp, "GET", "/v1/agent")).status).toBe(200); // the agent itself stays paired
+});
+
+test("gate lead: each pairing is a new link_epoch on agent.paired, and agent.unlinked names the link it ends", async () => {
+  const first = await owner(), second = await owner();
+  const { kp } = await paired(first);
+  calls.length = 0;
+  await call("DELETE", `/v1/agents/${kp.did}`, undefined, first.auth);
+  expect(calls.map((x) => [x.body.type, x.body.data.link_epoch])).toEqual(PRODUCTS.map(() => ["agent.unlinked", 1]));
+  calls.length = 0;
+  await paired(second, ["owner.message"], kp);
+  expect(calls.filter((x) => x.body.type === "agent.paired").map((x) => x.body.data.link_epoch)).toEqual(PRODUCTS.map(() => 2));
+  calls.length = 0;
+  await call("DELETE", `/v1/agents/${kp.did}`, undefined, second.auth);
+  expect(calls.map((x) => x.body.data.link_epoch)).toEqual(PRODUCTS.map(() => 2)); // a late unlink of link 1 is older than this
 });

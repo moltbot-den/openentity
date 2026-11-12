@@ -14,7 +14,7 @@ import { BUNDLE_ID } from "./wellknown.ts";
 
 export type Binding =
   | { type: "app_attest"; key_id: string; public_key: string; counter: number }
-  | { type: "android_key"; jwk: { kty: "EC"; crv: "P-256"; x: string; y: string }; key_storage: "tee" | "strongbox" };
+  | { type: "android_key"; jwk: { kty: "EC"; crv: "P-256"; x: string; y: string }; key_storage: "tee" | "strongbox"; counter?: number };
 
 /** A decoded Play Integrity verdict (standard request), from Google's decodeIntegrityToken. */
 export interface IntegrityVerdict { requestHash: string; packageName: string; deviceIntegrity: string[]; appRecognition: string }
@@ -72,7 +72,12 @@ async function proven(d: Deps, b: Binding, p: BodyProof, use: "refresh" | "sign-
   const sig = p.header("x-oe-device-signature") ?? fail(status, missing, "send X-OE-Device-Signature: the Keystore key's signature over the request body");
   if (!verify("sha256", p.body, createPublicKey({ key: b.jwk, format: "jwk" }), Buffer.from(sig, "base64url"))) fail(401, "binding_invalid", "the device signature does not verify");
   await integrity(d, p.header("x-oe-play-integrity"), sha256(p.body).toString("hex"), use);
-  return b;
+  if (use === "sign-in") return b;
+  // A refresh body carries device_counter, above the last one: a captured refresh cannot be replayed in the retry grace.
+  let counter: unknown;
+  try { counter = JSON.parse(Buffer.from(p.body).toString("utf8")).device_counter; } catch { /* refused below */ }
+  if (!Number.isSafeInteger(counter) || (counter as number) <= (b.counter ?? 0)) fail(401, "binding_invalid", "device_counter must be an integer above the last refresh's");
+  return { ...b, counter: counter as number };
 }
 
 /**

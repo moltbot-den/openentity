@@ -21,7 +21,7 @@ const PAUSE_LOCK = 7_231_001; // pg advisory lock: pause_changes rows commit in 
 
 export interface AgentRow {
   did: string; account_id: string; owner_did: string; label: string | null; framework: string | null; host: string | null;
-  permissions: string; perm_seq: number; state: "active" | "paused" | "unlinked"; pause_seq: number; status: string | null;
+  permissions: string; perm_seq: number; state: "active" | "paused" | "unlinked"; pause_seq: number; link_epoch: number; status: string | null;
   connection_id: string | null; paired_at: number; last_seen_at: number | null;
 }
 
@@ -59,7 +59,7 @@ async function unlink(d: Deps, a: AgentRow, message: string) {
   // A failed removal leaves the objects to the bucket's 90-day expiry; nothing points at them any more.
   if (files.length && d.blobs) await d.blobs.remove(files.map((f) => f.s3_key)).catch((e) => console.error(`removing ${a.did}'s attachments failed`, e));
   await closeSocket(d, a.did, a.connection_id, 4003, "unlinked", message);
-  const data = { agent_did: a.did, owner_did: a.owner_did };
+  const data = { agent_did: a.did, owner_did: a.owner_did, link_epoch: Number(a.link_epoch) };
   await Promise.all((await productsOf(d, a.did)).map((p) => sendEvent(d, p, "agent.unlinked", data)));
 }
 

@@ -95,7 +95,7 @@ try {
   };
   const claim = (await asAgent("POST", "/v1/pair", { code: pairing.code, presentation: await buildPresentation(kp, { audience: SERVICE, nonce: `pair:${pairing.code}` }), framework: "e2e", sdk: "openentity", sdk_version: "e2e" })).body;
   if (claim.sas.names.join() !== pairSas(pairing.code, kp.did).join()) throw new Error("match strings differ");
-  const detail = (await call("GET", `/v1/pairings/${pairing.id}`, undefined, auth)).body;
+  const detail = (await call("GET", `/v1/pairings/${pairing.id}?permissions=owner.message,owner.status,owner.approval`, undefined, auth)).body;
   await call("POST", `/v1/pairings/${pairing.id}/confirm`, { permissions: ["owner.message", "owner.status", "owner.approval"] }, { ...auth, "x-oe-approval": sign(detail.approval_request) });
   await new Promise((r) => setTimeout(r, 2100));
   const status = (await asAgent("GET", `/v1/pair/${pairing.id}`)).body;
