@@ -158,3 +158,16 @@ test("App Review: an alarm when APP_REVIEW_OPEN stays on for 21 days, per stage"
     });
   }
 });
+
+test("alarms: every account alarm acts on the one Monitoring topic, whose only subscriber is the relay Lambda (no email confirmation)", () => {
+  for (const t of [prod, staging]) {
+    const topics = Object.keys(t.findResources("AWS::SNS::Topic"));
+    expect(topics).toHaveLength(1);
+    expect(all(t, "AWS::SNS::Subscription").map((s) => s.Properties.Protocol)).toEqual(["lambda"]);
+    const alarms = all(t, "AWS::CloudWatch::Alarm");
+    for (const a of alarms) expect(a.Properties.AlarmActions).toEqual([{ Ref: topics[0] }]);
+    const described = alarms.map((a) => JSON.stringify(a.Properties.AlarmDescription ?? ""));
+    for (const what of ["APP_REVIEW_OPEN", "5xx above 1% for 5 minutes at CloudFront", "Lambda errors", "Lambda throttles"]) expect(described.some((d) => d.includes(what))).toBe(true);
+    expect(alarms.some((a) => a.Properties.MetricName === "ApproximateNumberOfMessagesVisible")).toBe(true); // the forwarder's dead letters
+  }
+});
