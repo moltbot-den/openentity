@@ -811,7 +811,7 @@ paths:
       description: |
         Returns an ApprovalRequest whose verifier is the service DID. Sign it with approval/2.0 (decision approve) using a
         key in the owner key log, then send the Approval2 in X-OE-Approval on the action's own call. Params per action:
-        agent.resume {agent_did}; agent.permissions.widen {agent_did, permissions}; method.add {type};
+        agent.resume {agent_did}; agent.permissions.widen {agent_did, permissions}; method.add {type, subject} (subject: the new sign-in's Apple or Google `sub`, email address or passkey credential id; the added method must be exactly that one);
         method.remove {method_id}; email.change {email}; account.delete {}; deletion.cancel {}; product.link {product}.
         For deletion.cancel the service also accepts the root passkey (approval/2.0, webauthn form, verified with
         verifyApproval allowRoot); revoked approvers cannot cancel a deletion. An account with no key log gets

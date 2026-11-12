@@ -9,6 +9,7 @@ import { createRemoteJWKSet, errors as joseErrors, jwtVerify, SignJWT, type JWTV
 import type { Deps } from "./app.ts";
 import { type AppleData, exchangeAppleCode } from "./apple.ts";
 import { newId, now } from "./db.ts";
+import { REAUTH_WINDOW } from "./deletion.ts";
 import { normalizeEmail, startEmail, verifyEmailCode } from "./email.ts";
 import { bearer, fail, ipOf, json, str } from "./http.ts";
 import { type Identity, appleKeys, googleKeys, nonceHash, verifyApple, verifyGoogle } from "./idtoken.ts";
@@ -64,8 +65,10 @@ export function testIdpOf(d: Deps) {
 
 /** Redeems an Android login code (POST /v1/token grant_type login_code): single use, 120 seconds, same install. */
 export async function redeemLoginCode(d: Deps, code: string, installId: string | null): Promise<{ accountId: string; amr: string }> {
+  // Never for a deleted account (deletion also removes its codes).
   const row = await d.db.first<{ account_id: string; install_id: string; amr: string }>(
-    "UPDATE login_codes SET used_at = $2 WHERE hash = $1 AND used_at IS NULL AND expires_at > $2 RETURNING account_id, install_id, amr",
+    `UPDATE login_codes l SET used_at = $2 FROM accounts a WHERE l.hash = $1 AND l.used_at IS NULL AND l.expires_at > $2
+      AND a.id = l.account_id AND a.deleted_at IS NULL RETURNING l.account_id, l.install_id, l.amr`,
     [createHash("sha256").update(code).digest("hex"), now()]);
   if (!row || row.install_id !== installId) fail(401, "invalid_grant", "the login code is unknown, expired, used, or was issued to another install");
   return { accountId: row!.account_id, amr: row!.amr };
@@ -246,12 +249,21 @@ export function routes(app: Hono, d: Deps) {
     const sub = typeof ev?.sub === "string" ? ev.sub : fail(400, "bad_request", "events.sub is required");
     const m = await d.db.first<{ account_id: string; data: string }>("SELECT account_id, data FROM methods WHERE type = 'apple' AND subject = $1", [sub]);
     if (!m) return c.body(null, 200);
+    // In order (gate hardening): an event acts only on what existed when Apple sent it, and an older event never
+    // overrides a newer one, so a late consent-revoked cannot end a session or a token made after it.
+    const at = Math.floor(Number(ev.event_time ?? Number(p!.iat) * 1000) / 1000);
+    const data = JSON.parse(m.data || "{}");
+    if (!Number.isFinite(at) || at <= Number(data.apple_event_at ?? 0)) return c.body(null, 200);
     if (["consent-revoked", "account-delete", "account-deleted"].includes(ev.type)) {
-      await d.db.run("UPDATE sessions SET revoked_at = $2, revoke_reason = $3 WHERE account_id = $1 AND amr = 'apple' AND revoked_at IS NULL", [m.account_id, now(), `apple_${String(ev.type).replace(/-/g, "_")}`]);
-      await d.db.run("UPDATE methods SET data = '{}' WHERE type = 'apple' AND subject = $1", [sub]); // Apple ended it: nothing left to revoke
+      await d.db.run("UPDATE sessions SET revoked_at = $2, revoke_reason = $3 WHERE account_id = $1 AND amr = 'apple' AND revoked_at IS NULL AND created_at <= $4",
+        [m.account_id, now(), `apple_${String(ev.type).replace(/-/g, "_")}`, at]);
+      // Apple ended the tokens it had issued by then; a token from a later sign-in stays, for deletion to revoke.
+      const keep = Number(data.apple_token_at ?? 0) > at;
+      await d.db.run("UPDATE methods SET data = $2 WHERE type = 'apple' AND subject = $1",
+        [sub, JSON.stringify(keep ? { ...data, apple_event_at: at } : { apple_event_at: at })]);
     } else if (ev.type === "email-disabled" || ev.type === "email-enabled") {
       // Recorded on the method: a private relay address that Apple stopped (or resumed) forwarding.
-      await d.db.run("UPDATE methods SET data = $2 WHERE type = 'apple' AND subject = $1", [sub, JSON.stringify({ ...JSON.parse(m.data || "{}"), email_disabled: ev.type === "email-disabled" })]);
+      await d.db.run("UPDATE methods SET data = $2 WHERE type = 'apple' AND subject = $1", [sub, JSON.stringify({ ...data, email_disabled: ev.type === "email-disabled", apple_event_at: at })]);
     }
     return c.body(null, 200);
   });
@@ -268,12 +280,11 @@ export function routes(app: Hono, d: Deps) {
     const cl = clientOf(c, b.client);
     const email = normalizeEmail(str(b.email, "email", 254));
     const proven = cl.platform !== "web" || await turnstileOk(d, b.turnstile_token, ipOf(c));
-    // Web sign-up needs Turnstile. Without it a code goes only to an existing email sign-in; the answer is the same either way.
-    if (!proven && !(await d.db.first("SELECT 1 FROM methods m JOIN accounts a ON a.id = m.account_id WHERE m.type = 'email' AND m.subject = $1 AND a.deleted_at IS NULL", [email]))) {
-      return c.json({ challenge_id: newId("eml"), expires_at: now() + 600 }, 202);
-    }
+    // Web sign-up needs Turnstile. Without it a code goes only to an existing email sign-in, but a row is stored either
+    // way, so start and verify answer alike whether or not the address has an account (gate lead: decoy).
+    const mail = proven || !!(await d.db.first("SELECT 1 FROM methods m JOIN accounts a ON a.id = m.account_id WHERE m.type = 'email' AND m.subject = $1 AND a.deleted_at IS NULL", [email]));
     // The App Review demo address takes its fixed code (verify below), so nothing is mailed to it.
-    const send = email === d.web.appReview?.email ? async () => {} : d.sendCode;
+    const send = mail && email !== d.web.appReview?.email ? d.sendCode : async () => {};
     const r = await startEmail(d.db, { email, installId: cl.install_id, pepper: d.pepper, send, human: proven });
     return c.json({ challenge_id: r.challengeId, expires_at: r.expiresAt }, 202);
   });
@@ -307,6 +318,8 @@ export function routes(app: Hono, d: Deps) {
       // Before the key log, one passkey: the onboarding root. After it, a new passkey is for the key log (an enrollment,
       // verified here) or a sign-in method (POST /v1/account/methods with step-up).
       if (!a?.owner_did && mine.length) fail(409, "passkey_exists", "this account has its root passkey; turn on approvals (the genesis entry) first");
+      // The root passkey decides who holds every step-up power: a stale session may not create it (gate M2).
+      if (!a?.owner_did && now() - caller.authTime > REAUTH_WINDOW) fail(401, "reauth_required", "sign in again, then turn on approvals within 5 minutes");
       options = await registrationOptions(d.rp, { accountId, userName: a?.email ?? accountId, exclude: mine.map((m) => ({ id: m.subject })) });
     } else {
       options = await authenticationOptions(d.rp);
@@ -327,6 +340,7 @@ export function routes(app: Hono, d: Deps) {
     if (ch!.mode === "register") {
       const caller = await bearer(c, d);
       if (caller.accountId !== ch!.account_id) fail(403, "forbidden", "this challenge belongs to another account");
+      if (!caller.ownerDid && now() - caller.authTime > REAUTH_WINDOW) fail(401, "reauth_required", "sign in again, then turn on approvals within 5 minutes");
       const r = await verifyRegistration(d.rp, b.response, ch!.challenge);
       const methodId = newId("mth"), t = now();
       // With a key log this passkey is offered to the log (POST /v1/keylog/enrollments): kept, but `pending`, so it is

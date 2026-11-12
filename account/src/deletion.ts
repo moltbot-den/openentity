@@ -52,6 +52,7 @@ export async function deleteAccount(d: Deps, accountId: string): Promise<number>
     await tx.run("DELETE FROM sessions WHERE account_id = $1", [accountId]);
     await tx.run("DELETE FROM methods WHERE account_id = $1", [accountId]); // the same Apple ID, Google account or email may start a new account
     await tx.run("DELETE FROM push_tokens WHERE account_id = $1", [accountId]);
+    await tx.run("DELETE FROM login_codes WHERE account_id = $1", [accountId]);
     await tx.run("UPDATE deletion_requests SET state = 'done' WHERE account_id = $1 AND state = 'pending'", [accountId]);
   });
   await unlinkAll(d, accountId); // their messages and attachments go too, and each agent may pair again

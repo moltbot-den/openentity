@@ -10,7 +10,7 @@ import type { Purpose } from "./seal.ts";
 export interface AppleSiwa { teamId: string; keyId: string; privateKey: string }
 export interface Vault { seal(purpose: Purpose, text: string): Promise<string>; open(purpose: Purpose, sealed: string): Promise<string> }
 /** What methods.data keeps for an Apple sign-in. */
-export interface AppleData { apple_refresh?: string; apple_client_id?: string }
+export interface AppleData { apple_refresh?: string; apple_client_id?: string; apple_token_at?: number }
 
 const APPLE = "https://appleid.apple.com";
 
@@ -38,7 +38,7 @@ export async function exchangeAppleCode(d: Deps, code: string, clientId: string,
   }).catch(() => fail(502, "provider_error", "Apple could not be reached for the code exchange"));
   const j: any = await r.json().catch(() => null);
   if (!r.ok || typeof j?.refresh_token !== "string") fail(502, "provider_error", `Apple's code exchange answered ${r.status} ${j?.error ?? ""}`.trim());
-  return { apple_refresh: await v.seal("apple-refresh", j.refresh_token), apple_client_id: clientId };
+  return { apple_refresh: await v.seal("apple-refresh", j.refresh_token), apple_client_id: clientId, apple_token_at: now() };
 }
 
 /** Revokes Apple's refresh token for each Apple sign-in of the account (account deletion). Logged, never thrown. */

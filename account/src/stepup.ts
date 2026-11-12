@@ -30,7 +30,11 @@ export function normalParams(action: string, p: any): Record<string, unknown> {
   switch (action) {
     case "agent.resume": need(AGENT_DID.test(p.agent_did ?? ""), "params.agent_did"); return { agent_did: p.agent_did };
     case "agent.permissions.widen": need(AGENT_DID.test(p.agent_did ?? ""), "params.agent_did"); return { agent_did: p.agent_did, permissions: permissionList(p.permissions) };
-    case "method.add": need(["apple", "google", "passkey", "email"].includes(p.type), "params.type"); return { type: p.type };
+    // The approval names the new sign-in itself (gate hardening), not only its kind: the Apple or Google `sub`, the
+    // email address, or the passkey credential id that the proof then signs in as.
+    case "method.add": need(["apple", "google", "passkey", "email"].includes(p.type), "params.type");
+      need(typeof p.subject === "string" && p.subject.length > 0 && p.subject.length <= 1024, "params.subject");
+      return { type: p.type, subject: p.type === "email" ? p.subject.trim().toLowerCase() : p.subject };
     case "method.remove": need(ID.test(p.method_id ?? ""), "params.method_id"); return { method_id: p.method_id };
     case "email.change": need(typeof p.email === "string" && p.email.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(p.email), "params.email"); return { email: p.email.trim().toLowerCase() };
     case "product.link": need(typeof p.product === "string" && p.product.length <= 128, "params.product"); return { product: p.product };

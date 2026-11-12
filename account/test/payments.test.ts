@@ -39,7 +39,11 @@ const SA = "play-push@oe.iam.gserviceaccount.com", AUD = "https://staging.accoun
 const pushToken = (claims: object = {}) => new SignJWT({ email: SA, email_verified: true, ...claims }).setProtectedHeader({ alg: "RS256", kid: "g1" })
   .setIssuer("https://accounts.google.com").setAudience(AUD).setIssuedAt().setExpirationTime("5m").sign(pubsub.privateKey);
 
-const { d, app, out } = await webApp({ web: { appleRoots: [testRoot], play: playApi, playPush: { audience: AUD, serviceAccount: SA, keys: pubsubKeys } } });
+let productsRefuse = false; // a product answering 400 to plan.changed, for the resend check
+const { d, app, out } = await webApp({
+  web: { appleRoots: [testRoot], play: playApi, playPush: { audience: AUD, serviceAccount: SA, keys: pubsubKeys } },
+  answer: (url) => (productsRefuse && url.endsWith("/v1/oe/events") ? Response.json({ error: "bad_request" }, { status: 400 }) : undefined),
+});
 const granted = (o: Owner) => out.calls.filter((c) => c.url.endsWith("/v1/oe/events") && c.body.type === "plan.changed" && c.body.data.owner_did === o.ownerDid).map((c) => ({ host: new URL(c.url).host, ...c.body.data }));
 const tokenOf = async (o: Owner) => (await d.db.first<any>("SELECT app_account_token FROM accounts WHERE id = $1", [o.accountId])).app_account_token as string;
 
@@ -195,5 +199,40 @@ describe("grants", () => {
     expect((await call(app, "POST", "/v1/store/google/notifications", body, { authorization: `Bearer ${await pushToken()}` })).status).toBe(204);
     const off = (await webApp()).app;
     expect((await call(off, "POST", "/v1/store/google/notifications", body, { authorization: `Bearer ${await pushToken()}` })).status).toBe(503);
+  });
+});
+
+describe("gate fixes (Day 6 review)", () => {
+  test("M7: a Play subscription token grants only the product Google names, on purchases and on notifications", async () => {
+    const o = await owner(d), token = `pt-${randomUUID()}`;
+    play.set(token, { subscriptionState: "SUBSCRIPTION_STATE_ACTIVE", lineItems: [{ productId: "org.openentity.app.sma.pro.monthly", expiryTime: new Date(ms(nowS() + 86_400)).toISOString() }], externalAccountIdentifiers: { obfuscatedExternalAccountId: await tokenOf(o) }, testPurchase: {} });
+    const claim = await call(app, "POST", "/v1/purchases", { platform: "android", product_id: "org.openentity.app.ass.team.yearly", purchase_token: token }, bearer(o));
+    expect([claim.status, claim.body.error]).toEqual([422, "transaction_invalid"]);
+    const pushed = await playPush({ subscriptionNotification: { version: "1.0", notificationType: 4, purchaseToken: token, subscriptionId: "org.openentity.app.ass.team.yearly" } });
+    expect(pushed.status).toBe(422);
+    expect(granted(o)).toEqual([]);
+    const honest = await call(app, "POST", "/v1/purchases", { platform: "android", product_id: "org.openentity.app.sma.pro.monthly", purchase_token: token }, bearer(o));
+    expect(honest.body.entitlements[0]).toMatchObject({ plan: "pro", source: "play" });
+  });
+
+  test("lead: a refused or lost plan.changed is resent under the same event id until the product takes it", async () => {
+    const { runJobs } = await import("../src/jobs.ts");
+    const o = await owner(d), t = await txn(o, "org.openentity.app.clawgrc.starter.monthly");
+    productsRefuse = true;
+    expect((await notify("SUBSCRIBED", t)).status).toBe(200);
+    productsRefuse = false;
+    const pending = await d.db.first<any>("SELECT event_id, delivered_at FROM entitlements WHERE store_transaction_id = $1", [t.originalTransactionId]);
+    expect(pending.delivered_at).toBeNull();
+    await d.db.run("UPDATE entitlements SET next_send_at = 0 WHERE store_transaction_id = $1", [t.originalTransactionId]);
+    await runJobs(d);
+    const sent = out.calls.filter((c) => c.url.endsWith("/v1/oe/events") && c.body.data?.store_transaction_id === t.originalTransactionId);
+    expect(sent.map((c) => c.body.id)).toEqual([pending.event_id, pending.event_id]); // refused once, then taken
+    expect((await d.db.first<any>("SELECT delivered_at FROM entitlements WHERE store_transaction_id = $1", [t.originalTransactionId])).delivered_at).not.toBeNull();
+    // A grant whose send never happened (a crash after the write) is pending too, and the job sends it.
+    const lost = await txn(o, "org.openentity.app.sma.team.monthly");
+    await d.db.run(`INSERT INTO entitlements (source, store_transaction_id, account_id, product, plan, sku, status, signed_at, created_at, updated_at, event_id, send_attempts, next_send_at)
+      VALUES ('iap', $1, $2, 'did:web:securemyagent.ai', 'team', 'org.openentity.app.sma.team.monthly', 'active', 1, 1, 1, 'evt_lostgrant', 0, 0)`, [lost.originalTransactionId, o.accountId]);
+    await runJobs(d);
+    expect(out.calls.some((c) => c.body.id === "evt_lostgrant" && c.body.type === "plan.changed")).toBe(true);
   });
 });

@@ -6,10 +6,12 @@ import { purgeTestAccounts, runDueDeletions } from "./deletion.ts";
 import { emitMetrics } from "./metrics.ts";
 import { retryOutbox } from "./outbound.ts";
 import { appReviewWatch } from "./signin.ts";
+import { sendGrants } from "./store.ts";
 
 const JOBS: [string, (d: Deps) => Promise<unknown>][] = [
   ["outbox", retryOutbox],
   ["deletions", runDueDeletions],
+  ["grants", (d) => sendGrants(d)],
   ["test_accounts", (d) => purgeTestAccounts(d)], // staging only (deletion.ts)
   ["app_review", appReviewWatch],
   // PendingRecoveriesMax, every tick (0 included): the most recoveries one owner started in the last 24 hours that have
