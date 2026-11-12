@@ -1,0 +1,226 @@
+# Frozen event catalog for the OpenEntity app (docs/mobile/PLAN.md section 13.2).
+# The generator (gen.mjs) turns this file into typed helpers for Swift, Kotlin,
+# TypeScript and Python, and the forwarder validates every event against it.
+# Change this file only with a new `version` and a matching PR to every consumer.
+version: 1
+
+# Source of an event: who may send it.
+#   client  the app, through POST /v1/events
+#   web     account.openentity.org pages, through POST /v1/events
+#   server  a backend, through POST /v1/events/ingest
+#
+# Property types:
+#   token    string, 1-64 chars of [A-Za-z0-9_.:-]. No spaces, no @, no /, so free text,
+#            email addresses and secret paths cannot pass.
+#   did      like token but up to 256 chars (agent DIDs are allowed as properties).
+#   int      integer, 0 to 2147483647 (price_usd is a number).
+#   number   finite number.
+#   bool     true or false.
+#   enum     one of `values`.
+# A property is required unless it says `optional: true`.
+
+# Every event carries these. They are not event properties.
+envelope:
+  event_id:    { type: uuid }                 # idempotency key; Amplitude insert_id, PostHog uuid
+  ts_ms:       { type: int64 }                # event time, ms since epoch
+  user_id:     { type: token, optional: true } # HMAC of the owner DID; absent before sign-up
+  install_id:  { type: token, optional: true } # random install id; stands in before sign-up
+  platform:    { type: enum, values: [ios, android, web, server] }
+  app_version: { type: token, optional: true }
+  # at least one of user_id and install_id is required (checked by the validator)
+
+# Allowed on every event.
+common_props:
+  agent_did: { type: did, optional: true }
+
+# Hard rule. Nothing below may ever appear as a property name, and no value may carry
+# one of these things. Enforced three ways: the generator refuses a declared property
+# whose name matches, the validator rejects undeclared properties and values that are
+# not plain tokens, and test/forbidden.test.ts fails if any of it regresses.
+forbidden:
+  rule: >-
+    Never a secret path or value, approval summary text, message text, photos,
+    or email addresses.
+  names:
+    - secret
+    - secret_path
+    - secret_value
+    - path
+    - value
+    - summary
+    - approval_summary
+    - message
+    - message_text
+    - text
+    - body
+    - content
+    - photo
+    - image
+    - email
+    - email_address
+    - mail
+    - password
+    - token_value
+    - api_key
+  # Substrings: a property name containing any of these is refused.
+  name_contains: [secret, summary, message_text, photo, email, password]
+
+events:
+  # Install
+  app_first_opened:   { source: client }
+  onboarding_viewed:  { source: client }
+
+  # Sign-up and sign-in
+  sign_in_started:
+    source: client
+    props: { method: &method { type: enum, values: [apple, google, passkey, email_code] } }
+  sign_in_completed:
+    source: server
+    props: { method: *method, new_account: { type: bool } }
+  sign_in_failed:
+    source: server
+    props: { method: *method, reason: { type: token } }
+  new_device_sign_in_notified: { source: server }
+  sign_in_method_linked:
+    source: server
+    props: { method: *method }
+  sign_in_method_removed:
+    source: server
+    props: { method: *method }
+  passkey_created: { source: server }
+  owner_key_log_created:
+    source: server
+    props: { approver_kind: { type: token } }
+  approver_added:
+    source: server
+    props:
+      platform: { type: enum, values: [ios, android, web] }
+      storage: { type: enum, values: [secure_enclave, strongbox, tee, passkey] }
+      strong_integrity: { type: bool }
+  backup_added:         { source: server }
+  recovery_started:     { source: server }
+  recovery_cancelled:   { source: server }
+  recovery_completed:   { source: server }
+  root_replace_started: { source: server }
+  root_replaced:        { source: server }
+  push_permission_answered:
+    source: client
+    props: { granted: { type: bool } }
+  account_deleted:
+    source: server
+    props: { deletion_path: { type: token } }
+
+  # Pairing
+  pair_code_created: { source: server }
+  pair_page_viewed:  { source: web }
+  pair_requested:
+    source: server
+    props: { framework: { type: token }, sdk: { type: token }, sdk_version: { type: token } }
+  pair_confirmed:
+    source: server
+    props: { framework: { type: token, optional: true }, permissions_count: { type: int }, seconds_from_code: { type: int } }
+  pair_failed:
+    source: server
+    props: { reason: { type: token }, framework: { type: token, optional: true } }
+  pair_code_expired: { source: server }
+  product_provisioned:
+    source: server
+    props: { product: &product { type: enum, values: [openentity, moltbotden, securemyagent, agentsecretstore, clawgrc] }, ok: { type: bool } }
+  agent_first_status: { source: server }
+
+  # Approvals
+  approval_requested:
+    source: server
+    props: { product: *product, kind: &kind { type: token }, risk: &risk { type: enum, values: [low, medium, high] } }
+  approval_push_sent:   { source: server }
+  approval_push_opened: { source: client }
+  approval_viewed:
+    source: client
+    props: { product: *product, kind: *kind, risk: *risk, seconds_left: { type: int } }
+  approval_decided:
+    source: server
+    props:
+      decision: { type: enum, values: [approved, denied] }
+      product: *product
+      kind: *kind
+      risk: *risk
+      seconds_to_decide: { type: int }
+      number_match: { type: bool }
+      form: { type: token }
+  approval_expired: { source: server }
+  approval_rejected_by_verifier:
+    source: server
+    props: { product: *product, reason: { type: token } }
+  legacy_approval_attempted:
+    source: server
+    props: { product: *product }
+  agent_auto_muted: { source: server }
+
+  # Messages and control
+  agent_message_sent:
+    source: server
+    props: { has_attachment: { type: bool } }
+  owner_message_sent: { source: server }
+  agent_status_reported:
+    source: server
+    props: { state: { type: token } }
+  command_sent:
+    source: server
+    props: { command: { type: token } }
+  agent_paused:
+    source: server
+    props: { source: { type: token } }
+  agent_pause_enforced:
+    source: server
+    props: { product: *product, seconds: { type: int } }
+  agent_resumed:         { source: server }
+  live_activity_started: { source: client }
+
+  # Purchases
+  plans_viewed:
+    source: client
+    props: { trigger: { type: token }, product: { type: enum, values: [openentity, moltbotden, securemyagent, agentsecretstore, clawgrc], optional: true } }
+  purchase_started:
+    source: client
+    props: { sku: &sku { type: token }, rail: &rail { type: enum, values: [apple_iap, google_play, stripe, credits] } }
+  purchase_completed:
+    source: server
+    props: { sku: *sku, rail: *rail, price_usd: { type: number }, storefront: { type: token } }
+  purchase_failed:
+    source: client
+    props: { reason: { type: token } }
+  purchase_restored:        { source: server }
+  subscription_renewed:     { source: server }
+  subscription_cancelled:   { source: server }
+  subscription_refunded:    { source: server }
+  plan_granted:
+    source: server
+    props: { product: *product, source: { type: token } }
+  credits_reserved:
+    source: server
+    props: { feature: &feature { type: token }, credits: { type: number }, balance: { type: number } }
+  credits_insufficient:
+    source: server
+    props: { feature: *feature }
+
+  # Retention
+  app_opened: { source: client }
+
+  # Sections and AI
+  entity_viewed: { source: client }
+  attestation_verified:
+    source: client
+    props: { ok: { type: bool } }
+  checkup_completed:
+    source: server
+    props: { score_band: { type: token }, judged: { type: bool } }
+  secret_added:                { source: server }
+  token_revoked:               { source: server }
+  evidence_filed:              { source: server }
+  exception_decided:           { source: server }
+  post_created:                { source: server }
+  contract_milestone_approved: { source: server }
+  intent_invoked:
+    source: client
+    props: { intent: { type: token }, source: { type: token } }
+  glasses_ask_completed: { source: client }
