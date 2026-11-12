@@ -85,7 +85,7 @@ describe('generated reference', () => {
   });
 
   it('the SDK pages list every exported function from the source', () => {
-    const ts = ['core', 'objects', 'merkle', 'registry', 'client', 'httpsig', 'owner', 'pair'].map((m) => read(join(repo, `sdk/ts/src/${m}.ts`))).join('\n');
+    const ts = ['core', 'objects', 'merkle', 'registry', 'client', 'httpsig', 'owner', 'pair', 'agent'].map((m) => read(join(repo, `sdk/ts/src/${m}.ts`))).join('\n');
     const tsPage = mainText(page('/sdk/typescript'));
     const lines = ts.split('\n');
     lines.forEach((l, i) => {
@@ -93,7 +93,7 @@ describe('generated reference', () => {
       if (name && !lines[i - 1].includes('@internal')) expect(tsPage, name).toContain(`${name}(`);
     });
     const pyPage = mainText(page('/sdk/python'));
-    for (const file of ['client.py', 'core.py', 'owner.py', 'pair.py']) {
+    for (const file of ['client.py', 'core.py', 'owner.py', 'pair.py', 'agent.py']) {
       for (const [, name] of read(join(repo, 'sdk/python/openentity', file)).matchAll(/^def ([a-z]\w*)\(/gm)) expect(pyPage, name).toContain(`${name}(`);
     }
   });

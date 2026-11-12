@@ -8,6 +8,7 @@ import { CliError, EXIT } from "./errors";
 import { conformance } from "./conformance";
 import { logCmd, resolveCmd, verifyCmd } from "./log";
 import { dispute, find, verifyPresentationCmd } from "./peers";
+import { ownerCmd, pairCmd } from "./pair";
 import { record } from "./record";
 import type { Ctx, Result } from "./store";
 import pkg from "../package.json";
@@ -15,18 +16,19 @@ import pkg from "../package.json";
 const str = { type: "string" } as const;
 const bool = { type: "boolean" } as const;
 const OPTIONS = {
-  json: bool, help: bool, version: bool, "dry-run": bool, "extension-only": bool, agree: bool, write: bool, conflict: bool, "no-push": bool, "with-key": bool, force: bool, "no-attestations": bool, writes: bool, "i-understand-this-creates-entities": bool,
+  json: bool, help: bool, version: bool, "dry-run": bool, "extension-only": bool, agree: bool, write: bool, conflict: bool, "no-push": bool, "with-key": bool, force: bool, "no-attestations": bool, writes: bool, "i-understand-this-creates-entities": bool, openclaw: bool, wait: bool,
   registry: str, url: str, eid: str, name: str, description: str, operator: str, "operator-kind": str, contact: str, custody: str, model: str, provider: str, runtime: str,
   erc8004: str, wallet: str, chain: str, signature: str, entries: str, format: str, dir: str,
   type: str, reason: str, cost: str, context: str, "will-not-ref": str, topic: str, from: str, to: str, evidence: str, id: str, title: str, outcome: str,
   with: str, role: str, ref: str, event: str, link: str, out: str, key: str, previous: str, via: str, proof: str, audience: str, nonce: str,
   subject: str, object: str, statement: str, capability: str, capabilities: str, "alias-type": str, level: str, q: str,
+  account: str, framework: str, progress: str, summary: str, risk: str, "expires-in": str,
 } as const;
 
 const COMMANDS: Record<string, (c: Ctx) => Promise<Result>> = {
   adopt, whoami, self, anchor, document: documentCmd, record, alias, verify: verifyCmd, resolve: resolveCmd, log: logCmd, stats,
   export: exportCmd, import: importCmd, rotate: (c) => link(c, "rotation"), migrate: (c) => link(c, "migration"), recover, withdraw, present,
-  dispute, find, card, "verify-presentation": verifyPresentationCmd, conformance,
+  dispute, find, card, "verify-presentation": verifyPresentationCmd, conformance, pair: pairCmd, owner: ownerCmd,
 };
 
 const HELP = `openentity ${pkg.version}: adopt and keep an Open Entity identity (OEIS-1)
@@ -50,8 +52,14 @@ Usage: openentity <command> [options]   (also: oe)
   export [--with-key] [--out file] | import <file>
   rotate [--to keyfile] [--dry-run] | migrate [--to keyfile] | recover --previous <eid> --via <alias>
   withdraw --force
+  pair <OE-XXXX-XXXX> [--openclaw] [--account URL] [--name N] [--framework F] [--dir D]
+                            (link this agent to its owner's OpenEntity app; adopts first if this home has no entity,
+                             which signs the Declaration; prints the match items to compare, waits for the owner;
+                             --openclaw also writes IDENTITY.md and SOUL.md, installs the skill and registers the MCP server)
+  owner message "<text>" | status <running|idle|blocked|error|done> "<summary>" [--progress 0..1] | inbox
+        | ask --title T --summary S [--risk low|medium|high] [--expires-in 60..600] [--wait]
 
-Global: --json  --registry <url>  --eid <eid>   Env: OPENENTITY_HOME, OPENENTITY_REGISTRY, OPENENTITY_NAME, OPENENTITY_OPERATOR
+Global: --json  --registry <url>  --eid <eid>   Env: OPENENTITY_HOME, OPENENTITY_REGISTRY, OPENENTITY_NAME, OPENENTITY_OPERATOR, OPENENTITY_ACCOUNT
 Exit codes: 0 ok, 1 usage, 2 network, 3 verification failed, 4 registry rejected, 5 local state.
 Docs: https://openentity.org`;
 
@@ -76,7 +84,7 @@ export async function run(argv: string[], io: IO = stdio): Promise<number> {
   const fn = COMMANDS[cmd];
   if (!fn) return io.err(`openentity: unknown command "${cmd}". Try --help.\n`), EXIT.USAGE;
   try {
-    const r = await fn({ args, v: { ...v } });
+    const r = await fn({ args, v: { ...v }, say: (line) => (v.json ? io.err : io.out)(line + "\n") });
     io.out((v.json ? JSON.stringify(r.json, null, 2) : r.text) + "\n");
     return r.code ?? EXIT.OK;
   } catch (e: any) {

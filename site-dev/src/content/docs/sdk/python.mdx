@@ -91,6 +91,12 @@ Verify only, for the OpenEntity app (ADR 0007 and ADR 0008); formats and rules a
 
 <Exports file="sdk/python/openentity/pair.py" />
 
+### Pairing and the owner channel (`openentity/agent.py`)
+
+`pair(code)` links the agent's key to its owner's OpenEntity app: a signed Presentation over the code, the four match items computed from the agent's own DID (a service that shows others is refused), then a wait for the owner. `Owner(identity)` then signs `message`, `status`, `ask_approval` ("Written by the agent" in the app), `inbox`, `renew_credentials` and `on_command`, which polls `GET /v1/agent/messages` every 15 seconds on a background thread (the standard library has no WebSocket client; the TypeScript SDK holds the socket).
+
+<Exports file="sdk/python/openentity/agent.py" />
+
 ## Develop
 
 {/* oe:skip re-runs the Python SDK tests that verify.sh already runs */}
