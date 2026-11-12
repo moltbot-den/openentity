@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { AnalyticsForwarder } from "../forwarder/construct.ts";
 
 const build = (environment: "production" | "staging") => {
-  const stack = new Stack(new App(), "T", { env: { account: "099705791378", region: "us-east-1" } });
+  const stack = new Stack(new App({ context: { "aws:cdk:bundling-stacks": [] } }), "T", { env: { account: "099705791378", region: "us-east-1" } });
   new AnalyticsForwarder(stack, "A", { environment });
   return Template.fromStack(stack);
 };
