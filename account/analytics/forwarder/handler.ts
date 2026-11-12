@@ -6,23 +6,26 @@ import { sendAmplitude, sendGa4, sendPosthog, type Keys } from "./senders.ts";
 
 type Deps = { getKeys: () => Promise<Keys>; fetch: typeof fetch; log: (m: string) => void };
 
-/** SSM SecureString parameters /openentity/account/analytics_<thing>_<prod|staging>, passed in as name -> value. */
+/**
+ * SSM SecureString parameters /openentity/account/analytics_<thing>_<prod|staging>, passed in as name -> value. A tool
+ * whose parameters are missing is left out: retrying cannot deliver to it, so its events are not failed for it.
+ */
 export function keysFrom(secret: Record<string, string>, env: string): Keys {
   const s = env === "production" ? "prod" : "staging";
-  const need = (k: string) => {
-    const v = secret[`analytics_${k}_${s}`];
-    if (!v) throw new Error(`parameter missing analytics_${k}_${s}`);
-    return v;
-  };
+  const get = (k: string) => secret[`analytics_${k}_${s}`] || undefined;
   return {
-    amplitudeApiKey: need("amplitude_api_key"),
+    amplitudeApiKey: get("amplitude_api_key"),
     amplitudeUrl: secret.analytics_amplitude_url,
-    posthogKey: need("posthog_key"),
+    posthogKey: get("posthog_key"),
     posthogHost: secret.analytics_posthog_host,
-    ga4MeasurementId: need("ga4_measurement_id"),
-    ga4ApiSecret: need("ga4_api_secret"),
+    ga4MeasurementId: get("ga4_measurement_id"),
+    ga4ApiSecret: get("ga4_api_secret"),
   };
 }
+
+/** The tools `k` leaves out, for the log. */
+export const unconfigured = (k: Keys) =>
+  [!k.amplitudeApiKey && "amplitude", !k.posthogKey && "posthog", !(k.ga4MeasurementId && k.ga4ApiSecret) && "ga4"].filter(Boolean) as string[];
 
 export function makeHandler(d: Deps) {
   return async (event: SQSEvent): Promise<SQSBatchResponse> => {
@@ -39,17 +42,18 @@ export function makeHandler(d: Deps) {
       const keys = await d.getKeys();
       const events = valid.map((x) => x.e);
       const markAll = (ids: string[]) => ids.forEach((i) => failed.add(i));
-      const tasks: Promise<void>[] = [
-        sendAmplitude(d.fetch, keys, events).catch((err) => { d.log(`amplitude: ${err}`); markAll(valid.map((x) => x.id)); }),
-        sendPosthog(d.fetch, keys, events).catch((err) => { d.log(`posthog: ${err}`); markAll(valid.map((x) => x.id)); }),
-      ];
+      const skipped = unconfigured(keys);
+      if (skipped.length) d.log(`not configured, skipped for ${events.length} events: ${skipped.join(", ")}`);
+      const tasks: Promise<void>[] = [];
+      if (keys.amplitudeApiKey) tasks.push(sendAmplitude(d.fetch, keys, events).catch((err) => { d.log(`amplitude: ${err}`); markAll(valid.map((x) => x.id)); }));
+      if (keys.posthogKey) tasks.push(sendPosthog(d.fetch, keys, events).catch((err) => { d.log(`posthog: ${err}`); markAll(valid.map((x) => x.id)); }));
       // GA4: one group per client_id so a failure only retries that client's records.
       const groups = new Map<string, typeof valid>();
       for (const x of valid) {
         const c = x.e.install_id ?? x.e.user_id!;
         groups.set(c, [...(groups.get(c) ?? []), x]);
       }
-      for (const g of groups.values())
+      if (!skipped.includes("ga4")) for (const g of groups.values())
         tasks.push(sendGa4(d.fetch, keys, g.map((x) => x.e)).catch((err) => { d.log(`ga4: ${err}`); markAll(g.map((x) => x.id)); }));
       await Promise.all(tasks);
     }

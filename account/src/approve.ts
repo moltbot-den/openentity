@@ -41,6 +41,12 @@ export const TEST_PRODUCTS: Record<string, string> = {
 };
 export const testProductDid = (host: string, name: string) => `did:web:${host}:test-products:${name}`;
 export type TestProducts = Map<string, { name: string; key: KeyObject; as: string }>;
+/** A test product's DID document: its one Ed25519 key, as a Multikey, for authentication and assertionMethod. */
+export function testProductDocument(id: string, key: KeyObject) {
+  const x = (key.export({ format: "jwk" }) as { x: string }).x;
+  const vm = { id: `${id}#key-1`, type: "Multikey", controller: id, publicKeyMultibase: didKeyFromPublicKey(Buffer.from(x, "base64url")).slice("did:key:".length) };
+  return { "@context": ["https://www.w3.org/ns/did/v1", "https://w3id.org/security/multikey/v1"], id, verificationMethod: [vm], authentication: [vm.id], assertionMethod: [vm.id] };
+}
 export function testProductsOf(d: Deps): TestProducts {
   const m: TestProducts = new Map();
   if (d.stage !== "staging") return m;
@@ -206,9 +212,7 @@ export function routes(app: Hono, d: Deps) {
     app.get("/test-products/:name/did.json", (c) => {
       const id = testProductDid(d.host, c.req.param("name"));
       const t = test.get(id) ?? fail(404, "not_found", "no such test product");
-      const x = (t.key.export({ format: "jwk" }) as { x: string }).x;
-      const vm = { id: `${id}#key-1`, type: "Multikey", controller: id, publicKeyMultibase: didKeyFromPublicKey(Buffer.from(x, "base64url")).slice("did:key:".length) };
-      return c.json({ "@context": ["https://www.w3.org/ns/did/v1", "https://w3id.org/security/multikey/v1"], id, verificationMethod: [vm], authentication: [vm.id], assertionMethod: [vm.id] });
+      return c.json(testProductDocument(id, t.key));
     });
   }
 

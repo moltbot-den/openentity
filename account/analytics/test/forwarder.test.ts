@@ -53,7 +53,16 @@ describe("forwarder", () => {
     expect(amp.events).toHaveLength(1);
   });
 
-  it("fails when the secret lacks a key", () => {
-    expect(() => keysFrom({}, "production")).toThrow(/analytics_amplitude_api_key_prod/);
+  it("a tool without its parameters is skipped and logged; the others still get every event, and nothing is retried for it", async () => {
+    const ga4Only = keysFrom({ analytics_ga4_measurement_id_prod: "G-TEST", analytics_ga4_api_secret_prod: "s" }, "production");
+    const f = ok(), logs: string[] = [];
+    const r = await makeHandler({ getKeys: async () => ga4Only, fetch: f as unknown as typeof fetch, log: (m) => logs.push(m) })(sqs(ev(1), ev(2)));
+    expect(r.batchItemFailures).toEqual([]);
+    expect(f.mock.calls.map((c) => String(c[0]))).toEqual([expect.stringContaining("google-analytics.com/mp/collect?measurement_id=G-TEST")]);
+    expect(logs).toEqual(["not configured, skipped for 2 events: amplitude, posthog"]);
+    // A measurement id without its API secret is not GA4: with no tool at all, the events are consumed, not failed.
+    const none = makeHandler({ getKeys: async () => keysFrom({ analytics_ga4_measurement_id_staging: "G-TEST" }, "staging"), fetch: f as unknown as typeof fetch, log: () => {} });
+    expect((await none(sqs(ev(3)))).batchItemFailures).toEqual([]);
+    expect(f.mock.calls).toHaveLength(1);
   });
 });

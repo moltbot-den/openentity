@@ -233,6 +233,13 @@ CREATE TABLE IF NOT EXISTS messages (
 );
 CREATE INDEX IF NOT EXISTS messages_agent ON messages (agent_did, seq);
 
+-- insert_ids seen in the last 7 days (events.ts accept): a resent event is accepted and not queued twice.
+CREATE TABLE IF NOT EXISTS event_ids (
+  key text PRIMARY KEY,                       -- the install or the product DID, then the insert_id
+  seen_at bigint NOT NULL
+);
+CREATE INDEX IF NOT EXISTS event_ids_seen ON event_ids (seen_at);
+
 -- Message attachments (POST /v1/agent/uploads): the agent PUTs to a presigned S3 URL, then names the upload in one
 -- message; the owner downloads it through GET /v1/attachments/{id}.
 CREATE TABLE IF NOT EXISTS uploads (

@@ -1,12 +1,13 @@
 import type { QueuedEvent } from "../src/validate.ts";
 
+/** A tool whose key is absent is not configured, and the handler skips it. */
 export type Keys = {
-  amplitudeApiKey: string;
+  amplitudeApiKey?: string;
   amplitudeUrl?: string; // default US; EU is https://api.eu.amplitude.com/2/httpapi
-  posthogKey: string;
+  posthogKey?: string;
   posthogHost?: string; // default https://us.i.posthog.com
-  ga4MeasurementId: string;
-  ga4ApiSecret: string;
+  ga4MeasurementId?: string;
+  ga4ApiSecret?: string;
 };
 type Fetch = typeof fetch;
 
@@ -72,6 +73,6 @@ export function ga4Requests(events: QueuedEvent[]): { client_id: string; user_id
 }
 
 export async function sendGa4(f: Fetch, k: Keys, events: QueuedEvent[]): Promise<void> {
-  const url = `https://www.google-analytics.com/mp/collect?measurement_id=${encodeURIComponent(k.ga4MeasurementId)}&api_secret=${encodeURIComponent(k.ga4ApiSecret)}`;
+  const url = `https://www.google-analytics.com/mp/collect?measurement_id=${encodeURIComponent(k.ga4MeasurementId!)}&api_secret=${encodeURIComponent(k.ga4ApiSecret!)}`;
   for (const body of ga4Requests(events)) await post(f, url, body, "ga4");
 }
