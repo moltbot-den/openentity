@@ -16,37 +16,36 @@ import { PRODUCT_APIS } from "./outbound.ts";
 import { runJobs } from "./jobs.ts";
 import { kmsEd25519, kmsEs256, kmsKey } from "./keys.ts";
 import { rpFor } from "./passkey.ts";
-import { WEB_PARAMS, webConfig } from "./web/config.ts";
+import { PARAM_NAMES, STAGE_SUFFIX, type Stage, paramNames, stageOf } from "./params.ts";
+import { webConfig } from "./web/config.ts";
 import { apiGatewayWs, wsEvent } from "./ws.ts";
 import { BUNDLE_ID } from "./wellknown.ts";
 
 const e = process.env;
-// Logical names read from SSM: <name> (both stages) and <name>_<prod|staging> (this stage wins). The role cannot read the other stage's values.
-// WEB_PARAMS are the web lane's names (account/src/web/config.ts).
-const NAMES = ["code_pepper", "cio_app_api_key", "apple_siwa_services_id", "google_oauth_ios_client_id", "google_oauth_web_client_id", "android_cert_sha256", "product_apis", ...WEB_PARAMS];
-
-async function params(): Promise<Record<string, string | undefined>> {
+/** The SSM values (params.ts names): this stage's suffixed value wins over the shared one. */
+async function params(stage: Stage): Promise<Record<string, string | undefined>> {
   const ssm = new SSMClient({});
-  const want = NAMES.flatMap((n) => [`${e.PARAM_PATH}${n}`, `${e.PARAM_PATH}${n}_${e.PARAM_SUFFIX}`]);
+  const want = paramNames(stage).map((n) => `${e.PARAM_PATH}${n}`);
   const got: Record<string, string> = {};
   for (let i = 0; i < want.length; i += 10) {
     const r = await ssm.send(new GetParametersCommand({ Names: want.slice(i, i + 10), WithDecryption: true }));
     for (const p of r.Parameters ?? []) got[p.Name!] = p.Value!;
   }
-  return Object.fromEntries(NAMES.map((n) => [n, got[`${e.PARAM_PATH}${n}_${e.PARAM_SUFFIX}`] ?? got[`${e.PARAM_PATH}${n}`]]));
+  return Object.fromEntries(PARAM_NAMES.map((n) => [n, got[`${e.PARAM_PATH}${n}_${STAGE_SUFFIX[stage]}`] ?? got[`${e.PARAM_PATH}${n}`]]));
 }
 
 const list = (v?: string) => (v ?? "").split(",").map((s) => s.trim()).filter(Boolean);
 
 async function init() {
-  const s = await params();
+  const stage = stageOf(e.STAGE); // first: an unknown STAGE starts nothing (gate hardening)
+  const s = await params(stage);
   if (!s.code_pepper) throw new Error("code_pepper is not set in SSM");
   const kms = new KMSClient({});
   // The close key signs key log close entries only; keylog.ts closeKeyLog normalizes its s to low-S (keylog-1).
   const [token, did, close] = await Promise.all([kmsKey(kms, e.TOKEN_KEY_ID!, kmsEs256), kmsKey(kms, e.DID_KEY_ID!, kmsEd25519), kmsKey(kms, e.CLOSE_KEY_ID!, kmsEs256)]);
   const fingerprints = list(s.android_cert_sha256);
   const deps: Deps = {
-    stage: e.STAGE === "production" ? "production" : "staging",
+    stage,
     host: e.HOST!,
     db: awake(dataApiDb({ resourceArn: e.DB_CLUSTER_ARN!, secretArn: e.DB_SECRET_ARN!, database: e.DB_NAME! })),
     keys: { token, did, close },
@@ -64,7 +63,7 @@ async function init() {
     queue: sqsQueue(e.EVENTS_QUEUE_URL!),
     blobs: e.ATTACHMENTS_BUCKET ? s3Blobs(e.ATTACHMENTS_BUCKET) : undefined,
     // Product API hosts by DID. Production calls the products; staging calls none unless product_apis names stubs.
-    products: s.product_apis ? JSON.parse(s.product_apis) : e.STAGE === "production" ? PRODUCT_APIS : {},
+    products: s.product_apis ? JSON.parse(s.product_apis) : stage === "production" ? PRODUCT_APIS : {},
   };
   return { deps, app: createApp(deps), verify: e.ORIGIN_VERIFY! };
 }

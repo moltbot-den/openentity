@@ -53,8 +53,10 @@ export async function testDeps(over: Partial<Deps> = {}): Promise<Deps & { codes
 }
 
 export type Call = (method: string, path: string, body?: unknown, headers?: Record<string, string>) => Promise<{ status: number; body: any; text: string; headers: Headers }>;
+/** The viewer address CloudFront's viewer-request function sets (a documentation address). */
+export const VIEWER = "203.0.113.7";
 export const caller = (app: Hono): Call => async (method, path, body, headers = {}) => {
-  const res = await app.request(`${ORIGIN}${path}`, { method, headers: { "content-type": "application/json", ...headers }, body: body === undefined ? undefined : typeof body === "string" ? body : JSON.stringify(body) });
+  const res = await app.request(`${ORIGIN}${path}`, { method, headers: { "content-type": "application/json", "x-oe-viewer-address": VIEWER, ...headers }, body: body === undefined ? undefined : typeof body === "string" ? body : JSON.stringify(body) });
   const text = await res.text();
   let json: any = null;
   try { json = JSON.parse(text); } catch { /* not JSON */ }

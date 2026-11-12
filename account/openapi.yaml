@@ -1358,8 +1358,9 @@ paths:
       summary: Append an entry (genesis creates the owner DID)
       description: |
         The body is `{line}`, final: the entry as its exact JCS line. The service stores and serves those bytes and never
-        re-encodes them. genesis (seq 1): ownerBearer of an account with no key log, and `{id}` must equal the
-        lowercase base32 of SHA-256(line). Other ops are self-authenticating and need no auth; anyone may post a
+        re-encodes them. genesis (seq 1): ownerBearer of an account with no key log, from a sign-in at most 300 s old
+        and, in production, an app session bound to its device; `{id}` must equal the lowercase base32 of
+        SHA-256(line). The owner is told by push (`keylog.genesis`) and email. Other ops are self-authenticating and need no auth; anyone may post a
         correctly signed entry. For approver and root changes the signed entry IS the step-up: no Approval2 is sent.
         The service records `first_seen_at` for every entry; `effective_at` is first_seen_at + 86400 for recover and
         replace_root (at once for replace_root in a single-credential log) and first_seen_at otherwise. close is
@@ -1388,10 +1389,10 @@ paths:
           description: 'error: bad_request'
         '401':
           $ref: '#/components/responses/Error'
-          description: 'error: unauthorized (genesis without a token)'
+          description: 'error: unauthorized (genesis without a token); reauth_required (genesis from a sign-in older than 300 s)'
         '403':
           $ref: '#/components/responses/Error'
-          description: 'error: log_exists (genesis for an account that already has a log)'
+          description: 'error: log_exists (genesis for an account that already has a log); binding_required (production genesis from a web session or an app session with no device binding)'
         '409':
           $ref: '#/components/responses/Error'
           description: 'error: seq_conflict'

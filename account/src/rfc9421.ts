@@ -26,20 +26,22 @@ const fetchJson = (d: Deps) => async (url: string) => {
  * the product it stands in for; otherwise only an agent did:key. Returns the signer DID.
  */
 export async function verifySigned(d: Deps, req: SignedRequest, o: { products: boolean }): Promise<{ did: string; keyid: string }> {
-  const input = Object.entries(req.headers).find(([k]) => k.toLowerCase() === "signature-input")?.[1] ?? "";
-  if (!input || !Object.keys(req.headers).some((k) => k.toLowerCase() === "signature")) fail(401, "signature_invalid", "missing_headers");
-  const keyid = /keyid="([^"]*)"/.exec(input)?.[1] ?? "";
-  const signer = keyid.split("#")[0];
-  const test = o.products ? testProductsOf(d).get(signer) : undefined;
-  if (o.products && !PRODUCT_DIDS.includes(signer) && !test) fail(403, "unknown_signer", "only the four product DIDs sign these calls");
-  if (!o.products && !keyid.startsWith("did:key:")) fail(401, "signature_invalid", "bad_keyid");
+  const has = (n: string) => Object.keys(req.headers).some((k) => k.toLowerCase() === n);
+  if (!has("signature-input") || !has("signature")) fail(401, "signature_invalid", "missing_headers");
+  const tests = o.products ? testProductsOf(d) : new Map();
   let v;
   try {
-    v = await verifyRequest({ ...req, now: now(), maxAge: 300, allowDidWeb: o.products ? [signer] : [], fetchJson: fetchJson(d) });
+    // The SDK verifies the sig1 member only; every decision below reads the DID it verified, never the raw header.
+    v = await verifyRequest({ ...req, now: now(), maxAge: 300, allowDidWeb: o.products ? [...PRODUCT_DIDS, ...tests.keys()] : [], fetchJson: fetchJson(d) });
   } catch (e) {
-    if (e instanceof HttpSigError) fail(401, "signature_invalid", (e as HttpSigError).code);
+    // A did:web keyid outside the allow list is the SDK's bad_keyid: for a product call, a signer that is not a product.
+    if (e instanceof HttpSigError && o.products && e.code === "bad_keyid") fail(403, "unknown_signer", "only the four product DIDs sign these calls");
+    if (e instanceof HttpSigError) fail(401, "signature_invalid", e.code);
     throw e;
   }
+  const test = tests.get(v!.did);
+  if (o.products && !PRODUCT_DIDS.includes(v!.did) && !test) fail(403, "unknown_signer", "only the four product DIDs sign these calls");
+  if (!o.products && !v!.did.startsWith("did:key:")) fail(401, "signature_invalid", "bad_keyid");
   const key = createHash("sha256").update(`${v!.keyid}|${v!.nonce}`).digest("hex");
   const spent = await d.db.run("INSERT INTO sig_nonces (key, expires_at) VALUES ($1, $2) ON CONFLICT DO NOTHING", [key, v!.expires]);
   if (!spent.changes) fail(401, "signature_replayed", "this signature nonce was already used");

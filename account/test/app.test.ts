@@ -5,7 +5,7 @@ import { createApp, type Deps } from "../src/app.ts";
 import { nonceHash } from "../src/idtoken.ts";
 import { derToJose, publicKey } from "../src/keys.ts";
 import { rpFor } from "../src/passkey.ts";
-import { pgliteDb } from "./helpers.ts";
+import { pgliteDb, VIEWER } from "./helpers.ts";
 
 // Throwaway keys per run: a P-256 token key and an Ed25519 DID key stand in for the KMS keys; an RSA key stands in
 // for Apple's and Google's published keys. None of them is a real key.
@@ -33,7 +33,7 @@ const base: Deps = {
 const app = createApp(base);
 
 async function call(method: string, path: string, body?: unknown, headers: Record<string, string> = {}, a = app) {
-  const res = await a.request(`${ORIGIN}${path}`, { method, headers: { "content-type": "application/json", ...headers }, body: body === undefined ? undefined : JSON.stringify(body) });
+  const res = await a.request(`${ORIGIN}${path}`, { method, headers: { "content-type": "application/json", "x-oe-viewer-address": VIEWER, ...headers }, body: body === undefined ? undefined : JSON.stringify(body) });
   const text = await res.text();
   let json: any = null;
   try { json = JSON.parse(text); } catch { /* not JSON */ }

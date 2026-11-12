@@ -6,6 +6,7 @@ import { nonceHash } from "../src/idtoken.ts";
 import { appReviewWatch, redeemLoginCode, testIdpKey } from "../src/signin.ts";
 import { webConfig } from "../src/web/config.ts";
 import { HOST, ORIGIN, call, webApp } from "./owner.ts";
+import { VIEWER } from "./helpers.ts";
 
 // Throwaway stand-ins, none real: an RSA key for Apple's published keys, a Turnstile siteverify, Apple's token and revoke
 // endpoints, a KMS vault that only tags values, and an APNs sender that records.
@@ -69,7 +70,7 @@ test("Apple on the web: authorize URL, state cookie, form_post return with the s
   });
   expect(cookieOf(n, "__Host-oe_state")).toMatch(/SameSite=None/);
   const form = new URLSearchParams({ state: n.body.state, code: "c1", id_token: await appleToken({ aud: "org.openentity.web", sub: "apple-web-1", nonce: nonceHash(n.body.nonce), email: "aw@example.com", email_verified: "true" }) });
-  const post = (cookie: string) => app.request(`${ORIGIN}/v1/auth/apple/callback`, { method: "POST", body: form, headers: { "content-type": "application/x-www-form-urlencoded", origin: "https://appleid.apple.com", cookie } });
+  const post = (cookie: string) => app.request(`${ORIGIN}/v1/auth/apple/callback`, { method: "POST", body: form, headers: { "x-oe-viewer-address": VIEWER, "content-type": "application/x-www-form-urlencoded", origin: "https://appleid.apple.com", cookie } });
   const noCookie = await post("");
   expect(noCookie.headers.get("location")).toBe(`${ORIGIN}/app/auth?error=state_invalid`); // and the state is spent
   const n2 = await appleWeb(web);
@@ -87,7 +88,7 @@ test("Apple for Android: the form_post return gives a single-use login code for 
   const install = randomUUID();
   const n = await appleWeb({ platform: "android", install_id: install }, {});
   const form = new URLSearchParams({ state: n.body.state, id_token: await appleToken({ aud: "org.openentity.web", sub: "apple-android-1", nonce: nonceHash(n.body.nonce) }) });
-  const r = await app.request(`${ORIGIN}/v1/auth/apple/callback`, { method: "POST", body: form, headers: { "content-type": "application/x-www-form-urlencoded" } });
+  const r = await app.request(`${ORIGIN}/v1/auth/apple/callback`, { method: "POST", body: form, headers: { "x-oe-viewer-address": VIEWER, "content-type": "application/x-www-form-urlencoded" } });
   const code = new URL(r.headers.get("location")!).searchParams.get("login_code")!;
   expect(code).toMatch(/^[A-Za-z0-9_-]{43}$/);
   await expect(redeemLoginCode(d, code, randomUUID())).rejects.toMatchObject({ code: "invalid_grant" });
@@ -95,7 +96,7 @@ test("Apple for Android: the form_post return gives a single-use login code for 
     const n2 = await appleWeb({ platform: "android", install_id: install }, {});
     form.set("state", n2.body.state);
     form.set("id_token", await appleToken({ aud: "org.openentity.web", sub: "apple-android-1", nonce: nonceHash(n2.body.nonce) }));
-    const r2 = await app.request(`${ORIGIN}/v1/auth/apple/callback`, { method: "POST", body: form, headers: { "content-type": "application/x-www-form-urlencoded" } });
+    const r2 = await app.request(`${ORIGIN}/v1/auth/apple/callback`, { method: "POST", body: form, headers: { "x-oe-viewer-address": VIEWER, "content-type": "application/x-www-form-urlencoded" } });
     return new URL(r2.headers.get("location")!).searchParams.get("login_code")!;
   })();
   expect((await redeemLoginCode(d, code2, install)).amr).toBe("apple");

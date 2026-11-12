@@ -9,7 +9,7 @@ import type { Deps } from "./app.ts";
 import { receipt, receiptClaims, verifyAndroidKey, verifyAppAttest } from "./attest.ts";
 import { integrity, revokedSerials } from "./binding.ts";
 import { bump, newId, now } from "./db.ts";
-import { bearer, fail, json, str } from "./http.ts";
+import { bearer, fail, freshSignIn, json, str } from "./http.ts";
 import { nonceHash } from "./idtoken.ts";
 import { track } from "./events.ts";
 import { notifyOwner } from "./notify.ts";
@@ -130,8 +130,8 @@ async function append(d: Deps, id: string, line: string, o: { account?: string; 
     if (!ins.changes) fail(409, "seq_conflict", "another entry took this seq; read the log and sign again");
     return (await tx.first<{ id: string }>("SELECT id FROM accounts WHERE owner_did = $1", [did]))?.id ?? null;
   });
-  if (accountId && (entry.op === "revoke" || entry.op === "recover" || entry.op === "replace_root")) {
-    const what = { revoke: "An approver was removed from", recover: "A recovery was started on", replace_root: "A new root passkey was added to" }[entry.op as "revoke"];
+  if (accountId && (entry.op === "genesis" || entry.op === "revoke" || entry.op === "recover" || entry.op === "replace_root")) {
+    const what = { genesis: "Approvers were set up on", revoke: "An approver was removed from", recover: "A recovery was started on", replace_root: "A new root passkey was added to" }[entry.op as "revoke"];
     const when = delayed ? ` It takes effect on ${new Date(out.effective_at * 1000).toUTCString()} unless an approver cancels it in the app.` : "";
     await notifyOwner(d, accountId, {
       type: `keylog.${entry.op}`, id: String(out.seq),
@@ -336,7 +336,17 @@ export function routes(app: Hono, d: Deps) {
     // Only genesis needs the owner; every other entry authenticates itself, so a stale token never blocks a revoke.
     let op: unknown;
     try { op = JSON.parse(b.line)?.op; } catch { /* append answers invalid_entry */ }
-    const account = op === "genesis" ? (await bearer(c, d)).accountId : undefined;
+    let account: string | undefined;
+    if (op === "genesis") {
+      // Gate M2: genesis decides who approves every later step-up, so it takes a fresh sign-in and, in production, an
+      // app session bound to its device; append tells the owner it happened.
+      const o = await bearer(c, d);
+      freshSignIn(o, "turn on approvals");
+      if (d.stage === "production" && !(await d.db.first("SELECT 1 FROM sessions WHERE id = $1 AND platform <> 'web' AND binding IS NOT NULL", [o.sid]))) {
+        fail(403, "binding_required", "turn on approvals in the app, from a device-bound sign-in");
+      }
+      account = o.accountId;
+    }
     return c.json(await append(d, id, b.line, { account }), 201);
   });
 

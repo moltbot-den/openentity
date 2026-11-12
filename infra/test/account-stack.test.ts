@@ -2,6 +2,7 @@ import { App } from "aws-cdk-lib";
 import { Match, Template } from "aws-cdk-lib/assertions";
 import { expect, test } from "vitest";
 import { OpenEntityAccountStack, type AccountStage } from "../lib/account-stack.ts";
+import { paramNames } from "../../account/src/params.ts";
 
 // Skip asset bundling: these tests read the templates, not the Lambda zip. Synthesized at load (see stack.test.ts).
 const synth = (stage: AccountStage) => Template.fromStack(new OpenEntityAccountStack(new App({ context: { "aws:cdk:bundling-stacks": [] } }), `A${stage}`, { env: { account: "099705791378", region: "us-east-1" }, stage }));
@@ -38,11 +39,11 @@ test("four KMS keys per stage: P-256 for tokens, P-256 for key log close entries
 
 test("the function runs outside any VPC; production sign-in stays closed, staging is open", () => {
   for (const t of [prod, staging]) expect(appFn(t).Properties.VpcConfig).toBeUndefined();
-  expect(appFn(prod).Properties.Environment.Variables).toMatchObject({ STAGE: "production", HOST: "account.openentity.org", SIGNIN_OPEN: "0", PARAM_SUFFIX: "prod" });
-  expect(appFn(staging).Properties.Environment.Variables).toMatchObject({ STAGE: "staging", HOST: "staging.account.openentity.org", SIGNIN_OPEN: "1", PARAM_SUFFIX: "staging" });
+  expect(appFn(prod).Properties.Environment.Variables).toMatchObject({ STAGE: "production", HOST: "account.openentity.org", SIGNIN_OPEN: "0" });
+  expect(appFn(staging).Properties.Environment.Variables).toMatchObject({ STAGE: "staging", HOST: "staging.account.openentity.org", SIGNIN_OPEN: "1" });
 });
 
-test("isolation: the role reads only /openentity/account/ parameters, never the registry's /openentity/app or the other stage's values", () => {
+test("isolation (gate hardening): the role reads exactly its named /openentity/account/ parameters, never the registry's /openentity/app or the other stage's values", () => {
   // The app function's own role. The analytics forwarder has its own, held to its stage's analytics names (below).
   const statements = (t: Template) => {
     const role = appFn(t).Properties.Role["Fn::GetAtt"][0];
@@ -53,7 +54,11 @@ test("isolation: the role reads only /openentity/account/ parameters, never the 
     expect(text).not.toContain("parameter/openentity/app");
     const ssmAllow = statements(t).filter((s) => s.Effect === "Allow" && JSON.stringify(s.Action).includes("ssm:"));
     expect(ssmAllow.map((s) => s.Action)).toEqual(["ssm:GetParameters"]);
-    expect(JSON.stringify(ssmAllow[0].Resource)).toContain("parameter/openentity/account/*");
+    const names = (ssmAllow[0].Resource as unknown[]).map((r) => JSON.stringify(r).match(/parameter\/openentity\/account\/([a-z0-9_]+)"/)?.[1]);
+    const mine = other === "staging" ? "production" : "staging";
+    expect(names.sort()).toEqual(paramNames(mine).sort()); // each name and its stage variant, no wildcard
+    expect(names).toContain(`code_pepper_${mine === "production" ? "prod" : "staging"}`);
+    expect(names.some((n) => n?.endsWith(`_${other}`))).toBe(false);
     const deny = statements(t).find((s) => s.Effect === "Deny");
     expect(JSON.stringify(deny.Resource)).toContain(`parameter/openentity/account/*_${other}`);
   }
@@ -169,5 +174,16 @@ test("alarms: every account alarm acts on the one Monitoring topic, whose only s
     const described = alarms.map((a) => JSON.stringify(a.Properties.AlarmDescription ?? ""));
     for (const what of ["APP_REVIEW_OPEN", "5xx above 1% for 5 minutes at CloudFront", "Lambda errors", "Lambda throttles"]) expect(described.some((d) => d.includes(what))).toBe(true);
     expect(alarms.some((a) => a.Properties.MetricName === "ApproximateNumberOfMessagesVisible")).toBe(true); // the forwarder's dead letters
+  }
+});
+
+test("gate M3: a viewer-request function sets x-oe-viewer-address from the viewer's address on every request to the account host", () => {
+  for (const t of [prod, staging]) {
+    const fns = all(t, "AWS::CloudFront::Function");
+    expect(fns).toHaveLength(1);
+    expect(fns[0].Properties.FunctionCode).toContain("event.request.headers['x-oe-viewer-address'] = { value: event.viewer.ip }");
+    const dist = all(t, "AWS::CloudFront::Distribution")[0].Properties.DistributionConfig;
+    expect(dist.DefaultCacheBehavior.FunctionAssociations).toEqual([{ EventType: "viewer-request", FunctionARN: expect.anything() }]);
+    expect(dist.CacheBehaviors ?? []).toEqual([]); // no other behavior that could skip it
   }
 });

@@ -42,6 +42,17 @@ test("productSigned: a product's did:web key verifies once; replays, other signe
   expect((await call("POST", "/test/product", body, await signed(agentDid, body, agentSeed))).body.error).toBe("unknown_signer");
 });
 
+test("gate M1: a decoy Signature-Input member naming a product does not make a did:key signer a product", async () => {
+  const agent = generateKeyPairSync("ed25519");
+  const agentSeed = new Uint8Array(agent.privateKey.export({ format: "der", type: "pkcs8" }).subarray(-32));
+  const agentDid = didKeyFromPublicKey(new Uint8Array(agent.publicKey.export({ format: "der", type: "spki" }).subarray(-32)));
+  const body = JSON.stringify({ hello: "decoy" });
+  const h = await signed(agentDid, body, agentSeed);
+  const input = Object.keys(h).find((k) => k.toLowerCase() === "signature-input")!;
+  h[input] = `decoy=("@method");created=${Math.floor(Date.now() / 1000)};keyid="${DEN}#key-1", ${h[input]}`;
+  expect(await call("POST", "/test/product", body, h)).toMatchObject({ status: 403, body: { error: "unknown_signer" } });
+});
+
 test("sendEvent: an AccountEvent signed with the service key that products verify from did.json; failures wait in the outbox", async () => {
   productStatus = 204;
   expect(await sendEvent(d, DEN, "agent.paused", { agent_did: "did:key:z6Mk1", seq: 1 })).toBe(true);
