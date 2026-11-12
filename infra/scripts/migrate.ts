@@ -1,5 +1,6 @@
 // Applies registry/schema.sql (idempotent: CREATE ... IF NOT EXISTS) to Aurora through the Data API.
 //   tsx scripts/migrate.ts [extra.sql]   # an optional second file runs after the schema, e.g. a data import
+//   STACK=OpenEntityAccount SCHEMA=account/schema.sql DB_NAME=account tsx scripts/migrate.ts   # the account service
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -13,8 +14,8 @@ const out = (k: string) => stack.Outputs.find((o: any) => o.OutputKey === k).Out
 if (!process.env.GITHUB_ACTIONS) process.env.AWS_PROFILE = "openentity";
 process.env.AWS_REGION ??= "us-east-1";
 
-const db = dataApiDb({ resourceArn: out("DbClusterArn"), secretArn: out("DbSecretArn"), database: "openentity" });
-const files = [fileURLToPath(new URL("../../registry/schema.sql", import.meta.url)), ...process.argv.slice(2)];
+const db = dataApiDb({ resourceArn: out("DbClusterArn"), secretArn: out("DbSecretArn"), database: process.env.DB_NAME ?? "openentity" });
+const files = [fileURLToPath(new URL(`../../${process.env.SCHEMA ?? "registry/schema.sql"}`, import.meta.url)), ...process.argv.slice(2)];
 for (const f of files) {
   const statements = splitSql(readFileSync(f, "utf8"));
   // The schema transaction locks many tables; the per-minute cron and live writes can deadlock with it (40P01).
@@ -26,8 +27,9 @@ for (const f of files) {
       });
       break;
     } catch (e) {
-      if (attempt >= 5 || !/deadlock detected|40P01/.test(String((e as Error).message))) throw e;
-      console.log(`deadlock on attempt ${attempt}, retrying`);
+      // A paused staging cluster answers DatabaseResumingException while it wakes (about 15 s, 30 s after a long pause).
+      if (attempt >= 8 || !/deadlock detected|40P01|DatabaseResuming/.test(`${(e as Error).name} ${(e as Error).message}`)) throw e;
+      console.log(`${(e as Error).name} on attempt ${attempt}, retrying`);
       await new Promise((r) => setTimeout(r, 2000 * attempt));
     }
   }

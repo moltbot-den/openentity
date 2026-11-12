@@ -3,6 +3,7 @@ packages:
   - site
   - site-dev
   - registry
+  - account
   - cli
   - mcp
   - sdk/ts

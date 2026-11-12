@@ -1,0 +1,4536 @@
+openapi: 3.1.0
+info:
+  title: Open Entity Account API
+  version: 1.0.0
+  summary: The OpenEntity Account service (account.openentity.org). Frozen Day 1 contract.
+  license:
+    name: MIT
+    identifier: MIT
+  description: |
+    The OpenEntity Account service is the identity provider and the owner channel for the OpenEntity app and the
+    Open Entity products: Moltbot Den, Secure My Agent, Agent Secret Store and ClawGRC. Sources: ADR 0007 and ADR 0008
+    in the oneentity meta repo, and `docs/mobile/PLAN.md` sections 2 to 4, 8, 10.3, 11 and 13.1. Every lane builds
+    against this file from Day 2. Changing a frozen shape needs a new version of this file and a note to every lane.
+
+    ## Environments
+
+    | | production | staging |
+    |---|---|---|
+    | Base URL | https://account.openentity.org | https://staging.account.openentity.org |
+    | WebSocket | wss://agents.account.openentity.org/ | wss://agents.staging.account.openentity.org/ |
+    | Service DID | did:web:account.openentity.org | did:web:staging.account.openentity.org |
+    | Token `iss` | https://account.openentity.org | https://staging.account.openentity.org |
+    | Passkey RP ID | account.openentity.org | staging.account.openentity.org |
+    | Owner DIDs | `did:web:account.openentity.org:o:<id>` | `did:web:staging.account.openentity.org:o:<id>` |
+
+    Staging products trust the staging issuer, its JWKS and its service DID only. Production products trust
+    production only.
+
+    Access-token audiences, in both environments: did:web:moltbotden.com, did:web:securemyagent.ai,
+    did:web:api.agentsecretstore.com, did:web:api.clawgrc.com, and the environment's own service DID.
+
+    ## Product signers
+
+    Only the four product DIDs (did:web:moltbotden.com, did:web:securemyagent.ai, did:web:api.agentsecretstore.com,
+    did:web:api.clawgrc.com) may call POST /v1/notify, POST /v1/events/ingest and GET /v1/paused, or sign /approve
+    envelopes. Each product's DID document must list an Ed25519 key (Multikey `z6Mk...`, or JsonWebKey with kty OKP and
+    crv Ed25519) under `authentication` (RFC 9421 requests) and `assertionMethod` (envelopes). On 2026-11-11
+    did:web:securemyagent.ai lists only a secp256k1 key and did:web:api.agentsecretstore.com does not resolve yet; both
+    add an Ed25519 key.
+
+    ## Normative vectors
+
+    The SDK lane's vectors win over this file wherever they differ: `test-vectors/keylog-1/` (owner key log entries,
+    credentials, signatures, verifier checks in order and their error names), `test-vectors/approval-2.0/` (Approval2,
+    its digest and verifier checks) and `test-vectors/pair-sas-1/` (the pairing match string). The RP ID and the owner
+    DID host follow the environment: verifiers take the RP ID as an option.
+
+    ## Service keys and rotation
+
+    The service has three signing keys, all in AWS KMS, none ever leaving it:
+    - the token key, ECC_NIST_P256, ES256: signs access tokens only; published in /.well-known/jwks.json (kid = RFC 7638
+      thumbprint), not in did.json;
+    - the service key, ECC_NIST_EDWARDS25519, ED25519_SHA_512: signs every call the service makes to a product, the GET
+      /v1/paused response (scheme accountSignature) and the LinkOwnerEnvelope and KeyAttestationReceipt JWS; published
+      in /.well-known/did.json as a Multikey under `authentication` and `assertionMethod` (fragment = RFC 7638
+      thumbprint of its OKP JWK);
+    - the close key, ECC_NIST_P256: signs key log `close` entries only (p256 form, low s); never deleted. did.json lists
+      it and every retired close key, permanently, as JsonWebKey verification methods under `assertionMethod`
+      (fragment = RFC 7638 thumbprint). Key log verifiers pass exactly those P-256 keys as `serviceKeys`, so a closed
+      log keeps verifying forever.
+
+    Rotation of the token key and the service key: every 90 days; a new key is published at least 24 hours before the
+    service first signs with it; a retired key stays published at least 24 hours after its last signature. Close keys
+    are never unpublished. Verifiers
+    cache did.json and jwks.json for at most 10 minutes, refetch once on an unknown keyid or kid, never accept a key
+    that is absent from the current document, and accept a service signature only when the keyid's DID equals the
+    pinned service DID of their environment.
+
+    ## Errors
+
+    Every non-2xx response body is JSON `{"error": "<code>", "message": "<text>"}` (schema Error). A 429 carries
+    `Retry-After` in seconds. Common codes: bad_request, unauthorized, forbidden, not_found, conflict, gone, too_large,
+    invalid, agent_paused (423), approval_required (428), rate_limited (429), internal (500), unavailable (503). Each
+    operation lists the codes it adds.
+
+    ## Approvals and step-up
+
+    Step-up and approval-gated calls carry `X-OE-Approval`: the base64url (no padding) of the UTF-8 JSON of an Approval2
+    object (approval/2.0, ADR 0008). Missing: 428 approval_required. Bad: 403 approval_invalid. Expired: 403
+    approval_expired. Already used: 409 approval_reused. The request id, payload and expiry come from an ApprovalRequest
+    the service issued: POST /v1/step-up, a claimed pairing, or an agent-written approval.
+
+    ## Availability
+
+    `x-available` on each operation names the plan day its server code lands. On the two product-implemented
+    endpoints it names the day the account service starts calling them. Every shape is frozen now.
+
+    ## Decisions made in this file
+
+    - Every `*_at` field and `expires_at` is integer Unix seconds. Event `time` is Unix milliseconds.
+    - Ids other than DIDs are opaque, matching `^[A-Za-z0-9_-]{1,64}$`. Account ids are `acct_` plus 26 alphanumeric
+      characters; event ids start with `evt_`.
+    - RFC 9421 failures are 401 signature_invalid (the message names the failed check) or 401 signature_replayed. An
+      agent call from a DID that is not paired is 403 not_paired. A product call from a DID outside the four is 403
+      unknown_signer.
+    - A missing, expired or invalid owner token is 401 unauthorized.
+    - Web sign-in POSTs (client.platform web) must also send Origin equal to the base URL (403 bad_origin), against
+      login CSRF.
+    - Web Apple and Google sign-ins prove Turnstile at POST /v1/auth/nonce: `turnstile_token` is required there when
+      client.platform is web.
+    - A web email start without a valid Turnstile token still answers 202, but sends a code only to an address that
+      already has an account (web sign-up needs Turnstile; the answer never reveals whether an account exists).
+    - Every sign-in attempt consumes its nonce. After attestation_required, fetch a new nonce and retry.
+    - id_token_invalid and nonce_invalid are 401. attestation_required, attestation_invalid, turnstile_required and
+      turnstile_invalid are 403. A failed Apple code exchange is 502 provider_error.
+    - Passkey verification failures, an unknown credential included, are 401 passkey_invalid. An unknown, used or
+      expired challenge is 410 challenge_expired. Registering a second root passkey is 409 passkey_exists.
+    - POST /v1/token accepts grant_type `login_code` and its metadata form `urn:openentity:login_code`.
+    - invalid_audience is 400. key_log_required is 403.
+    - POST /v1/pairings needs a key log (403 key_log_required). A 51st paired agent is 409 agent_limit.
+    - The owner view of an agent-written approval adds `agent_did` and `approval_request` (action agent.approval). A
+      decision on an expired request is 410 expired; a second decision is 409 already_decided.
+    - Purchases: 422 transaction_invalid when the store signature or Play answer fails; 409 account_mismatch when the
+      transaction names another account.
+    - POST /v1/notify for an owner DID the service does not know is 404 owner_unknown.
+    - A deletion request from an account with no key log is 409 no_key_log (use POST /v1/account/delete); a second one
+      is 409 deletion_pending.
+    - `vault.request:<path>` names one path pattern; grant several paths with several strings. `contract.accept<=$N`
+      takes a whole or two-decimal dollar amount.
+    - The owner did.json lists the current approvers (the root passkey alone in a single-credential log) under
+      authentication and assertionMethod, fragment = kid; products verify approvals from the log through the
+      packages, never from did.json.
+    - GET /v1/sessions marks the caller's session `current: true`. POST /v1/revoke answers 200 with an empty body.
+    - Polling GET /v1/pair/{pairing_id} more often than every 2 seconds is 429 rate_limited.
+    - x-websocket references the frame schemas in components/schemas.
+    - `seq` on agent.paused, agent.resumed and GET /v1/paused is the agent's pause-state counter; agent.permissions
+      has its own counter.
+    - PairStatus.owner_did is null until the owner confirms.
+    - AccountEvent.type is an open string; products ignore types they do not know.
+    - Google Play notifications authenticate with the Pub/Sub push OIDC token (security scheme pubsubPush).
+servers:
+  - url: https://account.openentity.org
+    description: production
+  - url: https://staging.account.openentity.org
+    description: staging
+tags:
+  - name: Well-known
+    description: Public discovery documents. No auth.
+  - name: Sign-in
+    description: Apple, Google, passkeys and the 8-digit email code (PLAN 2.3). No passwords exist.
+  - name: Tokens and sessions
+    description: Refresh-token rotation and one-audience access tokens (PLAN 2.4).
+  - name: Account
+    description: The signed-in owner's account, sign-in methods, push tokens and deletion.
+  - name: Key log
+    description: Owner DID documents and hash-chained key logs (PLAN 3, ADR 0007).
+  - name: Pairing
+    description: Owner side of pairing an agent (PLAN 8.1).
+  - name: Agents
+    description: The owner's paired agents, pause, resume, commands and messages (PLAN 8.2, 8.3).
+  - name: Agent-written approvals
+    description: Approvals an agent writes through the service. The service is the verifier; no product accepts them.
+  - name: Agent API
+    description: Called by agents, signed with RFC 9421 by the agent's did:key. No CAPTCHA, login or payment.
+  - name: Product to account
+    description: Called by product backends, signed with RFC 9421 by the product's DID.
+  - name: Analytics
+    description: App events (PLAN 13.1). The Monitoring lane owns account/analytics/events.yaml.
+  - name: Store
+    description: App Store and Google Play purchase events (PLAN 10.3).
+  - name: Web approvals
+    description: Approvals on account.openentity.org without the phone (PLAN 3.5).
+  - name: Implemented by products
+    description: Endpoints each product implements and the account service calls, signed with accountSignature.
+x-websocket:
+  summary: Agent channel (PLAN 8.2). The downlink for owner messages, commands, approval results and permissions.
+  x-available: day-3
+  urls:
+    production: wss://agents.account.openentity.org/
+    staging: wss://agents.staging.account.openentity.org/
+  connect:
+    description: |
+      $connect is the HTTP GET upgrade. It carries the agentSignature headers (Signature-Input and Signature) with
+      "@method" GET and "@target-uri" exactly the URL above, trailing slash included. There is no body, so there is no
+      Content-Digest. Only a paired agent DID connects; a paused agent may connect, so a resume command can reach it.
+      One socket per agent: a newer socket closes the older one with 4008. A rejected upgrade gets 401 (bad signature)
+      or 403 (not paired or unlinked).
+  routeSelectionExpression: $request.body.action
+  limits:
+    idle_timeout_seconds: 600
+    heartbeat_interval_seconds: 540
+    max_connection_seconds: 7200
+    max_frame_bytes: 32768
+    max_message_bytes: 131072
+  limitsDescription: |
+    API Gateway closes a socket idle for 10 minutes, so the agent sends {"action":"heartbeat"} every 9 minutes; a MOCK
+    route answers {"type":"heartbeat"} with no Lambda. Every socket ends at 2 hours; reconnect. A frame is at most
+    32 KB and a message at most 128 KB.
+  clientFrames:
+    sync:
+      $ref: '#/components/schemas/WsSync'
+    ack:
+      $ref: '#/components/schemas/WsAck'
+    heartbeat:
+      $ref: '#/components/schemas/WsHeartbeat'
+  serverFrames:
+    message:
+      $ref: '#/components/schemas/WsMessage'
+    command:
+      $ref: '#/components/schemas/WsCommand'
+    approval.result:
+      $ref: '#/components/schemas/WsApprovalResult'
+    permissions:
+      $ref: '#/components/schemas/WsPermissions'
+    heartbeat:
+      $ref: '#/components/schemas/WsHeartbeatReply'
+    error:
+      $ref: '#/components/schemas/WsError'
+  delivery: |
+    Items stay until the agent acknowledges them, with {"action":"ack","ids":[...]} or POST /v1/agent/messages/ack.
+    After {"action":"sync"} the server sends every unacknowledged item, oldest first, up to 100; sync again after
+    acknowledging to get more. The server also pushes new items as they arrive.
+  closeCodes:
+    '4001': The agent was paused. Reconnecting is allowed, so a resume command can arrive; products refuse the agent until it is resumed.
+    '4003': The agent was unlinked or is not paired. Do not reconnect.
+    '4008': Replaced by a newer socket from the same agent.
+    '1011': Server error. Reconnect with backoff.
+paths:
+  /.well-known/apple-app-site-association:
+    get:
+      operationId: getAppleAppSiteAssociation
+      tags: [Well-known]
+      summary: Associated domains file for the iOS app (passkeys and universal links)
+      description: Status 200, Content-Type application/json, no redirect, so Apple's CDN can fetch it. The staging host serves the same file.
+      x-available: day-1
+      security: []
+      responses:
+        '200':
+          description: The file.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppleAppSiteAssociation'
+              example:
+                applinks:
+                  details:
+                    - appIDs: [7R835D5LDZ.org.openentity.app]
+                      components:
+                        - /: /app/*
+                webcredentials:
+                  apps: [7R835D5LDZ.org.openentity.app]
+  /.well-known/assetlinks.json:
+    get:
+      operationId: getAssetLinks
+      tags: [Well-known]
+      summary: Digital Asset Links for the Android app (App Links and passkeys)
+      description: 404 until the Play App Signing fingerprints exist (Day 2).
+      x-available: day-1
+      security: []
+      responses:
+        '200':
+          description: The statement list.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetLinks'
+        '404':
+          $ref: '#/components/responses/Error'
+          description: 'error: not_found (no fingerprints yet)'
+  /.well-known/jwks.json:
+    get:
+      operationId: getJwks
+      tags: [Well-known]
+      summary: Public keys of the ES256 token key
+      description: Cache-Control public, max-age=600. During a rotation both keys are listed (see Service keys and rotation).
+      x-available: day-1
+      security: []
+      responses:
+        '200':
+          description: The key set.
+          headers:
+            Cache-Control:
+              schema: { type: string, const: 'public, max-age=600' }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Jwks'
+  /.well-known/openid-configuration:
+    get:
+      operationId: getAuthorizationServerMetadata
+      tags: [Well-known]
+      summary: Issuer metadata (RFC 8414 fields that are true for this service)
+      x-available: day-1
+      security: []
+      responses:
+        '200':
+          description: The metadata.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IssuerMetadata'
+  /.well-known/did.json:
+    get:
+      operationId: getServiceDidDocument
+      tags: [Well-known]
+      summary: The service DID document (did:web:account.openentity.org)
+      description: |
+        Holds the Ed25519 service key as a Multikey under `authentication` and `assertionMethod` (the accountSignature
+        key), and the P-256 close keys, current and every retired one, as JsonWebKey verification methods under
+        `assertionMethod` (fragment = RFC 7638 thumbprint): the signers of key log `close` entries and the verifiers'
+        `serviceKeys`. The access-token key is in /.well-known/jwks.json only. Cache at most 10 minutes.
+      x-available: day-1
+      security: []
+      responses:
+        '200':
+          description: The DID document.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DidDocument'
+  /v1/health:
+    get:
+      operationId: getHealth
+      tags: [Well-known]
+      summary: Liveness
+      x-available: day-1
+      security: []
+      responses:
+        '200':
+          description: Up.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+  /v1/auth/nonce:
+    post:
+      operationId: createAuthNonce
+      tags: [Sign-in]
+      summary: Issue a single-use sign-in nonce
+      description: |
+        The nonce is single use, valid 600 seconds, and bound to `client.install_id` (apps) or to a `__Host-oe_state`
+        cookie (web; SameSite=None, 10 minutes). Every provider nonce is the lowercase hex SHA-256 of this raw nonce: the
+        app passes that hash to Apple or Google, sends the raw nonce here, and the service compares the token's `nonce`
+        claim with the hash. The App Attest clientDataHash and the Android attestation challenge on the first sign-in
+        also derive from it (Attestation). flow `apple_web` (web and Android) also returns `state` and Apple's
+        `authorize_url`. Rate limited per IP and per install (429 rate_limited).
+      x-available: day-1
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NonceRequest'
+      responses:
+        '200':
+          description: The nonce.
+          headers:
+            Set-Cookie:
+              description: Web only. `__Host-oe_state=<opaque>; Path=/; Secure; HttpOnly; SameSite=None; Max-Age=600`.
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NonceResponse'
+        '400':
+          $ref: '#/components/responses/Error'
+          description: 'error: bad_request'
+        '403':
+          $ref: '#/components/responses/Error'
+          description: 'error: bad_origin, turnstile_required, turnstile_invalid (web)'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /v1/auth/apple:
+    post:
+      operationId: signInWithAppleNative
+      tags: [Sign-in]
+      summary: Sign in with Apple, native iOS sheet
+      description: |
+        Checks the identity token: `iss` https://appleid.apple.com, `aud` org.openentity.app, `nonce`, `exp`, signature
+        from https://appleid.apple.com/auth/keys (the `alg` in the token header, RS256 today). Then exchanges the
+        authorization code at Apple and keeps Apple's refresh token encrypted, so account deletion can revoke it.
+        `attestation` is required on the first sign-in from an install (403 attestation_required). A verified email
+        that matches another account is 409 account_exists: accounts never merge silently. Rate limited per IP and
+        per install.
+      x-available: day-1
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AppleSignInRequest'
+      responses:
+        '200':
+          description: Signed in.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        '400':
+          $ref: '#/components/responses/Error'
+          description: 'error: bad_request'
+        '401':
+          $ref: '#/components/responses/Error'
+          description: 'error: id_token_invalid, nonce_invalid'
+        '403':
+          $ref: '#/components/responses/Error'
+          description: 'error: attestation_required, attestation_invalid'
+        '409':
+          $ref: '#/components/responses/AccountExists'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '502':
+          $ref: '#/components/responses/Error'
+          description: 'error: provider_error (Apple code exchange failed)'
+  /v1/auth/apple/callback:
+    post:
+      operationId: appleCallback
+      tags: [Sign-in]
+      summary: Apple form_post return for the web and Android flows
+      description: |
+        Apple POSTs here after the authorize URL from POST /v1/auth/nonce (flow apple_web). `aud` is the Services ID;
+        `state` must match the nonce record (and, on the web, the `__Host-oe_state` cookie). Web: sets the session
+        cookie and redirects to `return_to` or `/`. Android: redirects to the App Link
+        `https://<host>/app/auth?login_code=<code>`; the code is single use, valid 120 seconds, and is redeemed at POST
+        /v1/token with grant_type login_code. Errors redirect to `/app/auth?error=<code>` with one of: state_invalid,
+        id_token_invalid, nonce_invalid, account_exists, provider_error.
+      x-available: day-1
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AppleCallbackForm'
+      responses:
+        '303':
+          description: Redirect (success or error).
+          headers:
+            Location:
+              schema: { type: string, format: uri-reference }
+            Set-Cookie:
+              $ref: '#/components/headers/SessionCookie'
+  /v1/auth/apple/notifications:
+    post:
+      operationId: appleServerNotification
+      tags: [Sign-in]
+      summary: Sign in with Apple server-to-server notifications
+      description: |
+        Apple POSTs {"payload": "<Apple-signed JWT>"}. Verified with Apple's keys; `aud` is the bundle ID or the Services
+        ID. The `events` claim may be an object or a JSON string. Types: email-disabled, email-enabled (update the
+        account email state), consent-revoked, account-delete and account-deleted (both spellings; end every session of
+        that Apple identity). Answers 200 for unknown subjects too.
+      x-available: day-1
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AppleNotificationRequest'
+      responses:
+        '200':
+          description: Processed.
+        '400':
+          $ref: '#/components/responses/Error'
+          description: 'error: bad_request'
+        '401':
+          $ref: '#/components/responses/Error'
+          description: 'error: payload_invalid'
+  /v1/auth/google:
+    post:
+      operationId: signInWithGoogle
+      tags: [Sign-in]
+      summary: Sign in with a Google ID token
+      description: |
+        `iss` https://accounts.google.com or accounts.google.com; `aud` the iOS OAuth client ID or the web client ID
+        (Android Credential Manager tokens carry the web client ID); `nonce`; `exp`; keys from
+        https://www.googleapis.com/oauth2/v3/certs. The email is used only when `email_verified` is true. Attestation,
+        account_exists and rate limits as for Apple.
+      x-available: day-1
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GoogleSignInRequest'
+      responses:
+        '200':
+          description: Signed in.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        '400':
+          $ref: '#/components/responses/Error'
+          description: 'error: bad_request'
+        '401':
+          $ref: '#/components/responses/Error'
+          description: 'error: id_token_invalid, nonce_invalid'
+        '403':
+          $ref: '#/components/responses/Error'
+          description: 'error: attestation_required, attestation_invalid, bad_origin'
+        '409':
+          $ref: '#/components/responses/AccountExists'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /v1/auth/passkey/options:
+    post:
+      operationId: passkeyOptions
+      tags: [Sign-in]
+      summary: WebAuthn options for passkey sign-in or root passkey registration
+      description: |
+        mode `authenticate`: no auth; a discoverable-credential request (empty allowCredentials), userVerification
+        required, timeout 300000 ms, RP ID of the environment. mode `register`: ownerBearer required; on Day 1 allowed
+        only for the onboarding root passkey (an account with no key log and no passkey); further passkeys need step-up
+        method.add (POST /v1/account/methods). The challenge is single use and valid 300 seconds.
+      x-available: day-1
+      security:
+        - {}
+        - ownerBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasskeyOptionsRequest'
+      responses:
+        '200':
+          description: Options in WebAuthn Level 3 JSON form.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PasskeyOptionsResponse'
+        '400':
+          $ref: '#/components/responses/Error'
+          description: 'error: bad_request'
+        '401':
+          $ref: '#/components/responses/Error'
+          description: 'error: unauthorized (register without a token)'
+        '409':
+          $ref: '#/components/responses/Error'
+          description: 'error: passkey_exists'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /v1/auth/passkey/verify:
+    post:
+      operationId: passkeyVerify
+      tags: [Sign-in]
+      summary: Verify a passkey assertion (sign-in) or registration (root passkey)
+      description: |
+        Expected origins: https://<environment host>, and the OpenEntity Android app's
+        `android:apk-key-hash:<base64url SHA-256 of the signing certificate>` origin once its fingerprint is known.
+        User verification is required. authenticate returns a Session; register returns PasskeyRegistered, whose
+        `credential` is the root Credential the app puts into the genesis entry.
+      x-available: day-1
+      security:
+        - {}
+        - ownerBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasskeyVerifyRequest'
+      responses:
+        '200':
+          description: Signed in (authenticate) or registered (register).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PasskeyVerifyResponse'
+        '400':
+          $ref: '#/components/responses/Error'
+          description: 'error: bad_request'
+        '401':
+          $ref: '#/components/responses/Error'
+          description: 'error: passkey_invalid, unauthorized'
+        '403':
+          $ref: '#/components/responses/Error'
+          description: 'error: attestation_required, attestation_invalid, bad_origin'
+        '410':
+          $ref: '#/components/responses/Error'
+          description: 'error: challenge_expired'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /v1/auth/email/start:
+    post:
+      operationId: emailStart
+      tags: [Sign-in]
+      summary: Email an 8-digit sign-in code
+      description: |
+        Always 202 for a well-formed address, so the answer never reveals whether an account exists. The code has 8
+        digits, is valid 600 seconds and allows 5 tries. At most 3 codes per address per hour and 10 per install per
+        hour (beyond that: still 202, no email). Sent through Customer.io transactional email. Web: send
+        `turnstile_token`; without a valid one, only an address that already has an account gets a code.
+      x-available: day-1
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmailStartRequest'
+      responses:
+        '202':
+          description: Accepted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmailStartResponse'
+        '400':
+          $ref: '#/components/responses/Error'
+          description: 'error: bad_request, email_invalid'
+        '403':
+          $ref: '#/components/responses/Error'
+          description: 'error: bad_origin'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+          description: 'error: rate_limited (per IP)'
+  /v1/auth/email/verify:
+    post:
+      operationId: emailVerify
+      tags: [Sign-in]
+      summary: Sign in with the emailed code
+      description: |
+        A wrong code is 401 code_invalid with `tries_left`; the fifth wrong try locks the code (410 code_locked).
+        Creating an account needs `attestation` (apps) or Turnstile (web: the start call's token, else
+        `turnstile_token` here).
+      x-available: day-1
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmailVerifyRequest'
+      responses:
+        '200':
+          description: Signed in.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        '400':
+          $ref: '#/components/responses/Error'
+          description: 'error: bad_request'
+        '401':
+          $ref: '#/components/responses/CodeInvalid'
+        '403':
+          $ref: '#/components/responses/Error'
+          description: 'error: attestation_required, attestation_invalid, turnstile_required, turnstile_invalid, bad_origin'
+        '409':
+          $ref: '#/components/responses/AccountExists'
+        '410':
+          $ref: '#/components/responses/Error'
+          description: 'error: code_locked, code_expired'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /v1/token:
+    post:
+      operationId: token
+      tags: [Tokens and sessions]
+      summary: Rotate the refresh token and mint access tokens, or redeem a login code
+      description: |
+        grant_type `refresh_token`: the refresh token is single use and rotates on every call. A second use of a
+        rotated token revokes the whole session (401 token_reused), except an idempotent retry within 30 seconds whose
+        successor was never used: that mints a fresh successor. Clients serialize refresh calls and ask for every
+        audience they need in one call. Expiry: 90 days sliding (apps), 12 hours absolute (web). Binding: iOS sends
+        X-OE-App-Attest; Android sends X-OE-Device-Signature and X-OE-Play-Integrity; the web sends the session cookie
+        with Origin equal to the base URL. grant_type `login_code` (or `urn:openentity:login_code`): redeems the
+        Android Apple code from /v1/auth/apple/callback; send `client`, and `attestation` on the install's first
+        sign-in. Each access token is a 15-minute ES256 JWT with exactly one audience (AccessTokenClaims). Product
+        audiences need an owner DID: 403 key_log_required before key log genesis.
+      x-available: day-1
+      security:
+        - {}
+        - webSession: []
+      parameters:
+        - $ref: '#/components/parameters/AppAttestHeader'
+        - $ref: '#/components/parameters/DeviceSignatureHeader'
+        - $ref: '#/components/parameters/PlayIntegrityHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenRequest'
+      responses:
+        '200':
+          description: Tokens.
+          headers:
+            Set-Cookie:
+              $ref: '#/components/headers/SessionCookie'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '400':
+          $ref: '#/components/responses/Error'
+          description: 'error: bad_request, invalid_audience'
+        '401':
+          $ref: '#/components/responses/Error'
+          description: 'error: invalid_grant, token_reused, binding_required, binding_invalid'
+        '403':
+          $ref: '#/components/responses/Error'
+          description: 'error: key_log_required, attestation_required, attestation_invalid, bad_origin'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /v1/revoke:
+    post:
+      operationId: revoke
+      tags: [Tokens and sessions]
+      summary: Sign out this session (RFC 7009 style)
+      description: Revokes the session the refresh token (or the web cookie) belongs to. Always 200 with an empty body.
+      x-available: day-1
+      security:
+        - {}
+        - webSession: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RevokeRequest'
+      responses:
+        '200':
+          description: Revoked, or already invalid.
+          headers:
+            Set-Cookie:
+              description: Web only. Clears `__Host-oe_session`.
+              schema: { type: string }
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /v1/sessions:
+    get:
+      operationId: listSessions
+      tags: [Tokens and sessions]
+      summary: The owner's signed-in devices and browsers
+      x-available: day-1
+      security:
+        - ownerBearer: []
+      responses:
+        '200':
+          description: Sessions.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionList'
+        '401':
+          $ref: '#/components/responses/Error'
+          description: 'error: unauthorized'
+  /v1/sessions/{id}:
+    delete:
+      operationId: revokeSession
+      tags: [Tokens and sessions]
+      summary: Sign out another device or browser
+      description: No step-up; ending a session only removes access. The new-install notice links here.
+      x-available: day-1
+      security:
+        - ownerBearer: []
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '204':
+          description: Revoked.
+        '401':
+          $ref: '#/components/responses/Error'
+          description: 'error: unauthorized'
+        '404':
+          $ref: '#/components/responses/Error'
+          description: 'error: not_found'
+  /v1/me:
+    get:
+      operationId: getMe
+      tags: [Account]
+      summary: The signed-in account
+      x-available: day-1
+      security:
+        - ownerBearer: []
+      responses:
+        '200':
+          description: The account.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+        '401':
+          $ref: '#/components/responses/Error'
+          description: 'error: unauthorized'
+  /v1/step-up:
+    post:
+      operationId: createStepUp
+      tags: [Account]
+      summary: Issue an approval request for a step-up action
+      description: |
+        Returns an ApprovalRequest whose verifier is the service DID. Sign it with approval/2.0 (decision approve) using a
+        key in the owner key log, then send the Approval2 in X-OE-Approval on the action's own call. Params per action:
+        agent.resume {agent_did}; agent.permissions.widen {agent_did, permissions}; method.add {type};
+        method.remove {method_id}; email.change {email}; account.delete {}; deletion.cancel {}; product.link {product}.
+        For deletion.cancel the service also accepts the root passkey (approval/2.0, webauthn form, verified with
+        verifyApproval allowRoot); revoked approvers cannot cancel a deletion. An account with no key log gets
+        403 key_log_required.
+      x-available: day-5
+      security:
+        - ownerBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StepUpRequest'
+      responses:
+        '200':
+          description: The request to sign.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApprovalRequest'
+        '400':
+          $ref: '#/components/responses/Error'
+          description: 'error: bad_request, unknown_action'
+        '401':
+          $ref: '#/components/responses/Error'
+          description: 'error: unauthorized'
+        '403':
+          $ref: '#/components/responses/Error'
+          description: 'error: key_log_required'
+        '404':
+          $ref: '#/components/responses/Error'
+          description: 'error: not_found (agent or method)'
+  /v1/account/links:
+    post:
+      operationId: createOwnerLink
+      tags: [Account]
+      summary: Link an existing product web account to this owner (PLAN 2.5)
+      description: |
+        A step-up action: sign the ApprovalRequest from POST /v1/step-up {action: product.link, params: {product}} and
+        send it in X-OE-Approval. Returns a LinkOwnerEnvelope for that product and the product's link page URL with the
+        envelope in the fragment. The app opens link_url; the product signs its existing web user in with its own web
+        sign-in, verifies the envelope (LinkOwnerEnvelope) and stores `oe_owner_did` on that user, then sends the
+        browser to https://<service host>/app/linked?product=<product DID>, an App Link back into the app. The envelope
+        is single use and expires in 600 seconds.
+      x-available: day-3
+      security:
+        - ownerBearer: []
+      parameters:
+        - $ref: '#/components/parameters/ApprovalHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OwnerLinkRequest'
+      responses:
+        '200':
+          description: The envelope and where to open it.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OwnerLink'
+        '400':
+          $ref: '#/components/responses/Error'
+          description: 'error: bad_request, unknown_product'
+        '401':
+          $ref: '#/components/responses/Error'
+          description: 'error: unauthorized'
+        '403':
+          $ref: '#/components/responses/Error'
+          description: 'error: approval_invalid, approval_expired, key_log_required'
+        '409':
+          $ref: '#/components/responses/Error'
+          description: 'error: approval_reused'
+        '428':
+          $ref: '#/components/responses/Error'
+          description: 'error: approval_required'
+  /v1/account/methods:
+    get:
+      operationId: listMethods
+      tags: [Account]
+      summary: Sign-in methods
+      x-available: day-5
+      security:
+        - ownerBearer: []
+      responses:
+        '200':
+          description: Methods.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MethodList'
+        '401':
+          $ref: '#/components/responses/Error'
+          description: 'error: unauthorized'
+    post:
+      operationId: addMethod
+      tags: [Account]
+      summary: Link a sign-in method (step-up method.add)
+      description: The proof is a fresh sign-in with the new method. A method already linked to any account is 409 method_exists.
+      x-available: day-5
+      security:
+        - ownerBearer: []
+      parameters:
+        - $ref: '#/components/parameters/ApprovalHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MethodAddRequest'
+      responses:
+        '201':
+          description: Linked.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Method'
+        '400':
+          $ref: '#/components/responses/Error'
+          description: 'error: bad_request'
+        '401':
+          $ref: '#/components/responses/Error'
+          description: 'error: unauthorized, id_token_invalid, nonce_invalid, code_invalid, passkey_invalid'
+        '403':
+          $ref: '#/components/responses/Error'
+          description: 'error: approval_invalid, approval_expired'
+        '409':
+          $ref: '#/components/responses/Error'
+          description: 'error: method_exists, approval_reused'
+        '428':
+          $ref: '#/components/responses/Error'
+          description: 'error: approval_required'
+  /v1/account/methods/{id}:
+    delete:
+      operationId: removeMethod
+      tags: [Account]
+      summary: Remove a sign-in method (step-up method.remove)
+      x-available: day-5
+      security:
+        - ownerBearer: []
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+        - $ref: '#/components/parameters/ApprovalHeader'
+      responses:
+        '204':
+          description: Removed.
+        '401':
+          $ref: '#/components/responses/Error'
+          description: 'error: unauthorized'
+        '403':
+          $ref: '#/components/responses/Error'
+          description: 'error: approval_invalid, approval_expired'
+        '404':
+          $ref: '#/components/responses/Error'
+          description: 'error: not_found'
+        '409':
+          $ref: '#/components/responses/Error'
+          description: 'error: last_method, approval_reused'
+        '428':
+          $ref: '#/components/responses/Error'
+          description: 'error: approval_required'
+  /v1/account/email:
+    put:
+      operationId: changeEmail
+      tags: [Account]
+      summary: Change the account email (step-up email.change)
+      description: Get the code for the new address with POST /v1/auth/email/start, then send its challenge and code here.
+      x-available: day-5
+      security:
+        - ownerBearer: []
+      parameters:
+        - $ref: '#/components/parameters/ApprovalHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmailChangeRequest'
+      responses:
+        '200':
+          description: Changed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+        '401':
+          $ref: '#/components/responses/CodeInvalid'
+        '403':
+          $ref: '#/components/responses/Error'
+          description: 'error: approval_invalid, approval_expired'
+        '409':
+          $ref: '#/components/responses/Error'
+          description: 'error: approval_reused'
+        '410':
+          $ref: '#/components/responses/Error'
+          description: 'error: code_locked, code_expired'
+        '428':
+          $ref: '#/components/responses/Error'
+          description: 'error: approval_required'
+  /v1/account/delete:
+    post:
+      operationId: deleteAccount
+      tags: [Account]
+      summary: Delete the account
+      description: |
+        With a key log: X-OE-Approval for step-up account.delete. With no key log: no approval, but the token's
+        `auth_time` must be within 300 seconds (sign in again first; else 401 reauth_required). Deletion revokes Apple
+        tokens, sends owner.deleted to every product (POST /v1/oe/events) and closes the key log (op close). The log
+        stays readable, so old signatures still verify.
+      x-available: day-5
+      security:
+        - ownerBearer: []
+      parameters:
+        - $ref: '#/components/parameters/ApprovalHeaderConditional'
+      responses:
+        '202':
+          description: Deleted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountDeleted'
+        '401':
+          $ref: '#/components/responses/Error'
+          description: 'error: unauthorized, reauth_required'
+        '403':
+          $ref: '#/components/responses/Error'
+          description: 'error: approval_invalid, approval_expired'
+        '409':
+          $ref: '#/components/responses/Error'
+          description: 'error: approval_reused'
+        '428':
+          $ref: '#/components/responses/Error'
+          description: 'error: approval_required'
+  /v1/account/deletion-request:
+    post:
+      operationId: requestDeletion
+      tags: [Account]
+      summary: Request deletion when the key log can no longer sign
+      description: |
+        Starts a 7-day wait. Every approver (including those revoked in the last 7 days) and the account email are
+        notified. A current approver or the root passkey can cancel (POST /v1/account/deletion-request/cancel).
+      x-available: day-8
+      security:
+        - ownerBearer: []
+      responses:
+        '202':
+          description: Requested.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeletionRequest'
+        '401':
+          $ref: '#/components/responses/Error'
+          description: 'error: unauthorized'
+        '409':
+          $ref: '#/components/responses/Error'
+          description: 'error: no_key_log, deletion_pending'
+  /v1/account/deletion-request/cancel:
+    post:
+      operationId: cancelDeletion
+      tags: [Account]
+      summary: Cancel a pending deletion request
+      description: |
+        X-OE-Approval for step-up deletion.cancel, signed with approval/2.0 by a current approver or by the root
+        passkey (webauthn form; the service verifies it with verifyApproval allowRoot). Approvers revoked in the last 7
+        days cannot cancel a deletion; they keep only the key log cancel op.
+      x-available: day-8
+      security:
+        - ownerBearer: []
+      parameters:
+        - $ref: '#/components/parameters/ApprovalHeader'
+      responses:
+        '200':
+          description: Cancelled.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeletionRequest'
+        '403':
+          $ref: '#/components/responses/Error'
+          description: 'error: approval_invalid, approval_expired'
+        '404':
+          $ref: '#/components/responses/Error'
+          description: 'error: not_found (no pending request)'
+        '409':
+          $ref: '#/components/responses/Error'
+          description: 'error: approval_reused'
+        '428':
+          $ref: '#/components/responses/Error'
+          description: 'error: approval_required'
+  /v1/push-tokens/{install_id}:
+    put:
+      operationId: putPushToken
+      tags: [Account]
+      summary: Register or replace this install's push token
+      x-available: day-2
+      security:
+        - ownerBearer: []
+      parameters:
+        - $ref: '#/components/parameters/InstallIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PushTokenRequest'
+      responses:
+        '204':
+          description: Stored.
+        '400':
+          $ref: '#/components/responses/Error'
+          description: 'error: bad_request'
+        '401':
+          $ref: '#/components/responses/Error'
+          description: 'error: unauthorized'
+    delete:
+      operationId: deletePushToken
+      tags: [Account]
+      summary: Remove this install's push token
+      x-available: day-2
+      security:
+        - ownerBearer: []
+      parameters:
+        - $ref: '#/components/parameters/InstallIdPath'
+      responses:
+        '204':
+          description: Removed.
+        '401':
+          $ref: '#/components/responses/Error'
+          description: 'error: unauthorized'
+  /v1/keylog/attestations:
+    post:
+      operationId: attestApproverKey
+      tags: [Key log]
+      summary: Attest a device approver key before it goes into a key log entry
+      description: |
+        Call before signing a genesis, add_approver or recover entry that carries a device key (type p256). The client
+        proves the key with the platform attestation, and the service verifies it against Apple's and Google's roots.
+        If it passes, the service returns a receipt (KeyAttestationReceipt): a compact JWS signed by the service key,
+        the Ed25519 key of accountSignature in /.well-known/did.json. The client copies the receipt's `key_storage`,
+        `attestation.type`, `attestation.verified` and (Android) `integrity` into the Credential, puts the JWS itself in
+        `attestation.receipt`, then signs the entry. Verifiers may check a receipt against did.json; a key log's
+        validity never depends on it (test-vectors/keylog-1).
+
+        Binding: `nonce` comes from POST /v1/auth/nonce (single use), and kid is the RFC 7638 thumbprint of `jwk`, the
+        key's SHA-256.
+        - iOS: an App Attest attestation of a new App Attest key, with clientDataHash = SHA-256(UTF-8(nonce + "|" +
+          kid)). The service checks the chain to the Apple App Attestation root, the nonce extension, the RP ID hash of
+          7R835D5LDZ.org.openentity.app, counter 0 and the production AAGUID (development in staging). key_storage is
+          secure_enclave.
+        - Android: the Key Attestation certificate chain of the approver key itself (leaf first; the leaf's public key
+          must be `jwk`), generated with attestationChallenge = UTF-8(nonce), plus a Play Integrity standard-request
+          token with requestHash = kid. The service checks the chain to a Google hardware attestation root, the security
+          level (StrongBox or TrustedEnvironment gives key_storage strongbox or tee), that the key needs biometric user
+          authentication on every use (Class 3), and the verdict for org.openentity.app. MEETS_DEVICE_INTEGRITY is
+          required (403 integrity_failed without it); MEETS_STRONG_INTEGRITY is recorded in integrity.strong.
+      x-available: day-2
+      security:
+        - ownerBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KeyAttestationRequest'
+      responses:
+        '200':
+          description: The receipt and its claims.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KeyAttestationResponse'
+        '400':
+          $ref: '#/components/responses/Error'
+          description: 'error: bad_request'
+        '401':
+          $ref: '#/components/responses/Error'
+          description: 'error: unauthorized, nonce_invalid'
+        '403':
+          $ref: '#/components/responses/Error'
+          description: 'error: attestation_invalid, integrity_failed'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /o/{id}/log:
+    get:
+      operationId: readKeyLog
+      tags: [Key log]
+      summary: Read an owner key log
+      description: JSON Lines, one exact JCS entry line per line, from seq `from` (default 1; genesis is seq 1). A closed log stays readable.
+      x-available: day-2
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/OwnerIdPath'
+        - name: from
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, default: 1 }
+      responses:
+        '200':
+          description: Entries.
+          headers:
+            X-OE-Log-Head:
+              description: The seq of the last entry.
+              schema: { type: integer, minimum: 1 }
+          content:
+            application/jsonl:
+              schema:
+                $ref: '#/components/schemas/KeyLogLines'
+        '404':
+          $ref: '#/components/responses/Error'
+          description: 'error: not_found'
+    post:
+      operationId: appendKeyLog
+      tags: [Key log]
+      summary: Append an entry (genesis creates the owner DID)
+      description: |
+        The body carries the entry as its exact JCS line (`line`); the service stores and serves those bytes and never
+        re-encodes them. genesis (seq 1): ownerBearer of an account with no key log, and `{id}` must equal the
+        lowercase base32 of SHA-256(line). Other ops are self-authenticating and need no auth; anyone may post a
+        correctly signed entry. For approver and root changes the signed entry IS the step-up: no Approval2 is sent.
+        The service records `first_seen_at` for every entry; `effective_at` is first_seen_at + 86400 for recover and
+        replace_root (at once for replace_root in a single-credential log) and first_seen_at otherwise. close is
+        written only by the service. Approver ops (add_approver, recover, replace_root, cancel, revoke) land on Day 5.
+      x-available: day-2
+      security:
+        - {}
+        - ownerBearer: []
+      parameters:
+        - $ref: '#/components/parameters/OwnerIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KeyLogAppendRequest'
+      responses:
+        '201':
+          description: Appended.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogAppendResponse'
+        '400':
+          $ref: '#/components/responses/Error'
+          description: 'error: bad_request'
+        '401':
+          $ref: '#/components/responses/Error'
+          description: 'error: unauthorized (genesis without a token)'
+        '403':
+          $ref: '#/components/responses/Error'
+          description: 'error: log_exists (genesis for an account that already has a log)'
+        '409':
+          $ref: '#/components/responses/Error'
+          description: 'error: seq_conflict'
+        '410':
+          $ref: '#/components/responses/Error'
+          description: 'error: log_closed'
+        '422':
+          $ref: '#/components/responses/Error'
+          description: 'error: invalid_entry'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /o/{id}/did.json:
+    get:
+      operationId: getOwnerDidDocument
+      tags: [Key log]
+      summary: The owner DID document, derived from the key log
+      description: |
+        Verification methods are JsonWebKey entries for the current credentials (fragment = kid). The current
+        approvers (the root passkey alone in a single-credential log) are listed under authentication and
+        assertionMethod. service:
+        {id "#keylog", type "OpenEntityKeyLog", serviceEndpoint "https://<host>/o/<id>/log"}. A closed log serves no
+        verification methods. Products verify approvals from the log through the packages, never from this document.
+      x-available: day-2
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/OwnerIdPath'
+      responses:
+        '200':
+          description: The DID document.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DidDocument'
+        '404':
+          $ref: '#/components/responses/Error'
+          description: 'error: not_found'
+  /v1/pairings:
+    post:
+      operationId: createPairing
+      tags: [Pairing]
+      summary: Create a pairing code
+      description: |
+        A single-use code `OE-XXXX-XXXX` (Crockford base32 without I, L, O, U), valid 600 seconds, shown with a QR code
+        of `url`. 10 codes per owner per day (429 rate_limited); 50 paired agents per owner (409 agent_limit). Needs a
+        key log, since confirming signs approval/2.0.
+      x-available: day-3
+      security:
+        - ownerBearer: []
+      responses:
+        '201':
+          description: Created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pairing'
+        '401':
+          $ref: '#/components/responses/Error'
+          description: 'error: unauthorized'
+        '403':
+          $ref: '#/components/responses/Error'
+          description: 'error: key_log_required'
+        '409':
+          $ref: '#/components/responses/Error'
+          description: 'error: agent_limit'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /v1/pairings/{id}:
+    get:
+      operationId: getPairing
+      tags: [Pairing]
+      summary: Pairing state; once claimed, the agent, the match string and the approval request
+      description: The app polls this while the code is on screen, at most every 2 seconds.
+      x-available: day-3
+      security:
+        - ownerBearer: []
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: The pairing.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PairingDetail'
+        '401':
+          $ref: '#/components/responses/Error'
+          description: 'error: unauthorized'
+        '404':
+          $ref: '#/components/responses/Error'
+          description: 'error: not_found'
+    delete:
+      operationId: cancelPairing
+      tags: [Pairing]
+      summary: Cancel a pairing
+      x-available: day-3
+      security:
+        - ownerBearer: []
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '204':
+          description: Cancelled.
+        '401':
+          $ref: '#/components/responses/Error'
+          description: 'error: unauthorized'
+        '404':
+          $ref: '#/components/responses/Error'
+          description: 'error: not_found'
+  /v1/pairings/{id}/confirm:
+    post:
+      operationId: confirmPairing
+      tags: [Pairing]
+      summary: Confirm a claimed pairing with Face ID (approval/2.0 over the link)
+      description: |
+        The owner checks that the match string matches what the agent printed, picks permissions, and signs the
+        pairing's `approval_request` (action pairing.confirm). The service then provisions the agent in each product
+        through that product's existing path and sends agent.permissions.
+      x-available: day-3
+      security:
+        - ownerBearer: []
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+        - $ref: '#/components/parameters/ApprovalHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PairingConfirmRequest'
+      responses:
+        '200':
+          description: Paired.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Agent'
+        '400':
+          $ref: '#/components/responses/Error'
+          description: 'error: bad_request, invalid_permission'
+        '401':
+          $ref: '#/components/responses/Error'
+          description: 'error: unauthorized'
+        '403':
+          $ref: '#/components/responses/Error'
+          description: 'error: approval_invalid, approval_expired'
+        '404':
+          $ref: '#/components/responses/Error'
+          description: 'error: not_found'
+        '409':
+          $ref: '#/components/responses/Error'
+          description: 'error: not_claimed, approval_reused'
+        '410':
+          $ref: '#/components/responses/Error'
+          description: 'error: code_expired'
+        '428':
+          $ref: '#/components/responses/Error'
+          description: 'error: approval_required'
+  /v1/agents:
+    get:
+      operationId: listAgents
+      tags: [Agents]
+      summary: The owner's paired agents
+      x-available: day-3
+      security:
+        - ownerBearer: []
+      responses:
+        '200':
+          description: Agents.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentList'
+        '401':
+          $ref: '#/components/responses/Error'
+          description: 'error: unauthorized'
+  /v1/agents/pause-all:
+    post:
+      operationId: pauseAllAgents
+      tags: [Agents]
+      summary: Pause every agent (no biometrics)
+      x-available: day-3
+      security:
+        - ownerBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PauseRequest'
+      responses:
+        '200':
+          description: Paused.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PauseAllResponse'
+        '401':
+          $ref: '#/components/responses/Error'
+          description: 'error: unauthorized'
+  /v1/agents/{agent_did}:
+    get:
+      operationId: getAgent
+      tags: [Agents]
+      summary: One agent
+      x-available: day-3
+      security:
+        - ownerBearer: []
+      parameters:
+        - $ref: '#/components/parameters/AgentDidPath'
+      responses:
+        '200':
+          description: The agent.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Agent'
+        '401':
+          $ref: '#/components/responses/Error'
+          description: 'error: unauthorized'
+        '404':
+          $ref: '#/components/responses/Error'
+          description: 'error: not_found'
+    patch:
+      operationId: updateAgent
+      tags: [Agents]
+      summary: Rename an agent or change its permissions
+      description: |
+        Narrowing permissions takes effect at once. Widening needs X-OE-Approval for step-up agent.permissions.widen.
+        Every change sends agent.permissions to the products and a permissions frame to the agent.
+      x-available: day-3
+      security:
+        - ownerBearer: []
+      parameters:
+        - $ref: '#/components/parameters/AgentDidPath'
+        - $ref: '#/components/parameters/ApprovalHeaderConditional'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentPatch'
+      responses:
+        '200':
+          description: Updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Agent'
+        '400':
+          $ref: '#/components/responses/Error'
+          description: 'error: bad_request, invalid_permission'
+        '401':
+          $ref: '#/components/responses/Error'
+          description: 'error: unauthorized'
+        '403':
+          $ref: '#/components/responses/Error'
+          description: 'error: approval_invalid, approval_expired'
+        '404':
+          $ref: '#/components/responses/Error'
+          description: 'error: not_found'
+        '409':
+          $ref: '#/components/responses/Error'
+          description: 'error: approval_reused'
+        '428':
+          $ref: '#/components/responses/Error'
+          description: 'error: approval_required (widening)'
+    delete:
+      operationId: unlinkAgent
+      tags: [Agents]
+      summary: Unlink an agent
+      description: Revokes its product credentials, sends agent.unlinked to every product and closes its socket with 4003.
+      x-available: day-3
+      security:
+        - ownerBearer: []
+      parameters:
+        - $ref: '#/components/parameters/AgentDidPath'
+      responses:
+        '204':
+          description: Unlinked.
+        '401':
+          $ref: '#/components/responses/Error'
+          description: 'error: unauthorized'
+        '404':
+          $ref: '#/components/responses/Error'
+          description: 'error: not_found'
+  /v1/agents/{agent_did}/pause:
+    post:
+      operationId: pauseAgent
+      tags: [Agents]
+      summary: Pause an agent (no biometrics)
+      description: |
+        Records the pause, closes the agent's socket with 4001 and sends agent.paused to every product (POST /v1/oe/events).
+        Products also poll GET /v1/paused, so every product refuses the agent within 60 seconds. Idempotent.
+      x-available: day-3
+      security:
+        - ownerBearer: []
+      parameters:
+        - $ref: '#/components/parameters/AgentDidPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PauseRequest'
+      responses:
+        '200':
+          description: Paused.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Agent'
+        '401':
+          $ref: '#/components/responses/Error'
+          description: 'error: unauthorized'
+        '404':
+          $ref: '#/components/responses/Error'
+          description: 'error: not_found'
+  /v1/agents/{agent_did}/resume:
+    post:
+      operationId: resumeAgent
+      tags: [Agents]
+      summary: Resume an agent (Face ID, step-up agent.resume)
+      description: Sends agent.resumed to every product and a resume command to the agent.
+      x-available: day-5
+      security:
+        - ownerBearer: []
+      parameters:
+        - $ref: '#/components/parameters/AgentDidPath'
+        - $ref: '#/components/parameters/ApprovalHeader'
+      responses:
+        '200':
+          description: Resumed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Agent'
+        '401':
+          $ref: '#/components/responses/Error'
+          description: 'error: unauthorized'
+        '403':
+          $ref: '#/components/responses/Error'
+          description: 'error: approval_invalid, approval_expired'
+        '404':
+          $ref: '#/components/responses/Error'
+          description: 'error: not_found'
+        '409':
+          $ref: '#/components/responses/Error'
+          description: 'error: not_paused, approval_reused'
+        '428':
+          $ref: '#/components/responses/Error'
+          description: 'error: approval_required'
+  /v1/agents/{agent_did}/commands:
+    post:
+      operationId: sendCommand
+      tags: [Agents]
+      summary: Send checkup or fix to an agent
+      x-available: day-3
+      security:
+        - ownerBearer: []
+      parameters:
+        - $ref: '#/components/parameters/AgentDidPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommandRequest'
+      responses:
+        '202':
+          description: Queued for the agent.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IdResponse'
+        '400':
+          $ref: '#/components/responses/Error'
+          description: 'error: bad_request'
+        '401':
+          $ref: '#/components/responses/Error'
+          description: 'error: unauthorized'
+        '404':
+          $ref: '#/components/responses/Error'
+          description: 'error: not_found'
+  /v1/agents/{agent_did}/messages:
+    get:
+      operationId: listAgentMessages
+      tags: [Agents]
+      summary: The owner channel with one agent, newest first
+      x-available: day-3
+      security:
+        - ownerBearer: []
+      parameters:
+        - $ref: '#/components/parameters/AgentDidPath'
+        - name: before
+          in: query
+          required: false
+          description: Return messages older than this message id.
+          schema: { $ref: '#/components/schemas/OpaqueId' }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+      responses:
+        '200':
+          description: Messages.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageList'
+        '401':
+          $ref: '#/components/responses/Error'
+          description: 'error: unauthorized'
+        '404':
+          $ref: '#/components/responses/Error'
+          description: 'error: not_found'
+    post:
+      operationId: sendOwnerMessage
+      tags: [Agents]
+      summary: Message the agent
+      x-available: day-3
+      security:
+        - ownerBearer: []
+      parameters:
+        - $ref: '#/components/parameters/AgentDidPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OwnerMessageRequest'
+      responses:
+        '201':
+          description: Queued for the agent.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '400':
+          $ref: '#/components/responses/Error'
+          description: 'error: bad_request'
+        '401':
+          $ref: '#/components/responses/Error'
+          description: 'error: unauthorized'
+        '404':
+          $ref: '#/components/responses/Error'
+          description: 'error: not_found'
+        '413':
+          $ref: '#/components/responses/Error'
+          description: 'error: too_large (over 4096 bytes)'
+  /v1/approvals:
+    get:
+      operationId: listAgentApprovals
+      tags: [Agent-written approvals]
+      summary: Approvals the owner's agents wrote
+      description: The app labels these "Written by the agent". Their verifier is the service DID; no product accepts them.
+      x-available: day-3
+      security:
+        - ownerBearer: []
+      parameters:
+        - name: state
+          in: query
+          required: false
+          schema: { type: string, enum: [pending, decided], default: pending }
+      responses:
+        '200':
+          description: Approvals.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentApprovalList'
+        '401':
+          $ref: '#/components/responses/Error'
+          description: 'error: unauthorized'
+  /v1/approvals/{id}:
+    get:
+      operationId: getAgentApproval
+      tags: [Agent-written approvals]
+      summary: One agent-written approval
+      x-available: day-3
+      security:
+        - ownerBearer: []
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: The approval.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentApproval'
+        '401':
+          $ref: '#/components/responses/Error'
+          description: 'error: unauthorized'
+        '404':
+          $ref: '#/components/responses/Error'
+          description: 'error: not_found'
+  /v1/approvals/{id}/decision:
+    post:
+      operationId: decideAgentApproval
+      tags: [Agent-written approvals]
+      summary: Approve or deny (the Approval2 in X-OE-Approval carries the decision)
+      description: The Approval2 signs the approval's `approval_request` (action agent.approval). The agent receives an approval.result frame.
+      x-available: day-3
+      security:
+        - ownerBearer: []
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+        - $ref: '#/components/parameters/ApprovalHeader'
+      responses:
+        '200':
+          description: Decided.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentApproval'
+        '401':
+          $ref: '#/components/responses/Error'
+          description: 'error: unauthorized'
+        '403':
+          $ref: '#/components/responses/Error'
+          description: 'error: approval_invalid, approval_expired'
+        '404':
+          $ref: '#/components/responses/Error'
+          description: 'error: not_found'
+        '409':
+          $ref: '#/components/responses/Error'
+          description: 'error: already_decided, approval_reused'
+        '410':
+          $ref: '#/components/responses/Error'
+          description: 'error: expired'
+        '428':
+          $ref: '#/components/responses/Error'
+          description: 'error: approval_required'
+  /v1/attachments/{id}:
+    get:
+      operationId: getAttachment
+      tags: [Agents]
+      summary: Download a message attachment
+      x-available: day-3
+      security:
+        - ownerBearer: []
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '302':
+          description: Redirect to a presigned URL valid 300 seconds.
+          headers:
+            Location:
+              schema: { type: string, format: uri }
+        '401':
+          $ref: '#/components/responses/Error'
+          description: 'error: unauthorized'
+        '404':
+          $ref: '#/components/responses/Error'
+          description: 'error: not_found'
+  /v1/purchases:
+    post:
+      operationId: submitPurchase
+      tags: [Store]
+      summary: Submit a store purchase for immediate verification and grant
+      description: |
+        iOS: the StoreKit 2 signed transaction (JWS; x5c chain verified to the Apple root; appAccountToken must equal the
+        account's app_account_token). Android: the Play product id and purchase token, verified with the Google Play
+        Developer API (obfuscatedAccountId must equal app_account_token). A grant rests only on an Apple-signed JWS or a
+        Google Play Developer API answer, never on the client's word. The grant reaches the product as plan.changed.
+      x-available: day-6
+      security:
+        - ownerBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Purchase'
+      responses:
+        '200':
+          description: Current entitlements.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EntitlementList'
+        '400':
+          $ref: '#/components/responses/Error'
+          description: 'error: bad_request'
+        '401':
+          $ref: '#/components/responses/Error'
+          description: 'error: unauthorized'
+        '409':
+          $ref: '#/components/responses/Error'
+          description: 'error: account_mismatch'
+        '422':
+          $ref: '#/components/responses/Error'
+          description: 'error: transaction_invalid'
+  /v1/entitlements:
+    get:
+      operationId: listEntitlements
+      tags: [Store]
+      summary: Store-bought plans
+      x-available: day-6
+      security:
+        - ownerBearer: []
+      responses:
+        '200':
+          description: Entitlements.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EntitlementList'
+        '401':
+          $ref: '#/components/responses/Error'
+          description: 'error: unauthorized'
+  /v1/store/apple/notifications:
+    post:
+      operationId: appStoreNotification
+      tags: [Store]
+      summary: App Store Server Notifications V2
+      description: The signedPayload JWS is verified to the Apple root (x5c chain). Answers 200 for every verified notification, unknown transactions included.
+      x-available: day-6
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AppStoreNotification'
+      responses:
+        '200':
+          description: Processed.
+        '400':
+          $ref: '#/components/responses/Error'
+          description: 'error: bad_request'
+        '401':
+          $ref: '#/components/responses/Error'
+          description: 'error: payload_invalid'
+  /v1/store/google/notifications:
+    post:
+      operationId: playNotification
+      tags: [Store]
+      summary: Google Play Real-time Developer Notifications (Cloud Pub/Sub push)
+      description: |
+        Authorization is `Bearer <Google-signed OIDC token>` from the push subscription's service account: `iss`
+        https://accounts.google.com (or accounts.google.com), `email` the push service account with email_verified true,
+        `aud` the subscription's configured audience. The purchase is re-read from the Play Developer API before any
+        grant.
+      x-available: day-6
+      security:
+        - pubsubPush: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PubSubPush'
+      responses:
+        '204':
+          description: Acknowledged.
+        '400':
+          $ref: '#/components/responses/Error'
+          description: 'error: bad_request'
+        '401':
+          $ref: '#/components/responses/Error'
+          description: 'error: unauthorized'
+  /v1/pair:
+    post:
+      operationId: claimPairing
+      tags: [Agent API]
+      summary: Claim a pairing code (the agent's one-liner calls this)
+      description: |
+        The request is signed by the agent's did:key and carries an OEIS-1 Presentation built with buildPresentation:
+        audience = the service DID, nonce = the code exactly as shown (`OE-XXXX-XXXX`). The signer DID must equal
+        `presentation.eid` (else 400 presentation_invalid). The first valid claim wins; the code is then used. The
+        agent prints `sas.names`; the app shows the same string. No CAPTCHA, login or payment. Rate limited per IP.
+      x-available: day-3
+      security:
+        - agentSignature: []
+      parameters:
+        - $ref: '#/components/parameters/SignatureInputHeader'
+        - $ref: '#/components/parameters/ContentDigestHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PairRequest'
+      responses:
+        '201':
+          description: Claimed; poll GET /v1/pair/{pairing_id}.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PairClaim'
+        '400':
+          $ref: '#/components/responses/Error'
+          description: 'error: bad_request, presentation_invalid'
+        '401':
+          $ref: '#/components/responses/Error'
+          description: 'error: signature_invalid, signature_replayed'
+        '404':
+          $ref: '#/components/responses/Error'
+          description: 'error: code_unknown'
+        '409':
+          $ref: '#/components/responses/Error'
+          description: 'error: code_used'
+        '410':
+          $ref: '#/components/responses/Error'
+          description: 'error: code_expired'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /v1/pair/{pairing_id}:
+    get:
+      operationId: getPairStatus
+      tags: [Agent API]
+      summary: Pairing status for the claiming agent
+      description: |
+        Only the DID that claimed the pairing may read it (others get 404). Poll at most every 2 seconds (else 429).
+        `credentials` (bearer keys for tools that still need them, PLAN 8.4) appear once, on the first confirmed read;
+        write each to its tool's existing config location with file mode 0600.
+      x-available: day-3
+      security:
+        - agentSignature: []
+      parameters:
+        - name: pairing_id
+          in: path
+          required: true
+          schema: { $ref: '#/components/schemas/OpaqueId' }
+        - $ref: '#/components/parameters/SignatureInputHeader'
+      responses:
+        '200':
+          description: Status.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PairStatus'
+        '401':
+          $ref: '#/components/responses/Error'
+          description: 'error: signature_invalid, signature_replayed'
+        '404':
+          $ref: '#/components/responses/Error'
+          description: 'error: not_found'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /v1/agent:
+    get:
+      operationId: getAgentSelf
+      tags: [Agent API]
+      summary: The calling agent's link, state and permissions
+      x-available: day-3
+      security:
+        - agentSignature: []
+      parameters:
+        - $ref: '#/components/parameters/SignatureInputHeader'
+      responses:
+        '200':
+          description: The agent.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentSelf'
+        '401':
+          $ref: '#/components/responses/Error'
+          description: 'error: signature_invalid, signature_replayed'
+        '403':
+          $ref: '#/components/responses/Error'
+          description: 'error: not_paired'
+  /v1/agent/messages:
+    get:
+      operationId: pollAgentInbox
+      tags: [Agent API]
+      summary: Fallback inbox for agents that cannot hold a socket
+      description: Not held open. At most once every 15 seconds per agent (else 429). Items stay until acknowledged.
+      x-available: day-3
+      security:
+        - agentSignature: []
+      parameters:
+        - $ref: '#/components/parameters/SignatureInputHeader'
+      responses:
+        '200':
+          description: Unacknowledged items, oldest first, up to 100.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InboxList'
+        '401':
+          $ref: '#/components/responses/Error'
+          description: 'error: signature_invalid, signature_replayed'
+        '403':
+          $ref: '#/components/responses/Error'
+          description: 'error: not_paired'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+    post:
+      operationId: sendAgentMessage
+      tags: [Agent API]
+      summary: Message the owner
+      description: Text up to 4096 UTF-8 bytes; attachments through POST /v1/agent/uploads. 60 per agent per hour.
+      x-available: day-3
+      security:
+        - agentSignature: []
+      parameters:
+        - $ref: '#/components/parameters/SignatureInputHeader'
+        - $ref: '#/components/parameters/ContentDigestHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentMessageRequest'
+      responses:
+        '201':
+          description: Sent.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IdResponse'
+        '400':
+          $ref: '#/components/responses/Error'
+          description: 'error: bad_request, upload_unknown'
+        '401':
+          $ref: '#/components/responses/Error'
+          description: 'error: signature_invalid, signature_replayed'
+        '403':
+          $ref: '#/components/responses/Error'
+          description: 'error: not_paired, permission_denied (owner.message)'
+        '413':
+          $ref: '#/components/responses/Error'
+          description: 'error: too_large'
+        '423':
+          $ref: '#/components/responses/Error'
+          description: 'error: agent_paused'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /v1/agent/messages/ack:
+    post:
+      operationId: ackAgentInbox
+      tags: [Agent API]
+      summary: Acknowledge inbox items
+      x-available: day-3
+      security:
+        - agentSignature: []
+      parameters:
+        - $ref: '#/components/parameters/SignatureInputHeader'
+        - $ref: '#/components/parameters/ContentDigestHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AckRequest'
+      responses:
+        '204':
+          description: Acknowledged (unknown ids are ignored).
+        '401':
+          $ref: '#/components/responses/Error'
+          description: 'error: signature_invalid, signature_replayed'
+        '403':
+          $ref: '#/components/responses/Error'
+          description: 'error: not_paired'
+  /v1/agent/uploads:
+    post:
+      operationId: createUpload
+      tags: [Agent API]
+      summary: Get a presigned URL for a message attachment
+      x-available: day-3
+      security:
+        - agentSignature: []
+      parameters:
+        - $ref: '#/components/parameters/SignatureInputHeader'
+        - $ref: '#/components/parameters/ContentDigestHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UploadRequest'
+      responses:
+        '201':
+          description: Upload with `method`, `url` and `headers` before `expires_at`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadResponse'
+        '400':
+          $ref: '#/components/responses/Error'
+          description: 'error: bad_request'
+        '401':
+          $ref: '#/components/responses/Error'
+          description: 'error: signature_invalid, signature_replayed'
+        '403':
+          $ref: '#/components/responses/Error'
+          description: 'error: not_paired'
+        '413':
+          $ref: '#/components/responses/Error'
+          description: 'error: too_large (over 10 MiB)'
+  /v1/agent/status:
+    post:
+      operationId: reportAgentStatus
+      tags: [Agent API]
+      summary: Report status (drives the Live Activity)
+      x-available: day-3
+      security:
+        - agentSignature: []
+      parameters:
+        - $ref: '#/components/parameters/SignatureInputHeader'
+        - $ref: '#/components/parameters/ContentDigestHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StatusRequest'
+      responses:
+        '204':
+          description: Recorded.
+        '400':
+          $ref: '#/components/responses/Error'
+          description: 'error: bad_request'
+        '401':
+          $ref: '#/components/responses/Error'
+          description: 'error: signature_invalid, signature_replayed'
+        '403':
+          $ref: '#/components/responses/Error'
+          description: 'error: not_paired, permission_denied (owner.status)'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /v1/agent/approvals:
+    post:
+      operationId: createAgentApproval
+      tags: [Agent API]
+      summary: Ask the owner for an approval ("Written by the agent")
+      description: |
+        The service is the verifier; no product accepts these. 30 per agent per hour; beyond that the agent is muted
+        (429 muted) and the owner is alerted.
+      x-available: day-3
+      security:
+        - agentSignature: []
+      parameters:
+        - $ref: '#/components/parameters/SignatureInputHeader'
+        - $ref: '#/components/parameters/ContentDigestHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentApprovalCreate'
+      responses:
+        '201':
+          description: Pending.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentApproval'
+        '400':
+          $ref: '#/components/responses/Error'
+          description: 'error: bad_request'
+        '401':
+          $ref: '#/components/responses/Error'
+          description: 'error: signature_invalid, signature_replayed'
+        '403':
+          $ref: '#/components/responses/Error'
+          description: 'error: not_paired, permission_denied (owner.approval)'
+        '423':
+          $ref: '#/components/responses/Error'
+          description: 'error: agent_paused'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+          description: 'error: rate_limited, muted'
+  /v1/agent/approvals/{id}:
+    get:
+      operationId: getAgentApprovalResult
+      tags: [Agent API]
+      summary: Result of an agent-written approval
+      x-available: day-3
+      security:
+        - agentSignature: []
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+        - $ref: '#/components/parameters/SignatureInputHeader'
+      responses:
+        '200':
+          description: The approval.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentApproval'
+        '401':
+          $ref: '#/components/responses/Error'
+          description: 'error: signature_invalid, signature_replayed'
+        '403':
+          $ref: '#/components/responses/Error'
+          description: 'error: not_paired'
+        '404':
+          $ref: '#/components/responses/Error'
+          description: 'error: not_found'
+  /v1/agent/credentials/renew:
+    post:
+      operationId: renewAgentCredentials
+      tags: [Agent API]
+      summary: Renew the agent's product bearer keys
+      description: Keys last 30 days. The old key stays valid 1 hour after renewal.
+      x-available: day-3
+      security:
+        - agentSignature: []
+      parameters:
+        - $ref: '#/components/parameters/SignatureInputHeader'
+        - $ref: '#/components/parameters/ContentDigestHeader'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RenewRequest'
+      responses:
+        '200':
+          description: New keys.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CredentialList'
+        '401':
+          $ref: '#/components/responses/Error'
+          description: 'error: signature_invalid, signature_replayed'
+        '403':
+          $ref: '#/components/responses/Error'
+          description: 'error: not_paired'
+        '423':
+          $ref: '#/components/responses/Error'
+          description: 'error: agent_paused'
+  /v1/notify:
+    post:
+      operationId: notify
+      tags: [Product to account]
+      summary: "Push hub: notify the owner's devices"
+      description: |
+        Pushes carry ids only. APNs and FCM payload: {"oe": {"product": "<product DID>", "type": "<type>", "id":
+        "<id>", "agent": "<agent DID>"}}. The visible text is fixed by the service per product and type; products
+        cannot set text. approval.resolved and refresh are silent pushes. Nothing can be approved from a notification.
+        600 per product per minute.
+      x-available: day-3
+      security:
+        - productSignature: []
+      parameters:
+        - $ref: '#/components/parameters/SignatureInputHeader'
+        - $ref: '#/components/parameters/ContentDigestHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NotifyRequest'
+      responses:
+        '202':
+          description: Queued.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotifyResponse'
+        '400':
+          $ref: '#/components/responses/Error'
+          description: 'error: bad_request'
+        '401':
+          $ref: '#/components/responses/Error'
+          description: 'error: signature_invalid, signature_replayed'
+        '403':
+          $ref: '#/components/responses/Error'
+          description: 'error: unknown_signer'
+        '404':
+          $ref: '#/components/responses/Error'
+          description: 'error: owner_unknown'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /v1/events/ingest:
+    post:
+      operationId: ingestProductEvents
+      tags: [Product to account]
+      summary: Product analytics events
+      description: |
+        Up to 100 events per call. Names and properties are checked against account/analytics/events.yaml; each
+        rejected event is listed with its index. `user_id` is an HMAC of the owner DID, computed by the service.
+      x-available: day-3
+      security:
+        - productSignature: []
+      parameters:
+        - $ref: '#/components/parameters/SignatureInputHeader'
+        - $ref: '#/components/parameters/ContentDigestHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IngestRequest'
+      responses:
+        '202':
+          description: Accepted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventsAccepted'
+        '400':
+          $ref: '#/components/responses/Error'
+          description: 'error: bad_request'
+        '401':
+          $ref: '#/components/responses/Error'
+          description: 'error: signature_invalid, signature_replayed'
+        '403':
+          $ref: '#/components/responses/Error'
+          description: 'error: unknown_signer'
+        '413':
+          $ref: '#/components/responses/Error'
+          description: 'error: too_large'
+  /v1/paused:
+    get:
+      operationId: listPaused
+      tags: [Product to account]
+      summary: Pause changes for agents provisioned in the calling product (signed response)
+      description: |
+        Poll every 30 seconds. Without `since`: every currently paused agent provisioned in the product, as state
+        paused. With `since`: changes after that cursor, oldest first. Apply a change only if its `seq` is newer than
+        the one you hold for that agent. The response is signed by the service (RFC 9421 response signature):
+        Signature-Input `sig1=("@status" "content-digest");created=<unix>;expires=<unix>;keyid="<service DID>#<thumbprint>";alg="ed25519"`
+        (expires - created at most 60, no nonce), Signature `sig1=:<base64>:`, Content-Digest `sha-256=:<base64>:`.
+        The signature base is three lines joined by LF: `"@status": 200`, `"content-digest": <header value>`,
+        `"@signature-params": <the Signature-Input value after "sig1=">`. Verify with the same key resolution as
+        accountSignature, check `since` equals the cursor you sent, then advance to `cursor`.
+      x-available: day-3
+      security:
+        - productSignature: []
+      parameters:
+        - name: since
+          in: query
+          required: false
+          description: The `cursor` from the previous response.
+          schema: { type: string, maxLength: 128 }
+        - $ref: '#/components/parameters/SignatureInputHeader'
+      responses:
+        '200':
+          description: Changes.
+          headers:
+            Signature-Input:
+              schema: { type: string }
+            Signature:
+              schema: { type: string }
+            Content-Digest:
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PausedList'
+        '400':
+          $ref: '#/components/responses/Error'
+          description: 'error: cursor_invalid'
+        '401':
+          $ref: '#/components/responses/Error'
+          description: 'error: signature_invalid, signature_replayed'
+        '403':
+          $ref: '#/components/responses/Error'
+          description: 'error: unknown_signer'
+  /v1/installs:
+    post:
+      operationId: createInstall
+      tags: [Analytics]
+      summary: Get an install token for events sent before sign-up
+      description: Rate limited per IP.
+      x-available: day-2
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InstallRequest'
+      responses:
+        '201':
+          description: The token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstallResponse'
+        '400':
+          $ref: '#/components/responses/Error'
+          description: 'error: bad_request'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /v1/events:
+    post:
+      operationId: sendAppEvents
+      tags: [Analytics]
+      summary: App-only analytics events
+      description: |
+        Up to 50 events and 32 KB per call. Checked against account/analytics/events.yaml, queued, and forwarded to
+        Amplitude, Google Analytics and PostHog. Never in any event: secret paths or values, approval summary text,
+        message text, photos, email addresses.
+      x-available: day-2
+      security:
+        - ownerBearer: []
+        - installToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AppEventsRequest'
+      responses:
+        '202':
+          description: Accepted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventsAccepted'
+        '400':
+          $ref: '#/components/responses/Error'
+          description: 'error: bad_request'
+        '401':
+          $ref: '#/components/responses/Error'
+          description: 'error: unauthorized'
+        '413':
+          $ref: '#/components/responses/Error'
+          description: 'error: too_large'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /approve:
+    get:
+      operationId: approvePage
+      tags: [Web approvals]
+      summary: Web approval page
+      description: |
+        A product console sends the owner to `https://<host>/approve#request=<envelope>` (in the fragment, so the
+        envelope never reaches server logs). The envelope is a compact JWS (ApproveEnvelope). The page posts it to POST
+        /v1/approve/check, shows the payload, gets a WebAuthn assertion whose challenge is the base64url approval/2.0
+        digest for the owner's decision, and auto-submits an HTML form POST
+        (application/x-www-form-urlencoded, ApproveReturnForm) to `return_url`. The product verifies the approval itself.
+      x-available: day-8
+      security: []
+      responses:
+        '200':
+          description: The page.
+          content:
+            text/html:
+              schema:
+                $ref: '#/components/schemas/ApprovePage'
+  /v1/approve/check:
+    post:
+      operationId: checkApproveEnvelope
+      tags: [Web approvals]
+      summary: Verify an approval envelope against the verifier's DID document
+      x-available: day-8
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApproveCheckRequest'
+      responses:
+        '200':
+          description: The verified request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApproveCheck'
+        '400':
+          $ref: '#/components/responses/Error'
+          description: 'error: envelope_invalid'
+        '403':
+          $ref: '#/components/responses/Error'
+          description: 'error: unknown_verifier'
+        '404':
+          $ref: '#/components/responses/Error'
+          description: 'error: owner_unknown'
+        '410':
+          $ref: '#/components/responses/Error'
+          description: 'error: envelope_expired'
+  /v1/oe/events:
+    post:
+      operationId: productReceiveEvent
+      tags: [Implemented by products]
+      summary: Receive a signed event from the account service
+      description: |
+        Implemented by each product. The account service signs the call with accountSignature. Verify it (keyid's DID
+        equals the pinned service DID; key from the service did.json), then handle the AccountEvent:
+        - agent.paused: refuse every request authenticated as that agent DID or its keys with 423 agent_paused
+          (Agent Secret Store also suspends its scoped tokens and gateway access; Moltbot Den holds contract actions);
+        - agent.resumed: lift that;
+        - agent.unlinked: revoke the agent's credentials;
+        - agent.permissions: replace the agent's permissions;
+        - owner.deleted: this IS the owner-delete call; delete the owner's data;
+        - plan.changed: this IS the signed plan-grant call; grant or end the plan and record `source`.
+        Products need no other endpoint for owner deletion or plan grants. Dedupe `id` for at least 24 hours (a
+        duplicate gets 204 again). Apply agent states only when `seq` is newer than the one held. An unknown type gets
+        204 and is ignored.
+      x-available: day-3
+      servers:
+        - url: https://{product_api}
+          variables:
+            product_api:
+              default: product.example
+              description: The product's API host.
+      security:
+        - accountSignature: []
+      parameters:
+        - $ref: '#/components/parameters/SignatureInputHeader'
+        - $ref: '#/components/parameters/ContentDigestHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccountEvent'
+      responses:
+        '204':
+          description: Handled, duplicate, or unknown type.
+        '400':
+          $ref: '#/components/responses/Error'
+          description: 'error: bad_request'
+        '401':
+          $ref: '#/components/responses/Error'
+          description: 'error: signature_invalid (bad signature, or a keyid not on the service DID)'
+  /v1/oe/credentials/renew:
+    post:
+      operationId: productRenewAgentCredential
+      tags: [Implemented by products]
+      summary: Issue a fresh bearer key for a paired agent (the account service calls this)
+      description: |
+        Implemented by each product that issues agent bearer keys (Moltbot Den moltbotden_sk_, Secure My Agent sma_,
+        Agent Secret Store ass_, ClawGRC cgrc_; PLAN 8.4). The account service calls it when an agent calls POST
+        /v1/agent/credentials/renew, signed with accountSignature. Verify it as for POST /v1/oe/events (the keyid's DID
+        is the pinned service DID).
+
+        The product issues a new key for `agent_did`, scoped to `permissions` and valid 30 days, and keeps every older
+        key of that agent valid for exactly 1 hour more (`previous_valid_until`), then revokes them. Idempotent on
+        `request_id`: a retry with the same request_id within 1 hour returns the same key, never a second one. A paused
+        agent still gets its key (pause is enforced on use, 423 agent_paused). An agent the product does not know, or
+        one that agent.unlinked removed, is 404 agent_unknown.
+      x-available: day-3
+      servers:
+        - url: https://{product_api}
+          variables:
+            product_api:
+              default: product.example
+              description: The product's API host.
+      security:
+        - accountSignature: []
+      parameters:
+        - $ref: '#/components/parameters/SignatureInputHeader'
+        - $ref: '#/components/parameters/ContentDigestHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductCredentialRenewRequest'
+      responses:
+        '200':
+          description: The new key.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductCredentialRenewal'
+        '401':
+          $ref: '#/components/responses/Error'
+          description: 'error: signature_invalid'
+        '404':
+          $ref: '#/components/responses/Error'
+          description: 'error: agent_unknown'
+  /v1/oe/keylog:
+    post:
+      operationId: productReceiveKeyLog
+      tags: [Implemented by products]
+      summary: Receive owner key log entries from any source
+      description: |
+        Implemented by each product. No auth: entries are self-authenticating. The app sends revoke and cancel entries
+        here directly, so a hidden entry still arrives. Entries arrive as their exact JCS lines (`lines`); keep and
+        hash those bytes, never a re-encoding. Verify through the openentity packages (verifyKeyLog with the
+        environment's rpId and origins, and serviceKeys = the P-256 close keys of the service did.json); fetch missing earlier
+        lines from GET /o/{id}/log; record `first_seen_at` for every entry and run every delay from it.
+      x-available: day-5
+      servers:
+        - url: https://{product_api}
+          variables:
+            product_api:
+              default: product.example
+              description: The product's API host.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OeKeylogRequest'
+      responses:
+        '202':
+          description: Accepted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OeKeylogResponse'
+        '400':
+          $ref: '#/components/responses/Error'
+          description: 'error: bad_request'
+        '409':
+          $ref: '#/components/responses/Error'
+          description: 'error: fork (a different entry already holds that seq; the product raises an alert)'
+        '422':
+          $ref: '#/components/responses/Error'
+          description: 'error: invalid_entry'
+components:
+  securitySchemes:
+    ownerBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: An access token from POST /v1/token or a sign-in whose `aud` is the environment's service DID (AccessTokenClaims).
+    webSession:
+      type: apiKey
+      in: cookie
+      name: __Host-oe_session
+      description: |
+        The web refresh token: `__Host-oe_session=<token>; Path=/; Secure; HttpOnly; SameSite=Strict`, valid 12 hours
+        from sign-in (absolute). Cookie-authenticated POSTs must send Origin equal to the base URL, else 403 bad_origin.
+    agentSignature:
+      type: apiKey
+      in: header
+      name: Signature
+      description: |
+        RFC 9421 HTTP message signature, OEIS-1 profile, exactly as @openentity/sdk signRequest emits it.
+        - `Signature-Input: sig1=("@method" "@target-uri" "content-digest");created=<unix>;expires=<unix>;nonce="<base64url>";keyid="<agent did:key>";alg="ed25519"`
+        - `Signature: sig1=:<base64 of the 64-byte Ed25519 signature>:`
+        - `Content-Digest: sha-256=:<base64 of SHA-256(body)>:` (RFC 9530), present and covered when the body is
+          non-empty. With an empty body both the header and the "content-digest" component are omitted.
+
+        Signature base (RFC 9421 section 2.5): one line per covered component, in order (`"@method": POST`,
+        `"@target-uri": https://account.openentity.org/v1/pair`, `"content-digest": sha-256=:...:`), then
+        `"@signature-params": ` followed by the Signature-Input value after `sig1=`. Lines are joined by LF, with no
+        trailing LF.
+
+        Rules: label sig1 only; alg ed25519 only; covered components exactly ("@method" "@target-uri") or ("@method"
+        "@target-uri" "content-digest"); keyid an Ed25519 did:key; created, expires, nonce, keyid and alg all present;
+        expires - created at most 300; created at most 5 seconds in the future and at most 300 seconds old; expires not
+        past; nonce at least 22 base64url characters (16 random bytes), single use per keyid while the signature is
+        valid. @method is the uppercase method. @target-uri is the full URL as sent: https, the environment host, path
+        and query.
+
+        Failures: 401 signature_invalid, whose message names the check (missing_headers, unknown_alg, bad_keyid,
+        missing_nonce, digest_mismatch, created_in_future, created_too_old, expired, lifetime_too_long, bad_signature);
+        401 signature_replayed.
+    productSignature:
+      type: apiKey
+      in: header
+      name: Signature
+      description: |
+        The agentSignature profile, except that keyid is a DID URL `<product DID>#<fragment>` naming an Ed25519
+        verification method listed under `authentication` in the product's did:web document. The service fetches the
+        document over HTTPS, caches it 10 minutes and refetches once on an unknown keyid. Only the four product DIDs
+        are accepted (else 403 unknown_signer). Failures: 401 signature_invalid, 401 signature_replayed.
+    accountSignature:
+      type: apiKey
+      in: header
+      name: Signature
+      description: |
+        The service's signature on every call it makes to a product: the agentSignature profile (label sig1;
+        alg="ed25519"; covered ("@method" "@target-uri" "content-digest"); created, expires, nonce, keyid and alg;
+        window at most 300 seconds; nonce single use) with keyid
+        `did:web:account.openentity.org#<RFC 7638 thumbprint of the Ed25519 OKP JWK>` (staging:
+        `did:web:staging.account.openentity.org#<thumbprint>`). The private key is an AWS KMS ECC_NIST_EDWARDS25519 key
+        (ED25519_SHA_512) and never leaves KMS. @target-uri is the product endpoint URL as called.
+
+        Products: pin the service DID of their environment and reject a keyid whose DID differs; resolve the key from
+        https://<service host>/.well-known/did.json (a Multikey `z6Mk...` under `authentication`); cache at most 10
+        minutes; refetch once on an unknown keyid; never accept a key absent from the current document; remember each
+        nonce for 300 seconds. Failure: 401 signature_invalid.
+    installToken:
+      type: apiKey
+      in: header
+      name: X-OE-Install-Token
+      description: From POST /v1/installs. Accepted only on POST /v1/events, before sign-up.
+    pubsubPush:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: The Google-signed OIDC token of the Pub/Sub push subscription's service account.
+  parameters:
+    ApprovalHeader:
+      name: X-OE-Approval
+      in: header
+      required: true
+      description: base64url (no padding) of the UTF-8 JSON of an Approval2 object that signs the matching ApprovalRequest.
+      schema: { type: string, pattern: '^[A-Za-z0-9_-]+$', maxLength: 8192 }
+    ApprovalHeaderConditional:
+      name: X-OE-Approval
+      in: header
+      required: false
+      description: As X-OE-Approval elsewhere; required only in the cases the operation describes.
+      schema: { type: string, pattern: '^[A-Za-z0-9_-]+$', maxLength: 8192 }
+    AppAttestHeader:
+      name: X-OE-App-Attest
+      in: header
+      required: false
+      description: |
+        iOS, refresh_token grant. base64url of the App Attest assertion (CBOR) made with the install's attested key,
+        clientDataHash = SHA-256(raw request body). Missing: 401 binding_required. Bad: 401 binding_invalid.
+      schema: { type: string, pattern: '^[A-Za-z0-9_-]+$', maxLength: 4096 }
+    DeviceSignatureHeader:
+      name: X-OE-Device-Signature
+      in: header
+      required: false
+      description: |
+        Android, refresh_token grant. base64url of the DER ECDSA P-256 SHA-256 signature over the raw request body by the
+        Keystore key registered at the install's first sign-in.
+      schema: { type: string, pattern: '^[A-Za-z0-9_-]+$', maxLength: 200 }
+    PlayIntegrityHeader:
+      name: X-OE-Play-Integrity
+      in: header
+      required: false
+      description: Android, refresh_token grant. A Play Integrity standard-request token whose requestHash is the lowercase hex SHA-256 of the raw request body.
+      schema: { type: string, maxLength: 8192 }
+    SignatureInputHeader:
+      name: Signature-Input
+      in: header
+      required: true
+      description: RFC 9421 Signature-Input (see the operation's security scheme).
+      schema: { type: string, maxLength: 2048 }
+    ContentDigestHeader:
+      name: Content-Digest
+      in: header
+      required: false
+      description: RFC 9530 `sha-256=:<base64>:`. Required, and covered by the signature, when the body is non-empty.
+      schema: { type: string, pattern: '^sha-256=:[A-Za-z0-9+/]{43}=:$' }
+    IdPath:
+      name: id
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/OpaqueId' }
+    InstallIdPath:
+      name: install_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    OwnerIdPath:
+      name: id
+      in: path
+      required: true
+      description: The owner id, the last segment of the owner DID.
+      schema: { type: string, pattern: '^[a-z2-7]{52}$' }
+    AgentDidPath:
+      name: agent_did
+      in: path
+      required: true
+      description: The agent's did:key as is (":" is a valid path character); percent-encoded forms are also accepted.
+      schema: { $ref: '#/components/schemas/AgentDid' }
+  headers:
+    SessionCookie:
+      description: Web only. `__Host-oe_session=<refresh token>; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=<seconds left of the 12 hours>`.
+      schema: { type: string }
+    RetryAfter:
+      description: Seconds to wait before retrying.
+      schema: { type: integer, minimum: 1 }
+  responses:
+    Error:
+      description: Error.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    RateLimited:
+      description: 'error: rate_limited'
+      headers:
+        Retry-After:
+          $ref: '#/components/headers/RetryAfter'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    AccountExists:
+      description: 'error: account_exists. The verified email belongs to an account with other methods: sign in with one of `methods`, then link this one with POST /v1/account/methods.'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorAccountExists'
+    CodeInvalid:
+      description: 'error: code_invalid, with `tries_left`'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorCodeInvalid'
+  schemas:
+    Error:
+      type: object
+      required: [error, message]
+      properties:
+        error: { type: string, description: Machine-readable code. }
+        message: { type: string, description: Human-readable text; it may change. }
+    ErrorAccountExists:
+      allOf:
+        - $ref: '#/components/schemas/Error'
+        - type: object
+          required: [methods]
+          properties:
+            methods:
+              type: array
+              items: { $ref: '#/components/schemas/MethodType' }
+    ErrorCodeInvalid:
+      allOf:
+        - $ref: '#/components/schemas/Error'
+        - type: object
+          required: [tries_left]
+          properties:
+            tries_left: { type: integer, minimum: 0, maximum: 4 }
+    Did:
+      type: string
+      pattern: '^did:[a-z0-9]+:[A-Za-z0-9._%:-]*[A-Za-z0-9._%-]$'
+      maxLength: 512
+    ServiceDid:
+      type: string
+      enum: ['did:web:account.openentity.org', 'did:web:staging.account.openentity.org']
+      description: The environment's service DID. Each environment uses only its own.
+    ProductDid:
+      type: string
+      enum: ['did:web:moltbotden.com', 'did:web:securemyagent.ai', 'did:web:api.agentsecretstore.com', 'did:web:api.clawgrc.com']
+    AudienceDid:
+      type: string
+      enum:
+        - 'did:web:moltbotden.com'
+        - 'did:web:securemyagent.ai'
+        - 'did:web:api.agentsecretstore.com'
+        - 'did:web:api.clawgrc.com'
+        - 'did:web:account.openentity.org'
+        - 'did:web:staging.account.openentity.org'
+      description: One access-token audience. Each environment accepts the four product DIDs and its own service DID.
+    AgentDid:
+      type: string
+      pattern: '^did:key:z6Mk[1-9A-HJ-NP-Za-km-z]+$'
+      maxLength: 128
+      description: An agent EID, an Ed25519 did:key.
+    OwnerDid:
+      type: string
+      pattern: '^did:web:(staging\.)?account\.openentity\.org:o:[a-z2-7]{52}$'
+    Hex64:
+      type: string
+      pattern: '^[0-9a-f]{64}$'
+    Base64url:
+      type: string
+      pattern: '^[A-Za-z0-9_-]*$'
+    CompactJws:
+      type: string
+      pattern: '^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'
+      maxLength: 16384
+    UnixSeconds:
+      type: integer
+      minimum: 0
+    OpaqueId:
+      type: string
+      pattern: '^[A-Za-z0-9_-]{1,64}$'
+    RequestId:
+      type: string
+      pattern: '^[A-Za-z0-9:._-]{1,128}$'
+    RawNonce:
+      type: string
+      pattern: '^[A-Za-z0-9_-]{43}$'
+      description: The raw nonce from POST /v1/auth/nonce.
+    Thumbprint:
+      type: string
+      pattern: '^[A-Za-z0-9_-]{43}$'
+      description: RFC 7638 JWK thumbprint, base64url of the SHA-256.
+    Permission:
+      type: string
+      maxLength: 256
+      pattern: '^(owner\.message|owner\.status|owner\.approval|vault\.request:\S+|evidence\.file|den\.post|market\.sell|contract\.accept<=\$[0-9]+(\.[0-9]{1,2})?)$'
+      description: |
+        An agent permission (PLAN 7.6): owner.message, owner.status, owner.approval, vault.request:<path pattern> (one
+        path per string), evidence.file, den.post, market.sell, contract.accept<=$N (whole or two-decimal dollars).
+    Platform:
+      type: string
+      enum: [ios, android, web]
+    MethodType:
+      type: string
+      enum: [apple, google, passkey, email]
+    AppleAppSiteAssociation:
+      type: object
+      required: [applinks, webcredentials]
+      properties:
+        applinks:
+          type: object
+          required: [details]
+          properties:
+            details:
+              type: array
+              items:
+                type: object
+                required: [appIDs, components]
+                properties:
+                  appIDs:
+                    type: array
+                    items: { type: string, const: 7R835D5LDZ.org.openentity.app }
+                  components:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: { type: string }
+        webcredentials:
+          type: object
+          required: [apps]
+          properties:
+            apps:
+              type: array
+              items: { type: string, const: 7R835D5LDZ.org.openentity.app }
+    AssetLinks:
+      type: array
+      items:
+        type: object
+        required: [relation, target]
+        properties:
+          relation:
+            type: array
+            items:
+              type: string
+              enum: [delegate_permission/common.handle_all_urls, delegate_permission/common.get_login_creds]
+          target:
+            type: object
+            required: [namespace, package_name, sha256_cert_fingerprints]
+            properties:
+              namespace: { type: string, const: android_app }
+              package_name: { type: string, const: org.openentity.app }
+              sha256_cert_fingerprints:
+                type: array
+                items: { type: string, pattern: '^([0-9A-F]{2}:){31}[0-9A-F]{2}$' }
+    Jwk:
+      type: object
+      required: [kty, crv, x, y, kid, alg, use]
+      properties:
+        kty: { type: string, const: EC }
+        crv: { type: string, const: P-256 }
+        x: { type: string, pattern: '^[A-Za-z0-9_-]{43}$' }
+        y: { type: string, pattern: '^[A-Za-z0-9_-]{43}$' }
+        kid: { $ref: '#/components/schemas/Thumbprint' }
+        alg: { type: string, const: ES256 }
+        use: { type: string, const: sig }
+    Jwks:
+      type: object
+      required: [keys]
+      properties:
+        keys:
+          type: array
+          minItems: 1
+          items: { $ref: '#/components/schemas/Jwk' }
+    IssuerMetadata:
+      type: object
+      required: [issuer, jwks_uri, token_endpoint, revocation_endpoint, grant_types_supported, response_types_supported, token_endpoint_auth_methods_supported]
+      properties:
+        issuer: { type: string, format: uri }
+        jwks_uri: { type: string, format: uri }
+        token_endpoint: { type: string, format: uri }
+        revocation_endpoint: { type: string, format: uri }
+        grant_types_supported:
+          type: array
+          items: { type: string, enum: [refresh_token, 'urn:openentity:login_code'] }
+        response_types_supported:
+          type: array
+          maxItems: 0
+          description: Empty; the service has no authorization endpoint.
+        token_endpoint_auth_methods_supported:
+          type: array
+          items: { type: string, const: none }
+      example:
+        issuer: https://account.openentity.org
+        jwks_uri: https://account.openentity.org/.well-known/jwks.json
+        token_endpoint: https://account.openentity.org/v1/token
+        revocation_endpoint: https://account.openentity.org/v1/revoke
+        grant_types_supported: [refresh_token, 'urn:openentity:login_code']
+        response_types_supported: []
+        token_endpoint_auth_methods_supported: [none]
+    DidDocument:
+      type: object
+      required: ['@context', id, verificationMethod]
+      properties:
+        '@context':
+          type: array
+          items: { type: string }
+          examples:
+            - ['https://www.w3.org/ns/did/v1', 'https://w3id.org/security/multikey/v1', 'https://w3id.org/security/jwk/v1']
+        id: { $ref: '#/components/schemas/Did' }
+        verificationMethod:
+          type: array
+          items: { $ref: '#/components/schemas/VerificationMethod' }
+        authentication:
+          type: array
+          items: { type: string, description: A DID URL from verificationMethod. }
+        assertionMethod:
+          type: array
+          items: { type: string, description: A DID URL from verificationMethod. }
+        service:
+          type: array
+          items:
+            type: object
+            required: [id, type, serviceEndpoint]
+            properties:
+              id: { type: string }
+              type: { type: string }
+              serviceEndpoint: { type: string, format: uri }
+    VerificationMethod:
+      type: object
+      required: [id, type, controller]
+      properties:
+        id: { type: string, description: 'DID URL; the fragment is the key''s RFC 7638 thumbprint.' }
+        type: { type: string, enum: [Multikey, JsonWebKey] }
+        controller: { $ref: '#/components/schemas/Did' }
+        publicKeyMultibase: { type: string, pattern: '^z6Mk[1-9A-HJ-NP-Za-km-z]+$', description: Multikey (the Ed25519 service key). }
+        publicKeyJwk: { type: object, description: 'JsonWebKey (a service close key, or an owner credential).' }
+    Health:
+      type: object
+      required: [ok, stage, version]
+      properties:
+        ok: { type: boolean, const: true }
+        stage: { type: string, enum: [production, staging] }
+        version: { type: string, description: The deployed git commit. }
+    ClientInfo:
+      type: object
+      required: [platform]
+      properties:
+        platform: { $ref: '#/components/schemas/Platform' }
+        install_id: { type: string, format: uuid, description: 'Random per install, kept in the Keychain or Keystore. Required on ios and android.' }
+        app_version: { type: string, maxLength: 32 }
+        os_version: { type: string, maxLength: 32 }
+        device_model: { type: string, maxLength: 64 }
+      allOf:
+        - if:
+            properties:
+              platform: { enum: [ios, android] }
+          then:
+            required: [install_id]
+    Attestation:
+      description: Sent on the first sign-in from an install, and whenever a response says attestation_required. It binds the install's refresh tokens to its key.
+      oneOf:
+        - $ref: '#/components/schemas/AppAttestAttestation'
+        - $ref: '#/components/schemas/AndroidKeyAttestation'
+      discriminator:
+        propertyName: type
+        mapping:
+          app_attest: '#/components/schemas/AppAttestAttestation'
+          android_key: '#/components/schemas/AndroidKeyAttestation'
+    AppAttestAttestation:
+      type: object
+      required: [type, key_id, attestation_object]
+      properties:
+        type: { type: string, const: app_attest }
+        key_id: { type: string, maxLength: 128, description: The base64 key identifier from DCAppAttestService.generateKey. }
+        attestation_object: { type: string, pattern: '^[A-Za-z0-9_-]+$', description: 'base64url CBOR from attestKey, clientDataHash = SHA-256(UTF-8 of the raw nonce).' }
+    AndroidKeyAttestation:
+      type: object
+      required: [type, certificate_chain, integrity_token]
+      properties:
+        type: { type: string, const: android_key }
+        certificate_chain:
+          type: array
+          minItems: 2
+          items: { type: string, description: base64 DER certificate. }
+          description: Leaf first. The leaf certifies the hardware-backed Keystore P-256 key that later signs refresh calls; its attestationChallenge is the UTF-8 bytes of the raw nonce.
+        integrity_token: { type: string, maxLength: 8192, description: 'A Play Integrity standard-request token, requestHash = lowercase hex SHA-256(UTF-8 of the raw nonce).' }
+    NonceRequest:
+      type: object
+      required: [client]
+      properties:
+        client: { $ref: '#/components/schemas/ClientInfo' }
+        flow: { type: string, enum: [native, apple_web], default: native }
+        return_to: { type: string, maxLength: 512, pattern: '^/(?![/\\])', description: Web only. A same-origin path to land on after Apple sign-in. }
+        turnstile_token: { type: string, maxLength: 2048, description: Required when client.platform is web. }
+    NonceResponse:
+      type: object
+      required: [nonce, expires_at]
+      properties:
+        nonce: { $ref: '#/components/schemas/RawNonce', description: '32 random bytes, base64url. Send the raw value to this service; give providers its lowercase hex SHA-256.' }
+        expires_at: { $ref: '#/components/schemas/UnixSeconds', description: now + 600. }
+        state: { type: string, maxLength: 128, description: apple_web only. }
+        authorize_url:
+          type: string
+          format: uri
+          description: |
+            apple_web only. https://appleid.apple.com/auth/authorize with client_id = the Services ID, redirect_uri =
+            https://<host>/v1/auth/apple/callback, response_type = "code id_token", scope = "name email",
+            response_mode = form_post, state, and nonce = lowercase hex SHA-256(nonce).
+    AppleSignInRequest:
+      type: object
+      required: [identity_token, authorization_code, nonce, client]
+      properties:
+        identity_token: { $ref: '#/components/schemas/CompactJws' }
+        authorization_code: { type: string, maxLength: 1024 }
+        nonce: { $ref: '#/components/schemas/RawNonce' }
+        client: { $ref: '#/components/schemas/ClientInfo' }
+        attestation: { $ref: '#/components/schemas/Attestation' }
+        user: { $ref: '#/components/schemas/AppleUser' }
+    AppleUser:
+      type: object
+      description: First sign-in only. Apple sends the name only once; the identity token never carries it.
+      properties:
+        name:
+          type: object
+          properties:
+            firstName: { type: string, maxLength: 100 }
+            lastName: { type: string, maxLength: 100 }
+        email: { type: string, format: email }
+    AppleCallbackForm:
+      type: object
+      required: [code, id_token, state]
+      properties:
+        code: { type: string, description: 'Single use, valid 5 minutes.' }
+        id_token: { $ref: '#/components/schemas/CompactJws' }
+        state: { type: string }
+        user: { type: string, description: 'JSON text {"name": {"firstName", "lastName"}, "email"}, first authorization only.' }
+    AppleNotificationRequest:
+      type: object
+      required: [payload]
+      properties:
+        payload: { $ref: '#/components/schemas/CompactJws' }
+    GoogleSignInRequest:
+      type: object
+      required: [id_token, nonce, client]
+      properties:
+        id_token: { $ref: '#/components/schemas/CompactJws' }
+        nonce: { $ref: '#/components/schemas/RawNonce' }
+        client: { $ref: '#/components/schemas/ClientInfo' }
+        attestation: { $ref: '#/components/schemas/Attestation' }
+    PasskeyOptionsRequest:
+      type: object
+      required: [mode, client]
+      properties:
+        mode: { type: string, enum: [authenticate, register] }
+        client: { $ref: '#/components/schemas/ClientInfo' }
+    PasskeyOptionsResponse:
+      type: object
+      required: [challenge_id, options]
+      properties:
+        challenge_id: { $ref: '#/components/schemas/OpaqueId' }
+        options:
+          type: object
+          description: PublicKeyCredentialRequestOptionsJSON (authenticate) or PublicKeyCredentialCreationOptionsJSON (register), WebAuthn Level 3 JSON form, binary fields base64url.
+    PasskeyVerifyRequest:
+      type: object
+      required: [challenge_id, response, client]
+      properties:
+        challenge_id: { $ref: '#/components/schemas/OpaqueId' }
+        response:
+          type: object
+          description: AuthenticationResponseJSON or RegistrationResponseJSON (WebAuthn Level 3 toJSON form), binary fields base64url.
+        client: { $ref: '#/components/schemas/ClientInfo' }
+        attestation: { $ref: '#/components/schemas/Attestation' }
+    PasskeyRegistered:
+      type: object
+      required: [method_id, credential]
+      properties:
+        method_id: { $ref: '#/components/schemas/OpaqueId' }
+        credential: { $ref: '#/components/schemas/Credential', description: The root passkey Credential (type webauthn) for the genesis entry. }
+    EmailStartRequest:
+      type: object
+      required: [email, client]
+      properties:
+        email: { type: string, format: email, maxLength: 254 }
+        client: { $ref: '#/components/schemas/ClientInfo' }
+        turnstile_token: { type: string, maxLength: 2048, description: Web only. }
+    EmailStartResponse:
+      type: object
+      required: [challenge_id, expires_at]
+      properties:
+        challenge_id: { $ref: '#/components/schemas/OpaqueId' }
+        expires_at: { $ref: '#/components/schemas/UnixSeconds' }
+    EmailVerifyRequest:
+      type: object
+      required: [challenge_id, code, client]
+      properties:
+        challenge_id: { $ref: '#/components/schemas/OpaqueId' }
+        code: { type: string, pattern: '^[0-9]{8}$' }
+        client: { $ref: '#/components/schemas/ClientInfo' }
+        attestation: { $ref: '#/components/schemas/Attestation' }
+        turnstile_token: { type: string, maxLength: 2048, description: Web only; needed only when the start call carried no valid token. }
+    Session:
+      type: object
+      required: [account, new_account, token_type, access_token, access_expires_at, refresh_expires_at]
+      properties:
+        account: { $ref: '#/components/schemas/Account' }
+        new_account: { type: boolean }
+        token_type: { type: string, const: Bearer }
+        access_token: { $ref: '#/components/schemas/CompactJws', description: Its aud is the service DID. }
+        access_expires_at: { $ref: '#/components/schemas/UnixSeconds' }
+        refresh_token: { type: string, maxLength: 128, description: 'Apps only (the web gets the session cookie). Opaque; 256 random bits; the service stores only its SHA-256.' }
+        refresh_expires_at: { $ref: '#/components/schemas/UnixSeconds' }
+    Account:
+      type: object
+      required: [id, owner_did, email, email_private, created_at, has_key_log, backup_needed, app_account_token, methods, deletion]
+      properties:
+        id: { type: string, pattern: '^acct_[A-Za-z0-9]{26}$' }
+        owner_did:
+          anyOf:
+            - $ref: '#/components/schemas/OwnerDid'
+            - type: 'null'
+        email: { type: [string, 'null'], format: email }
+        email_private: { type: boolean, description: An Apple private relay address. }
+        created_at: { $ref: '#/components/schemas/UnixSeconds' }
+        has_key_log: { type: boolean }
+        backup_needed: { type: boolean, description: 'True until the key log holds a second passkey or a second approver device; the app shows "Add a backup".' }
+        app_account_token: { type: string, format: uuid, description: The StoreKit appAccountToken and Play obfuscatedAccountId for this account. }
+        methods:
+          type: array
+          items: { $ref: '#/components/schemas/Method' }
+        deletion:
+          anyOf:
+            - $ref: '#/components/schemas/DeletionRequest'
+            - type: 'null'
+    Method:
+      type: object
+      required: [id, type, label, created_at, last_used_at]
+      properties:
+        id: { $ref: '#/components/schemas/OpaqueId' }
+        type: { $ref: '#/components/schemas/MethodType' }
+        label: { type: string, maxLength: 120 }
+        created_at: { $ref: '#/components/schemas/UnixSeconds' }
+        last_used_at: { type: [integer, 'null'], minimum: 0 }
+    MethodList:
+      type: object
+      required: [methods]
+      properties:
+        methods:
+          type: array
+          items: { $ref: '#/components/schemas/Method' }
+    DeletionRequest:
+      type: object
+      required: [id, requested_at, effective_at, state]
+      properties:
+        id: { $ref: '#/components/schemas/OpaqueId' }
+        requested_at: { $ref: '#/components/schemas/UnixSeconds' }
+        effective_at: { $ref: '#/components/schemas/UnixSeconds', description: requested_at + 7 days. }
+        state: { type: string, enum: [pending, cancelled, done] }
+    TokenRequest:
+      type: object
+      required: [grant_type, audience]
+      properties:
+        grant_type: { type: string, enum: [refresh_token, login_code, 'urn:openentity:login_code'] }
+        refresh_token: { type: string, maxLength: 128, description: refresh_token grant from an app. The web omits it and sends the cookie. }
+        login_code: { type: string, maxLength: 128 }
+        audience:
+          type: array
+          minItems: 1
+          maxItems: 5
+          uniqueItems: true
+          items: { $ref: '#/components/schemas/AudienceDid' }
+        client: { $ref: '#/components/schemas/ClientInfo' }
+        attestation: { $ref: '#/components/schemas/Attestation' }
+      allOf:
+        - if:
+            properties:
+              grant_type: { enum: [login_code, 'urn:openentity:login_code'] }
+          then:
+            required: [login_code, client]
+    TokenResponse:
+      type: object
+      required: [token_type, refresh_expires_at, tokens]
+      properties:
+        token_type: { type: string, const: Bearer }
+        refresh_token: { type: string, maxLength: 128, description: Apps only. The rotated token; the one sent is now used. }
+        refresh_expires_at: { $ref: '#/components/schemas/UnixSeconds' }
+        tokens:
+          type: array
+          items: { $ref: '#/components/schemas/AudienceToken' }
+        account: { $ref: '#/components/schemas/Account', description: login_code grant only. }
+        new_account: { type: boolean, description: login_code grant only. }
+    AudienceToken:
+      type: object
+      required: [audience, access_token, expires_at]
+      properties:
+        audience: { $ref: '#/components/schemas/AudienceDid' }
+        access_token: { $ref: '#/components/schemas/CompactJws' }
+        expires_at: { $ref: '#/components/schemas/UnixSeconds' }
+    AccessTokenClaims:
+      type: object
+      description: |
+        Claims of an access token: a compact JWS with header {"alg": "ES256", "kid": "<RFC 7638 thumbprint>", "typ":
+        "at+jwt"}, signed by the KMS token key. Product checks: typ at+jwt; alg ES256 only; iss equals the environment
+        issuer; aud equals the product's own DID (else 401); exp; keys from /.well-known/jwks.json, cached 10 minutes
+        and refetched once on an unknown kid. A token presented to the wrong product gets 401.
+      required: [iss, sub, aud, iat, exp, jti, sid, client_id, auth_time, amr]
+      properties:
+        iss: { type: string, enum: ['https://account.openentity.org', 'https://staging.account.openentity.org'] }
+        sub: { type: string, description: 'The owner DID. For the service''s own audience before key log genesis, the account id.' }
+        aud: { $ref: '#/components/schemas/AudienceDid', description: 'One string, never an array.' }
+        iat: { $ref: '#/components/schemas/UnixSeconds' }
+        exp: { $ref: '#/components/schemas/UnixSeconds', description: iat + 900. }
+        jti: { $ref: '#/components/schemas/OpaqueId' }
+        sid: { $ref: '#/components/schemas/OpaqueId', description: The session id. }
+        client_id: { type: string, enum: [org.openentity.app, web] }
+        auth_time: { $ref: '#/components/schemas/UnixSeconds' }
+        amr:
+          type: array
+          items: { $ref: '#/components/schemas/MethodType' }
+    RevokeRequest:
+      type: object
+      properties:
+        refresh_token: { type: string, maxLength: 128 }
+    SessionInfo:
+      type: object
+      required: [id, platform, created_at, last_used_at, current]
+      properties:
+        id: { $ref: '#/components/schemas/OpaqueId' }
+        platform: { $ref: '#/components/schemas/Platform' }
+        device_model: { type: [string, 'null'], maxLength: 64 }
+        app_version: { type: [string, 'null'], maxLength: 32 }
+        created_at: { $ref: '#/components/schemas/UnixSeconds' }
+        last_used_at: { $ref: '#/components/schemas/UnixSeconds' }
+        current: { type: boolean }
+    SessionList:
+      type: object
+      required: [sessions]
+      properties:
+        sessions:
+          type: array
+          items: { $ref: '#/components/schemas/SessionInfo' }
+    StepUpRequest:
+      type: object
+      required: [action, params]
+      properties:
+        action: { type: string, enum: [agent.resume, agent.permissions.widen, method.add, method.remove, email.change, account.delete, deletion.cancel, product.link] }
+        params: { type: object, description: Per action; see POST /v1/step-up. }
+    ApprovalRequest:
+      type: object
+      required: [verifier_did, owner_did, request_id, action, payload, payload_digest, expires_at, decisions]
+      properties:
+        verifier_did: { $ref: '#/components/schemas/Did' }
+        owner_did: { $ref: '#/components/schemas/OwnerDid' }
+        request_id: { $ref: '#/components/schemas/RequestId' }
+        action: { type: string, description: 'A step-up action, pairing.confirm, or agent.approval.' }
+        payload: { type: object, description: What the owner is shown. }
+        payload_digest: { $ref: '#/components/schemas/Hex64', description: Lowercase hex SHA-256 of the RFC 8785 JCS of payload. }
+        expires_at: { $ref: '#/components/schemas/UnixSeconds', description: At most now + 600. }
+        decisions:
+          type: array
+          minItems: 1
+          items: { type: string, enum: [approve, deny] }
+    Approval2:
+      type: object
+      description: |
+        approval/2.0 (ADR 0008). Normative: test-vectors/approval-2.0/README.md (SDK lane), including the verifier
+        checks in order and their error names (malformed, bad_version, wrong_verifier, wrong_owner, owner_closed,
+        wrong_request, wrong_payload, bad_decision, expired, expiry_too_far, unknown_key, bad_signature, bad_webauthn,
+        counter_replayed). digest = SHA-256(UTF-8("approval/2.0|" verifier_did "|" owner_did "|" request_id "|"
+        payload_digest "|" decision "|" expires_at)), expires_at in decimal ASCII. Form p256: `signature` is the raw
+        64-byte r||s of ECDSA P-256 over the 32-byte digest with no further hashing (CryptoKit signs the UTF-8 preimage
+        with SHA-256, which gives exactly that). Form webauthn: the assertion challenge is base64url(digest), the RP ID
+        is the environment RP ID, the accepted origins are https://<environment host> and the OpenEntity Android app's
+        android:apk-key-hash:<base64url SHA-256 of the signing certificate> origin, and `signature` is strict DER over
+        authenticatorData followed by SHA-256(clientDataJSON). Approvals accept a high or a low s; key log entries
+        accept only a low s (KeyLogAuth). All binary fields are strict base64url without padding.
+      required: [version, verifier_did, owner_did, request_id, payload_digest, decision, expires_at, device_id, form, signature]
+      properties:
+        version: { type: string, const: approval/2.0 }
+        verifier_did: { $ref: '#/components/schemas/Did' }
+        owner_did: { $ref: '#/components/schemas/OwnerDid' }
+        request_id: { $ref: '#/components/schemas/RequestId' }
+        payload_digest: { $ref: '#/components/schemas/Hex64' }
+        decision: { type: string, enum: [approve, deny] }
+        expires_at: { type: integer, minimum: 0, maximum: 9007199254740991 }
+        device_id: { $ref: '#/components/schemas/Thumbprint', description: The kid of the signing key in the owner key log. }
+        form: { type: string, enum: [p256, webauthn] }
+        signature: { $ref: '#/components/schemas/Base64url' }
+        authenticator_data: { $ref: '#/components/schemas/Base64url' }
+        client_data_json: { $ref: '#/components/schemas/Base64url' }
+      allOf:
+        - if:
+            properties:
+              form: { const: webauthn }
+          then:
+            required: [authenticator_data, client_data_json]
+    KeyLogEntry:
+      type: object
+      description: |
+        One owner key log entry (ADR 0007). Normative: test-vectors/keylog-1/README.md (SDK lane), including the
+        verifier checks in order and their error names; this schema is the wire shape.
+
+        Encoding: an entry travels as its exact RFC 8785 (JCS) line (KeyLogLine), byte for byte, never re-encoded; a
+        verifier rejects a line that is not exactly the JCS form of what it parses to. Every number is an integer
+        between -(2^53 - 1) and 2^53 - 1; strings carry no lone surrogates; objects have no duplicate keys. `prev` is
+        the lowercase hex SHA-256 of the previous line's UTF-8 bytes (`auth` included), null at genesis. The signed
+        digest is SHA-256 of the JCS form of the entry without `auth`. Owner id = lowercase RFC 4648 base32, no padding,
+        of SHA-256(genesis line): 52 characters. The owner DID is did:web:<RP ID>:o:<id>, with the environment's RP ID
+        (account.openentity.org or staging.account.openentity.org).
+
+        Who signs: genesis, the first approver (the root passkey when `approver` is null); add_approver, a current
+        approver; recover, the root passkey; replace_root, the root passkey or a current approver; cancel of a recover,
+        a current approver, an approver revoked less than 604800 seconds before, or the root passkey; cancel of a
+        replace_root, a current approver or an approver revoked less than 604800 seconds before; revoke, a current
+        approver or the root passkey; close, an account service close key (did.json).
+
+        Semantics:
+        - Every delay runs from the verifier's own first_seen_at, never from `ts`: recover and replace_root take
+          effect at first_seen_at + 86400 unless cancelled first (replace_root at once in a single-credential log).
+        - Single-credential (root-only) means the genesis `approver` was null and no approver has taken effect since:
+          the root passkey is then the approver. Revoking every approver never makes the root an approver again.
+        - A recover that takes effect replaces the approver set; the replaced approvers count as revoked from that
+          moment (they may sign cancel for 7 days and are notified).
+        - A kid enters a log once, even after it is revoked or its entry is cancelled.
+        - A pending recover or replace_root stays valid if its signer is revoked later. A cancel whose target already
+          took effect, or was already cancelled, is accepted as a no-op.
+        - For approver and root changes (add_approver, recover, replace_root, revoke, cancel), the signed entry IS the
+          step-up: no separate Approval2.
+        - No entry is accepted after close.
+      required: [v, seq, prev, op, ts, body, auth]
+      additionalProperties: false
+      properties:
+        v: { type: integer, const: 1 }
+        seq: { type: integer, minimum: 1, maximum: 9007199254740991, description: '1 for genesis, then the previous seq plus 1.' }
+        prev:
+          anyOf:
+            - $ref: '#/components/schemas/Hex64'
+            - type: 'null'
+        op: { type: string, enum: [genesis, add_approver, recover, replace_root, cancel, revoke, close] }
+        ts: { type: integer, minimum: 0, maximum: 9007199254740991, description: 'Unix seconds the signer claims. Informational: no delay or window runs from it.' }
+        body: { type: object }
+        auth: { $ref: '#/components/schemas/KeyLogAuth' }
+      allOf:
+        - if: { properties: { op: { const: genesis } } }
+          then: { properties: { seq: { const: 1 }, prev: { type: 'null' }, body: { $ref: '#/components/schemas/GenesisBody' } } }
+        - if: { properties: { op: { const: add_approver } } }
+          then: { properties: { body: { $ref: '#/components/schemas/AddApproverBody' } } }
+        - if: { properties: { op: { const: recover } } }
+          then: { properties: { body: { $ref: '#/components/schemas/RecoverBody' } } }
+        - if: { properties: { op: { const: replace_root } } }
+          then: { properties: { body: { $ref: '#/components/schemas/ReplaceRootBody' } } }
+        - if: { properties: { op: { const: cancel } } }
+          then: { properties: { body: { $ref: '#/components/schemas/CancelBody' } } }
+        - if: { properties: { op: { const: revoke } } }
+          then: { properties: { body: { $ref: '#/components/schemas/RevokeBody' } } }
+        - if: { properties: { op: { const: close } } }
+          then: { properties: { body: { $ref: '#/components/schemas/CloseBody' } } }
+    KeyLogAuth:
+      type: object
+      description: |
+        The one signature that authorizes an entry, over the entry digest. p256: `signature` is the 64-byte raw r||s
+        of ECDSA P-256 over the digest with no further hashing (CryptoKit and the Android Keystore sign the JCS bytes
+        with SHA-256, which gives the same value). webauthn: a WebAuthn get() assertion whose challenge is
+        base64url(digest), checked as approval/2.0 checks one; `signature` is DER over authenticatorData followed by
+        SHA-256(clientDataJSON). Signatures in entries are canonical: low s only (s <= n/2 for the P-256 order n; a
+        signer whose platform returns a high s sends n - s), strict DER (short-form lengths, minimal positive
+        INTEGERs, nothing after the sequence), strict base64url (no padding, no non-zero trailing bits). The form must
+        match the key's type. close is signed in the p256 form by an account service close key, kid = its RFC 7638
+        thumbprint; verifiers pass the P-256 close keys of the service did.json (current and retired) as serviceKeys.
+      required: [kid, form, signature]
+      additionalProperties: false
+      properties:
+        kid: { $ref: '#/components/schemas/Thumbprint' }
+        form: { type: string, enum: [p256, webauthn] }
+        signature: { $ref: '#/components/schemas/Base64url' }
+        authenticator_data: { $ref: '#/components/schemas/Base64url' }
+        client_data_json: { $ref: '#/components/schemas/Base64url' }
+      allOf:
+        - if: { properties: { form: { const: webauthn } } }
+          then:
+            required: [authenticator_data, client_data_json]
+          else:
+            not:
+              anyOf:
+                - required: [authenticator_data]
+                - required: [client_data_json]
+    KeyLogLine:
+      type: string
+      maxLength: 65536
+      contentMediaType: application/json
+      contentSchema: { $ref: '#/components/schemas/KeyLogEntry' }
+      description: One entry as its exact RFC 8785 (JCS) line, UTF-8, no trailing newline. Hashes and signatures cover these bytes.
+    KeyLogLines:
+      type: string
+      description: The log as JSON Lines, one KeyLogLine per line, LF separated, lowest seq first.
+    KeyLogAppendRequest:
+      type: object
+      required: [line]
+      properties:
+        line:
+          type: string
+          maxLength: 65536
+          contentMediaType: application/json
+          contentSchema: { $ref: '#/components/schemas/KeyLogEntry' }
+          description: The entry as its exact JCS line.
+    Credential:
+      type: object
+      description: |
+        A key in an owner key log: a device P-256 key (type p256: Secure Enclave, StrongBox or TEE) or a passkey (type
+        webauthn). The root is always webauthn. `kid` is the RFC 7638 thumbprint of `jwk`: base64url of
+        SHA-256(`{"crv":"P-256","kty":"EC","x":"<x>","y":"<y>"}`); the app shows it as the key fingerprint. A webauthn
+        credential has a non-empty `credential_id` and `rp_id` equal to the environment RP ID. label, platform,
+        key_storage, attestation, integrity and aaguid are signed with the entry and shown to people, but no verifier
+        interprets them; the account service checks App Attest, Android Key Attestation and Play Integrity at
+        enrollment and records the result here.
+      required: [kid, type, jwk]
+      properties:
+        kid: { $ref: '#/components/schemas/Thumbprint' }
+        type: { type: string, enum: [p256, webauthn] }
+        jwk: { $ref: '#/components/schemas/PublicKeyJwk' }
+        label: { type: string, maxLength: 80 }
+        platform: { type: string, enum: [ios, android, web] }
+        key_storage: { type: string, enum: [secure_enclave, strongbox, tee] }
+        attestation: { $ref: '#/components/schemas/CredentialAttestation' }
+        integrity: { $ref: '#/components/schemas/CredentialIntegrity' }
+        aaguid: { type: string, format: uuid }
+        credential_id: { $ref: '#/components/schemas/Base64url', minLength: 1, description: webauthn only. }
+        rp_id: { type: string, description: webauthn only. The environment RP ID. }
+      allOf:
+        - if: { properties: { type: { const: webauthn } } }
+          then: { required: [credential_id, rp_id] }
+    PublicKeyJwk:
+      type: object
+      description: Exactly kty, crv, x and y; x and y are the 32-byte coordinates in strict base64url, and the point is on P-256.
+      required: [kty, crv, x, y]
+      additionalProperties: false
+      properties:
+        kty: { type: string, const: EC }
+        crv: { type: string, const: P-256 }
+        x: { type: string, pattern: '^[A-Za-z0-9_-]{43}$' }
+        y: { type: string, pattern: '^[A-Za-z0-9_-]{43}$' }
+    CredentialAttestation:
+      type: object
+      required: [type, verified]
+      properties:
+        type: { type: string, enum: [app_attest, android_key, webauthn, none] }
+        verified: { type: boolean, description: True only when the chain validated to a trusted root. }
+        receipt: { $ref: '#/components/schemas/CompactJws', description: 'Device keys: the KeyAttestationReceipt from POST /v1/keylog/attestations, verifiable against the service did.json.' }
+    KeyAttestationRequest:
+      type: object
+      required: [nonce, platform, jwk]
+      properties:
+        nonce: { $ref: '#/components/schemas/RawNonce', description: From POST /v1/auth/nonce; single use. }
+        platform: { type: string, enum: [ios, android] }
+        jwk: { $ref: '#/components/schemas/PublicKeyJwk', description: The approver key being enrolled. }
+        app_attest:
+          type: object
+          description: iOS. clientDataHash = SHA-256(UTF-8(nonce + "|" + kid)).
+          required: [key_id, attestation_object]
+          properties:
+            key_id: { type: string, maxLength: 128, description: The App Attest key id (base64). }
+            attestation_object: { $ref: '#/components/schemas/Base64url' }
+        android:
+          type: object
+          description: Android. The approver key's own Key Attestation chain and a Play Integrity token bound to its kid.
+          required: [certificate_chain, integrity_token]
+          properties:
+            certificate_chain: { type: array, minItems: 2, maxItems: 10, items: { type: string, contentEncoding: base64 }, description: DER certificates, leaf first; attestationChallenge = UTF-8(nonce). }
+            integrity_token: { type: string, maxLength: 8192, description: Standard request with requestHash = kid. }
+      allOf:
+        - if: { properties: { platform: { const: ios } } }
+          then: { required: [app_attest] }
+        - if: { properties: { platform: { const: android } } }
+          then: { required: [android] }
+    KeyAttestationResponse:
+      type: object
+      required: [receipt, claims]
+      properties:
+        receipt: { $ref: '#/components/schemas/CompactJws', description: The KeyAttestationReceipt. Put it in Credential.attestation.receipt. }
+        claims: { $ref: '#/components/schemas/KeyAttestationReceipt' }
+    KeyAttestationReceipt:
+      type: object
+      description: |
+        The claims of an attestation receipt: a compact JWS with header {"alg": "EdDSA", "kid": "<service DID>#<RFC 7638
+        thumbprint>", "typ": "oe-key-attestation+jwt"}, signed by the account service's Ed25519 key (accountSignature,
+        /.well-known/did.json). A verifier checks typ, that the kid's DID is the pinned service DID, the signature,
+        and that `kid` equals the credential's kid. Field names follow test-vectors/keylog-1: key_storage, the
+        attestation type and verified flag, and integrity {device, strong}.
+      required: [iss, kid, platform, type, key_storage, verified, iat]
+      properties:
+        iss: { $ref: '#/components/schemas/ServiceDid' }
+        kid: { $ref: '#/components/schemas/Thumbprint', description: The attested key's RFC 7638 thumbprint. }
+        platform: { type: string, enum: [ios, android] }
+        type: { type: string, enum: [app_attest, android_key] }
+        key_storage: { type: string, enum: [secure_enclave, strongbox, tee] }
+        verified: { type: boolean, const: true, description: A receipt is issued only for an attestation that verified. }
+        integrity:
+          anyOf:
+            - $ref: '#/components/schemas/CredentialIntegrity'
+            - type: 'null'
+          description: Android only; null on iOS.
+        iat: { $ref: '#/components/schemas/UnixSeconds' }
+    CredentialIntegrity:
+      type: object
+      description: Android. The Play Integrity verdict at enrollment.
+      required: [device, strong]
+      properties:
+        device: { type: boolean, description: MEETS_DEVICE_INTEGRITY. }
+        strong: { type: boolean, description: MEETS_STRONG_INTEGRITY. }
+    GenesisBody:
+      type: object
+      required: [root, approver]
+      additionalProperties: false
+      properties:
+        root: { $ref: '#/components/schemas/Credential', description: The root passkey (type webauthn). }
+        approver:
+          description: The first approver, or null for a single-credential log.
+          anyOf:
+            - $ref: '#/components/schemas/Credential'
+            - type: 'null'
+    AddApproverBody:
+      type: object
+      required: [approver]
+      additionalProperties: false
+      properties:
+        approver: { $ref: '#/components/schemas/Credential' }
+    RecoverBody:
+      type: object
+      required: [approvers]
+      additionalProperties: false
+      properties:
+        approvers:
+          type: array
+          minItems: 1
+          items: { $ref: '#/components/schemas/Credential' }
+    ReplaceRootBody:
+      type: object
+      required: [root]
+      additionalProperties: false
+      properties:
+        root: { $ref: '#/components/schemas/Credential', description: The new root passkey (type webauthn). }
+    CancelBody:
+      type: object
+      required: [target]
+      additionalProperties: false
+      properties:
+        target: { $ref: '#/components/schemas/Hex64', description: The entry hash (as prev uses it) of a recover or replace_root in this log. }
+    RevokeBody:
+      type: object
+      required: [kid]
+      additionalProperties: false
+      properties:
+        kid: { $ref: '#/components/schemas/Thumbprint', description: The kid of a current approver. }
+    CloseBody:
+      type: object
+      maxProperties: 0
+      description: Always the empty object.
+    LogAppendResponse:
+      type: object
+      required: [seq, hash, first_seen_at, effective_at]
+      properties:
+        seq: { type: integer, minimum: 1 }
+        hash: { $ref: '#/components/schemas/Hex64', description: SHA-256 of the line, the value the next entry's prev holds. }
+        first_seen_at: { $ref: '#/components/schemas/UnixSeconds' }
+        effective_at: { $ref: '#/components/schemas/UnixSeconds' }
+    PairSas:
+      type: object
+      description: |
+        The pairing match string, pair-sas/1. Normative: test-vectors/pair-sas-1/ (README.md, words.json and
+        vectors.json; SDK lane). h = SHA-256(UTF-8("oe-pair-sas/1|" + CODE + "|" + agent_did)), where CODE is the
+        pairing code trimmed and upper-cased before hashing and agent_did is the agent's did:key exactly as it signs.
+        indexes = the first four bytes of h; names = words[index] from words.json, each two lowercase words (for
+        example "red shell"). The agent prints the names joined by ", "; the app renders the symbols by index and
+        shows the names.
+      required: [version, indexes, names]
+      properties:
+        version: { type: string, const: pair-sas/1 }
+        indexes:
+          type: array
+          minItems: 4
+          maxItems: 4
+          items: { type: integer, minimum: 0, maximum: 255 }
+        names:
+          type: array
+          minItems: 4
+          maxItems: 4
+          items: { type: string, pattern: '^[a-z]+ [a-z]+$' }
+    PairingCode:
+      type: string
+      pattern: '^OE-[0-9A-HJKMNP-TV-Z]{4}-[0-9A-HJKMNP-TV-Z]{4}$'
+      description: Crockford base32 without I, L, O and U.
+    Pairing:
+      type: object
+      required: [id, code, url, expires_at, state]
+      properties:
+        id: { $ref: '#/components/schemas/OpaqueId' }
+        code: { $ref: '#/components/schemas/PairingCode' }
+        url: { type: string, format: uri, description: 'https://openentity.org/pair#OE-XXXX-XXXX, shown as a QR code.' }
+        expires_at: { $ref: '#/components/schemas/UnixSeconds' }
+        state: { type: string, enum: [waiting, claimed, confirmed, expired, cancelled] }
+    PairingDetail:
+      allOf:
+        - $ref: '#/components/schemas/Pairing'
+        - type: object
+          required: [agent, sas, approval_request]
+          properties:
+            agent:
+              anyOf:
+                - $ref: '#/components/schemas/PairingAgent'
+                - type: 'null'
+            sas:
+              anyOf:
+                - $ref: '#/components/schemas/PairSas'
+                - type: 'null'
+            approval_request:
+              description: Present while claimed; action pairing.confirm.
+              anyOf:
+                - $ref: '#/components/schemas/ApprovalRequest'
+                - type: 'null'
+    PairingAgent:
+      type: object
+      required: [did, framework, host, sdk, sdk_version, safety]
+      properties:
+        did: { $ref: '#/components/schemas/AgentDid' }
+        framework: { type: string, maxLength: 64 }
+        host: { type: [string, 'null'], maxLength: 255 }
+        sdk: { type: string, maxLength: 64 }
+        sdk_version: { type: string, maxLength: 32 }
+        safety:
+          anyOf:
+            - $ref: '#/components/schemas/SafetyVerdict'
+            - type: 'null'
+    SafetyVerdict:
+      type: object
+      description: The latest Secure My Agent verdict on the agent, read from the registry (ADR 0002).
+      required: [verdict, checked_at]
+      properties:
+        verdict: { type: string, maxLength: 32 }
+        checked_at: { $ref: '#/components/schemas/UnixSeconds' }
+    PairingConfirmRequest:
+      type: object
+      required: [permissions]
+      properties:
+        permissions:
+          type: array
+          items: { $ref: '#/components/schemas/Permission' }
+        label: { type: string, maxLength: 80 }
+    Agent:
+      type: object
+      required: [did, label, framework, host, state, status, permissions, products, paired_at, last_seen_at]
+      properties:
+        did: { $ref: '#/components/schemas/AgentDid' }
+        label: { type: [string, 'null'], maxLength: 80 }
+        framework: { type: [string, 'null'], maxLength: 64 }
+        host: { type: [string, 'null'], maxLength: 255 }
+        state: { type: string, enum: [active, paused] }
+        status:
+          anyOf:
+            - $ref: '#/components/schemas/AgentStatus'
+            - type: 'null'
+        permissions:
+          type: array
+          items: { $ref: '#/components/schemas/Permission' }
+        products:
+          type: array
+          items: { $ref: '#/components/schemas/ProductDid' }
+        paired_at: { $ref: '#/components/schemas/UnixSeconds' }
+        last_seen_at: { type: [integer, 'null'], minimum: 0 }
+    AgentStatus:
+      type: object
+      required: [state, summary, at]
+      properties:
+        state: { type: string, enum: [running, idle, blocked, error, done] }
+        summary: { type: string, maxLength: 200 }
+        progress: { type: [number, 'null'], minimum: 0, maximum: 1 }
+        at: { $ref: '#/components/schemas/UnixSeconds' }
+    AgentList:
+      type: object
+      required: [agents]
+      properties:
+        agents:
+          type: array
+          items: { $ref: '#/components/schemas/Agent' }
+    AgentPatch:
+      type: object
+      minProperties: 1
+      properties:
+        label: { type: string, maxLength: 80 }
+        permissions:
+          type: array
+          items: { $ref: '#/components/schemas/Permission' }
+    PauseRequest:
+      type: object
+      required: [source]
+      properties:
+        source: { type: string, enum: [app, control, siri, tile, widget, web] }
+    PauseAllResponse:
+      type: object
+      required: [paused]
+      properties:
+        paused: { type: integer, minimum: 0 }
+    CommandRequest:
+      type: object
+      required: [command]
+      properties:
+        command: { type: string, enum: [checkup, fix] }
+        args: { type: object }
+    IdResponse:
+      type: object
+      required: [id]
+      properties:
+        id: { $ref: '#/components/schemas/OpaqueId' }
+    Attachment:
+      type: object
+      required: [id, name, content_type, size]
+      properties:
+        id: { $ref: '#/components/schemas/OpaqueId' }
+        name: { type: string, maxLength: 255 }
+        content_type: { type: string, maxLength: 127 }
+        size: { type: integer, minimum: 0, maximum: 10485760 }
+    Message:
+      type: object
+      required: [id, from, text, attachments, created_at]
+      properties:
+        id: { $ref: '#/components/schemas/OpaqueId' }
+        from: { type: string, enum: [owner, agent] }
+        text: { type: string, maxLength: 4096 }
+        attachments:
+          type: array
+          items: { $ref: '#/components/schemas/Attachment' }
+        created_at: { $ref: '#/components/schemas/UnixSeconds' }
+        acked_at: { type: [integer, 'null'], minimum: 0, description: Owner messages only; when the agent acknowledged it. }
+    MessageList:
+      type: object
+      required: [messages]
+      properties:
+        messages:
+          type: array
+          items: { $ref: '#/components/schemas/Message' }
+    OwnerMessageRequest:
+      type: object
+      required: [text]
+      properties:
+        text: { type: string, minLength: 1, maxLength: 4096, description: At most 4096 UTF-8 bytes. }
+    AgentApproval:
+      type: object
+      required: [id, request_id, state, title, summary, risk, created_at, expires_at, decided_at]
+      properties:
+        id: { $ref: '#/components/schemas/OpaqueId' }
+        request_id: { $ref: '#/components/schemas/RequestId' }
+        state: { type: string, enum: [pending, approved, denied, expired] }
+        title: { type: string, maxLength: 120 }
+        summary: { type: string, maxLength: 2000 }
+        details: { type: object }
+        risk: { type: string, enum: [low, medium, high] }
+        created_at: { $ref: '#/components/schemas/UnixSeconds' }
+        expires_at: { $ref: '#/components/schemas/UnixSeconds' }
+        decided_at: { type: [integer, 'null'], minimum: 0 }
+        approval: { $ref: '#/components/schemas/Approval2', description: Once decided. }
+        agent_did: { $ref: '#/components/schemas/AgentDid', description: Owner view only. }
+        approval_request: { $ref: '#/components/schemas/ApprovalRequest', description: 'Owner view only, while pending; action agent.approval, verifier the service DID.' }
+    AgentApprovalList:
+      type: object
+      required: [approvals]
+      properties:
+        approvals:
+          type: array
+          items: { $ref: '#/components/schemas/AgentApproval' }
+    AgentApprovalCreate:
+      type: object
+      required: [title, summary, risk, expires_in]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 120 }
+        summary: { type: string, minLength: 1, maxLength: 2000 }
+        details: { type: object }
+        risk: { type: string, enum: [low, medium, high] }
+        expires_in: { type: integer, minimum: 60, maximum: 600 }
+    Purchase:
+      oneOf:
+        - $ref: '#/components/schemas/IosPurchase'
+        - $ref: '#/components/schemas/AndroidPurchase'
+      discriminator:
+        propertyName: platform
+        mapping:
+          ios: '#/components/schemas/IosPurchase'
+          android: '#/components/schemas/AndroidPurchase'
+    IosPurchase:
+      type: object
+      required: [platform, signed_transaction]
+      properties:
+        platform: { type: string, const: ios }
+        signed_transaction: { $ref: '#/components/schemas/CompactJws', description: The StoreKit 2 jwsRepresentation. }
+    AndroidPurchase:
+      type: object
+      required: [platform, product_id, purchase_token]
+      properties:
+        platform: { type: string, const: android }
+        product_id: { type: string, maxLength: 128 }
+        purchase_token: { type: string, maxLength: 4096 }
+    Entitlement:
+      type: object
+      required: [product, plan, status, source, period_end]
+      properties:
+        product: { $ref: '#/components/schemas/ProductDid' }
+        plan: { type: string, maxLength: 64 }
+        status: { type: string, enum: [active, grace, expired, revoked, refunded] }
+        source: { type: string, enum: [iap, play] }
+        period_end: { type: [integer, 'null'], minimum: 0 }
+    EntitlementList:
+      type: object
+      required: [entitlements]
+      properties:
+        entitlements:
+          type: array
+          items: { $ref: '#/components/schemas/Entitlement' }
+    AppStoreNotification:
+      type: object
+      required: [signedPayload]
+      properties:
+        signedPayload: { $ref: '#/components/schemas/CompactJws' }
+    PubSubPush:
+      type: object
+      required: [message, subscription]
+      properties:
+        message:
+          type: object
+          required: [data, messageId, publishTime]
+          properties:
+            data: { type: string, contentEncoding: base64, description: The base64 JSON DeveloperNotification. }
+            messageId: { type: string }
+            publishTime: { type: string, format: date-time }
+            attributes:
+              type: object
+              additionalProperties: { type: string }
+        subscription: { type: string }
+    PairRequest:
+      type: object
+      required: [code, presentation, framework, sdk, sdk_version]
+      properties:
+        code: { $ref: '#/components/schemas/PairingCode' }
+        presentation: { type: object, description: 'An OEIS-1 Presentation (buildPresentation): eid = the signer, audience = the service DID, nonce = the code exactly as shown.' }
+        framework: { type: string, maxLength: 64, description: 'e.g. openclaw, claude-code, openai-agents, langchain, crewai.' }
+        sdk: { type: string, maxLength: 64 }
+        sdk_version: { type: string, maxLength: 32 }
+        host: { type: string, maxLength: 255 }
+    PairClaim:
+      type: object
+      required: [pairing_id, sas, expires_at, poll_interval]
+      properties:
+        pairing_id: { $ref: '#/components/schemas/OpaqueId' }
+        sas: { $ref: '#/components/schemas/PairSas' }
+        expires_at: { $ref: '#/components/schemas/UnixSeconds' }
+        poll_interval: { type: integer, const: 2, description: 'Seconds between GET /v1/pair/{pairing_id} calls.' }
+    PairStatus:
+      type: object
+      required: [state, owner_did, permissions]
+      properties:
+        state: { type: string, enum: [claimed, confirmed, rejected, expired] }
+        owner_did:
+          description: Null until confirmed.
+          anyOf:
+            - $ref: '#/components/schemas/OwnerDid'
+            - type: 'null'
+        permissions:
+          type: array
+          items: { $ref: '#/components/schemas/Permission' }
+        credentials:
+          type: array
+          description: Once, on the first confirmed read.
+          items: { $ref: '#/components/schemas/BearerCredential' }
+    BearerCredential:
+      type: object
+      required: [product, kind, key, expires_at]
+      properties:
+        product: { $ref: '#/components/schemas/ProductDid' }
+        kind: { type: string, const: bearer }
+        key: { type: string, maxLength: 512, description: 'The product key (moltbotden_sk_, sma_, ass_ or cgrc_), scoped to the granted permissions.' }
+        expires_at: { $ref: '#/components/schemas/UnixSeconds', description: Issued for 30 days. }
+    ProductCredentialRenewRequest:
+      type: object
+      required: [request_id, agent_did, owner_did, kind, permissions]
+      properties:
+        request_id: { $ref: '#/components/schemas/RequestId', description: Idempotency key; the same value within 1 hour returns the same key. }
+        agent_did: { type: string, pattern: '^did:key:z6Mk[1-9A-HJ-NP-Za-km-z]+$' }
+        owner_did: { $ref: '#/components/schemas/OwnerDid' }
+        kind: { type: string, const: bearer }
+        permissions: { type: array, items: { type: string }, description: The agent's current permissions; scope the key to them. }
+    ProductCredentialRenewal:
+      type: object
+      description: A BearerCredential plus when the agent's older keys stop working (issued_at + 3600).
+      required: [product, kind, key, expires_at, previous_valid_until]
+      properties:
+        product: { $ref: '#/components/schemas/ProductDid' }
+        kind: { type: string, const: bearer }
+        key: { type: string, maxLength: 512, description: The new key (moltbotden_sk_, sma_, ass_ or cgrc_). }
+        expires_at: { $ref: '#/components/schemas/UnixSeconds', description: Issued for 30 days. }
+        previous_valid_until: { $ref: '#/components/schemas/UnixSeconds', description: The older keys of this agent stay valid until then, 1 hour after this renewal. }
+    CredentialList:
+      type: object
+      required: [credentials]
+      properties:
+        credentials:
+          type: array
+          items: { $ref: '#/components/schemas/BearerCredential' }
+    AgentSelf:
+      type: object
+      required: [did, owner_did, state, permissions, products]
+      properties:
+        did: { $ref: '#/components/schemas/AgentDid' }
+        owner_did: { $ref: '#/components/schemas/OwnerDid' }
+        state: { type: string, enum: [active, paused] }
+        permissions:
+          type: array
+          items: { $ref: '#/components/schemas/Permission' }
+        products:
+          type: array
+          items: { $ref: '#/components/schemas/ProductDid' }
+    InboxItem:
+      oneOf:
+        - $ref: '#/components/schemas/WsMessage'
+        - $ref: '#/components/schemas/WsCommand'
+        - $ref: '#/components/schemas/WsApprovalResult'
+        - $ref: '#/components/schemas/WsPermissions'
+      discriminator:
+        propertyName: type
+        mapping:
+          message: '#/components/schemas/WsMessage'
+          command: '#/components/schemas/WsCommand'
+          approval.result: '#/components/schemas/WsApprovalResult'
+          permissions: '#/components/schemas/WsPermissions'
+    InboxList:
+      type: object
+      required: [items, more]
+      properties:
+        items:
+          type: array
+          maxItems: 100
+          items: { $ref: '#/components/schemas/InboxItem' }
+        more: { type: boolean }
+    AckRequest:
+      type: object
+      required: [ids]
+      properties:
+        ids:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items: { $ref: '#/components/schemas/OpaqueId' }
+    AgentMessageRequest:
+      type: object
+      required: [text]
+      properties:
+        text: { type: string, minLength: 1, maxLength: 4096, description: At most 4096 UTF-8 bytes. }
+        attachments:
+          type: array
+          maxItems: 10
+          items: { $ref: '#/components/schemas/OpaqueId', description: An upload_id from POST /v1/agent/uploads. }
+    UploadRequest:
+      type: object
+      required: [name, content_type, size]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 255 }
+        content_type: { type: string, maxLength: 127 }
+        size: { type: integer, minimum: 1, maximum: 10485760 }
+    UploadResponse:
+      type: object
+      required: [upload_id, url, method, headers, expires_at]
+      properties:
+        upload_id: { $ref: '#/components/schemas/OpaqueId' }
+        url: { type: string, format: uri }
+        method: { type: string, const: PUT }
+        headers:
+          type: object
+          additionalProperties: { type: string }
+        expires_at: { $ref: '#/components/schemas/UnixSeconds', description: now + 300. }
+    StatusRequest:
+      type: object
+      required: [state, summary]
+      properties:
+        state: { type: string, enum: [running, idle, blocked, error, done] }
+        summary: { type: string, maxLength: 200 }
+        progress: { type: number, minimum: 0, maximum: 1 }
+    RenewRequest:
+      type: object
+      properties:
+        products:
+          type: array
+          description: Default every product the agent holds a key for.
+          items: { $ref: '#/components/schemas/ProductDid' }
+    WsSync:
+      type: object
+      required: [action]
+      properties:
+        action: { type: string, const: sync }
+    WsAck:
+      type: object
+      required: [action, ids]
+      properties:
+        action: { type: string, const: ack }
+        ids:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items: { $ref: '#/components/schemas/OpaqueId' }
+    WsHeartbeat:
+      type: object
+      required: [action]
+      properties:
+        action: { type: string, const: heartbeat }
+    WsMessage:
+      type: object
+      required: [type, id, created_at, text, attachments]
+      properties:
+        type: { type: string, const: message }
+        id: { $ref: '#/components/schemas/OpaqueId' }
+        created_at: { $ref: '#/components/schemas/UnixSeconds' }
+        text: { type: string, maxLength: 4096 }
+        attachments:
+          type: array
+          items: { $ref: '#/components/schemas/Attachment' }
+    WsCommand:
+      type: object
+      required: [type, id, created_at, command, args]
+      properties:
+        type: { type: string, const: command }
+        id: { $ref: '#/components/schemas/OpaqueId' }
+        created_at: { $ref: '#/components/schemas/UnixSeconds' }
+        command: { type: string, enum: [checkup, fix, pause, resume] }
+        args: { type: object }
+    WsApprovalResult:
+      type: object
+      required: [type, id, created_at, approval_id, state]
+      properties:
+        type: { type: string, const: approval.result }
+        id: { $ref: '#/components/schemas/OpaqueId' }
+        created_at: { $ref: '#/components/schemas/UnixSeconds' }
+        approval_id: { $ref: '#/components/schemas/OpaqueId' }
+        state: { type: string, enum: [approved, denied, expired] }
+        approval:
+          anyOf:
+            - $ref: '#/components/schemas/Approval2'
+            - type: 'null'
+    WsPermissions:
+      type: object
+      required: [type, id, created_at, permissions]
+      properties:
+        type: { type: string, const: permissions }
+        id: { $ref: '#/components/schemas/OpaqueId' }
+        created_at: { $ref: '#/components/schemas/UnixSeconds' }
+        permissions:
+          type: array
+          items: { $ref: '#/components/schemas/Permission' }
+    WsHeartbeatReply:
+      type: object
+      required: [type]
+      properties:
+        type: { type: string, const: heartbeat }
+    WsError:
+      type: object
+      required: [type, error, message]
+      properties:
+        type: { type: string, const: error }
+        error: { type: string }
+        message: { type: string }
+    NotifyRequest:
+      type: object
+      required: [owner_did, type, id]
+      properties:
+        owner_did: { $ref: '#/components/schemas/OwnerDid' }
+        type: { type: string, enum: [approval.requested, approval.resolved, alert, refresh] }
+        id: { type: string, pattern: '^[A-Za-z0-9:._-]{1,128}$', description: The product-scoped id the app fetches from the product. }
+        agent_did: { $ref: '#/components/schemas/AgentDid' }
+        collapse_key: { type: string, maxLength: 64 }
+        ttl: { type: integer, minimum: 1, maximum: 86400 }
+    NotifyResponse:
+      type: object
+      required: [queued]
+      properties:
+        queued: { type: boolean, const: true }
+    PushPayload:
+      type: object
+      description: 'The custom data in every APNs and FCM push: ids only. The visible text, if any, is fixed by the service per product and type.'
+      required: [oe]
+      properties:
+        oe:
+          type: object
+          required: [product, type, id]
+          properties:
+            product: { $ref: '#/components/schemas/ProductDid' }
+            type: { type: string, enum: [approval.requested, approval.resolved, alert, refresh] }
+            id: { type: string }
+            agent: { $ref: '#/components/schemas/AgentDid' }
+    EventName:
+      type: string
+      pattern: '^[a-z][a-z0-9_]{0,63}$'
+      description: A name listed in account/analytics/events.yaml.
+    IngestEvent:
+      type: object
+      required: [name, time, insert_id, properties]
+      properties:
+        name: { $ref: '#/components/schemas/EventName' }
+        time: { type: integer, minimum: 0, description: Unix milliseconds. }
+        insert_id: { type: string, maxLength: 64, description: Deduplicates retries. }
+        owner_did: { $ref: '#/components/schemas/OwnerDid' }
+        agent_did: { $ref: '#/components/schemas/AgentDid' }
+        properties: { type: object }
+    IngestRequest:
+      type: object
+      required: [events]
+      properties:
+        events:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items: { $ref: '#/components/schemas/IngestEvent' }
+    AppEvent:
+      type: object
+      required: [name, time, insert_id, properties]
+      properties:
+        name: { $ref: '#/components/schemas/EventName' }
+        time: { type: integer, minimum: 0, description: Unix milliseconds. }
+        insert_id: { type: string, maxLength: 64 }
+        properties: { type: object }
+    AppEventsRequest:
+      type: object
+      required: [install_id, events]
+      properties:
+        install_id: { type: string, format: uuid }
+        events:
+          type: array
+          minItems: 1
+          maxItems: 50
+          items: { $ref: '#/components/schemas/AppEvent' }
+    EventsAccepted:
+      type: object
+      required: [accepted, rejected]
+      properties:
+        accepted: { type: integer, minimum: 0 }
+        rejected:
+          type: array
+          items:
+            type: object
+            required: [index, error]
+            properties:
+              index: { type: integer, minimum: 0 }
+              error: { type: string }
+    InstallRequest:
+      type: object
+      required: [install_id, platform]
+      properties:
+        install_id: { type: string, format: uuid }
+        platform: { $ref: '#/components/schemas/Platform' }
+        app_version: { type: string, maxLength: 32 }
+    InstallResponse:
+      type: object
+      required: [install_token]
+      properties:
+        install_token: { type: string, maxLength: 256 }
+    PausedChange:
+      type: object
+      required: [agent_did, owner_did, state, at, seq]
+      properties:
+        agent_did: { $ref: '#/components/schemas/AgentDid' }
+        owner_did: { $ref: '#/components/schemas/OwnerDid' }
+        state: { type: string, enum: [paused, active] }
+        at: { $ref: '#/components/schemas/UnixSeconds' }
+        seq: { type: integer, minimum: 1, description: The agent's pause-state counter (shared with agent.paused and agent.resumed). }
+    PausedList:
+      type: object
+      required: [since, cursor, generated_at, changes]
+      properties:
+        since: { type: [string, 'null'], description: Echoes the request's since; products check it. }
+        cursor: { type: string, maxLength: 128, description: Send as since next time. }
+        generated_at: { $ref: '#/components/schemas/UnixSeconds' }
+        changes:
+          type: array
+          items: { $ref: '#/components/schemas/PausedChange' }
+    ApproveEnvelope:
+      type: object
+      description: |
+        The claims of an approval request envelope: a compact JWS with header {"alg": "EdDSA", "kid": "<DID URL of an
+        Ed25519 assertionMethod key of the verifier DID>", "typ": "oe-approval-request+jwt"}, signed by the product.
+      required: [iss, aud, iat, exp, request_id, owner_did, payload, payload_digest, return_url]
+      properties:
+        iss: { $ref: '#/components/schemas/ProductDid', description: The verifier DID. }
+        aud: { $ref: '#/components/schemas/ServiceDid' }
+        iat: { $ref: '#/components/schemas/UnixSeconds' }
+        exp: { $ref: '#/components/schemas/UnixSeconds', description: 'The approval''s expires_at; at most iat + 600.' }
+        request_id: { $ref: '#/components/schemas/RequestId' }
+        owner_did: { $ref: '#/components/schemas/OwnerDid' }
+        payload: { type: object, description: The canonical summary the owner sees. }
+        payload_digest: { $ref: '#/components/schemas/Hex64', description: Lowercase hex SHA-256 of the RFC 8785 JCS of payload. }
+        return_url: { type: string, format: uri, description: 'https, on the same registrable domain as the verifier DID host (did:web:api.agentsecretstore.com allows https://agentsecretstore.com/... and its subdomains).' }
+        state: { type: string, maxLength: 256 }
+    OwnerLinkRequest:
+      type: object
+      required: [product]
+      properties:
+        product: { $ref: '#/components/schemas/ProductDid' }
+    OwnerLink:
+      type: object
+      required: [product, envelope, link_url, expires_at]
+      properties:
+        product: { $ref: '#/components/schemas/ProductDid' }
+        envelope: { $ref: '#/components/schemas/CompactJws', description: The LinkOwnerEnvelope. }
+        link_url: { type: string, format: uri, description: 'The product''s link page, https://<product web host>/oe/link, with "#envelope=<JWS>" appended (a fragment, so it never reaches server logs).' }
+        expires_at: { $ref: '#/components/schemas/UnixSeconds' }
+    LinkOwnerEnvelope:
+      type: object
+      description: |
+        The claims of an owner-link envelope: a compact JWS with header {"alg": "EdDSA", "kid": "<service DID>#<RFC
+        7638 thumbprint>", "typ": "oe-link-owner+jwt"}, signed by the account service's Ed25519 key (the key of
+        accountSignature, in /.well-known/did.json under assertionMethod). The same JWS format as ApproveEnvelope,
+        signed in the other direction. Issued by POST /v1/account/links after a product.link step-up.
+
+        The product verifies, in order: typ is oe-link-owner+jwt and alg is EdDSA; the kid's DID equals the pinned
+        service DID of its environment and the key is in the current did.json (cache at most 10 minutes, refetch once on
+        an unknown kid); the signature; purpose is link-owner; aud is its own DID; iat is not in the future (5 seconds of
+        skew) and now < exp <= iat + 600; jti was not used before (remember it until exp). Then it stores `sub` as
+        `oe_owner_did` on the web user it signed in, and answers 409 if that user is already linked to another owner
+        DID. This replaces any interim link format (Agent Secret Store's ES256 `purpose: link-owner` JWT).
+      required: [iss, aud, sub, purpose, iat, exp, jti]
+      properties:
+        iss: { $ref: '#/components/schemas/ServiceDid' }
+        aud: { $ref: '#/components/schemas/ProductDid' }
+        sub: { $ref: '#/components/schemas/OwnerDid', description: The owner DID to link. }
+        purpose: { type: string, const: link-owner }
+        iat: { $ref: '#/components/schemas/UnixSeconds' }
+        exp: { $ref: '#/components/schemas/UnixSeconds', description: At most iat + 600. }
+        jti: { type: string, pattern: '^lnk_[A-Za-z0-9]{26}$', description: Single use. }
+    ApproveCheckRequest:
+      type: object
+      required: [request]
+      properties:
+        request: { $ref: '#/components/schemas/CompactJws', description: The envelope (ApproveEnvelope). }
+    ApproveCheck:
+      type: object
+      required: [verifier_did, owner_did, request_id, payload, payload_digest, expires_at, return_url, rp_id, allow_credentials]
+      properties:
+        verifier_did: { $ref: '#/components/schemas/ProductDid' }
+        owner_did: { $ref: '#/components/schemas/OwnerDid' }
+        request_id: { $ref: '#/components/schemas/RequestId' }
+        payload: { type: object }
+        payload_digest: { $ref: '#/components/schemas/Hex64' }
+        expires_at: { $ref: '#/components/schemas/UnixSeconds' }
+        return_url: { type: string, format: uri }
+        state: { type: [string, 'null'] }
+        rp_id: { type: string }
+        allow_credentials:
+          type: array
+          description: The owner's approver passkey credential ids (the root passkey in a single-credential log).
+          items: { $ref: '#/components/schemas/Base64url' }
+    ApproveReturnForm:
+      type: object
+      description: What the /approve page auto-submits to return_url as application/x-www-form-urlencoded. Either approval or error is present.
+      required: [request_id]
+      properties:
+        approval: { type: string, description: The Approval2 object as JSON text. }
+        error: { type: string, const: cancelled }
+        request_id: { $ref: '#/components/schemas/RequestId' }
+        state: { type: string, maxLength: 256 }
+    AccountEvent:
+      type: object
+      description: |
+        The body of POST /v1/oe/events. Types the service sends: agent.paused, agent.resumed, agent.unlinked,
+        agent.permissions, owner.deleted (the owner-delete call), plan.changed (the signed plan-grant call). Products
+        ignore types they do not know.
+      required: [id, type, created_at, data]
+      properties:
+        id: { type: string, pattern: '^evt_[A-Za-z0-9_-]{1,60}$', description: Dedupe for at least 24 hours. }
+        type: { type: string, maxLength: 64 }
+        created_at: { $ref: '#/components/schemas/UnixSeconds' }
+        data: { type: object }
+      allOf:
+        - if: { properties: { type: { const: agent.paused } } }
+          then: { properties: { data: { $ref: '#/components/schemas/AgentPausedData' } } }
+        - if: { properties: { type: { const: agent.resumed } } }
+          then: { properties: { data: { $ref: '#/components/schemas/AgentResumedData' } } }
+        - if: { properties: { type: { const: agent.unlinked } } }
+          then: { properties: { data: { $ref: '#/components/schemas/AgentUnlinkedData' } } }
+        - if: { properties: { type: { const: agent.permissions } } }
+          then: { properties: { data: { $ref: '#/components/schemas/AgentPermissionsData' } } }
+        - if: { properties: { type: { const: owner.deleted } } }
+          then: { properties: { data: { $ref: '#/components/schemas/OwnerDeletedData' } } }
+        - if: { properties: { type: { const: plan.changed } } }
+          then: { properties: { data: { $ref: '#/components/schemas/PlanChangedData' } } }
+    AgentPausedData:
+      type: object
+      required: [agent_did, owner_did, paused_at, seq]
+      properties:
+        agent_did: { $ref: '#/components/schemas/AgentDid' }
+        owner_did: { $ref: '#/components/schemas/OwnerDid' }
+        paused_at: { $ref: '#/components/schemas/UnixSeconds' }
+        seq: { type: integer, minimum: 1, description: The agent's pause-state counter. Apply only if newer than the one held. }
+    AgentResumedData:
+      type: object
+      required: [agent_did, owner_did, resumed_at, seq]
+      properties:
+        agent_did: { $ref: '#/components/schemas/AgentDid' }
+        owner_did: { $ref: '#/components/schemas/OwnerDid' }
+        resumed_at: { $ref: '#/components/schemas/UnixSeconds' }
+        seq: { type: integer, minimum: 1, description: The agent's pause-state counter. Apply only if newer than the one held. }
+    AgentUnlinkedData:
+      type: object
+      required: [agent_did, owner_did]
+      properties:
+        agent_did: { $ref: '#/components/schemas/AgentDid' }
+        owner_did: { $ref: '#/components/schemas/OwnerDid' }
+    AgentPermissionsData:
+      type: object
+      required: [agent_did, owner_did, permissions, seq]
+      properties:
+        agent_did: { $ref: '#/components/schemas/AgentDid' }
+        owner_did: { $ref: '#/components/schemas/OwnerDid' }
+        permissions:
+          type: array
+          items: { $ref: '#/components/schemas/Permission' }
+        seq: { type: integer, minimum: 1, description: The agent's permissions counter (separate from the pause-state counter). }
+    OwnerDeletedData:
+      type: object
+      required: [owner_did, deleted_at]
+      properties:
+        owner_did: { $ref: '#/components/schemas/OwnerDid' }
+        deleted_at: { $ref: '#/components/schemas/UnixSeconds' }
+    PlanChangedData:
+      type: object
+      required: [owner_did, product, plan, status, source, period_end, store_transaction_id]
+      properties:
+        owner_did: { $ref: '#/components/schemas/OwnerDid' }
+        product: { $ref: '#/components/schemas/ProductDid' }
+        plan: { type: string, maxLength: 64 }
+        status: { type: string, enum: [active, grace, expired, revoked, refunded] }
+        source: { type: string, enum: [iap, play] }
+        period_end: { type: [integer, 'null'], minimum: 0 }
+        store_transaction_id: { type: string, maxLength: 128, description: The original transaction id (App Store) or purchase token (Play). }
+    OeKeylogRequest:
+      type: object
+      required: [owner_did, lines]
+      properties:
+        owner_did: { $ref: '#/components/schemas/OwnerDid' }
+        lines:
+          type: array
+          minItems: 1
+          maxItems: 100
+          description: Consecutive entries, lowest seq first, each as its exact JCS line.
+          items:
+            type: string
+            maxLength: 65536
+            contentMediaType: application/json
+            contentSchema: { $ref: '#/components/schemas/KeyLogEntry' }
+    OeKeylogResponse:
+      type: object
+      required: [head]
+      properties:
+        head: { type: integer, minimum: 1, description: The seq of the product's newest entry for this owner. }
+    MethodAddRequest:
+      type: object
+      required: [type, proof]
+      properties:
+        type: { $ref: '#/components/schemas/MethodType' }
+        proof: { type: object, description: A fresh sign-in with the new method, shaped by type. }
+      allOf:
+        - if: { properties: { type: { const: apple } } }
+          then: { properties: { proof: { $ref: '#/components/schemas/AppleProof' } } }
+        - if: { properties: { type: { const: google } } }
+          then: { properties: { proof: { $ref: '#/components/schemas/GoogleProof' } } }
+        - if: { properties: { type: { const: email } } }
+          then: { properties: { proof: { $ref: '#/components/schemas/EmailProof' } } }
+        - if: { properties: { type: { const: passkey } } }
+          then: { properties: { proof: { $ref: '#/components/schemas/PasskeyProof' } } }
+    AppleProof:
+      type: object
+      required: [identity_token, nonce]
+      properties:
+        identity_token: { $ref: '#/components/schemas/CompactJws' }
+        nonce: { $ref: '#/components/schemas/RawNonce' }
+    GoogleProof:
+      type: object
+      required: [id_token, nonce]
+      properties:
+        id_token: { $ref: '#/components/schemas/CompactJws' }
+        nonce: { $ref: '#/components/schemas/RawNonce' }
+    EmailProof:
+      type: object
+      required: [challenge_id, code]
+      properties:
+        challenge_id: { $ref: '#/components/schemas/OpaqueId' }
+        code: { type: string, pattern: '^[0-9]{8}$' }
+    PasskeyProof:
+      type: object
+      required: [challenge_id, response]
+      properties:
+        challenge_id: { $ref: '#/components/schemas/OpaqueId' }
+        response: { type: object, description: RegistrationResponseJSON (WebAuthn Level 3 toJSON form). }
+    EmailChangeRequest:
+      type: object
+      required: [challenge_id, code]
+      properties:
+        challenge_id: { $ref: '#/components/schemas/OpaqueId', description: From POST /v1/auth/email/start for the new address. }
+        code: { type: string, pattern: '^[0-9]{8}$' }
+    AccountDeleted:
+      type: object
+      required: [deleted_at]
+      properties:
+        deleted_at: { $ref: '#/components/schemas/UnixSeconds' }
+    PushTokenRequest:
+      type: object
+      required: [provider, token]
+      properties:
+        provider: { type: string, enum: [apns, fcm] }
+        token: { type: string, maxLength: 4096 }
+        environment: { type: string, enum: [sandbox, production], description: APNs only. }
+      allOf:
+        - if: { properties: { provider: { const: apns } } }
+          then: { required: [environment] }
+    PasskeyVerifyResponse:
+      description: A Session for mode authenticate; PasskeyRegistered for mode register.
+      oneOf:
+        - $ref: '#/components/schemas/Session'
+        - $ref: '#/components/schemas/PasskeyRegistered'
+    ApprovePage:
+      type: string
+      description: The HTML page.
