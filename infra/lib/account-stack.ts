@@ -23,10 +23,10 @@ import {
   aws_lambda_nodejs as nodejs,
   aws_logs as logs,
   aws_rds as rds,
-  aws_sqs as sqs,
   aws_ssm as ssm,
 } from "aws-cdk-lib";
 import type { Construct } from "constructs";
+import { AnalyticsForwarder } from "../../account/analytics/forwarder/construct.ts";
 
 export type AccountStage = "staging" | "production";
 export const ACCOUNT_HOST: Record<AccountStage, string> = { production: "account.openentity.org", staging: "staging.account.openentity.org" };
@@ -103,12 +103,10 @@ export class OpenEntityAccountStack extends Stack {
       alias: `alias/openentity-account-${suffix}-data`, description: `OpenEntity Account ${stage}: data encryption`,
     });
 
-    // ---- Events: app and product analytics events, validated by the API, forwarded by the Monitoring lane's consumer ----
-    const deadEvents = new sqs.Queue(this, "EventsDlq", { retentionPeriod: Duration.days(14), encryption: sqs.QueueEncryption.SQS_MANAGED, enforceSSL: true });
-    const events = new sqs.Queue(this, "Events", {
-      visibilityTimeout: Duration.minutes(2), retentionPeriod: Duration.days(4), encryption: sqs.QueueEncryption.SQS_MANAGED, enforceSSL: true,
-      deadLetterQueue: { queue: deadEvents, maxReceiveCount: 5 },
-    });
+    // ---- Events: app and product analytics events, validated by the API (account/src/events.ts) onto the Monitoring
+    // lane's forwarder queue; its Lambda sends them to Amplitude, Google Analytics and PostHog, with a DLQ and an alarm.
+    const analytics = new AnalyticsForwarder(this, "Analytics", { environment: stage });
+    const events = analytics.queue;
 
     // ---- App: one function serves HTTP (through CloudFront) and the WebSocket routes ----
     const originVerify = ssm.StringParameter.valueForStringParameter(this, `${PARAM_PATH}origin_verify_${suffix}`);

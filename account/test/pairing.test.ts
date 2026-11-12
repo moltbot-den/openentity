@@ -251,3 +251,15 @@ test("GET /v1/paused: product-signed, signed back by the service, cursor-based, 
   expect((await call("GET", "/v1/paused?since=x", undefined, await signRequest({ method: "GET", url: `https://${HOST}/v1/paused?since=x`, privateKey: den, did: `${PRODUCTS[0]}#k1` }))).body.error).toBe("cursor_invalid");
   expect((await call("GET", "/v1/paused", undefined, await signRequest({ method: "GET", url: `https://${HOST}/v1/paused`, privateKey: kp, did: kp.did }))).body.error).toBe("unknown_signer");
 });
+
+test("housekeeping: acknowledged inbox items, old pairings and step-up requests go; live ones stay", async () => {
+  const o = await owner();
+  const { kp } = await paired(o);
+  const old = Math.floor(Date.now() / 1000) - 8 * 86_400;
+  await d.db.run("INSERT INTO inbox (id, agent_did, frame, created_at, acked_at) VALUES ('itm_old', $1, '{}', $2, $2), ('itm_live', $1, '{}', $2, NULL)", [kp.did, old]);
+  await d.db.run("UPDATE pairings SET expires_at = $1, confirmed_at = $1 WHERE account_id = $2", [old, o.accountId]);
+  await runJobs(d);
+  expect((await d.db.all<{ id: string }>("SELECT id FROM inbox WHERE id IN ('itm_old', 'itm_live')")).map((r) => r.id)).toEqual(["itm_live"]);
+  expect(await d.db.first("SELECT 1 FROM pairings WHERE account_id = $1", [o.accountId])).toBeNull();
+  expect((await asAgent(kp, "GET", "/v1/agent")).status).toBe(200); // the agent itself stays paired
+});
