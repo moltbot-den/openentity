@@ -16,6 +16,7 @@ import { notifyOwner } from "./notify.ts";
 import { authenticationOptions, registrationOptions, verifyAuthentication, verifyRegistration } from "./passkey.ts";
 import { COOKIE, type Platform, accessToken, me, openSession } from "./sessions.ts";
 import { appAuthPage, homePage } from "./web/home.ts";
+import { emitMetrics } from "./metrics.ts";
 
 export const NONCE_TTL = 600, CHALLENGE_TTL = 300, LOGIN_CODE_TTL = 120;
 /** A random id per browser, so a sign-in from a new browser can be told apart (PLAN 2.3, new install or browser). */
@@ -386,10 +387,7 @@ export async function appReviewWatch(d: Deps): Promise<void> {
   const since = d.web.appReview?.openSince;
   if (!since) return;
   const days = Math.floor((now() - since) / 86_400);
-  console.log(JSON.stringify({
-    _aws: { Timestamp: Date.now(), CloudWatchMetrics: [{ Namespace: "OpenEntity/Account", Dimensions: [["Stage"]], Metrics: [{ Name: "AppReviewOpenDays", Unit: "Count" }] }] },
-    Stage: d.stage, AppReviewOpenDays: days,
-  }));
+  emitMetrics(d.stage, { AppReviewOpenDays: days });
   if (days >= APP_REVIEW_ALERT_DAYS) console.error(`ALERT: APP_REVIEW_OPEN has been on for ${days} days; turn it off with scripts/app-review.sh off ${d.stage}`);
 }
 

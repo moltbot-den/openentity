@@ -10,6 +10,7 @@ import { PRODUCT_SITES } from "./approve.ts";
 import { bump, now } from "./db.ts";
 import { bearer, fail, json, str } from "./http.ts";
 import { productSigned } from "./rfc9421.ts";
+import { emitMetrics } from "./metrics.ts";
 
 /** What products may send. The service's own notices (sender = the service DID) are the other TEXT keys and enrollment.completed. */
 export const PUSH_TYPES = ["approval.requested", "approval.resolved", "alert", "refresh"] as const;
@@ -135,10 +136,13 @@ export async function push(d: Deps, accountId: string, m: PushMessage, o: { grac
     const sender = r.provider === "apns" ? d.web.apns : fcmDisabled;
     try {
       const result = sender ? await sender(target, m) : "apns_unconfigured";
+      // One data point per delivery attempt; a provider that is not set up yet makes no attempt.
+      if (result !== "apns_unconfigured" && result !== "fcm_disabled") emitMetrics(d.stage, { PushSent: result === null ? 1 : 0, PushFailed: result === null ? 0 : 1 });
       if (result === null) sent++;
       else if (result === "gone") await d.db.run("DELETE FROM push_tokens WHERE install_id = $1 AND token = $2", [r.install_id, r.token]);
       else console.warn(`push ${m.type} to ${r.provider} install ${r.install_id}: ${result}`);
     } catch (e) {
+      emitMetrics(d.stage, { PushSent: 0, PushFailed: 1 });
       console.warn(`push ${m.type} to install ${r.install_id} failed: ${(e as Error).message}`);
     }
   }));
