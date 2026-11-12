@@ -4877,6 +4877,7 @@ components:
         code: { type: string, pattern: '^[0-9]{8}$' }
     PasskeyProof:
       type: object
+      description: 'Adding a passkey sign-in method, in order: POST /v1/auth/passkey/options with mode register (the session only, no approval); create the credential; POST /v1/step-up with action method.add and params {type: passkey, subject: the credential id exactly as in response.id, base64url without padding}; sign that approval; then POST /v1/account/methods with this proof and X-OE-Approval, within 300 s of the options call. Do not send the response to POST /v1/auth/passkey/verify: that spends the challenge and keeps the passkey as a pending approver key, not a sign-in method.'
       required: [challenge_id, response]
       properties:
         challenge_id: { $ref: '#/components/schemas/OpaqueId' }
