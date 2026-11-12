@@ -153,6 +153,103 @@ CREATE TABLE IF NOT EXISTS outbox (
 );
 CREATE INDEX IF NOT EXISTS outbox_due ON outbox (next_at);
 
+-- Pairing codes (PLAN 8.1). state: waiting, claimed, confirmed or cancelled; expired is read from expires_at.
+CREATE TABLE IF NOT EXISTS pairings (
+  id text PRIMARY KEY,
+  account_id text NOT NULL REFERENCES accounts (id),
+  code text NOT NULL UNIQUE,                  -- OE-XXXX-XXXX
+  state text NOT NULL,
+  created_at bigint NOT NULL,
+  expires_at bigint NOT NULL,                 -- the code's 600 s; once claimed, the owner's 600 s to confirm
+  agent_did text,
+  agent text,                                 -- JSON {framework, host, sdk, sdk_version} from the claim
+  request_id text,                            -- the pairing.confirm approval request, issued at the claim
+  claimed_at bigint,
+  confirmed_at bigint,
+  credentials_at bigint,                      -- the agent's first confirmed read, which fetched its product keys
+  polled_at bigint                            -- the agent's last status read (2 s apart at least)
+);
+CREATE INDEX IF NOT EXISTS pairings_account ON pairings (account_id, created_at);
+
+-- Paired agents (PLAN 8.2, 8.3). One owner per agent DID at a time; unlinking keeps the row and its counters.
+CREATE TABLE IF NOT EXISTS agents (
+  did text PRIMARY KEY,
+  account_id text NOT NULL REFERENCES accounts (id),
+  owner_did text NOT NULL,
+  label text,
+  framework text,
+  host text,
+  permissions text NOT NULL DEFAULT '[]',     -- JSON array, sorted
+  perm_seq integer NOT NULL DEFAULT 0,        -- agent.paired and agent.permissions counter
+  state text NOT NULL CHECK (state IN ('active', 'paused', 'unlinked')),
+  pause_seq integer NOT NULL DEFAULT 0,       -- agent.paused, agent.resumed and GET /v1/paused counter
+  status text,                                -- JSON AgentStatus
+  connection_id text,                         -- the open WebSocket
+  inbox_polled_at bigint,                     -- GET /v1/agent/messages (15 s apart at least)
+  paired_at bigint NOT NULL,
+  last_seen_at bigint,
+  unlinked_at bigint
+);
+CREATE INDEX IF NOT EXISTS agents_account ON agents (account_id);
+CREATE INDEX IF NOT EXISTS agents_connection ON agents (connection_id);
+
+-- Products an agent was sent to (agent.paired). GET /v1/paused tells a product only about its own agents.
+CREATE TABLE IF NOT EXISTS agent_products (
+  agent_did text NOT NULL,
+  product text NOT NULL,
+  PRIMARY KEY (agent_did, product)
+);
+
+-- Pause and resume, in commit order: writers hold one advisory lock, so a poller's cursor never skips a row.
+CREATE TABLE IF NOT EXISTS pause_changes (
+  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  agent_did text NOT NULL,
+  owner_did text NOT NULL,
+  state text NOT NULL CHECK (state IN ('paused', 'active')),
+  seq integer NOT NULL,
+  at bigint NOT NULL
+);
+
+-- What the agent receives (x-websocket serverFrames), kept until it acknowledges.
+CREATE TABLE IF NOT EXISTS inbox (
+  id text PRIMARY KEY,
+  seq bigint GENERATED ALWAYS AS IDENTITY,    -- delivery order (created_at has one-second ties)
+  agent_did text NOT NULL,
+  frame text NOT NULL,                        -- the frame JSON, id included
+  created_at bigint NOT NULL,
+  acked_at bigint
+);
+CREATE INDEX IF NOT EXISTS inbox_agent ON inbox (agent_did, acked_at, seq);
+
+-- The owner channel, both directions. An owner message shares its id with its inbox item.
+CREATE TABLE IF NOT EXISTS messages (
+  id text PRIMARY KEY,
+  seq bigint GENERATED ALWAYS AS IDENTITY,    -- thread order (created_at has one-second ties)
+  agent_did text NOT NULL,
+  sender text NOT NULL CHECK (sender IN ('owner', 'agent')),
+  text text NOT NULL,
+  created_at bigint NOT NULL,
+  acked_at bigint
+);
+CREATE INDEX IF NOT EXISTS messages_agent ON messages (agent_did, seq);
+
+-- Approvals agents write (POST /v1/agent/approvals): the service is the verifier and no product accepts them.
+CREATE TABLE IF NOT EXISTS agent_approvals (
+  id text PRIMARY KEY,
+  agent_did text NOT NULL,
+  account_id text NOT NULL REFERENCES accounts (id),
+  owner_did text NOT NULL,
+  request_id text NOT NULL UNIQUE,
+  payload text NOT NULL,                      -- JSON shown to the owner; payload_digest is over its JCS
+  payload_digest text NOT NULL,
+  state text NOT NULL CHECK (state IN ('pending', 'approved', 'denied')),
+  approval text,                              -- the Approval2 once decided
+  created_at bigint NOT NULL,
+  expires_at bigint NOT NULL,
+  decided_at bigint
+);
+CREATE INDEX IF NOT EXISTS agent_approvals_account ON agent_approvals (account_id, created_at);
+
 -- ---------------------------------------------------------------- web lane (appends below)
 
 -- Push tokens, one per app install (PUT /v1/push-tokens/{install_id}). Products reach installs with a live session;

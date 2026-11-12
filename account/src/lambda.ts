@@ -9,16 +9,18 @@ import { type Deps, createApp } from "./app.ts";
 import { awake, dataApiDb } from "./db.ts";
 import { customerIo } from "./email.ts";
 import { fail } from "./http.ts";
+import { PRODUCT_APIS } from "./outbound.ts";
 import { runJobs } from "./jobs.ts";
 import { kmsEd25519, kmsEs256, kmsKey } from "./keys.ts";
 import { rpFor } from "./passkey.ts";
 import { WEB_PARAMS, webConfig } from "./web/config.ts";
+import { apiGatewayWs, wsEvent } from "./ws.ts";
 import { BUNDLE_ID } from "./wellknown.ts";
 
 const e = process.env;
 // Logical names read from SSM: <name> (both stages) and <name>_<prod|staging> (this stage wins). The role cannot read the other stage's values.
 // WEB_PARAMS are the web lane's names (account/src/web/config.ts).
-const NAMES = ["code_pepper", "cio_app_api_key", "apple_siwa_services_id", "google_oauth_ios_client_id", "google_oauth_web_client_id", "android_cert_sha256", ...WEB_PARAMS];
+const NAMES = ["code_pepper", "cio_app_api_key", "apple_siwa_services_id", "google_oauth_ios_client_id", "google_oauth_web_client_id", "android_cert_sha256", "product_apis", ...WEB_PARAMS];
 
 async function params(): Promise<Record<string, string | undefined>> {
   const ssm = new SSMClient({});
@@ -55,6 +57,9 @@ async function init() {
     signinOpen: e.SIGNIN_OPEN === "1",
     version: e.AWS_LAMBDA_FUNCTION_VERSION,
     web: webConfig(s),
+    ws: apiGatewayWs(e.WS_CALLBACK_URL!),
+    // Product API hosts by DID. Production calls the products; staging calls none unless product_apis names stubs.
+    products: s.product_apis ? JSON.parse(s.product_apis) : e.STAGE === "production" ? PRODUCT_APIS : {},
   };
   return { deps, app: createApp(deps), verify: e.ORIGIN_VERIFY! };
 }
@@ -81,11 +86,7 @@ const onHttp = handle(http);
 export const handler = async (event: any, context: any) => {
   // EventBridge schedule (account-stack.ts): run the jobs. Only EventBridge can send this shape; HTTP events never carry it.
   if (event?.source === "aws.events") return runJobs((await boot()).deps);
-  const route = event?.requestContext?.routeKey;
-  if (event?.requestContext?.connectionId && route) {
-    // WebSocket (PLAN 8.2). Pairing lands on Day 3; until then no agent is paired, so every connection is refused.
-    if (route === "$connect") return { statusCode: 403, body: "not paired" };
-    return { statusCode: 200 };
-  }
+  // The agent WebSocket (PLAN 8.2): $connect, $disconnect, sync, ack and $default. Heartbeats never reach the function.
+  if (event?.requestContext?.connectionId && event.requestContext.routeKey) return wsEvent((await boot()).deps, event);
   return onHttp(event, context);
 };

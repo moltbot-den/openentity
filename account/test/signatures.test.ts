@@ -70,3 +70,9 @@ test("sendEvent: an AccountEvent signed with the service key that products verif
   expect(await sendEvent(d, DEN, "agent.unlinked", {})).toBe(false);
   expect(await d.db.first("SELECT 1 FROM outbox")).toBeNull();
 });
+
+test("an environment that does not reach a product sends it nothing and queues nothing (staging until Day 7)", async () => {
+  const quiet = await testDeps({ products: {}, fetch: (async () => { throw new Error("no call expected"); }) as typeof fetch });
+  expect(await sendEvent(quiet, DEN, "agent.paired", { agent_did: "did:key:z6Mk1" })).toBe(false);
+  expect(await quiet.db.first("SELECT 1 FROM outbox")).toBeNull();
+});

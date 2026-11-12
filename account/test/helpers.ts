@@ -58,12 +58,25 @@ export const caller = (app: Hono): Call => async (method, path, body, headers = 
   return { status: res.status, body: json, text, headers: res.headers };
 };
 
+/** Records what the real notice path delivers (notify.ts notifyOwner): pushes through a stand-in APNs, and mail. */
+export function noticeRecorder() {
+  const pushes: { type: string; id: string }[] = [], mail: { to: string; subject: string }[] = [];
+  const web = {
+    apns: async (_t: unknown, m: { type: string; id: string }) => { pushes.push({ type: m.type, id: m.id }); return null; },
+    sendMail: async (to: string, subject: string) => { mail.push({ to, subject }); },
+  };
+  /** Gives the signed-in install a push token, so notices reach it. */
+  const device = (db: Db, accountId: string, install: string) =>
+    db.run("INSERT INTO push_tokens (install_id, account_id, provider, token, environment, created_at, updated_at) VALUES ($1, $2, 'apns', $3, 'sandbox', 1, 1)", [install, accountId, `tok-${install}`]);
+  return { pushes, mail, web: web as any, device };
+}
+
 /** Signs in a new owner with the email code; returns the access token and account id. */
 export async function signIn(call: Call, d: { codes: string[] }, email = `${randomUUID()}@example.com`) {
   const client = { platform: "ios", install_id: randomUUID() };
   const s = await call("POST", "/v1/auth/email/start", { email, client });
   const r = await call("POST", "/v1/auth/email/verify", { challenge_id: s.body.challenge_id, code: d.codes.at(-1), client });
-  return { token: r.body.access_token as string, accountId: r.body.account.id as string, auth: { authorization: `Bearer ${r.body.access_token}` } };
+  return { token: r.body.access_token as string, accountId: r.body.account.id as string, install: client.install_id, auth: { authorization: `Bearer ${r.body.access_token}` } };
 }
 
 /** A throwaway P-256 key: its key log credential, and raw low-S r||s ECDSA over SHA-256 of the bytes given. */
