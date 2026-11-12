@@ -13,5 +13,5 @@
     "allowImportingTsExtensions": true,
     "skipLibCheck": true
   },
-  "include": ["arrival.test.ts", "src", "forwarder", "generated/ts", "test", "gen.mjs"]
+  "include": ["arrival.test.ts", "monitoring", "src", "forwarder", "generated/ts", "test", "gen.mjs"]
 }
