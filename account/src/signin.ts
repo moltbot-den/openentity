@@ -138,28 +138,34 @@ export function routes(app: Hono, d: Deps) {
     return { accountId, created: true };
   }
 
+  /** A sign-in from an install or browser this account never used is told to its other installs and the account email. */
+  const isNew = async (accountId: string, created: boolean, cl: Client) =>
+    !created && !!cl.install_id && !(await d.db.first("SELECT 1 FROM sessions WHERE account_id = $1 AND install_id = $2", [accountId, cl.install_id]));
+  async function tell(accountId: string, cl: Client, amr: string, id: string) {
+    const where = cl.platform === "web" ? "a web browser" : `${cl.platform === "ios" ? "an iPhone" : "an Android phone"}${cl.device_model ? ` (${cl.device_model})` : ""}`;
+    await notifyOwner(d, accountId, {
+      type: "signin.new", id, exceptInstall: cl.install_id,
+      email: {
+        subject: "New sign-in to your OpenEntity account",
+        text: `Your OpenEntity account was signed in from ${where} with ${amr} on ${new Date().toUTCString()}.\n\nIf this was not you, open the OpenEntity app or https://${d.host}, end that session under Sessions, and remove any sign-in method you do not recognize.`,
+      },
+    });
+  }
+
   /**
-   * Every sign-in opens its session here, and only here (core's device-binding openSession replaces the one call
-   * below). A sign-in from an install or browser this account never used is told to its other installs and email.
+   * Every sign-in opens its session here, and only here. sessions.ts openSession enforces the install's device binding
+   * (PLAN 2.4): the `attestation` in the request body over the sign-in's nonce, or for email and passkey the install's
+   * newest unused nonce from POST /v1/auth/nonce; an install that attested before proves its key over the body instead.
    */
-  async function open(accountId: string, created: boolean, cl: Client, amr: string) {
-    const seen = !created && cl.install_id ? await d.db.first("SELECT 1 FROM sessions WHERE account_id = $1 AND install_id = $2", [accountId, cl.install_id]) : true;
-    const s = await openSession(d.db, { accountId, platform: cl.platform, amr, installId: cl.install_id, deviceModel: cl.device_model, appVersion: cl.app_version });
-    if (!seen) {
-      const where = cl.platform === "web" ? "a web browser" : `${cl.platform === "ios" ? "an iPhone" : "an Android phone"}${cl.device_model ? ` (${cl.device_model})` : ""}`;
-      await notifyOwner(d, accountId, {
-        type: "signin.new", id: s.sessionId, exceptInstall: cl.install_id,
-        email: {
-          subject: "New sign-in to your OpenEntity account",
-          text: `Your OpenEntity account was signed in from ${where} with ${amr} on ${new Date().toUTCString()}.\n\nIf this was not you, open the OpenEntity app or https://${d.host}, end that session under Sessions, and remove any sign-in method you do not recognize.`,
-        },
-      });
-    }
+  async function open(c: Context, accountId: string, created: boolean, cl: Client, amr: string) {
+    const fresh = await isNew(accountId, created, cl);
+    const s = await openSession(c, d, { accountId, platform: cl.platform, amr, installId: cl.install_id, deviceModel: cl.device_model, appVersion: cl.app_version });
+    if (fresh) await tell(accountId, cl, amr, s.sessionId);
     return s;
   }
 
   async function session(c: Context, accountId: string, created: boolean, cl: Client, amr: string) {
-    const s = await open(accountId, created, cl, amr);
+    const s = await open(c, accountId, created, cl, amr);
     const at = await accessToken(d, accountId, did, s.sessionId, cl.platform, now(), amr);
     if (cl.platform === "web") c.header("set-cookie", `${COOKIE}=${s.refreshToken}; Path=/; Max-Age=${s.expiresAt - now()}; HttpOnly; Secure; SameSite=Strict`, { append: true });
     return c.json({
@@ -210,15 +216,14 @@ export function routes(app: Hono, d: Deps) {
     }
     const cl: Client = { platform: n.platform as Platform, install_id: n.install_id, app_version: null, device_model: null };
     if (cl.platform === "android") {
-      const s = await open(accountId, created, cl, "apple");
-      // The app redeems the code for its own session; this one only records the sign-in.
-      await d.db.run("UPDATE sessions SET revoked_at = $2, revoke_reason = 'login_code' WHERE id = $1", [s.sessionId, now()]);
+      // The app redeems the code at POST /v1/token (grant login_code), which opens its device-bound session.
+      if (await isNew(accountId, created, cl)) await tell(accountId, cl, "apple", n.install_id ?? "android");
       const code = randomBytes(32).toString("base64url"), t = now();
       await d.db.run("INSERT INTO login_codes (hash, account_id, install_id, amr, created_at, expires_at) VALUES ($1, $2, $3, 'apple', $4, $5)",
         [createHash("sha256").update(code).digest("hex"), accountId, n.install_id, t, t + LOGIN_CODE_TTL]);
       return c.redirect(`${origin}/app/auth?login_code=${code}`, 303);
     }
-    const s = await open(accountId, created, cl, "apple");
+    const s = await open(c, accountId, created, cl, "apple");
     c.header("set-cookie", `${COOKIE}=${s.refreshToken}; Path=/; Max-Age=${s.expiresAt - now()}; HttpOnly; Secure; SameSite=Strict`, { append: true });
     return c.redirect(`${origin}${n.return_to ?? "/"}`, 303);
   });

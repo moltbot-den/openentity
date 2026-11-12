@@ -219,3 +219,21 @@ test("App Review watch: a CloudWatch metric of the days open, and an alert line 
   expect(log).not.toHaveBeenCalled();
   log.mockRestore(); err.mockRestore();
 });
+
+test("device binding at sign-in (production): an app's email sign-in fetches a nonce first and attests over it", async () => {
+  const { fakeAppAttest } = await import("./helpers.ts");
+  const fake = fakeAppAttest();
+  const prod = createApp({ ...d, stage: "production", attestRoots: { apple: [fake.root] } });
+  const client = ios();
+  const code = async () => {
+    const s = await call(prod, "POST", "/v1/auth/email/start", { email: "bound@example.com", client });
+    return { challenge_id: s.body.challenge_id, code: out.codes.at(-1), client };
+  };
+  expect((await call(prod, "POST", "/v1/auth/email/verify", await code())).body.error).toBe("attestation_required");
+  const n = await call(prod, "POST", "/v1/auth/nonce", { client });
+  const att = fake.attest(createHash("sha256").update(n.body.nonce).digest(), { aaguid: "appattest\0\0\0\0\0\0\0" });
+  const r = await call(prod, "POST", "/v1/auth/email/verify", { ...(await code()), attestation: { type: "app_attest", key_id: att.key_id, attestation_object: att.attestation_object } });
+  expect(r.status).toBe(200);
+  const s = await d.db.first<{ binding: string }>("SELECT binding FROM sessions WHERE install_id = $1 ORDER BY created_at DESC LIMIT 1", [client.install_id]);
+  expect(JSON.parse(s!.binding)).toMatchObject({ type: "app_attest", key_id: att.key_id });
+});
