@@ -26,13 +26,12 @@ test("staging Aurora: one writer that pauses when idle (0 ACU)", () => {
   expect(all(staging, "AWS::RDS::DBInstance")).toHaveLength(1);
 });
 
-test("four KMS keys per stage: P-256 for tokens, P-256 for key log close entries, Ed25519 for the DID, a rotating data key", () => {
+test("three KMS keys per stage, all signing keys: P-256 for tokens, P-256 for key log close entries, Ed25519 for the DID", () => {
   for (const t of [prod, staging]) {
     const keys = all(t, "AWS::KMS::Key").map((k) => k.Properties);
-    expect(keys).toHaveLength(4);
+    expect(keys).toHaveLength(3);
     expect(keys.filter((k) => k.KeySpec === "ECC_NIST_P256" && k.KeyUsage === "SIGN_VERIFY")).toHaveLength(2);
     expect(keys.filter((k) => k.KeySpec === "ECC_NIST_EDWARDS25519" && k.KeyUsage === "SIGN_VERIFY")).toHaveLength(1);
-    expect(keys.filter((k) => !k.KeySpec && k.EnableKeyRotation === true)).toHaveLength(1);
   }
 });
 

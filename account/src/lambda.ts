@@ -10,11 +10,12 @@ import { customerIo } from "./email.ts";
 import { fail } from "./http.ts";
 import { kmsEd25519, kmsEs256, kmsKey } from "./keys.ts";
 import { rpFor } from "./passkey.ts";
+import { dataKey } from "./seal.ts";
 import { BUNDLE_ID } from "./wellknown.ts";
 
 const e = process.env;
 // Logical names read from SSM: <name> (both stages) and <name>_<prod|staging> (this stage wins). The role cannot read the other stage's values.
-const NAMES = ["code_pepper", "cio_app_api_key", "apple_siwa_services_id", "google_oauth_ios_client_id", "google_oauth_web_client_id", "android_cert_sha256"];
+const NAMES = ["code_pepper", "data_key", "cio_app_api_key", "apple_siwa_services_id", "google_oauth_ios_client_id", "google_oauth_web_client_id", "android_cert_sha256"];
 
 async function params(): Promise<Record<string, string | undefined>> {
   const ssm = new SSMClient({});
@@ -32,6 +33,7 @@ const list = (v?: string) => (v ?? "").split(",").map((s) => s.trim()).filter(Bo
 async function init() {
   const s = await params();
   if (!s.code_pepper) throw new Error("code_pepper is not set in SSM");
+  dataKey(s.data_key); // fail at boot, not at the first Apple sign-in, if the data key is missing
   const kms = new KMSClient({});
   // ponytail: the close key signs nothing until account deletion lands; its signer must then normalize s to low-S (keylog-1).
   const [token, did, close] = await Promise.all([kmsKey(kms, e.TOKEN_KEY_ID!, kmsEs256), kmsKey(kms, e.DID_KEY_ID!, kmsEd25519), kmsKey(kms, e.CLOSE_KEY_ID!, kmsEs256)]);
