@@ -63,6 +63,14 @@ describe("relay", () => {
     await makeRelay(deps(send))(ev(signed()));
     expect(send).toHaveBeenCalledWith(expect.objectContaining({ to: "ops@example.com", subject: "[OpenEntity staging] FIRED: Rate5xx" }));
   });
+  it("does not mail when a new alarm settles from INSUFFICIENT_DATA to OK, but does for a real resolve", async () => {
+    const send = vi.fn(async () => {});
+    const r = makeRelay(deps(send));
+    await r(ev(signed({ Message: alarm("OK", { OldStateValue: "INSUFFICIENT_DATA" }) })));
+    expect(send).not.toHaveBeenCalled();
+    await r(ev(signed({ Message: alarm("OK", { OldStateValue: "ALARM" }) })));
+    expect(send).toHaveBeenCalledTimes(1);
+  });
   it("sends nothing and throws for a forged signature, another topic or a bad cert URL", async () => {
     const send = vi.fn(async () => {});
     const r = makeRelay(deps(send));
