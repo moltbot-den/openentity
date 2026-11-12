@@ -1,7 +1,7 @@
 // Browser code for / (account.openentity.org), serialized by page.ts: it may use only its own locals and browser globals.
 // Signed out: Apple, Google, passkeys (conditional UI) and the email code, with Turnstile for sign-up. Signed in: the
 // account, sessions, approvals (turn on with a passkey, add a passkey approver), deletion and sign-out.
-export function homeClient(cfg: { serviceDid: string; rpId: string; turnstile: string | null; google: string | null; error: string | null }) {
+export function homeClient(cfg: { serviceDid: string; rpId: string; turnstile: string | null; google: string | null; error: string | null; testSignIn: boolean }) {
   const $ = (id: string) => document.getElementById(id) as HTMLElement & HTMLInputElement & HTMLButtonElement;
   const show = (id: string, on = true) => { $(id).hidden = !on; };
   const say = (id: string, text: string) => { $(id).textContent = text; show(id, !!text); };
@@ -126,6 +126,17 @@ export function homeClient(cfg: { serviceDid: string; rpId: string; turnstile: s
       signedIn();
     };
     $("passkey").addEventListener("click", () => passkey().catch((e) => say("signin-error", message(e))));
+    if (cfg.testSignIn) {
+      show("test-signin");
+      $("test-signin").addEventListener("submit", async (ev) => {
+        ev.preventDefault();
+        try {
+          const t = await api("POST", "/v1/auth/test-idp", { kind: "email", email: $("test-email").value });
+          await api("POST", "/v1/auth/email/verify", { challenge_id: t.challenge_id, code: t.code, client: web });
+          signedIn();
+        } catch (e) { say("signin-error", message(e)); }
+      });
+    }
     if ((await (PublicKeyCredential as any).isConditionalMediationAvailable?.().catch(() => false))) passkey("conditional").catch(() => { /* the user picked another way */ });
     $("email-form").addEventListener("submit", async (ev) => {
       ev.preventDefault();

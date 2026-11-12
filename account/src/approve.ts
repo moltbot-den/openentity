@@ -5,7 +5,7 @@
 // this service only checks that the request really comes from the product and names an owner it knows.
 import { createHash, createPublicKey, verify, type KeyObject } from "node:crypto";
 import type { Hono } from "hono";
-import { approvalDigest, payloadDigest, publicKeyFromDidKey, type KeyLogState } from "@openentity/sdk";
+import { approvalDigest, didKeyFromPublicKey, payloadDigest, publicKeyFromDidKey, type KeyLogState } from "@openentity/sdk";
 import type { Deps } from "./app.ts";
 import { bump, newId, now } from "./db.ts";
 import { bearer, fail, ipOf, json } from "./http.ts";
@@ -29,6 +29,26 @@ export const PRODUCT_SITES: Record<string, { site: string; name: string }> = {
   "did:web:api.agentsecretstore.com": { site: "agentsecretstore.com", name: "Agent Secret Store" },
   "did:web:api.clawgrc.com": { site: "clawgrc.com", name: "ClawGRC" },
 };
+
+/**
+ * Staging only: test product identities for end-to-end approval tests, did:web:<staging host>:test-products:<name>,
+ * each standing in for the real product it names (its site takes the return). Keys come from staging SSM
+ * (test_product_seeds); production reads none and serves none.
+ */
+export const TEST_PRODUCTS: Record<string, string> = {
+  ass: "did:web:api.agentsecretstore.com", mbd: "did:web:moltbotden.com", sma: "did:web:securemyagent.ai", clawgrc: "did:web:api.clawgrc.com",
+};
+export const testProductDid = (host: string, name: string) => `did:web:${host}:test-products:${name}`;
+export type TestProducts = Map<string, { name: string; key: KeyObject; as: string }>;
+export function testProductsOf(d: Deps): TestProducts {
+  const m: TestProducts = new Map();
+  if (d.stage !== "staging") return m;
+  for (const [name, priv] of Object.entries(d.web.testProducts ?? {})) {
+    if (TEST_PRODUCTS[name]) m.set(testProductDid(d.host, name), { name, key: createPublicKey(priv), as: TEST_PRODUCTS[name] });
+  }
+  return m;
+}
+const LOCAL = new Set(["localhost", "127.0.0.1"]);
 
 type FetchJson = (url: string) => Promise<unknown>;
 const getJson = (f: typeof fetch): FetchJson => async (url) => {
@@ -92,6 +112,8 @@ export interface CheckContext {
   keyLog: (ownerDid: string) => Promise<Pick<KeyLogState, "approvers" | "closed"> | null>;
   now?: number;
   fetchJson?: FetchJson;
+  /** Staging only (testProductsOf). */
+  testProducts?: TestProducts;
 }
 
 /**
@@ -105,10 +127,11 @@ export async function checkEnvelope(jws: unknown, x: CheckContext) {
   const header = segment(parts[0], "header");
   if (header.alg !== "EdDSA" || header.typ !== ENVELOPE_TYP || "crit" in header) invalid(`header must be alg EdDSA, typ ${ENVELOPE_TYP}`);
   const kid = typeof header.kid === "string" ? header.kid : invalid("header has no kid");
-  const did = kid.split("#")[0];
-  if (!Object.hasOwn(PRODUCT_SITES, did) || !/^[^#]+#[^#]+$/.test(kid)) fail(403, "unknown_verifier", "approval requests are accepted only from Moltbot Den, Secure My Agent, Agent Secret Store and ClawGRC");
-  const key = (await productKey(kid, x.fetchJson ?? getJson(fetch))) ?? invalid(`${kid} is not an Ed25519 assertionMethod key of ${did}`);
-  if (!verify(null, Buffer.from(`${parts[0]}.${parts[1]}`), key, Buffer.from(parts[2], "base64url"))) invalid("signature does not verify");
+  const did = kid.split("#")[0], test = x.testProducts?.get(did);
+  if ((!test && !Object.hasOwn(PRODUCT_SITES, did)) || !/^[^#]+#[^#]+$/.test(kid)) fail(403, "unknown_verifier", "approval requests are accepted only from Moltbot Den, Secure My Agent, Agent Secret Store and ClawGRC");
+  const key = test ? (kid === `${did}#key-1` ? test.key : undefined) : await productKey(kid, x.fetchJson ?? getJson(fetch));
+  if (!key) invalid(`${kid} is not an Ed25519 assertionMethod key of ${did}`);
+  if (!verify(null, Buffer.from(`${parts[0]}.${parts[1]}`), key!, Buffer.from(parts[2], "base64url"))) invalid("signature does not verify");
 
   const e = segment(parts[1], "claims");
   const now = x.now ?? Math.floor(Date.now() / 1000);
@@ -123,10 +146,12 @@ export async function checkEnvelope(jws: unknown, x: CheckContext) {
   let digest = "";
   try { digest = payloadDigest(e.payload); } catch (err) { invalid(`payload: ${(err as Error).message}`); }
   if (typeof e.payload_digest !== "string" || !HEX64.test(e.payload_digest) || e.payload_digest !== digest) invalid("payload_digest is not the SHA-256 of the JCS of payload");
-  const site = PRODUCT_SITES[did].site;
+  const site = PRODUCT_SITES[test ? test.as : did].site;
   let back: URL | undefined;
   try { back = new URL(String(e.return_url)); } catch { /* checked below */ }
-  if (!back || back.protocol !== "https:" || back.username || back.password || back.port || !(back.hostname === site || back.hostname.endsWith(`.${site}`))) invalid(`return_url must be https on ${site}`);
+  // A staging test product may also return to a console running on this machine (http or https, any port).
+  const local = !!test && !!back && LOCAL.has(back.hostname) && (back.protocol === "http:" || back.protocol === "https:");
+  if (!back || back.username || back.password || (!local && (back.protocol !== "https:" || back.port || !(back.hostname === site || back.hostname.endsWith(`.${site}`))))) invalid(`return_url must be https on ${site}`);
   if (e.state !== undefined && (typeof e.state !== "string" || e.state.length > 256)) invalid("state must be a string of at most 256 characters");
 
   const log = await x.keyLog(e.owner_did);
@@ -142,9 +167,10 @@ export async function checkEnvelope(jws: unknown, x: CheckContext) {
   };
 }
 
-/** The /approve page. Its form may post only to the four products' sites. */
-export function approvePage() {
-  const products = Object.fromEntries(Object.entries(PRODUCT_SITES).map(([d, p]) => [d, p.name]));
+/** The /approve page. Its form may post only to the four products' sites (and, with staging test products, to localhost). */
+export function approvePage(test: TestProducts = new Map()) {
+  const products: Record<string, string> = Object.fromEntries(Object.entries(PRODUCT_SITES).map(([d, p]) => [d, p.name]));
+  for (const [did, t] of test) products[did] = `${PRODUCT_SITES[t.as].name} (staging test)`;
   return page({
     title: "Approve a request | OpenEntity",
     body: `
@@ -164,21 +190,33 @@ export function approvePage() {
 <section id="done" hidden><h1>Sending your decision</h1><p>Returning you to the product.</p></section>`,
     client: approveClient,
     config: { products },
-    csp: { "form-action": Object.values(PRODUCT_SITES).flatMap((p) => [`https://${p.site}`, `https://*.${p.site}`]) },
+    csp: { "form-action": [...Object.values(PRODUCT_SITES).flatMap((p) => [`https://${p.site}`, `https://*.${p.site}`]), ...(test.size ? ["http://localhost:*", "https://localhost:*", "http://127.0.0.1:*"] : [])] },
   });
 }
 
 export function routes(app: Hono, d: Deps) {
   const did = `did:web:${d.host}`;
 
-  app.get("/approve", () => approvePage());
+  const test = testProductsOf(d);
+  app.get("/approve", () => approvePage(test));
+
+  // Staging only: the test products' DID documents (did:web:<host>:test-products:<name> resolves here).
+  if (test.size) {
+    app.get("/test-products/:name/did.json", (c) => {
+      const id = testProductDid(d.host, c.req.param("name"));
+      const t = test.get(id) ?? fail(404, "not_found", "no such test product");
+      const x = (t.key.export({ format: "jwk" }) as { x: string }).x;
+      const vm = { id: `${id}#key-1`, type: "Multikey", controller: id, publicKeyMultibase: didKeyFromPublicKey(Buffer.from(x, "base64url")).slice("did:key:".length) };
+      return c.json({ "@context": ["https://www.w3.org/ns/did/v1", "https://w3id.org/security/multikey/v1"], id, verificationMethod: [vm], authentication: [vm.id], assertionMethod: [vm.id] });
+    });
+  }
 
   app.post("/v1/approve/check", async (c) => {
     if ((await bump(d.db, `approve:${createHash("sha256").update(ipOf(c)).digest("hex").slice(0, 32)}`, String(Math.floor(now() / 60)))) > 60) {
       fail(429, "rate_limited", "too many approval checks from this address", { retry_after: 60 });
     }
     const b = await json(c);
-    return c.json(await checkEnvelope(b.request, { serviceDid: did, rpId: d.rp.id, keyLog: (owner) => keyLogState(d, owner), fetchJson: getJson(d.fetch ?? fetch) }));
+    return c.json(await checkEnvelope(b.request, { serviceDid: did, rpId: d.rp.id, keyLog: (owner) => keyLogState(d, owner), fetchJson: getJson(d.fetch ?? fetch), testProducts: test }));
   });
 
   // Link an existing product web account (PLAN 2.5): a product.link step-up, then a LinkOwnerEnvelope for that product.

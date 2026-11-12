@@ -2640,6 +2640,57 @@ paths:
           content:
             text/html:
               schema: { type: string }
+  /signup:
+    get:
+      operationId: signupPage
+      tags: [Sign-in]
+      summary: The web account page (as /); signing in creates the account
+      x-available: day-4
+      security: []
+      responses:
+        '200':
+          description: The page.
+          content:
+            text/html:
+              schema: { type: string }
+  /login:
+    get:
+      operationId: loginPage
+      tags: [Sign-in]
+      summary: The web account page (as /)
+      x-available: day-4
+      security: []
+      responses:
+        '200':
+          description: The page.
+          content:
+            text/html:
+              schema: { type: string }
+  /test-products/{name}/did.json:
+    get:
+      operationId: stagingTestProductDidDocument
+      tags: [Web approvals]
+      summary: Staging only. The DID document of a test product identity for end-to-end approval tests
+      description: |
+        did:web:staging.account.openentity.org:test-products:<name> for name ass, mbd, sma and clawgrc, each standing in for
+        the real product (Agent Secret Store, Moltbot Den, Secure My Agent, ClawGRC). Staging's /v1/approve/check accepts
+        envelopes they sign (kid `<did>#key-1`), returning to that real product's site or to http(s)://localhost or
+        127.0.0.1 on any port. The Ed25519 seeds are in staging SSM `/openentity/account/test_product_seeds_staging`
+        (JSON name to base64url seed) for test harnesses. Production has none of this (404, and 403 unknown_verifier).
+      x-available: day-4
+      security: []
+      parameters:
+        - { name: name, in: path, required: true, schema: { type: string, enum: [ass, mbd, sma, clawgrc] } }
+      responses:
+        '200':
+          description: The DID document.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DidDocument'
+        '404':
+          $ref: '#/components/responses/Error'
+          description: 'error: not_found'
   /app/auth:
     get:
       operationId: appAuthLanding
@@ -2667,7 +2718,9 @@ paths:
         reads no test key, and refuses tokens signed by it (a production guard test). Returns an ID token with the
         provider's issuer, the app's audience (`client_id` web: the Services ID), `sub` = "test-" + sub, and `nonce` =
         SHA-256 hex of the raw nonce from POST /v1/auth/nonce. Sign in with it at POST /v1/auth/apple or /v1/auth/google
-        as with a real token; any authorization_code is accepted and not exchanged.
+        as with a real token; any authorization_code is accepted and not exchanged. kind `email` takes an address
+        @test.openentity.org and returns `{challenge_id, code, expires_at}` instead of mailing the code: finish at POST
+        /v1/auth/email/verify (web needs no Turnstile for it).
       x-available: day-4
       security: []
       requestBody:
@@ -2676,9 +2729,9 @@ paths:
           application/json:
             schema:
               type: object
-              required: [kind, nonce]
+              required: [kind]
               properties:
-                kind: { type: string, enum: [apple, google] }
+                kind: { type: string, enum: [apple, google, email] }
                 nonce: { $ref: '#/components/schemas/RawNonce' }
                 sub: { type: string, pattern: '^[A-Za-z0-9._-]{1,64}$' }
                 email: { type: string, format: email }
@@ -2690,10 +2743,13 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [id_token, sub]
+                description: 'apple and google: {id_token, sub}; email: {challenge_id, code, expires_at}.'
                 properties:
                   id_token: { $ref: '#/components/schemas/CompactJws' }
                   sub: { type: string }
+                  challenge_id: { $ref: '#/components/schemas/OpaqueId' }
+                  code: { type: string, pattern: '^[0-9]{8}$' }
+                  expires_at: { $ref: '#/components/schemas/UnixSeconds' }
   /approve:
     get:
       operationId: approvePage

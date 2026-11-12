@@ -9,7 +9,7 @@ const ERRORS: Record<string, string> = {
   provider_error: "Apple could not finish the sign-in.",
 };
 
-export function homePage(o: { serviceDid: string; rpId: string; turnstile: string | null; google: string | null; error: string | null }) {
+export function homePage(o: { serviceDid: string; rpId: string; turnstile: string | null; google: string | null; error: string | null; testSignIn: boolean }) {
   return page({
     title: "OpenEntity account",
     body: `
@@ -25,6 +25,7 @@ export function homePage(o: { serviceDid: string; rpId: string; turnstile: strin
   <form id="email-form"><input id="email" type="email" required autocomplete="username webauthn" placeholder="you@example.com" aria-label="Email"><button class="primary">Email me a code</button></form>
   <form id="code-form" hidden><input id="code" inputmode="numeric" pattern="[0-9]{8}" maxlength="8" required autocomplete="one-time-code" placeholder="8-digit code" aria-label="Code"><button class="primary">Sign in</button></form>
   <div id="turnstile"></div>
+  <form id="test-signin" class="panel" hidden><p class="note">Staging only: sign in as a test owner (an address at test.openentity.org).</p><input id="test-email" type="email" required placeholder="qa-1@test.openentity.org" aria-label="Test email"><button>Test sign-in</button></form>
   <p class="note">New here? Signing in creates your account. There are no passwords.</p>
 </section>
 <section id="account" hidden>
