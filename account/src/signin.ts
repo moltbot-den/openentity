@@ -251,19 +251,19 @@ export function routes(app: Hono, d: Deps) {
     if (!m) return c.body(null, 200);
     // In order (gate hardening): an event acts only on what existed when Apple sent it, and an older event never
     // overrides a newer one, so a late consent-revoked cannot end a session or a token made after it.
-    const at = Math.floor(Number(ev.event_time ?? Number(p!.iat) * 1000) / 1000);
+    const ms = Number(ev.event_time ?? Number(p!.iat) * 1000), at = Math.floor(ms / 1000);
     const data = JSON.parse(m.data || "{}");
-    if (!Number.isFinite(at) || at <= Number(data.apple_event_at ?? 0)) return c.body(null, 200);
+    if (!Number.isFinite(ms) || ms < Number(data.apple_event_ms ?? 0)) return c.body(null, 200);
     if (["consent-revoked", "account-delete", "account-deleted"].includes(ev.type)) {
       await d.db.run("UPDATE sessions SET revoked_at = $2, revoke_reason = $3 WHERE account_id = $1 AND amr = 'apple' AND revoked_at IS NULL AND created_at <= $4",
         [m.account_id, now(), `apple_${String(ev.type).replace(/-/g, "_")}`, at]);
       // Apple ended the tokens it had issued by then; a token from a later sign-in stays, for deletion to revoke.
       const keep = Number(data.apple_token_at ?? 0) > at;
       await d.db.run("UPDATE methods SET data = $2 WHERE type = 'apple' AND subject = $1",
-        [sub, JSON.stringify(keep ? { ...data, apple_event_at: at } : { apple_event_at: at })]);
+        [sub, JSON.stringify(keep ? { ...data, apple_event_ms: ms } : { apple_event_ms: ms })]);
     } else if (ev.type === "email-disabled" || ev.type === "email-enabled") {
       // Recorded on the method: a private relay address that Apple stopped (or resumed) forwarding.
-      await d.db.run("UPDATE methods SET data = $2 WHERE type = 'apple' AND subject = $1", [sub, JSON.stringify({ ...data, email_disabled: ev.type === "email-disabled", apple_event_at: at })]);
+      await d.db.run("UPDATE methods SET data = $2 WHERE type = 'apple' AND subject = $1", [sub, JSON.stringify({ ...data, email_disabled: ev.type === "email-disabled", apple_event_ms: ms })]);
     }
     return c.body(null, 200);
   });

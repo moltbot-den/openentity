@@ -132,17 +132,16 @@ export async function grant(d: Deps, p: Purchase, accountId?: string): Promise<b
   return true;
 }
 
-interface Pending { source: string; store_transaction_id: string; account_id: string; product: string; plan: string; status: string; period_end: number | null; event_id: string; updated_at: number; send_attempts: number }
-
 /**
  * Sends pending plan.changed events (a grant's product has not taken its latest state yet), oldest first: one row when
  * `one` names it (right after the grant), else every due row (jobs.ts). A failure, a refusal included, is retried
  * with backoff (1 minute doubling, at most an hour) under the same event id, which products dedupe. An owner with no
- * key log yet has no DID, so its grant waits until it has one; a deleted owner's grant is dropped.
+ * key log yet has no DID, so its grant waits until it has one; a deleted owner's grant, or one for a product this stage
+ * never calls (outbound.ts reaches), is dropped.
  */
 export async function sendGrants(d: Deps, one?: { source: string; id: string }): Promise<void> {
   const t = now();
-  const rows = await d.db.all<Pending & { owner_did: string | null; deleted_at: number | null }>(
+  const rows = await d.db.all<any>(
     `SELECT e.*, a.owner_did, a.deleted_at FROM entitlements e JOIN accounts a ON a.id = e.account_id
       WHERE e.delivered_at IS NULL AND e.event_id IS NOT NULL AND ${one ? "e.source = $1 AND e.store_transaction_id = $2" : "e.next_send_at <= $1"}
       ORDER BY e.next_send_at LIMIT 50`, one ? [one.source, one.id] : [t]);
@@ -150,7 +149,7 @@ export async function sendGrants(d: Deps, one?: { source: string; id: string }):
     const done = (at: number | null) => d.db.run(
       "UPDATE entitlements SET delivered_at = $3, send_attempts = send_attempts + 1, next_send_at = $4 WHERE store_transaction_id = $1 AND event_id = $2",
       [g.store_transaction_id, g.event_id, at, at ?? t + Math.min(60 * 2 ** Number(g.send_attempts), 3600)]);
-    if (g.deleted_at !== null) { await done(t); continue; } // owner.deleted already told the product
+    if (g.deleted_at !== null || !reaches(d, g.product)) { await done(t); continue; } // owner.deleted already told the product
     if (!g.owner_did) { await done(null); continue; }
     const r = await callProduct(d, g.product, "/v1/oe/events", {
       id: g.event_id, type: "plan.changed", created_at: Number(g.updated_at),
@@ -158,7 +157,7 @@ export async function sendGrants(d: Deps, one?: { source: string; id: string }):
     });
     if (r.status >= 200 && r.status < 300) await done(t);
     else {
-      if (reaches(d, g.product)) console.warn(`store: ${g.product} did not take plan.changed ${g.event_id} (${r.status}); retrying`);
+      console.warn(`store: ${g.product} did not take plan.changed ${g.event_id} (${r.status}); retrying`);
       await done(null);
     }
   }

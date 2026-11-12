@@ -33,7 +33,7 @@ export function normalParams(action: string, p: any): Record<string, unknown> {
     // The approval names the new sign-in itself (gate hardening), not only its kind: the Apple or Google `sub`, the
     // email address, or the passkey credential id that the proof then signs in as.
     case "method.add": need(["apple", "google", "passkey", "email"].includes(p.type), "params.type");
-      need(typeof p.subject === "string" && p.subject.length > 0 && p.subject.length <= 1024, "params.subject");
+      need(typeof p.subject === "string" && p.subject.length > 0 && p.subject.length <= 2048, "params.subject");
       return { type: p.type, subject: p.type === "email" ? p.subject.trim().toLowerCase() : p.subject };
     case "method.remove": need(ID.test(p.method_id ?? ""), "params.method_id"); return { method_id: p.method_id };
     case "email.change": need(typeof p.email === "string" && p.email.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(p.email), "params.email"); return { email: p.email.trim().toLowerCase() };
