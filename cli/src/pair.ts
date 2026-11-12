@@ -60,7 +60,7 @@ export async function pairCmd(c: Ctx): Promise<Result> {
   const { e, adopted } = await entityFor(c, framework);
   if (adopted) say(`Adopted ${e.eid} ("${e.doc.name}"). By pairing, this agent signed the Open Entity Declaration: ${SITE}/spec/declaration/1.0.txt`);
   const paired = await pair(code, {
-    identity: e.kp, framework, sdk: "openentity-cli", sdkVersion: pkg.version, host: hostname(), account,
+    identity: e.kp, framework, sdk: v.sdk ?? "openentity-cli", sdkVersion: v.sdk_version ?? pkg.version, host: hostname(), account, // sdk: set by the MCP server
     onMatch: (names) => say(`Match: ${names.join(", ")}\nConfirm in your OpenEntity app if it shows the same four items. Waiting for the owner...`),
   }).catch((err) => Promise.reject(cliError(err)));
   const openclaw = v.openclaw ? await setUpOpenClaw(v, e, account) : undefined;
