@@ -1178,7 +1178,11 @@ paths:
       operationId: readKeyLog
       tags: [Key log]
       summary: Read an owner key log
-      description: JSON Lines, one exact JCS entry line per line, from seq `from` (default 1; genesis is seq 1). A closed log stays readable.
+      description: |
+        JSON Lines, one exact JCS entry line per line, from seq `from` (default 1; genesis is seq 1). A closed log stays
+        readable. X-OE-First-Seen-At carries the account service's own first_seen_at for each returned line: the
+        server's view. The app passes it to verifyKeyLog to show when a pending recover or replace_root takes effect.
+        Products never use it: they record and run every delay from their own first_seen_at.
       x-available: day-2
       security: []
       parameters:
@@ -1194,6 +1198,9 @@ paths:
             X-OE-Log-Head:
               description: The seq of the last entry.
               schema: { type: integer, minimum: 1 }
+            X-OE-First-Seen-At:
+              description: The account service's first_seen_at (Unix seconds) for each returned line, in the same order, comma-separated with no spaces, for example `1794009600,1794016800`. One value per line of the body.
+              schema: { type: string, pattern: '^[0-9]+(,[0-9]+)*$' }
           content:
             application/jsonl:
               schema:
@@ -1206,7 +1213,7 @@ paths:
       tags: [Key log]
       summary: Append an entry (genesis creates the owner DID)
       description: |
-        The body carries the entry as its exact JCS line (`line`); the service stores and serves those bytes and never
+        The body is `{line}`, final: the entry as its exact JCS line. The service stores and serves those bytes and never
         re-encodes them. genesis (seq 1): ownerBearer of an account with no key log, and `{id}` must equal the
         lowercase base32 of SHA-256(line). Other ops are self-authenticating and need no auth; anyone may post a
         correctly signed entry. For approver and root changes the signed entry IS the step-up: no Approval2 is sent.
@@ -3509,6 +3516,7 @@ components:
     KeyLogAppendRequest:
       type: object
       required: [line]
+      additionalProperties: false
       properties:
         line:
           type: string
