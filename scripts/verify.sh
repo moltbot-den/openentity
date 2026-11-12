@@ -24,7 +24,7 @@ if [ -f pnpm-lock.yaml ]; then
   if ! git diff --quiet -- sdk/ts/dist || [ -n "$(git ls-files --others --exclude-standard sdk/ts/dist)" ]; then
     echo "verify: sdk/ts/dist differs from a fresh build; commit the rebuilt files"; fail=1
   fi
-  pnpm -r --if-present run test
+  pnpm -r --if-present run test  # each vitest package has its own fsModuleCachePath: parallel runs sharing the default race on clearing it (ENOTEMPTY)
 fi
 
 # Every runnable code block in the guides, skill, SDK and integration docs runs against a throwaway local registry (needs the builds above).
