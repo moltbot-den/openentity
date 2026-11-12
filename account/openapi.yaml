@@ -47,16 +47,21 @@ info:
 
     ## Service keys and rotation
 
-    The service has two keys, both in AWS KMS, neither ever leaving it:
-    - the token key, ECC_NIST_P256, ES256: signs access tokens and key log `close` entries; published in
-      /.well-known/jwks.json and, as a JsonWebKey under `assertionMethod`, in /.well-known/did.json (fragment = JWT
-      `kid` = RFC 7638 thumbprint). Key log verifiers pass the jwks.json keys as `serviceKeys`;
-    - the service key, ECC_NIST_EDWARDS25519, ED25519_SHA_512: signs every call the service makes to a product and
-      the GET /v1/paused response (scheme accountSignature); published in /.well-known/did.json as a Multikey under
-      `authentication` and `assertionMethod` (fragment = RFC 7638 thumbprint of its OKP JWK).
+    The service has three signing keys, all in AWS KMS, none ever leaving it:
+    - the token key, ECC_NIST_P256, ES256: signs access tokens only; published in /.well-known/jwks.json (kid = RFC 7638
+      thumbprint), not in did.json;
+    - the service key, ECC_NIST_EDWARDS25519, ED25519_SHA_512: signs every call the service makes to a product, the GET
+      /v1/paused response (scheme accountSignature) and the LinkOwnerEnvelope and KeyAttestationReceipt JWS; published
+      in /.well-known/did.json as a Multikey under `authentication` and `assertionMethod` (fragment = RFC 7638
+      thumbprint of its OKP JWK);
+    - the close key, ECC_NIST_P256: signs key log `close` entries only (p256 form, low s); never deleted. did.json lists
+      it and every retired close key, permanently, as JsonWebKey verification methods under `assertionMethod`
+      (fragment = RFC 7638 thumbprint). Key log verifiers pass exactly those P-256 keys as `serviceKeys`, so a closed
+      log keeps verifying forever.
 
-    Rotation, for both keys and both documents: every 90 days; a new key is published at least 24 hours before the
-    service first signs with it; a retired key stays published at least 24 hours after its last signature. Verifiers
+    Rotation of the token key and the service key: every 90 days; a new key is published at least 24 hours before the
+    service first signs with it; a retired key stays published at least 24 hours after its last signature. Close keys
+    are never unpublished. Verifiers
     cache did.json and jwks.json for at most 10 minutes, refetch once on an unknown keyid or kid, never accept a key
     that is absent from the current document, and accept a service signature only when the keyid's DID equals the
     pinned service DID of their environment.
@@ -291,8 +296,9 @@ paths:
       summary: The service DID document (did:web:account.openentity.org)
       description: |
         Holds the Ed25519 service key as a Multikey under `authentication` and `assertionMethod` (the accountSignature
-        key), and the P-256 token keys as JsonWebKey verification methods under `assertionMethod` (fragment = JWT kid):
-        the same keys as /.well-known/jwks.json, and the signers of key log `close` entries. Cache at most 10 minutes.
+        key), and the P-256 close keys, current and every retired one, as JsonWebKey verification methods under
+        `assertionMethod` (fragment = RFC 7638 thumbprint): the signers of key log `close` entries and the verifiers'
+        `serviceKeys`. The access-token key is in /.well-known/jwks.json only. Cache at most 10 minutes.
       x-available: day-1
       security: []
       responses:
@@ -784,8 +790,8 @@ paths:
         key in the owner key log, then send the Approval2 in X-OE-Approval on the action's own call. Params per action:
         agent.resume {agent_did}; agent.permissions.widen {agent_did, permissions}; method.add {type};
         method.remove {method_id}; email.change {email}; account.delete {}; deletion.cancel {}; product.link {product}.
-        For deletion.cancel the
-        service also accepts approvers revoked in the last 7 days and the root passkey. An account with no key log gets
+        For deletion.cancel the service also accepts the root passkey (approval/2.0, webauthn form, verified with
+        verifyApproval allowRoot); revoked approvers cannot cancel a deletion. An account with no key log gets
         403 key_log_required.
       x-available: day-5
       security:
@@ -1024,7 +1030,7 @@ paths:
       summary: Request deletion when the key log can no longer sign
       description: |
         Starts a 7-day wait. Every approver (including those revoked in the last 7 days) and the account email are
-        notified; any of them can cancel. The email carries a cancel link with an `email_token`.
+        notified. A current approver or the root passkey can cancel (POST /v1/account/deletion-request/cancel).
       x-available: day-8
       security:
         - ownerBearer: []
@@ -1047,21 +1053,14 @@ paths:
       tags: [Account]
       summary: Cancel a pending deletion request
       description: |
-        Either the `email_token` from the notice (no session needed), or a session plus X-OE-Approval for step-up
-        deletion.cancel signed by any key in the log: a current approver, an approver revoked in the last 7 days, or
-        the root passkey.
+        X-OE-Approval for step-up deletion.cancel, signed with approval/2.0 by a current approver or by the root
+        passkey (webauthn form; the service verifies it with verifyApproval allowRoot). Approvers revoked in the last 7
+        days cannot cancel a deletion; they keep only the key log cancel op.
       x-available: day-8
       security:
-        - {}
         - ownerBearer: []
       parameters:
-        - $ref: '#/components/parameters/ApprovalHeaderConditional'
-      requestBody:
-        required: false
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/DeletionCancelRequest'
+        - $ref: '#/components/parameters/ApprovalHeader'
       responses:
         '200':
           description: Cancelled.
@@ -1071,7 +1070,7 @@ paths:
                 $ref: '#/components/schemas/DeletionRequest'
         '403':
           $ref: '#/components/responses/Error'
-          description: 'error: token_invalid, approval_invalid, approval_expired'
+          description: 'error: approval_invalid, approval_expired'
         '404':
           $ref: '#/components/responses/Error'
           description: 'error: not_found (no pending request)'
@@ -2567,7 +2566,7 @@ paths:
         Implemented by each product. No auth: entries are self-authenticating. The app sends revoke and cancel entries
         here directly, so a hidden entry still arrives. Entries arrive as their exact JCS lines (`lines`); keep and
         hash those bytes, never a re-encoding. Verify through the openentity packages (verifyKeyLog with the
-        environment's rpId and origins, and serviceKeys = the keys of /.well-known/jwks.json); fetch missing earlier
+        environment's rpId and origins, and serviceKeys = the P-256 close keys of the service did.json); fetch missing earlier
         lines from GET /o/{id}/log; record `first_seen_at` for every entry and run every delay from it.
       x-available: day-5
       servers:
@@ -3000,7 +2999,7 @@ components:
         type: { type: string, enum: [Multikey, JsonWebKey] }
         controller: { $ref: '#/components/schemas/Did' }
         publicKeyMultibase: { type: string, pattern: '^z6Mk[1-9A-HJ-NP-Za-km-z]+$', description: Multikey (the Ed25519 service key). }
-        publicKeyJwk: { type: object, description: 'JsonWebKey (the ES256 token key, or an owner credential).' }
+        publicKeyJwk: { type: object, description: 'JsonWebKey (a service close key, or an owner credential).' }
     Health:
       type: object
       required: [ok, stage, version]
@@ -3379,7 +3378,7 @@ components:
         approver; recover, the root passkey; replace_root, the root passkey or a current approver; cancel of a recover,
         a current approver, an approver revoked less than 604800 seconds before, or the root passkey; cancel of a
         replace_root, a current approver or an approver revoked less than 604800 seconds before; revoke, a current
-        approver or the root passkey; close, an account service P-256 token key.
+        approver or the root passkey; close, an account service close key (did.json).
 
         Semantics:
         - Every delay runs from the verifier's own first_seen_at, never from `ts`: recover and replace_root take
@@ -3432,8 +3431,8 @@ components:
         SHA-256(clientDataJSON). Signatures in entries are canonical: low s only (s <= n/2 for the P-256 order n; a
         signer whose platform returns a high s sends n - s), strict DER (short-form lengths, minimal positive
         INTEGERs, nothing after the sequence), strict base64url (no padding, no non-zero trailing bits). The form must
-        match the key's type. close is signed in the p256 form by an account service P-256 token key, kid = its RFC
-        7638 thumbprint; verifiers pass the keys of /.well-known/jwks.json as serviceKeys.
+        match the key's type. close is signed in the p256 form by an account service close key, kid = its RFC 7638
+        thumbprint; verifiers pass the P-256 close keys of the service did.json (current and retired) as serviceKeys.
       required: [kid, form, signature]
       additionalProperties: false
       properties:
@@ -4451,10 +4450,6 @@ components:
       required: [deleted_at]
       properties:
         deleted_at: { $ref: '#/components/schemas/UnixSeconds' }
-    DeletionCancelRequest:
-      type: object
-      properties:
-        email_token: { type: string, maxLength: 256, description: From the cancel link in the deletion notice. Omit when sending X-OE-Approval. }
     PushTokenRequest:
       type: object
       required: [provider, token]
