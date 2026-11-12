@@ -29,6 +29,10 @@ openentity = "openentity.cli:main"
 [dependency-groups]
 dev = ["pytest>=8", "eth-account>=0.11"]
 
+[tool.uv]
+# Bridges use this package as a path dependency; rebuild it when any source file changes, not only pyproject.toml.
+cache-keys = [{ file = "pyproject.toml" }, { file = "openentity/**" }]
+
 [tool.hatch.build.targets.wheel]
 packages = ["openentity"]
 
