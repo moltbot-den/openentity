@@ -783,7 +783,8 @@ paths:
         Returns an ApprovalRequest whose verifier is the service DID. Sign it with approval/2.0 (decision approve) using a
         key in the owner key log, then send the Approval2 in X-OE-Approval on the action's own call. Params per action:
         agent.resume {agent_did}; agent.permissions.widen {agent_did, permissions}; method.add {type};
-        method.remove {method_id}; email.change {email}; account.delete {}; deletion.cancel {}. For deletion.cancel the
+        method.remove {method_id}; email.change {email}; account.delete {}; deletion.cancel {}; product.link {product}.
+        For deletion.cancel the
         service also accepts approvers revoked in the last 7 days and the root passkey. An account with no key log gets
         403 key_log_required.
       x-available: day-5
@@ -814,6 +815,51 @@ paths:
         '404':
           $ref: '#/components/responses/Error'
           description: 'error: not_found (agent or method)'
+  /v1/account/links:
+    post:
+      operationId: createOwnerLink
+      tags: [Account]
+      summary: Link an existing product web account to this owner (PLAN 2.5)
+      description: |
+        A step-up action: sign the ApprovalRequest from POST /v1/step-up {action: product.link, params: {product}} and
+        send it in X-OE-Approval. Returns a LinkOwnerEnvelope for that product and the product's link page URL with the
+        envelope in the fragment. The app opens link_url; the product signs its existing web user in with its own web
+        sign-in, verifies the envelope (LinkOwnerEnvelope) and stores `oe_owner_did` on that user, then sends the
+        browser to https://<service host>/app/linked?product=<product DID>, an App Link back into the app. The envelope
+        is single use and expires in 600 seconds.
+      x-available: day-3
+      security:
+        - ownerBearer: []
+      parameters:
+        - $ref: '#/components/parameters/ApprovalHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OwnerLinkRequest'
+      responses:
+        '200':
+          description: The envelope and where to open it.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OwnerLink'
+        '400':
+          $ref: '#/components/responses/Error'
+          description: 'error: bad_request, unknown_product'
+        '401':
+          $ref: '#/components/responses/Error'
+          description: 'error: unauthorized'
+        '403':
+          $ref: '#/components/responses/Error'
+          description: 'error: approval_invalid, approval_expired, key_log_required'
+        '409':
+          $ref: '#/components/responses/Error'
+          description: 'error: approval_reused'
+        '428':
+          $ref: '#/components/responses/Error'
+          description: 'error: approval_required'
   /v1/account/methods:
     get:
       operationId: listMethods
@@ -1075,6 +1121,59 @@ paths:
         '401':
           $ref: '#/components/responses/Error'
           description: 'error: unauthorized'
+  /v1/keylog/attestations:
+    post:
+      operationId: attestApproverKey
+      tags: [Key log]
+      summary: Attest a device approver key before it goes into a key log entry
+      description: |
+        Call before signing a genesis, add_approver or recover entry that carries a device key (type p256). The client
+        proves the key with the platform attestation, and the service verifies it against Apple's and Google's roots.
+        If it passes, the service returns a receipt (KeyAttestationReceipt): a compact JWS signed by the service key,
+        the Ed25519 key of accountSignature in /.well-known/did.json. The client copies the receipt's `key_storage`,
+        `attestation.type`, `attestation.verified` and (Android) `integrity` into the Credential, puts the JWS itself in
+        `attestation.receipt`, then signs the entry. Verifiers may check a receipt against did.json; a key log's
+        validity never depends on it (test-vectors/keylog-1).
+
+        Binding: `nonce` comes from POST /v1/auth/nonce (single use), and kid is the RFC 7638 thumbprint of `jwk`, the
+        key's SHA-256.
+        - iOS: an App Attest attestation of a new App Attest key, with clientDataHash = SHA-256(UTF-8(nonce + "|" +
+          kid)). The service checks the chain to the Apple App Attestation root, the nonce extension, the RP ID hash of
+          7R835D5LDZ.org.openentity.app, counter 0 and the production AAGUID (development in staging). key_storage is
+          secure_enclave.
+        - Android: the Key Attestation certificate chain of the approver key itself (leaf first; the leaf's public key
+          must be `jwk`), generated with attestationChallenge = UTF-8(nonce), plus a Play Integrity standard-request
+          token with requestHash = kid. The service checks the chain to a Google hardware attestation root, the security
+          level (StrongBox or TrustedEnvironment gives key_storage strongbox or tee), that the key needs biometric user
+          authentication on every use (Class 3), and the verdict for org.openentity.app. MEETS_DEVICE_INTEGRITY is
+          required (403 integrity_failed without it); MEETS_STRONG_INTEGRITY is recorded in integrity.strong.
+      x-available: day-2
+      security:
+        - ownerBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KeyAttestationRequest'
+      responses:
+        '200':
+          description: The receipt and its claims.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KeyAttestationResponse'
+        '400':
+          $ref: '#/components/responses/Error'
+          description: 'error: bad_request'
+        '401':
+          $ref: '#/components/responses/Error'
+          description: 'error: unauthorized, nonce_invalid'
+        '403':
+          $ref: '#/components/responses/Error'
+          description: 'error: attestation_invalid, integrity_failed'
+        '429':
+          $ref: '#/components/responses/RateLimited'
   /o/{id}/log:
     get:
       operationId: readKeyLog
@@ -3211,7 +3310,7 @@ components:
       type: object
       required: [action, params]
       properties:
-        action: { type: string, enum: [agent.resume, agent.permissions.widen, method.add, method.remove, email.change, account.delete, deletion.cancel] }
+        action: { type: string, enum: [agent.resume, agent.permissions.widen, method.add, method.remove, email.change, account.delete, deletion.cancel, product.link] }
         params: { type: object, description: Per action; see POST /v1/step-up. }
     ApprovalRequest:
       type: object
@@ -3413,6 +3512,61 @@ components:
       properties:
         type: { type: string, enum: [app_attest, android_key, webauthn, none] }
         verified: { type: boolean, description: True only when the chain validated to a trusted root. }
+        receipt: { $ref: '#/components/schemas/CompactJws', description: 'Device keys: the KeyAttestationReceipt from POST /v1/keylog/attestations, verifiable against the service did.json.' }
+    KeyAttestationRequest:
+      type: object
+      required: [nonce, platform, jwk]
+      properties:
+        nonce: { $ref: '#/components/schemas/RawNonce', description: From POST /v1/auth/nonce; single use. }
+        platform: { type: string, enum: [ios, android] }
+        jwk: { $ref: '#/components/schemas/PublicKeyJwk', description: The approver key being enrolled. }
+        app_attest:
+          type: object
+          description: iOS. clientDataHash = SHA-256(UTF-8(nonce + "|" + kid)).
+          required: [key_id, attestation_object]
+          properties:
+            key_id: { type: string, maxLength: 128, description: The App Attest key id (base64). }
+            attestation_object: { $ref: '#/components/schemas/Base64url' }
+        android:
+          type: object
+          description: Android. The approver key's own Key Attestation chain and a Play Integrity token bound to its kid.
+          required: [certificate_chain, integrity_token]
+          properties:
+            certificate_chain: { type: array, minItems: 2, maxItems: 10, items: { type: string, contentEncoding: base64 }, description: DER certificates, leaf first; attestationChallenge = UTF-8(nonce). }
+            integrity_token: { type: string, maxLength: 8192, description: Standard request with requestHash = kid. }
+      allOf:
+        - if: { properties: { platform: { const: ios } } }
+          then: { required: [app_attest] }
+        - if: { properties: { platform: { const: android } } }
+          then: { required: [android] }
+    KeyAttestationResponse:
+      type: object
+      required: [receipt, claims]
+      properties:
+        receipt: { $ref: '#/components/schemas/CompactJws', description: The KeyAttestationReceipt. Put it in Credential.attestation.receipt. }
+        claims: { $ref: '#/components/schemas/KeyAttestationReceipt' }
+    KeyAttestationReceipt:
+      type: object
+      description: |
+        The claims of an attestation receipt: a compact JWS with header {"alg": "EdDSA", "kid": "<service DID>#<RFC 7638
+        thumbprint>", "typ": "oe-key-attestation+jwt"}, signed by the account service's Ed25519 key (accountSignature,
+        /.well-known/did.json). A verifier checks typ, that the kid's DID is the pinned service DID, the signature,
+        and that `kid` equals the credential's kid. Field names follow test-vectors/keylog-1: key_storage, the
+        attestation type and verified flag, and integrity {device, strong}.
+      required: [iss, kid, platform, type, key_storage, verified, iat]
+      properties:
+        iss: { $ref: '#/components/schemas/ServiceDid' }
+        kid: { $ref: '#/components/schemas/Thumbprint', description: The attested key's RFC 7638 thumbprint. }
+        platform: { type: string, enum: [ios, android] }
+        type: { type: string, enum: [app_attest, android_key] }
+        key_storage: { type: string, enum: [secure_enclave, strongbox, tee] }
+        verified: { type: boolean, const: true, description: A receipt is issued only for an attestation that verified. }
+        integrity:
+          anyOf:
+            - $ref: '#/components/schemas/CredentialIntegrity'
+            - type: 'null'
+          description: Android only; null on iOS.
+        iat: { $ref: '#/components/schemas/UnixSeconds' }
     CredentialIntegrity:
       type: object
       description: Android. The Play Integrity verdict at enrollment.
@@ -4086,6 +4240,42 @@ components:
         payload_digest: { $ref: '#/components/schemas/Hex64', description: Lowercase hex SHA-256 of the RFC 8785 JCS of payload. }
         return_url: { type: string, format: uri, description: 'https, on the same registrable domain as the verifier DID host (did:web:api.agentsecretstore.com allows https://agentsecretstore.com/... and its subdomains).' }
         state: { type: string, maxLength: 256 }
+    OwnerLinkRequest:
+      type: object
+      required: [product]
+      properties:
+        product: { $ref: '#/components/schemas/ProductDid' }
+    OwnerLink:
+      type: object
+      required: [product, envelope, link_url, expires_at]
+      properties:
+        product: { $ref: '#/components/schemas/ProductDid' }
+        envelope: { $ref: '#/components/schemas/CompactJws', description: The LinkOwnerEnvelope. }
+        link_url: { type: string, format: uri, description: 'The product''s link page, https://<product web host>/oe/link, with "#envelope=<JWS>" appended (a fragment, so it never reaches server logs).' }
+        expires_at: { $ref: '#/components/schemas/UnixSeconds' }
+    LinkOwnerEnvelope:
+      type: object
+      description: |
+        The claims of an owner-link envelope: a compact JWS with header {"alg": "EdDSA", "kid": "<service DID>#<RFC
+        7638 thumbprint>", "typ": "oe-link-owner+jwt"}, signed by the account service's Ed25519 key (the key of
+        accountSignature, in /.well-known/did.json under assertionMethod). The same JWS format as ApproveEnvelope,
+        signed in the other direction. Issued by POST /v1/account/links after a product.link step-up.
+
+        The product verifies, in order: typ is oe-link-owner+jwt and alg is EdDSA; the kid's DID equals the pinned
+        service DID of its environment and the key is in the current did.json (cache at most 10 minutes, refetch once on
+        an unknown kid); the signature; purpose is link-owner; aud is its own DID; iat is not in the future (5 seconds of
+        skew) and now < exp <= iat + 600; jti was not used before (remember it until exp). Then it stores `sub` as
+        `oe_owner_did` on the web user it signed in, and answers 409 if that user is already linked to another owner
+        DID. This replaces any interim link format (Agent Secret Store's ES256 `purpose: link-owner` JWT).
+      required: [iss, aud, sub, purpose, iat, exp, jti]
+      properties:
+        iss: { $ref: '#/components/schemas/ServiceDid' }
+        aud: { $ref: '#/components/schemas/ProductDid' }
+        sub: { $ref: '#/components/schemas/OwnerDid', description: The owner DID to link. }
+        purpose: { type: string, const: link-owner }
+        iat: { $ref: '#/components/schemas/UnixSeconds' }
+        exp: { $ref: '#/components/schemas/UnixSeconds', description: At most iat + 600. }
+        jti: { type: string, pattern: '^lnk_[A-Za-z0-9]{26}$', description: Single use. }
     ApproveCheckRequest:
       type: object
       required: [request]
