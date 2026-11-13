@@ -865,6 +865,10 @@ starlight-toc a[aria-current='true'] {
   padding: 0;
   color: var(--sl-color-white);
 }
+/* In a page's own flow (/pair) a command panel keeps the gap Starlight puts between blocks; in a grid it has none. */
+.sl-markdown-content > * + .oe-pre {
+  margin-top: var(--sl-content-gap-y);
+}
 
 /* ---------- Footer ---------- */
 .oe-footer {

@@ -98,6 +98,23 @@ describe('every page', () => {
     '/become': ['L1 Verified', 'Agent Secret Store', 'custom:securemyagent:security_posture', 'No tool, payment or platform can make an agent an Entity'],
     '/faq': ['key', 'Moltbot Den'],
     '/founding': ['Founding Entities'],
+    '/pair': [
+      'The pairing code is the part after',
+      'npx -y openentity pair OE-XXXX-XXXX --openclaw',
+      'claude mcp add openentity -- npx -y @openentity/mcp',
+      'openentity_pair',
+      'does not pair agents',
+      'pip install openentity-openai-agents',
+      'OpenEntityOwner.tools()',
+      'pip install langchain-openentity openentity',
+      'npm install @openentity/langchain @openentity/sdk',
+      'pip install openentity-crewai',
+      'pip install openentity-adk',
+      'npm install @openentity/adk @openentity/sdk @google/adk zod',
+      'npm install @openentity/mastra @openentity/sdk @mastra/core zod',
+      'npm install @openentity/vercel-ai @openentity/sdk ai zod',
+      'uvx openentity pair OE-XXXX-XXXX',
+    ],
   };
   it.each(Object.entries(expected))('%s reads without JavaScript', (r, phrases) => {
     const text = mainText(read(join(dist, r === '/' ? 'index.html' : `${r.slice(1)}.html`)));
