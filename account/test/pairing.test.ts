@@ -280,3 +280,16 @@ test("gate lead: each pairing is a new link_epoch on agent.paired, and agent.unl
   await call("DELETE", `/v1/agents/${kp.did}`, undefined, second.auth);
   expect(calls.map((x) => x.body.data.link_epoch)).toEqual(PRODUCTS.map(() => 2)); // a late unlink of link 1 is older than this
 });
+
+test("gate R5: an agent renews its product keys at most 6 times a day, then 429 until the next day", async () => {
+  const o = await owner();
+  const { kp } = await paired(o);
+  for (let i = 0; i < 6; i++) expect((await asAgent(kp, "POST", "/v1/agent/credentials/renew")).status).toBe(200);
+  await runJobs(d); // the rate_events retention keeps the day's count
+  const over = await asAgent(kp, "POST", "/v1/agent/credentials/renew");
+  expect(over).toMatchObject({ status: 429, body: { error: "rate_limited", message: "at most 6 a day" } });
+  expect(Number(over.headers.get("retry-after"))).toBeGreaterThan(0);
+  expect(Number(over.headers.get("retry-after"))).toBeLessThanOrEqual(86_400);
+  later(86_400); // the next day
+  expect((await asAgent(kp, "POST", "/v1/agent/credentials/renew")).status).toBe(200);
+});

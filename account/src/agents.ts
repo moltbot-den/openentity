@@ -16,6 +16,8 @@ import { URL_TTL } from "./blobs.ts";
 import { ack, closeSocket, deliver, unacked } from "./ws.ts";
 
 const MAX_TEXT = 4096, MESSAGES_PER_HOUR = 60, APPROVALS_PER_HOUR = 30, STATUS_PER_HOUR = 600, POLL_GAP = 15;
+// Keys last 30 days with an hour of overlap, so an agent renews about monthly; a few a day covers retries (gate R5).
+const RENEWS_PER_DAY = 6;
 const MAX_UPLOAD = 10 * 1024 * 1024, MAX_ATTACHMENTS = 10, UPLOADS_PER_HOUR = 60;
 const PAUSE_LOCK = 7_231_001; // pg advisory lock: pause_changes rows commit in id order
 
@@ -79,10 +81,11 @@ async function pairedAgent(c: Context, d: Deps): Promise<AgentRow> {
 }
 const allowed = (a: AgentRow, perm: string) => (JSON.parse(a.permissions) as string[]).includes(perm) || fail(403, "permission_denied", `the owner has not granted ${perm}`);
 const notPaused = (a: AgentRow) => a.state !== "paused" || fail(423, "agent_paused", "the owner paused this agent");
-async function limit(d: Deps, key: string, max: number, code = "rate_limited") {
-  const hour = Math.floor(now() / 3600);
-  const n = await bump(d.db, key, String(hour));
-  if (n > max) fail(429, code, `at most ${max} an hour`, { retry_after: (hour + 1) * 3600 - now() });
+/** At most `max` per window (an hour or a day). The window is stored as the number of its first hour, which the rate_events retention keeps for 48 hours. */
+async function limit(d: Deps, key: string, max: number, code = "rate_limited", window: 3600 | 86_400 = 3600) {
+  const start = Math.floor(now() / window) * window;
+  const n = await bump(d.db, key, String(start / 3600));
+  if (n > max) fail(429, code, `at most ${max} ${window === 3600 ? "an hour" : "a day"}`, { retry_after: start + window - now() });
   return n;
 }
 const utf8Text = (v: unknown, name: string) => {
@@ -281,6 +284,7 @@ export function routes(app: Hono, d: Deps) {
   app.post("/v1/agent/credentials/renew", async (c) => {
     const a = await pairedAgent(c, d);
     notPaused(a);
+    await limit(d, `renew:${a.did}`, RENEWS_PER_DAY, "rate_limited", 86_400); // a renew loop cannot race the owner's narrowing (gate R5)
     const b = (await c.req.text()) ? await json(c) : {};
     const held = await productsOf(d, a.did);
     const want: string[] = Array.isArray(b.products) ? b.products : held;
