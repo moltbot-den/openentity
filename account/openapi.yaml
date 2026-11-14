@@ -2411,7 +2411,7 @@ paths:
       operationId: renewAgentCredentials
       tags: [Agent API]
       summary: Renew the agent's product bearer keys
-      description: Keys last 30 days. The old key stays valid 1 hour after renewal.
+      description: Keys last 30 days. The old key stays valid 1 hour after renewal. At most 6 renewals a day per agent (429 rate_limited with Retry-After).
       x-available: day-3
       security:
         - agentSignature: []
@@ -2440,6 +2440,8 @@ paths:
         '423':
           $ref: '#/components/responses/Error'
           description: 'error: agent_paused'
+        '429':
+          $ref: '#/components/responses/RateLimited'
   /v1/notify:
     post:
       operationId: notify
@@ -3219,6 +3221,8 @@ components:
       description: |
         An agent permission (PLAN 7.6): owner.message, owner.status, owner.approval, vault.request:<path pattern> (one
         path per string), evidence.file, den.post, market.sell, contract.accept<=$N (whole or two-decimal dollars).
+        `vault.request:*` grants the whole vault. Inside a path, `*` matches one path level only:
+        `vault.request:prod/*` covers `prod/db` but not `prod/db/password`. Agent Secret Store enforces exactly this.
     Platform:
       type: string
       enum: [ios, android, web]
