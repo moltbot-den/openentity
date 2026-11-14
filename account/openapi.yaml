@@ -2925,7 +2925,9 @@ paths:
         here directly, so a hidden entry still arrives. Entries arrive as their exact JCS lines (`lines`); keep and
         hash those bytes, never a re-encoding. Verify through the openentity packages (verifyKeyLog with the
         environment's rpId and origins, and serviceKeys = the P-256 close keys of the service did.json); fetch missing earlier
-        lines from GET /o/{id}/log; record `first_seen_at` for every entry and run every delay from it.
+        lines from GET /o/{id}/log; record `first_seen_at` for every entry and run every delay from it. An owner the
+        product does not know is 404 owner_unknown, answered before any verification and with nothing kept. Callers
+        treat 2xx and every 4xx as final, and retry only network errors, 429 and 5xx.
       x-available: day-5
       servers:
         - url: https://{product_api}
@@ -2950,6 +2952,9 @@ paths:
         '400':
           $ref: '#/components/responses/Error'
           description: 'error: bad_request'
+        '404':
+          $ref: '#/components/responses/Error'
+          description: 'error: owner_unknown (the product does not know the owner and keeps nothing, with no verification)'
         '409':
           $ref: '#/components/responses/Error'
           description: 'error: fork (a different entry already holds that seq; the product raises an alert)'
