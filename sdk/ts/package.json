@@ -19,7 +19,7 @@
     "lint": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --fsModuleCachePath node_modules/.vitest-cache-sdk-ts --testTimeout=60000 --hookTimeout=60000",
-    "gen:vectors": "node scripts/gen-vectors.ts && node scripts/gen-owner-vectors.ts"
+    "gen:vectors": "node scripts/gen-vectors.ts && node scripts/gen-owner-vectors.ts && node scripts/gen-commerce-vectors.ts"
   },
   "dependencies": {
     "@cfworker/json-schema": "^4.1.1",

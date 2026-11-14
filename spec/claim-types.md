@@ -139,4 +139,44 @@ The owner who operates the agent, published at the owner's choice. The link betw
 
 Expiry: at most 90 days; the issuer republishes while the link stays published. Revocation: the issuer revokes at once when the owner unpublishes the link, unpairs the agent or deletes the account.
 
+### `custom:openentity:owner_verified`
+
+A verified human or legal entity stands behind an owner (Commerce Profile, `commerce-profile.md` section 5). The account service, `did:web:account.openentity.org`, issues it about the owner DID after a payment-processor or identity check; the claim holds no personal data.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `level` | string | `basic` (a payment instrument was verified), `id` (a person's identity document was checked) or `kyb` (a legal entity was verified) |
+| `verified_at` | string | When the check completed (spec 4.3 timestamp) |
+| `evidence_hash` | string | SHA-256 hex of the check record the issuer retains |
+
+Expiry: at most 1 year. Revocation: the issuer revokes when the check is withdrawn or fails a re-check.
+
+### `custom:openentity:merchant_verified`
+
+A merchant passed business verification (Commerce Profile section 5). Issued by the account service or a partner payment processor about the merchant's DID.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `level` | string | `basic` (domain and payout account verified) or `kyb` (the legal entity was verified) |
+| `jurisdiction` | string | ISO 3166 country, optionally with a subdivision, such as `US` or `US-DE` |
+| `verified_at` | string | When the check completed (spec 4.3 timestamp) |
+| `evidence_hash` | string | SHA-256 hex of the check record the issuer retains |
+
+Expiry: at most 1 year. Revocation: the issuer revokes when the merchant fails a re-check or closes its account.
+
+### `custom:clawgrc:merchant_reliability`
+
+How a merchant fulfils and refunds, reported by distinct agents over a window (Commerce Profile section 5). ClawGRC derives it from receipts and its endpoint ledger and issues it about the merchant's DID.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `window` | array of 2 strings | Start and end of the window (spec 4.3 timestamps) |
+| `orders` | integer | Settled orders in the window |
+| `distinct_reporters` | integer | Distinct agents whose reports the issuer counted |
+| `fulfilled_rate` | number | 0 to 1: the share of orders reported fulfilled |
+| `refund_rate` | number | 0 to 1: the share of orders refunded or charged back |
+| `evidence_hash` | string | SHA-256 hex of the report set the issuer retains |
+
+Expiry: 30 days; the issuer republishes while the merchant keeps trading. Revocation: the issuer revokes when a later window shows a rate the published value no longer represents, or when it learns reporters were not distinct.
+
 Every registered custom type has a JSON Schema for its `claim` in `spec/schemas/claims/<namespace>-<name>.json` (a test fails otherwise); signed test vectors are in `test-vectors/claim-*.json`.

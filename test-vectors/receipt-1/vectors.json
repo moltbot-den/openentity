@@ -1,0 +1,641 @@
+{
+  "description": "receipt/1 vectors. Merchant key is the OEIS `second` key, agent the `entity` key (test-vectors/keys.json). cases: verifyReceipt(receipt, {require}) must equal `expect`; `require` defaults to [merchant]. Proofs are eddsa-jcs-2022 over the receipt without `proofs`; `by` is outside the signed proof configuration.",
+  "warning": "PUBLISHED THROWAWAY KEYS FOR TEST VECTORS ONLY. Every secret is published (test-vectors/approval-2.0/keys.json and test-vectors/keys.json). Anyone can sign with them. Never use them for anything real.",
+  "merchant_did": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+  "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+  "cases": [
+    {
+      "name": "purchase-both-proofs",
+      "description": "Merchant and buyer agent both signed.",
+      "receipt": {
+        "version": "receipt/1",
+        "receipt_id": "rc_epnbabxzpxpezkdskl76iw5vnp",
+        "kind": "purchase",
+        "refers_to": null,
+        "merchant_did": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg",
+        "mandate_hash": "c4038f40931a25f9c093468b42eaf10972dfd438afab758d0d5cd5c40b6c8cdd",
+        "cart_digest": "cbc0dde63d67e4d56adc506240d733f7685c3039388c76440aa5b1cfd1011886",
+        "approval_request_id": null,
+        "total": 1000,
+        "currency": "USD",
+        "rail": "x402",
+        "settlement_ref": "0xabababababababababababababababababababababababababababababababab",
+        "created_at": 1794009700,
+        "proofs": [
+          {
+            "by": "merchant",
+            "type": "DataIntegrityProof",
+            "cryptosuite": "eddsa-jcs-2022",
+            "created": "2026-11-07T00:02:00Z",
+            "verificationMethod": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw#z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+            "proofPurpose": "assertionMethod",
+            "proofValue": "zHZ2r8q6Ec7vhDysNUVDyTdejA8P4Lspd7u3VJ1vKwn56sV4kuEAyDfCdoYiGv4YwynTMvzFNPS2SSn2A8hzUuCo"
+          },
+          {
+            "by": "agent",
+            "type": "DataIntegrityProof",
+            "cryptosuite": "eddsa-jcs-2022",
+            "created": "2026-11-07T00:02:00Z",
+            "verificationMethod": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7#z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+            "proofPurpose": "assertionMethod",
+            "proofValue": "z5xuETHQ5fV1ZojFMNxru464uNY3MYrAUiPZKEEknF29oUjepn1mUuoNy6MBbuqa88b8NxeyCEBJ91psQJaKCDQhs"
+          }
+        ]
+      },
+      "require": [
+        "merchant",
+        "agent"
+      ],
+      "expect": {
+        "ok": true,
+        "signed_by": [
+          "merchant",
+          "agent"
+        ]
+      }
+    },
+    {
+      "name": "purchase-merchant-only",
+      "description": "Merchant proof alone satisfies the default requirement.",
+      "receipt": {
+        "version": "receipt/1",
+        "receipt_id": "rc_epnbabxzpxpezkdskl76iw5vnp",
+        "kind": "purchase",
+        "refers_to": null,
+        "merchant_did": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg",
+        "mandate_hash": "c4038f40931a25f9c093468b42eaf10972dfd438afab758d0d5cd5c40b6c8cdd",
+        "cart_digest": "cbc0dde63d67e4d56adc506240d733f7685c3039388c76440aa5b1cfd1011886",
+        "approval_request_id": null,
+        "total": 1000,
+        "currency": "USD",
+        "rail": "x402",
+        "settlement_ref": "0xabababababababababababababababababababababababababababababababab",
+        "created_at": 1794009700,
+        "proofs": [
+          {
+            "by": "merchant",
+            "type": "DataIntegrityProof",
+            "cryptosuite": "eddsa-jcs-2022",
+            "created": "2026-11-07T00:02:00Z",
+            "verificationMethod": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw#z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+            "proofPurpose": "assertionMethod",
+            "proofValue": "zHZ2r8q6Ec7vhDysNUVDyTdejA8P4Lspd7u3VJ1vKwn56sV4kuEAyDfCdoYiGv4YwynTMvzFNPS2SSn2A8hzUuCo"
+          }
+        ]
+      },
+      "expect": {
+        "ok": true,
+        "signed_by": [
+          "merchant"
+        ]
+      }
+    },
+    {
+      "name": "agent-countersign-missing",
+      "description": "Both proofs required, the agent has not countersigned.",
+      "receipt": {
+        "version": "receipt/1",
+        "receipt_id": "rc_epnbabxzpxpezkdskl76iw5vnp",
+        "kind": "purchase",
+        "refers_to": null,
+        "merchant_did": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg",
+        "mandate_hash": "c4038f40931a25f9c093468b42eaf10972dfd438afab758d0d5cd5c40b6c8cdd",
+        "cart_digest": "cbc0dde63d67e4d56adc506240d733f7685c3039388c76440aa5b1cfd1011886",
+        "approval_request_id": null,
+        "total": 1000,
+        "currency": "USD",
+        "rail": "x402",
+        "settlement_ref": "0xabababababababababababababababababababababababababababababababab",
+        "created_at": 1794009700,
+        "proofs": [
+          {
+            "by": "merchant",
+            "type": "DataIntegrityProof",
+            "cryptosuite": "eddsa-jcs-2022",
+            "created": "2026-11-07T00:02:00Z",
+            "verificationMethod": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw#z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+            "proofPurpose": "assertionMethod",
+            "proofValue": "zHZ2r8q6Ec7vhDysNUVDyTdejA8P4Lspd7u3VJ1vKwn56sV4kuEAyDfCdoYiGv4YwynTMvzFNPS2SSn2A8hzUuCo"
+          }
+        ]
+      },
+      "require": [
+        "merchant",
+        "agent"
+      ],
+      "expect": {
+        "ok": false,
+        "error": "missing_proof"
+      }
+    },
+    {
+      "name": "unsigned",
+      "description": "No proofs.",
+      "receipt": {
+        "version": "receipt/1",
+        "receipt_id": "rc_epnbabxzpxpezkdskl76iw5vnp",
+        "kind": "purchase",
+        "refers_to": null,
+        "merchant_did": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg",
+        "mandate_hash": "c4038f40931a25f9c093468b42eaf10972dfd438afab758d0d5cd5c40b6c8cdd",
+        "cart_digest": "cbc0dde63d67e4d56adc506240d733f7685c3039388c76440aa5b1cfd1011886",
+        "approval_request_id": null,
+        "total": 1000,
+        "currency": "USD",
+        "rail": "x402",
+        "settlement_ref": "0xabababababababababababababababababababababababababababababababab",
+        "created_at": 1794009700
+      },
+      "expect": {
+        "ok": false,
+        "error": "missing_proof"
+      }
+    },
+    {
+      "name": "agent-signed-first",
+      "description": "The agent may sign before the merchant; order is not significant.",
+      "receipt": {
+        "version": "receipt/1",
+        "receipt_id": "rc_epnbabxzpxpezkdskl76iw5vnp",
+        "kind": "purchase",
+        "refers_to": null,
+        "merchant_did": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg",
+        "mandate_hash": "c4038f40931a25f9c093468b42eaf10972dfd438afab758d0d5cd5c40b6c8cdd",
+        "cart_digest": "cbc0dde63d67e4d56adc506240d733f7685c3039388c76440aa5b1cfd1011886",
+        "approval_request_id": null,
+        "total": 1000,
+        "currency": "USD",
+        "rail": "x402",
+        "settlement_ref": "0xabababababababababababababababababababababababababababababababab",
+        "created_at": 1794009700,
+        "proofs": [
+          {
+            "by": "agent",
+            "type": "DataIntegrityProof",
+            "cryptosuite": "eddsa-jcs-2022",
+            "created": "2026-11-07T00:02:00Z",
+            "verificationMethod": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7#z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+            "proofPurpose": "assertionMethod",
+            "proofValue": "z5xuETHQ5fV1ZojFMNxru464uNY3MYrAUiPZKEEknF29oUjepn1mUuoNy6MBbuqa88b8NxeyCEBJ91psQJaKCDQhs"
+          },
+          {
+            "by": "merchant",
+            "type": "DataIntegrityProof",
+            "cryptosuite": "eddsa-jcs-2022",
+            "created": "2026-11-07T00:02:00Z",
+            "verificationMethod": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw#z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+            "proofPurpose": "assertionMethod",
+            "proofValue": "zHZ2r8q6Ec7vhDysNUVDyTdejA8P4Lspd7u3VJ1vKwn56sV4kuEAyDfCdoYiGv4YwynTMvzFNPS2SSn2A8hzUuCo"
+          }
+        ]
+      },
+      "require": [
+        "merchant",
+        "agent"
+      ],
+      "expect": {
+        "ok": true,
+        "signed_by": [
+          "agent",
+          "merchant"
+        ]
+      }
+    },
+    {
+      "name": "refund",
+      "description": "A refund is a new receipt that refers to the purchase.",
+      "receipt": {
+        "version": "receipt/1",
+        "receipt_id": "rc_tmovbv5nztxp3bah5eaosuspeq",
+        "kind": "refund",
+        "refers_to": "rc_epnbabxzpxpezkdskl76iw5vnp",
+        "merchant_did": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg",
+        "mandate_hash": "c4038f40931a25f9c093468b42eaf10972dfd438afab758d0d5cd5c40b6c8cdd",
+        "cart_digest": "cbc0dde63d67e4d56adc506240d733f7685c3039388c76440aa5b1cfd1011886",
+        "approval_request_id": null,
+        "total": 400,
+        "currency": "USD",
+        "rail": "x402",
+        "settlement_ref": "re_vector_1",
+        "created_at": 1794009800,
+        "proofs": [
+          {
+            "by": "merchant",
+            "type": "DataIntegrityProof",
+            "cryptosuite": "eddsa-jcs-2022",
+            "created": "2026-11-07T00:02:00Z",
+            "verificationMethod": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw#z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+            "proofPurpose": "assertionMethod",
+            "proofValue": "z2Rby3VVQTnDB1jPtS6FLKFZMZJhY2RRUqWCBBxSJJwBEvQRaRUZFz2UbxjFpZwrWLUvntndh8Pfh7DVoBeWmzP52"
+          },
+          {
+            "by": "agent",
+            "type": "DataIntegrityProof",
+            "cryptosuite": "eddsa-jcs-2022",
+            "created": "2026-11-07T00:02:00Z",
+            "verificationMethod": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7#z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+            "proofPurpose": "assertionMethod",
+            "proofValue": "z2yfNxDcMaNEvR3626hhpfF8AwFzJfytiGYSpimM4TdW8J7Sa6vvB51b6DtppwrCvu4M2adCgMu6gdJhgXUVBVjkg"
+          }
+        ]
+      },
+      "require": [
+        "merchant",
+        "agent"
+      ],
+      "expect": {
+        "ok": true,
+        "signed_by": [
+          "merchant",
+          "agent"
+        ]
+      }
+    },
+    {
+      "name": "chargeback",
+      "description": "A chargeback is a new receipt that refers to the purchase.",
+      "receipt": {
+        "version": "receipt/1",
+        "receipt_id": "rc_hg6iokur5lcecg4j2d5ezdsvqj",
+        "kind": "chargeback",
+        "refers_to": "rc_epnbabxzpxpezkdskl76iw5vnp",
+        "merchant_did": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg",
+        "mandate_hash": "c4038f40931a25f9c093468b42eaf10972dfd438afab758d0d5cd5c40b6c8cdd",
+        "cart_digest": "cbc0dde63d67e4d56adc506240d733f7685c3039388c76440aa5b1cfd1011886",
+        "approval_request_id": null,
+        "total": 1000,
+        "currency": "USD",
+        "rail": "x402",
+        "settlement_ref": "dp_vector_1",
+        "created_at": 1794009900,
+        "proofs": [
+          {
+            "by": "merchant",
+            "type": "DataIntegrityProof",
+            "cryptosuite": "eddsa-jcs-2022",
+            "created": "2026-11-07T00:02:00Z",
+            "verificationMethod": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw#z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+            "proofPurpose": "assertionMethod",
+            "proofValue": "z5YSB6PumFZqB5MfRQLKo9HB5dGUZo5BtRhRbUkzKZLL9jWvmEzXBNTYxfyugJpCamPrM7adPFsLvFP5DokCHmWBn"
+          }
+        ]
+      },
+      "expect": {
+        "ok": true,
+        "signed_by": [
+          "merchant"
+        ]
+      }
+    },
+    {
+      "name": "tampered-total",
+      "description": "total changed after signing.",
+      "receipt": {
+        "version": "receipt/1",
+        "receipt_id": "rc_epnbabxzpxpezkdskl76iw5vnp",
+        "kind": "purchase",
+        "refers_to": null,
+        "merchant_did": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg",
+        "mandate_hash": "c4038f40931a25f9c093468b42eaf10972dfd438afab758d0d5cd5c40b6c8cdd",
+        "cart_digest": "cbc0dde63d67e4d56adc506240d733f7685c3039388c76440aa5b1cfd1011886",
+        "approval_request_id": null,
+        "total": 1,
+        "currency": "USD",
+        "rail": "x402",
+        "settlement_ref": "0xabababababababababababababababababababababababababababababababab",
+        "created_at": 1794009700,
+        "proofs": [
+          {
+            "by": "merchant",
+            "type": "DataIntegrityProof",
+            "cryptosuite": "eddsa-jcs-2022",
+            "created": "2026-11-07T00:02:00Z",
+            "verificationMethod": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw#z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+            "proofPurpose": "assertionMethod",
+            "proofValue": "zHZ2r8q6Ec7vhDysNUVDyTdejA8P4Lspd7u3VJ1vKwn56sV4kuEAyDfCdoYiGv4YwynTMvzFNPS2SSn2A8hzUuCo"
+          },
+          {
+            "by": "agent",
+            "type": "DataIntegrityProof",
+            "cryptosuite": "eddsa-jcs-2022",
+            "created": "2026-11-07T00:02:00Z",
+            "verificationMethod": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7#z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+            "proofPurpose": "assertionMethod",
+            "proofValue": "z5xuETHQ5fV1ZojFMNxru464uNY3MYrAUiPZKEEknF29oUjepn1mUuoNy6MBbuqa88b8NxeyCEBJ91psQJaKCDQhs"
+          }
+        ]
+      },
+      "expect": {
+        "ok": false,
+        "error": "bad_proof"
+      }
+    },
+    {
+      "name": "tampered-mandate-hash",
+      "description": "mandate_hash changed after signing.",
+      "receipt": {
+        "version": "receipt/1",
+        "receipt_id": "rc_epnbabxzpxpezkdskl76iw5vnp",
+        "kind": "purchase",
+        "refers_to": null,
+        "merchant_did": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg",
+        "mandate_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "cart_digest": "cbc0dde63d67e4d56adc506240d733f7685c3039388c76440aa5b1cfd1011886",
+        "approval_request_id": null,
+        "total": 1000,
+        "currency": "USD",
+        "rail": "x402",
+        "settlement_ref": "0xabababababababababababababababababababababababababababababababab",
+        "created_at": 1794009700,
+        "proofs": [
+          {
+            "by": "merchant",
+            "type": "DataIntegrityProof",
+            "cryptosuite": "eddsa-jcs-2022",
+            "created": "2026-11-07T00:02:00Z",
+            "verificationMethod": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw#z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+            "proofPurpose": "assertionMethod",
+            "proofValue": "zHZ2r8q6Ec7vhDysNUVDyTdejA8P4Lspd7u3VJ1vKwn56sV4kuEAyDfCdoYiGv4YwynTMvzFNPS2SSn2A8hzUuCo"
+          }
+        ]
+      },
+      "expect": {
+        "ok": false,
+        "error": "bad_proof"
+      }
+    },
+    {
+      "name": "proof-mislabelled",
+      "description": "The agent's proof presented as the merchant's.",
+      "receipt": {
+        "version": "receipt/1",
+        "receipt_id": "rc_epnbabxzpxpezkdskl76iw5vnp",
+        "kind": "purchase",
+        "refers_to": null,
+        "merchant_did": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg",
+        "mandate_hash": "c4038f40931a25f9c093468b42eaf10972dfd438afab758d0d5cd5c40b6c8cdd",
+        "cart_digest": "cbc0dde63d67e4d56adc506240d733f7685c3039388c76440aa5b1cfd1011886",
+        "approval_request_id": null,
+        "total": 1000,
+        "currency": "USD",
+        "rail": "x402",
+        "settlement_ref": "0xabababababababababababababababababababababababababababababababab",
+        "created_at": 1794009700,
+        "proofs": [
+          {
+            "by": "merchant",
+            "type": "DataIntegrityProof",
+            "cryptosuite": "eddsa-jcs-2022",
+            "created": "2026-11-07T00:02:00Z",
+            "verificationMethod": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7#z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+            "proofPurpose": "assertionMethod",
+            "proofValue": "z5xuETHQ5fV1ZojFMNxru464uNY3MYrAUiPZKEEknF29oUjepn1mUuoNy6MBbuqa88b8NxeyCEBJ91psQJaKCDQhs"
+          }
+        ]
+      },
+      "expect": {
+        "ok": false,
+        "error": "wrong_signer"
+      }
+    },
+    {
+      "name": "signed-by-stranger",
+      "description": "A proof by a key that is neither party, labelled merchant.",
+      "receipt": {
+        "version": "receipt/1",
+        "receipt_id": "rc_epnbabxzpxpezkdskl76iw5vnp",
+        "kind": "purchase",
+        "refers_to": null,
+        "merchant_did": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg",
+        "mandate_hash": "c4038f40931a25f9c093468b42eaf10972dfd438afab758d0d5cd5c40b6c8cdd",
+        "cart_digest": "cbc0dde63d67e4d56adc506240d733f7685c3039388c76440aa5b1cfd1011886",
+        "approval_request_id": null,
+        "total": 1000,
+        "currency": "USD",
+        "rail": "x402",
+        "settlement_ref": "0xabababababababababababababababababababababababababababababababab",
+        "created_at": 1794009700,
+        "proofs": [
+          {
+            "by": "merchant",
+            "type": "DataIntegrityProof",
+            "cryptosuite": "eddsa-jcs-2022",
+            "created": "2026-11-07T00:02:00Z",
+            "verificationMethod": "did:key:z6MkweEczu3W59i7TqPgQFf97PgJVyPtvyijLYGRa88A31QY#z6MkweEczu3W59i7TqPgQFf97PgJVyPtvyijLYGRa88A31QY",
+            "proofPurpose": "assertionMethod",
+            "proofValue": "zadiyWY3VeSDpC2HgyN1F4mp3SPkpDKqzqhsYXfHMPVsroBVxLCVg1H5K9E9UtLfA3A91MNRyjiTfvViuQetkAXk"
+          }
+        ]
+      },
+      "expect": {
+        "ok": false,
+        "error": "wrong_signer"
+      }
+    },
+    {
+      "name": "duplicate-by",
+      "description": "Two merchant proofs.",
+      "receipt": {
+        "version": "receipt/1",
+        "receipt_id": "rc_epnbabxzpxpezkdskl76iw5vnp",
+        "kind": "purchase",
+        "refers_to": null,
+        "merchant_did": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg",
+        "mandate_hash": "c4038f40931a25f9c093468b42eaf10972dfd438afab758d0d5cd5c40b6c8cdd",
+        "cart_digest": "cbc0dde63d67e4d56adc506240d733f7685c3039388c76440aa5b1cfd1011886",
+        "approval_request_id": null,
+        "total": 1000,
+        "currency": "USD",
+        "rail": "x402",
+        "settlement_ref": "0xabababababababababababababababababababababababababababababababab",
+        "created_at": 1794009700,
+        "proofs": [
+          {
+            "by": "merchant",
+            "type": "DataIntegrityProof",
+            "cryptosuite": "eddsa-jcs-2022",
+            "created": "2026-11-07T00:02:00Z",
+            "verificationMethod": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw#z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+            "proofPurpose": "assertionMethod",
+            "proofValue": "zHZ2r8q6Ec7vhDysNUVDyTdejA8P4Lspd7u3VJ1vKwn56sV4kuEAyDfCdoYiGv4YwynTMvzFNPS2SSn2A8hzUuCo"
+          },
+          {
+            "by": "merchant",
+            "type": "DataIntegrityProof",
+            "cryptosuite": "eddsa-jcs-2022",
+            "created": "2026-11-07T00:02:00Z",
+            "verificationMethod": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw#z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+            "proofPurpose": "assertionMethod",
+            "proofValue": "zHZ2r8q6Ec7vhDysNUVDyTdejA8P4Lspd7u3VJ1vKwn56sV4kuEAyDfCdoYiGv4YwynTMvzFNPS2SSn2A8hzUuCo"
+          }
+        ]
+      },
+      "expect": {
+        "ok": false,
+        "error": "malformed"
+      }
+    },
+    {
+      "name": "refund-without-refers-to",
+      "description": "A refund with refers_to null.",
+      "receipt": {
+        "version": "receipt/1",
+        "receipt_id": "rc_tmovbv5nztxp3bah5eaosuspeq",
+        "kind": "refund",
+        "refers_to": null,
+        "merchant_did": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg",
+        "mandate_hash": "c4038f40931a25f9c093468b42eaf10972dfd438afab758d0d5cd5c40b6c8cdd",
+        "cart_digest": "cbc0dde63d67e4d56adc506240d733f7685c3039388c76440aa5b1cfd1011886",
+        "approval_request_id": null,
+        "total": 400,
+        "currency": "USD",
+        "rail": "x402",
+        "settlement_ref": "re_vector_1",
+        "created_at": 1794009800
+      },
+      "expect": {
+        "ok": false,
+        "error": "malformed"
+      }
+    },
+    {
+      "name": "purchase-with-refers-to",
+      "description": "A purchase that refers to another receipt.",
+      "receipt": {
+        "version": "receipt/1",
+        "receipt_id": "rc_epnbabxzpxpezkdskl76iw5vnp",
+        "kind": "purchase",
+        "refers_to": "rc_tmovbv5nztxp3bah5eaosuspeq",
+        "merchant_did": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg",
+        "mandate_hash": "c4038f40931a25f9c093468b42eaf10972dfd438afab758d0d5cd5c40b6c8cdd",
+        "cart_digest": "cbc0dde63d67e4d56adc506240d733f7685c3039388c76440aa5b1cfd1011886",
+        "approval_request_id": null,
+        "total": 1000,
+        "currency": "USD",
+        "rail": "x402",
+        "settlement_ref": "0xabababababababababababababababababababababababababababababababab",
+        "created_at": 1794009700
+      },
+      "expect": {
+        "ok": false,
+        "error": "malformed"
+      }
+    },
+    {
+      "name": "mandate-id-without-hash",
+      "description": "mandate_id and mandate_hash go together.",
+      "receipt": {
+        "version": "receipt/1",
+        "receipt_id": "rc_epnbabxzpxpezkdskl76iw5vnp",
+        "kind": "purchase",
+        "refers_to": null,
+        "merchant_did": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg",
+        "mandate_hash": null,
+        "cart_digest": "cbc0dde63d67e4d56adc506240d733f7685c3039388c76440aa5b1cfd1011886",
+        "approval_request_id": null,
+        "total": 1000,
+        "currency": "USD",
+        "rail": "x402",
+        "settlement_ref": "0xabababababababababababababababababababababababababababababababab",
+        "created_at": 1794009700
+      },
+      "expect": {
+        "ok": false,
+        "error": "malformed"
+      }
+    },
+    {
+      "name": "no-mandate",
+      "description": "A purchase approved per cart: no mandate, an approval request id.",
+      "receipt": {
+        "version": "receipt/1",
+        "receipt_id": "rc_epnbabxzpxpezkdskl76iw5vnp",
+        "kind": "purchase",
+        "refers_to": null,
+        "merchant_did": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "mandate_id": null,
+        "mandate_hash": null,
+        "cart_digest": "cbc0dde63d67e4d56adc506240d733f7685c3039388c76440aa5b1cfd1011886",
+        "approval_request_id": "req_cart:7",
+        "total": 1000,
+        "currency": "USD",
+        "rail": "x402",
+        "settlement_ref": "0xabababababababababababababababababababababababababababababababab",
+        "created_at": 1794009700,
+        "proofs": [
+          {
+            "by": "merchant",
+            "type": "DataIntegrityProof",
+            "cryptosuite": "eddsa-jcs-2022",
+            "created": "2026-11-07T00:02:00Z",
+            "verificationMethod": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw#z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+            "proofPurpose": "assertionMethod",
+            "proofValue": "z5GzsxMNKQo8DxV8DJEsynugTFk63pCmh7A6o53AJQK6bD4c8Pq2198GxyFjZoWTQXA26Tc8Xh8CKEaVgrKifCVni"
+          }
+        ]
+      },
+      "expect": {
+        "ok": true,
+        "signed_by": [
+          "merchant"
+        ]
+      }
+    },
+    {
+      "name": "unknown-kind",
+      "description": "kind outside the profile.",
+      "receipt": {
+        "version": "receipt/1",
+        "receipt_id": "rc_epnbabxzpxpezkdskl76iw5vnp",
+        "kind": "void",
+        "refers_to": null,
+        "merchant_did": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg",
+        "mandate_hash": "c4038f40931a25f9c093468b42eaf10972dfd438afab758d0d5cd5c40b6c8cdd",
+        "cart_digest": "cbc0dde63d67e4d56adc506240d733f7685c3039388c76440aa5b1cfd1011886",
+        "approval_request_id": null,
+        "total": 1000,
+        "currency": "USD",
+        "rail": "x402",
+        "settlement_ref": "0xabababababababababababababababababababababababababababababababab",
+        "created_at": 1794009700
+      },
+      "expect": {
+        "ok": false,
+        "error": "malformed"
+      }
+    }
+  ]
+}

@@ -1,0 +1,951 @@
+{
+  "description": "cart/1 vectors. carts: valid summaries with their canonical form and payload digest (the payload_digest of the approval/2.0 that approves the purchase). invalid: cartDigest must refuse. mandates: signed mandate/1 objects the covers cases refer to by name. covers: mandateCovers(mandates[mandate], cart, {spent}) must equal `expect`.",
+  "warning": "PUBLISHED THROWAWAY KEYS FOR TEST VECTORS ONLY. Every secret is published (test-vectors/approval-2.0/keys.json and test-vectors/keys.json). Anyone can sign with them. Never use them for anything real.",
+  "carts": [
+    {
+      "cart": {
+        "profile": "cart/1",
+        "merchant": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "lines": [
+          {
+            "sku": "lst_123",
+            "title": "Dataset",
+            "qty": 1,
+            "unit": 1000,
+            "category": "data"
+          }
+        ],
+        "total": 1000,
+        "currency": "USD",
+        "rail": "credits",
+        "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg"
+      },
+      "canonical": "{\"agent_did\":\"did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7\",\"currency\":\"USD\",\"lines\":[{\"category\":\"data\",\"qty\":1,\"sku\":\"lst_123\",\"title\":\"Dataset\",\"unit\":1000}],\"mandate_id\":\"md_4b3eaz4gie3atj4jlyz375pbfg\",\"merchant\":\"did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw\",\"profile\":\"cart/1\",\"rail\":\"credits\",\"total\":1000}",
+      "digest": "cbc0dde63d67e4d56adc506240d733f7685c3039388c76440aa5b1cfd1011886"
+    },
+    {
+      "cart": {
+        "profile": "cart/1",
+        "merchant": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "lines": [
+          {
+            "sku": "a",
+            "title": "Caf\u00e9 \u2615",
+            "qty": 2,
+            "unit": 450
+          },
+          {
+            "sku": "b",
+            "title": "B",
+            "qty": 1,
+            "unit": 100,
+            "category": "data"
+          }
+        ],
+        "total": 1000,
+        "currency": "USD",
+        "rail": "x402",
+        "mandate_id": null
+      },
+      "canonical": "{\"agent_did\":\"did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7\",\"currency\":\"USD\",\"lines\":[{\"qty\":2,\"sku\":\"a\",\"title\":\"Caf\u00e9 \u2615\",\"unit\":450},{\"category\":\"data\",\"qty\":1,\"sku\":\"b\",\"title\":\"B\",\"unit\":100}],\"mandate_id\":null,\"merchant\":\"did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw\",\"profile\":\"cart/1\",\"rail\":\"x402\",\"total\":1000}",
+      "digest": "4254899a941039b0754d6f1b0fd91277fc1134b3f063be3cc50322d968c1ffc8"
+    }
+  ],
+  "invalid": [
+    {
+      "cart": {
+        "profile": "cart/1",
+        "merchant": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "lines": [
+          {
+            "sku": "lst_123",
+            "title": "Dataset",
+            "qty": 1,
+            "unit": 1000,
+            "category": "data"
+          }
+        ],
+        "total": 999,
+        "currency": "USD",
+        "rail": "credits",
+        "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg"
+      },
+      "reason": "total is not the sum of qty * unit"
+    },
+    {
+      "cart": {
+        "profile": "cart/1",
+        "merchant": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "lines": [],
+        "total": 0,
+        "currency": "USD",
+        "rail": "credits",
+        "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg"
+      },
+      "reason": "no lines"
+    },
+    {
+      "cart": {
+        "profile": "cart/1",
+        "merchant": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "lines": [
+          {
+            "sku": "a",
+            "title": "a",
+            "qty": 0,
+            "unit": 10
+          }
+        ],
+        "total": 0,
+        "currency": "USD",
+        "rail": "credits",
+        "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg"
+      },
+      "reason": "qty must be positive"
+    },
+    {
+      "cart": {
+        "profile": "cart/1",
+        "merchant": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "lines": [
+          {
+            "sku": "a",
+            "title": "a",
+            "qty": 1,
+            "unit": 10.5
+          }
+        ],
+        "total": 10.5,
+        "currency": "USD",
+        "rail": "credits",
+        "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg"
+      },
+      "reason": "fractional amount"
+    },
+    {
+      "cart": {
+        "profile": "cart/1",
+        "merchant": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "lines": [
+          {
+            "sku": "lst_123",
+            "title": "Dataset",
+            "qty": 1,
+            "unit": 1000,
+            "category": "data"
+          }
+        ],
+        "total": 1000,
+        "currency": "USD",
+        "rail": "paypal",
+        "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg"
+      },
+      "reason": "rail not in the profile"
+    },
+    {
+      "cart": {
+        "profile": "cart/1",
+        "merchant": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "lines": [
+          {
+            "sku": "lst_123",
+            "title": "Dataset",
+            "qty": 1,
+            "unit": 1000,
+            "category": "data"
+          }
+        ],
+        "total": 1000,
+        "currency": "usd",
+        "rail": "credits",
+        "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg"
+      },
+      "reason": "currency is three uppercase letters"
+    },
+    {
+      "cart": {
+        "profile": "cart/2",
+        "merchant": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "lines": [
+          {
+            "sku": "lst_123",
+            "title": "Dataset",
+            "qty": 1,
+            "unit": 1000,
+            "category": "data"
+          }
+        ],
+        "total": 1000,
+        "currency": "USD",
+        "rail": "credits",
+        "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg"
+      },
+      "reason": "profile must be cart/1"
+    },
+    {
+      "cart": {
+        "profile": "cart/1",
+        "merchant": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "lines": [
+          {
+            "sku": "lst_123",
+            "title": "Dataset",
+            "qty": 1,
+            "unit": 1000,
+            "category": "data"
+          }
+        ],
+        "total": 1000,
+        "currency": "USD",
+        "rail": "credits",
+        "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg",
+        "note": "x"
+      },
+      "reason": "unknown field"
+    },
+    {
+      "cart": {
+        "profile": "cart/1",
+        "merchant": "shop.example",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "lines": [
+          {
+            "sku": "lst_123",
+            "title": "Dataset",
+            "qty": 1,
+            "unit": 1000,
+            "category": "data"
+          }
+        ],
+        "total": 1000,
+        "currency": "USD",
+        "rail": "credits",
+        "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg"
+      },
+      "reason": "merchant must be a DID"
+    },
+    {
+      "cart": {
+        "profile": "cart/1",
+        "merchant": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "lines": [
+          {
+            "sku": "lst_123",
+            "title": "Dataset",
+            "qty": 1,
+            "unit": 1000,
+            "category": "data"
+          }
+        ],
+        "total": 1000,
+        "currency": "USD",
+        "rail": "credits",
+        "mandate_id": "md_short"
+      },
+      "reason": "mandate_id form"
+    }
+  ],
+  "mandates": {
+    "M": {
+      "version": "mandate/1",
+      "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg",
+      "issuer_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+      "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+      "issued_at": 1794009600,
+      "expires_at": 1796601600,
+      "limits": {
+        "currency": "USD",
+        "per_tx_max": 5000,
+        "period": "P1D",
+        "period_max": 20000,
+        "total_max": 100000
+      },
+      "scope": {
+        "merchants": [
+          "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+          "*.moltbotden.com"
+        ],
+        "categories": [
+          "software",
+          "data"
+        ],
+        "rails": [
+          "card",
+          "x402",
+          "mpp",
+          "credits",
+          "usdc"
+        ]
+      },
+      "step_up_over": 2500,
+      "status": "https://account.openentity.org/v1/mandates/md_4b3eaz4gie3atj4jlyz375pbfg/status",
+      "signature": {
+        "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+        "form": "p256",
+        "signature": "nroQ52XQe3s5Xs7_ZCUA1p33MQ8UyBgscWtCjViHTtoZ4okUeZ1AVdFgoTI95wA7nKjZxi8xccWUFawCLinFHw"
+      }
+    },
+    "N": {
+      "version": "mandate/1",
+      "mandate_id": "md_zvhzz5rtuczhqjajrzi3sam5fm",
+      "issuer_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+      "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+      "issued_at": 1794009600,
+      "expires_at": 1796601600,
+      "limits": {
+        "currency": "USD",
+        "per_tx_max": 5000,
+        "period": "P1D",
+        "period_max": 20000,
+        "total_max": 100000
+      },
+      "scope": {
+        "merchants": [
+          "shop.example"
+        ],
+        "categories": [
+          "software"
+        ],
+        "rails": [
+          "card",
+          "x402"
+        ]
+      },
+      "step_up_over": 2500,
+      "status": "https://account.openentity.org/v1/mandates/md_zvhzz5rtuczhqjajrzi3sam5fm/status",
+      "signature": {
+        "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+        "form": "p256",
+        "signature": "X5Ngh1YccGCN83NEM87dAau9YrKP_sl2f7wasZX8X0RlNAN7EtnS7foQhZ27iiWqC973iXTjJWzF7dqt9ixN0Q"
+      }
+    }
+  },
+  "covers": [
+    {
+      "name": "small-cart",
+      "description": "Under step_up_over.",
+      "mandate": "M",
+      "cart": {
+        "profile": "cart/1",
+        "merchant": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "lines": [
+          {
+            "sku": "lst_123",
+            "title": "Dataset",
+            "qty": 1,
+            "unit": 1000,
+            "category": "data"
+          }
+        ],
+        "total": 1000,
+        "currency": "USD",
+        "rail": "credits",
+        "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg"
+      },
+      "expect": {
+        "ok": true,
+        "step_up_required": false
+      }
+    },
+    {
+      "name": "step-up",
+      "description": "Over step_up_over (2500) and under per_tx_max: the owner must approve this cart.",
+      "mandate": "M",
+      "cart": {
+        "profile": "cart/1",
+        "merchant": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "lines": [
+          {
+            "sku": "sku_big",
+            "title": "sku_big",
+            "qty": 1,
+            "unit": 3000,
+            "category": "software"
+          }
+        ],
+        "total": 3000,
+        "currency": "USD",
+        "rail": "credits",
+        "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg"
+      },
+      "expect": {
+        "ok": true,
+        "step_up_required": true
+      }
+    },
+    {
+      "name": "at-step-up-edge",
+      "description": "Exactly step_up_over needs no step up.",
+      "mandate": "M",
+      "cart": {
+        "profile": "cart/1",
+        "merchant": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "lines": [
+          {
+            "sku": "sku_big",
+            "title": "sku_big",
+            "qty": 1,
+            "unit": 2500,
+            "category": "software"
+          }
+        ],
+        "total": 2500,
+        "currency": "USD",
+        "rail": "credits",
+        "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg"
+      },
+      "expect": {
+        "ok": true,
+        "step_up_required": false
+      }
+    },
+    {
+      "name": "at-per-tx-edge",
+      "description": "Exactly per_tx_max fits.",
+      "mandate": "M",
+      "cart": {
+        "profile": "cart/1",
+        "merchant": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "lines": [
+          {
+            "sku": "sku_big",
+            "title": "sku_big",
+            "qty": 1,
+            "unit": 5000,
+            "category": "software"
+          }
+        ],
+        "total": 5000,
+        "currency": "USD",
+        "rail": "credits",
+        "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg"
+      },
+      "expect": {
+        "ok": true,
+        "step_up_required": true
+      }
+    },
+    {
+      "name": "over-per-tx",
+      "description": "One unit over per_tx_max.",
+      "mandate": "M",
+      "cart": {
+        "profile": "cart/1",
+        "merchant": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "lines": [
+          {
+            "sku": "sku_big",
+            "title": "sku_big",
+            "qty": 1,
+            "unit": 5001,
+            "category": "software"
+          }
+        ],
+        "total": 5001,
+        "currency": "USD",
+        "rail": "credits",
+        "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg"
+      },
+      "expect": {
+        "ok": false,
+        "step_up_required": false,
+        "reason": "over_limit"
+      }
+    },
+    {
+      "name": "over-period",
+      "description": "period_spent 19000 plus 1500 passes period_max 20000.",
+      "mandate": "M",
+      "cart": {
+        "profile": "cart/1",
+        "merchant": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "lines": [
+          {
+            "sku": "a",
+            "title": "a",
+            "qty": 1,
+            "unit": 1500,
+            "category": "software"
+          }
+        ],
+        "total": 1500,
+        "currency": "USD",
+        "rail": "credits",
+        "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg"
+      },
+      "spent": {
+        "period_spent": 19000
+      },
+      "expect": {
+        "ok": false,
+        "step_up_required": false,
+        "reason": "over_limit"
+      }
+    },
+    {
+      "name": "at-period-edge",
+      "description": "period_spent 19000 plus 1000 reaches period_max exactly.",
+      "mandate": "M",
+      "cart": {
+        "profile": "cart/1",
+        "merchant": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "lines": [
+          {
+            "sku": "lst_123",
+            "title": "Dataset",
+            "qty": 1,
+            "unit": 1000,
+            "category": "data"
+          }
+        ],
+        "total": 1000,
+        "currency": "USD",
+        "rail": "credits",
+        "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg"
+      },
+      "spent": {
+        "period_spent": 19000
+      },
+      "expect": {
+        "ok": true,
+        "step_up_required": false
+      }
+    },
+    {
+      "name": "over-total",
+      "description": "total_spent 99500 plus 1000 passes total_max 100000.",
+      "mandate": "M",
+      "cart": {
+        "profile": "cart/1",
+        "merchant": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "lines": [
+          {
+            "sku": "lst_123",
+            "title": "Dataset",
+            "qty": 1,
+            "unit": 1000,
+            "category": "data"
+          }
+        ],
+        "total": 1000,
+        "currency": "USD",
+        "rail": "credits",
+        "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg"
+      },
+      "spent": {
+        "total_spent": 99500
+      },
+      "expect": {
+        "ok": false,
+        "step_up_required": false,
+        "reason": "over_limit"
+      }
+    },
+    {
+      "name": "merchant-pattern",
+      "description": "did:web:api.moltbotden.com matches *.moltbotden.com.",
+      "mandate": "M",
+      "cart": {
+        "profile": "cart/1",
+        "merchant": "did:web:api.moltbotden.com",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "lines": [
+          {
+            "sku": "lst_123",
+            "title": "Dataset",
+            "qty": 1,
+            "unit": 1000,
+            "category": "data"
+          }
+        ],
+        "total": 1000,
+        "currency": "USD",
+        "rail": "credits",
+        "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg"
+      },
+      "expect": {
+        "ok": true,
+        "step_up_required": false
+      }
+    },
+    {
+      "name": "merchant-pattern-apex",
+      "description": "The apex moltbotden.com is not matched by *.moltbotden.com.",
+      "mandate": "M",
+      "cart": {
+        "profile": "cart/1",
+        "merchant": "did:web:moltbotden.com",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "lines": [
+          {
+            "sku": "lst_123",
+            "title": "Dataset",
+            "qty": 1,
+            "unit": 1000,
+            "category": "data"
+          }
+        ],
+        "total": 1000,
+        "currency": "USD",
+        "rail": "credits",
+        "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg"
+      },
+      "expect": {
+        "ok": false,
+        "step_up_required": false,
+        "reason": "out_of_scope"
+      }
+    },
+    {
+      "name": "merchant-pattern-lookalike",
+      "description": "evilmoltbotden.com is not a subdomain.",
+      "mandate": "M",
+      "cart": {
+        "profile": "cart/1",
+        "merchant": "did:web:evilmoltbotden.com",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "lines": [
+          {
+            "sku": "lst_123",
+            "title": "Dataset",
+            "qty": 1,
+            "unit": 1000,
+            "category": "data"
+          }
+        ],
+        "total": 1000,
+        "currency": "USD",
+        "rail": "credits",
+        "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg"
+      },
+      "expect": {
+        "ok": false,
+        "step_up_required": false,
+        "reason": "out_of_scope"
+      }
+    },
+    {
+      "name": "merchant-pattern-port",
+      "description": "A did:web with an encoded port matches its host.",
+      "mandate": "M",
+      "cart": {
+        "profile": "cart/1",
+        "merchant": "did:web:api.moltbotden.com%3A8443",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "lines": [
+          {
+            "sku": "lst_123",
+            "title": "Dataset",
+            "qty": 1,
+            "unit": 1000,
+            "category": "data"
+          }
+        ],
+        "total": 1000,
+        "currency": "USD",
+        "rail": "credits",
+        "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg"
+      },
+      "expect": {
+        "ok": true,
+        "step_up_required": false
+      }
+    },
+    {
+      "name": "merchant-domain-exact",
+      "description": "A bare domain pattern equals the host of a did:web merchant.",
+      "mandate": "N",
+      "cart": {
+        "profile": "cart/1",
+        "merchant": "did:web:shop.example",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "lines": [
+          {
+            "sku": "a",
+            "title": "a",
+            "qty": 1,
+            "unit": 100,
+            "category": "software"
+          }
+        ],
+        "total": 100,
+        "currency": "USD",
+        "rail": "card",
+        "mandate_id": "md_zvhzz5rtuczhqjajrzi3sam5fm"
+      },
+      "expect": {
+        "ok": true,
+        "step_up_required": false
+      }
+    },
+    {
+      "name": "merchant-not-listed",
+      "description": "A merchant outside the list.",
+      "mandate": "N",
+      "cart": {
+        "profile": "cart/1",
+        "merchant": "did:web:other.example",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "lines": [
+          {
+            "sku": "a",
+            "title": "a",
+            "qty": 1,
+            "unit": 100,
+            "category": "software"
+          }
+        ],
+        "total": 100,
+        "currency": "USD",
+        "rail": "card",
+        "mandate_id": null
+      },
+      "expect": {
+        "ok": false,
+        "step_up_required": false,
+        "reason": "out_of_scope"
+      }
+    },
+    {
+      "name": "rail-not-in-scope",
+      "description": "credits is not in the narrow mandate's rails.",
+      "mandate": "N",
+      "cart": {
+        "profile": "cart/1",
+        "merchant": "did:web:shop.example",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "lines": [
+          {
+            "sku": "a",
+            "title": "a",
+            "qty": 1,
+            "unit": 100,
+            "category": "software"
+          }
+        ],
+        "total": 100,
+        "currency": "USD",
+        "rail": "credits",
+        "mandate_id": null
+      },
+      "expect": {
+        "ok": false,
+        "step_up_required": false,
+        "reason": "out_of_scope"
+      }
+    },
+    {
+      "name": "category-not-in-scope",
+      "description": "A hardware line under a software-only mandate.",
+      "mandate": "N",
+      "cart": {
+        "profile": "cart/1",
+        "merchant": "did:web:shop.example",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "lines": [
+          {
+            "sku": "a",
+            "title": "a",
+            "qty": 1,
+            "unit": 100,
+            "category": "hardware"
+          }
+        ],
+        "total": 100,
+        "currency": "USD",
+        "rail": "card",
+        "mandate_id": null
+      },
+      "expect": {
+        "ok": false,
+        "step_up_required": false,
+        "reason": "out_of_scope"
+      }
+    },
+    {
+      "name": "line-without-category",
+      "description": "A line with no category under a mandate that lists categories.",
+      "mandate": "N",
+      "cart": {
+        "profile": "cart/1",
+        "merchant": "did:web:shop.example",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "lines": [
+          {
+            "sku": "a",
+            "title": "a",
+            "qty": 1,
+            "unit": 100
+          }
+        ],
+        "total": 100,
+        "currency": "USD",
+        "rail": "card",
+        "mandate_id": null
+      },
+      "expect": {
+        "ok": false,
+        "step_up_required": false,
+        "reason": "out_of_scope"
+      }
+    },
+    {
+      "name": "wrong-agent",
+      "description": "The cart names another agent.",
+      "mandate": "M",
+      "cart": {
+        "profile": "cart/1",
+        "merchant": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+        "agent_did": "did:key:z6MkweEczu3W59i7TqPgQFf97PgJVyPtvyijLYGRa88A31QY",
+        "lines": [
+          {
+            "sku": "lst_123",
+            "title": "Dataset",
+            "qty": 1,
+            "unit": 1000,
+            "category": "data"
+          }
+        ],
+        "total": 1000,
+        "currency": "USD",
+        "rail": "credits",
+        "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg"
+      },
+      "expect": {
+        "ok": false,
+        "step_up_required": false,
+        "reason": "wrong_agent"
+      }
+    },
+    {
+      "name": "wrong-mandate",
+      "description": "The cart names another mandate.",
+      "mandate": "M",
+      "cart": {
+        "profile": "cart/1",
+        "merchant": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "lines": [
+          {
+            "sku": "lst_123",
+            "title": "Dataset",
+            "qty": 1,
+            "unit": 1000,
+            "category": "data"
+          }
+        ],
+        "total": 1000,
+        "currency": "USD",
+        "rail": "credits",
+        "mandate_id": "md_rmonrvlhazzxsgiih4bbrt6qxt"
+      },
+      "expect": {
+        "ok": false,
+        "step_up_required": false,
+        "reason": "wrong_mandate"
+      }
+    },
+    {
+      "name": "null-mandate-id",
+      "description": "A cart that names no mandate may be checked against one.",
+      "mandate": "M",
+      "cart": {
+        "profile": "cart/1",
+        "merchant": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "lines": [
+          {
+            "sku": "lst_123",
+            "title": "Dataset",
+            "qty": 1,
+            "unit": 1000,
+            "category": "data"
+          }
+        ],
+        "total": 1000,
+        "currency": "USD",
+        "rail": "credits",
+        "mandate_id": null
+      },
+      "expect": {
+        "ok": true,
+        "step_up_required": false
+      }
+    },
+    {
+      "name": "wrong-currency",
+      "description": "EUR cart, USD mandate.",
+      "mandate": "M",
+      "cart": {
+        "profile": "cart/1",
+        "merchant": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "lines": [
+          {
+            "sku": "lst_123",
+            "title": "Dataset",
+            "qty": 1,
+            "unit": 1000,
+            "category": "data"
+          }
+        ],
+        "total": 1000,
+        "currency": "EUR",
+        "rail": "credits",
+        "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg"
+      },
+      "expect": {
+        "ok": false,
+        "step_up_required": false,
+        "reason": "wrong_currency"
+      }
+    },
+    {
+      "name": "bad-cart",
+      "description": "total does not equal the lines.",
+      "mandate": "M",
+      "cart": {
+        "profile": "cart/1",
+        "merchant": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "lines": [
+          {
+            "sku": "lst_123",
+            "title": "Dataset",
+            "qty": 1,
+            "unit": 1000,
+            "category": "data"
+          }
+        ],
+        "total": 999,
+        "currency": "USD",
+        "rail": "credits",
+        "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg"
+      },
+      "expect": {
+        "ok": false,
+        "step_up_required": false,
+        "reason": "bad_cart"
+      }
+    }
+  ]
+}

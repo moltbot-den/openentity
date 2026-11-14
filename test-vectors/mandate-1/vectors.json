@@ -1,0 +1,1242 @@
+{
+  "description": "mandate/1 vectors. Owner DID, key states and device keys are those of approval-2.0 (published throwaway keys). cases: verify `mandate` with `context` (key_state names an entry of approval-2.0/vectors.json key_states; agent_did, now and the status answer); `expect` is {ok: true, kid, mandate_id, limits, scope, step_up_over, period_spent?, total_spent?} or {ok: false, error}. digests: the signing preimage and its SHA-256. replay: an approval/2.0 carrying a mandate's signature must fail bad_signature.",
+  "warning": "PUBLISHED THROWAWAY KEYS FOR TEST VECTORS ONLY. Every secret is published (test-vectors/approval-2.0/keys.json and test-vectors/keys.json). Anyone can sign with them. Never use them for anything real.",
+  "verifier_scope": "*",
+  "digests": [
+    {
+      "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg",
+      "preimage": "mandate/1|*|{\"agent_did\":\"did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7\",\"expires_at\":1796601600,\"issued_at\":1794009600,\"issuer_did\":\"did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q\",\"limits\":{\"currency\":\"USD\",\"per_tx_max\":5000,\"period\":\"P1D\",\"period_max\":20000,\"total_max\":100000},\"mandate_id\":\"md_4b3eaz4gie3atj4jlyz375pbfg\",\"scope\":{\"categories\":[\"software\",\"data\"],\"merchants\":[\"did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw\",\"*.moltbotden.com\"],\"rails\":[\"card\",\"x402\",\"mpp\",\"credits\",\"usdc\"]},\"status\":\"https://account.openentity.org/v1/mandates/md_4b3eaz4gie3atj4jlyz375pbfg/status\",\"step_up_over\":2500,\"version\":\"mandate/1\"}",
+      "digest": "c4038f40931a25f9c093468b42eaf10972dfd438afab758d0d5cd5c40b6c8cdd"
+    },
+    {
+      "mandate_id": "md_dfgsoad6qhcvolo3gobvk3tsor",
+      "preimage": "mandate/1|*|{\"agent_did\":\"did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7\",\"ap2\":{\"checkout_mandate_hash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"expires_at\":1796601600,\"issued_at\":1794009600,\"issuer_did\":\"did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q\",\"limits\":{\"currency\":\"USD\",\"per_tx_max\":5000,\"period\":\"P1D\",\"period_max\":20000,\"total_max\":100000},\"mandate_id\":\"md_dfgsoad6qhcvolo3gobvk3tsor\",\"scope\":{\"categories\":[\"software\",\"data\"],\"merchants\":[\"did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw\",\"*.moltbotden.com\"],\"rails\":[\"card\",\"x402\",\"mpp\",\"credits\",\"usdc\"]},\"status\":\"https://account.openentity.org/v1/mandates/md_dfgsoad6qhcvolo3gobvk3tsor/status\",\"step_up_over\":2500,\"version\":\"mandate/1\"}",
+      "digest": "b2add918526ed4513b8a2428c8661aad52fdc0561fdc0c8e3496ffa6dd624f75"
+    }
+  ],
+  "cases": [
+    {
+      "name": "valid-with-status",
+      "description": "Thirty-day mandate, active status answer.",
+      "mandate": {
+        "version": "mandate/1",
+        "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg",
+        "issuer_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "issued_at": 1794009600,
+        "expires_at": 1796601600,
+        "limits": {
+          "currency": "USD",
+          "per_tx_max": 5000,
+          "period": "P1D",
+          "period_max": 20000,
+          "total_max": 100000
+        },
+        "scope": {
+          "merchants": [
+            "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+            "*.moltbotden.com"
+          ],
+          "categories": [
+            "software",
+            "data"
+          ],
+          "rails": [
+            "card",
+            "x402",
+            "mpp",
+            "credits",
+            "usdc"
+          ]
+        },
+        "step_up_over": 2500,
+        "status": "https://account.openentity.org/v1/mandates/md_4b3eaz4gie3atj4jlyz375pbfg/status",
+        "signature": {
+          "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+          "form": "p256",
+          "signature": "nroQ52XQe3s5Xs7_ZCUA1p33MQ8UyBgscWtCjViHTtoZ4okUeZ1AVdFgoTI95wA7nKjZxi8xccWUFawCLinFHw"
+        }
+      },
+      "context": {
+        "key_state": "owner",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "now": 1794010600,
+        "status": {
+          "status": "active",
+          "period_spent": 4000,
+          "total_spent": 9000
+        }
+      },
+      "expect": {
+        "ok": true,
+        "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg",
+        "limits": {
+          "currency": "USD",
+          "per_tx_max": 5000,
+          "period": "P1D",
+          "period_max": 20000,
+          "total_max": 100000
+        },
+        "scope": {
+          "merchants": [
+            "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+            "*.moltbotden.com"
+          ],
+          "categories": [
+            "software",
+            "data"
+          ],
+          "rails": [
+            "card",
+            "x402",
+            "mpp",
+            "credits",
+            "usdc"
+          ]
+        },
+        "step_up_over": 2500,
+        "kid": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+        "period_spent": 4000,
+        "total_spent": 9000
+      }
+    },
+    {
+      "name": "valid-offline",
+      "description": "A mandate with a day or less left needs no status answer (the offline mode).",
+      "mandate": {
+        "version": "mandate/1",
+        "mandate_id": "md_rmonrvlhazzxsgiih4bbrt6qxt",
+        "issuer_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "issued_at": 1794009600,
+        "expires_at": 1794096000,
+        "limits": {
+          "currency": "USD",
+          "per_tx_max": 5000,
+          "period": "P1D",
+          "period_max": 20000,
+          "total_max": 100000
+        },
+        "scope": {
+          "merchants": [
+            "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+            "*.moltbotden.com"
+          ],
+          "categories": [
+            "software",
+            "data"
+          ],
+          "rails": [
+            "card",
+            "x402",
+            "mpp",
+            "credits",
+            "usdc"
+          ]
+        },
+        "step_up_over": 2500,
+        "status": "https://account.openentity.org/v1/mandates/md_rmonrvlhazzxsgiih4bbrt6qxt/status",
+        "signature": {
+          "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+          "form": "p256",
+          "signature": "7ahTFPa1V_bbMhiCLy5T36Zu4eozUA_BXcaJ3IUirjQ2csy0ph0IueIZZORsc2h5x5FCajSZxeAy8b9A0kxwKA"
+        }
+      },
+      "context": {
+        "key_state": "owner",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "now": 1794010600
+      },
+      "expect": {
+        "ok": true,
+        "mandate_id": "md_rmonrvlhazzxsgiih4bbrt6qxt",
+        "limits": {
+          "currency": "USD",
+          "per_tx_max": 5000,
+          "period": "P1D",
+          "period_max": 20000,
+          "total_max": 100000
+        },
+        "scope": {
+          "merchants": [
+            "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+            "*.moltbotden.com"
+          ],
+          "categories": [
+            "software",
+            "data"
+          ],
+          "rails": [
+            "card",
+            "x402",
+            "mpp",
+            "credits",
+            "usdc"
+          ]
+        },
+        "step_up_over": 2500,
+        "kid": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU"
+      }
+    },
+    {
+      "name": "valid-with-ap2-binding",
+      "description": "The optional ap2 binding is part of the signed body.",
+      "mandate": {
+        "version": "mandate/1",
+        "mandate_id": "md_dfgsoad6qhcvolo3gobvk3tsor",
+        "issuer_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "issued_at": 1794009600,
+        "expires_at": 1796601600,
+        "limits": {
+          "currency": "USD",
+          "per_tx_max": 5000,
+          "period": "P1D",
+          "period_max": 20000,
+          "total_max": 100000
+        },
+        "scope": {
+          "merchants": [
+            "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+            "*.moltbotden.com"
+          ],
+          "categories": [
+            "software",
+            "data"
+          ],
+          "rails": [
+            "card",
+            "x402",
+            "mpp",
+            "credits",
+            "usdc"
+          ]
+        },
+        "step_up_over": 2500,
+        "status": "https://account.openentity.org/v1/mandates/md_dfgsoad6qhcvolo3gobvk3tsor/status",
+        "ap2": {
+          "checkout_mandate_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "signature": {
+          "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+          "form": "p256",
+          "signature": "3QMS2INZQRnK-gGs9gBvlyXU9qvMvQ5Xr-JOp25vTcBIhK1SxlPP2mnc3yrPunQLyfsILdzTpHLqn1fOePTYLQ"
+        }
+      },
+      "context": {
+        "key_state": "owner",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "now": 1794010600,
+        "status": {
+          "status": "active",
+          "period_spent": 4000,
+          "total_spent": 9000
+        }
+      },
+      "expect": {
+        "ok": true,
+        "mandate_id": "md_dfgsoad6qhcvolo3gobvk3tsor",
+        "limits": {
+          "currency": "USD",
+          "per_tx_max": 5000,
+          "period": "P1D",
+          "period_max": 20000,
+          "total_max": 100000
+        },
+        "scope": {
+          "merchants": [
+            "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+            "*.moltbotden.com"
+          ],
+          "categories": [
+            "software",
+            "data"
+          ],
+          "rails": [
+            "card",
+            "x402",
+            "mpp",
+            "credits",
+            "usdc"
+          ]
+        },
+        "step_up_over": 2500,
+        "kid": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+        "period_spent": 4000,
+        "total_spent": 9000
+      }
+    },
+    {
+      "name": "status-required",
+      "description": "More than a day left and no status answer: refused.",
+      "mandate": {
+        "version": "mandate/1",
+        "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg",
+        "issuer_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "issued_at": 1794009600,
+        "expires_at": 1796601600,
+        "limits": {
+          "currency": "USD",
+          "per_tx_max": 5000,
+          "period": "P1D",
+          "period_max": 20000,
+          "total_max": 100000
+        },
+        "scope": {
+          "merchants": [
+            "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+            "*.moltbotden.com"
+          ],
+          "categories": [
+            "software",
+            "data"
+          ],
+          "rails": [
+            "card",
+            "x402",
+            "mpp",
+            "credits",
+            "usdc"
+          ]
+        },
+        "step_up_over": 2500,
+        "status": "https://account.openentity.org/v1/mandates/md_4b3eaz4gie3atj4jlyz375pbfg/status",
+        "signature": {
+          "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+          "form": "p256",
+          "signature": "nroQ52XQe3s5Xs7_ZCUA1p33MQ8UyBgscWtCjViHTtoZ4okUeZ1AVdFgoTI95wA7nKjZxi8xccWUFawCLinFHw"
+        }
+      },
+      "context": {
+        "key_state": "owner",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "now": 1794010600
+      },
+      "expect": {
+        "ok": false,
+        "error": "status_required"
+      }
+    },
+    {
+      "name": "expired",
+      "description": "now equals expires_at.",
+      "mandate": {
+        "version": "mandate/1",
+        "mandate_id": "md_rmonrvlhazzxsgiih4bbrt6qxt",
+        "issuer_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "issued_at": 1794009600,
+        "expires_at": 1794096000,
+        "limits": {
+          "currency": "USD",
+          "per_tx_max": 5000,
+          "period": "P1D",
+          "period_max": 20000,
+          "total_max": 100000
+        },
+        "scope": {
+          "merchants": [
+            "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+            "*.moltbotden.com"
+          ],
+          "categories": [
+            "software",
+            "data"
+          ],
+          "rails": [
+            "card",
+            "x402",
+            "mpp",
+            "credits",
+            "usdc"
+          ]
+        },
+        "step_up_over": 2500,
+        "status": "https://account.openentity.org/v1/mandates/md_rmonrvlhazzxsgiih4bbrt6qxt/status",
+        "signature": {
+          "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+          "form": "p256",
+          "signature": "7ahTFPa1V_bbMhiCLy5T36Zu4eozUA_BXcaJ3IUirjQ2csy0ph0IueIZZORsc2h5x5FCajSZxeAy8b9A0kxwKA"
+        }
+      },
+      "context": {
+        "key_state": "owner",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "now": 1794096000
+      },
+      "expect": {
+        "ok": false,
+        "error": "expired"
+      }
+    },
+    {
+      "name": "not-yet-valid",
+      "description": "now before issued_at.",
+      "mandate": {
+        "version": "mandate/1",
+        "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg",
+        "issuer_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "issued_at": 1794009600,
+        "expires_at": 1796601600,
+        "limits": {
+          "currency": "USD",
+          "per_tx_max": 5000,
+          "period": "P1D",
+          "period_max": 20000,
+          "total_max": 100000
+        },
+        "scope": {
+          "merchants": [
+            "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+            "*.moltbotden.com"
+          ],
+          "categories": [
+            "software",
+            "data"
+          ],
+          "rails": [
+            "card",
+            "x402",
+            "mpp",
+            "credits",
+            "usdc"
+          ]
+        },
+        "step_up_over": 2500,
+        "status": "https://account.openentity.org/v1/mandates/md_4b3eaz4gie3atj4jlyz375pbfg/status",
+        "signature": {
+          "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+          "form": "p256",
+          "signature": "nroQ52XQe3s5Xs7_ZCUA1p33MQ8UyBgscWtCjViHTtoZ4okUeZ1AVdFgoTI95wA7nKjZxi8xccWUFawCLinFHw"
+        }
+      },
+      "context": {
+        "key_state": "owner",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "now": 1794009599,
+        "status": {
+          "status": "active",
+          "period_spent": 4000,
+          "total_spent": 9000
+        }
+      },
+      "expect": {
+        "ok": false,
+        "error": "not_yet_valid"
+      }
+    },
+    {
+      "name": "revoked",
+      "description": "The status endpoint says revoked (the owner paused the agent or revoked the mandate).",
+      "mandate": {
+        "version": "mandate/1",
+        "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg",
+        "issuer_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "issued_at": 1794009600,
+        "expires_at": 1796601600,
+        "limits": {
+          "currency": "USD",
+          "per_tx_max": 5000,
+          "period": "P1D",
+          "period_max": 20000,
+          "total_max": 100000
+        },
+        "scope": {
+          "merchants": [
+            "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+            "*.moltbotden.com"
+          ],
+          "categories": [
+            "software",
+            "data"
+          ],
+          "rails": [
+            "card",
+            "x402",
+            "mpp",
+            "credits",
+            "usdc"
+          ]
+        },
+        "step_up_over": 2500,
+        "status": "https://account.openentity.org/v1/mandates/md_4b3eaz4gie3atj4jlyz375pbfg/status",
+        "signature": {
+          "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+          "form": "p256",
+          "signature": "nroQ52XQe3s5Xs7_ZCUA1p33MQ8UyBgscWtCjViHTtoZ4okUeZ1AVdFgoTI95wA7nKjZxi8xccWUFawCLinFHw"
+        }
+      },
+      "context": {
+        "key_state": "owner",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "now": 1794010600,
+        "status": {
+          "status": "revoked"
+        }
+      },
+      "expect": {
+        "ok": false,
+        "error": "revoked"
+      }
+    },
+    {
+      "name": "exhausted",
+      "description": "The status endpoint says exhausted.",
+      "mandate": {
+        "version": "mandate/1",
+        "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg",
+        "issuer_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "issued_at": 1794009600,
+        "expires_at": 1796601600,
+        "limits": {
+          "currency": "USD",
+          "per_tx_max": 5000,
+          "period": "P1D",
+          "period_max": 20000,
+          "total_max": 100000
+        },
+        "scope": {
+          "merchants": [
+            "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+            "*.moltbotden.com"
+          ],
+          "categories": [
+            "software",
+            "data"
+          ],
+          "rails": [
+            "card",
+            "x402",
+            "mpp",
+            "credits",
+            "usdc"
+          ]
+        },
+        "step_up_over": 2500,
+        "status": "https://account.openentity.org/v1/mandates/md_4b3eaz4gie3atj4jlyz375pbfg/status",
+        "signature": {
+          "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+          "form": "p256",
+          "signature": "nroQ52XQe3s5Xs7_ZCUA1p33MQ8UyBgscWtCjViHTtoZ4okUeZ1AVdFgoTI95wA7nKjZxi8xccWUFawCLinFHw"
+        }
+      },
+      "context": {
+        "key_state": "owner",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "now": 1794010600,
+        "status": {
+          "status": "exhausted",
+          "period_spent": 20000
+        }
+      },
+      "expect": {
+        "ok": false,
+        "error": "exhausted"
+      }
+    },
+    {
+      "name": "wrong-agent",
+      "description": "Another agent presents the mandate.",
+      "mandate": {
+        "version": "mandate/1",
+        "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg",
+        "issuer_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "issued_at": 1794009600,
+        "expires_at": 1796601600,
+        "limits": {
+          "currency": "USD",
+          "per_tx_max": 5000,
+          "period": "P1D",
+          "period_max": 20000,
+          "total_max": 100000
+        },
+        "scope": {
+          "merchants": [
+            "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+            "*.moltbotden.com"
+          ],
+          "categories": [
+            "software",
+            "data"
+          ],
+          "rails": [
+            "card",
+            "x402",
+            "mpp",
+            "credits",
+            "usdc"
+          ]
+        },
+        "step_up_over": 2500,
+        "status": "https://account.openentity.org/v1/mandates/md_4b3eaz4gie3atj4jlyz375pbfg/status",
+        "signature": {
+          "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+          "form": "p256",
+          "signature": "nroQ52XQe3s5Xs7_ZCUA1p33MQ8UyBgscWtCjViHTtoZ4okUeZ1AVdFgoTI95wA7nKjZxi8xccWUFawCLinFHw"
+        }
+      },
+      "context": {
+        "key_state": "owner",
+        "agent_did": "did:key:z6MkweEczu3W59i7TqPgQFf97PgJVyPtvyijLYGRa88A31QY",
+        "now": 1794010600,
+        "status": {
+          "status": "active",
+          "period_spent": 4000,
+          "total_spent": 9000
+        }
+      },
+      "expect": {
+        "ok": false,
+        "error": "wrong_agent"
+      }
+    },
+    {
+      "name": "wrong-owner",
+      "description": "Checked against another owner's key log.",
+      "mandate": {
+        "version": "mandate/1",
+        "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg",
+        "issuer_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "issued_at": 1794009600,
+        "expires_at": 1796601600,
+        "limits": {
+          "currency": "USD",
+          "per_tx_max": 5000,
+          "period": "P1D",
+          "period_max": 20000,
+          "total_max": 100000
+        },
+        "scope": {
+          "merchants": [
+            "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+            "*.moltbotden.com"
+          ],
+          "categories": [
+            "software",
+            "data"
+          ],
+          "rails": [
+            "card",
+            "x402",
+            "mpp",
+            "credits",
+            "usdc"
+          ]
+        },
+        "step_up_over": 2500,
+        "status": "https://account.openentity.org/v1/mandates/md_4b3eaz4gie3atj4jlyz375pbfg/status",
+        "signature": {
+          "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+          "form": "p256",
+          "signature": "nroQ52XQe3s5Xs7_ZCUA1p33MQ8UyBgscWtCjViHTtoZ4okUeZ1AVdFgoTI95wA7nKjZxi8xccWUFawCLinFHw"
+        }
+      },
+      "context": {
+        "key_state": "single",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "now": 1794010600,
+        "status": {
+          "status": "active",
+          "period_spent": 4000,
+          "total_spent": 9000
+        }
+      },
+      "expect": {
+        "ok": false,
+        "error": "wrong_owner"
+      }
+    },
+    {
+      "name": "owner-closed",
+      "description": "The owner's key log is closed.",
+      "mandate": {
+        "version": "mandate/1",
+        "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg",
+        "issuer_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "issued_at": 1794009600,
+        "expires_at": 1796601600,
+        "limits": {
+          "currency": "USD",
+          "per_tx_max": 5000,
+          "period": "P1D",
+          "period_max": 20000,
+          "total_max": 100000
+        },
+        "scope": {
+          "merchants": [
+            "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+            "*.moltbotden.com"
+          ],
+          "categories": [
+            "software",
+            "data"
+          ],
+          "rails": [
+            "card",
+            "x402",
+            "mpp",
+            "credits",
+            "usdc"
+          ]
+        },
+        "step_up_over": 2500,
+        "status": "https://account.openentity.org/v1/mandates/md_4b3eaz4gie3atj4jlyz375pbfg/status",
+        "signature": {
+          "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+          "form": "p256",
+          "signature": "nroQ52XQe3s5Xs7_ZCUA1p33MQ8UyBgscWtCjViHTtoZ4okUeZ1AVdFgoTI95wA7nKjZxi8xccWUFawCLinFHw"
+        }
+      },
+      "context": {
+        "key_state": "closed",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "now": 1794010600,
+        "status": {
+          "status": "active",
+          "period_spent": 4000,
+          "total_spent": 9000
+        }
+      },
+      "expect": {
+        "ok": false,
+        "error": "owner_closed"
+      }
+    },
+    {
+      "name": "revoked-device-key",
+      "description": "Signed by an approver that has since been revoked.",
+      "mandate": {
+        "version": "mandate/1",
+        "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg",
+        "issuer_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "issued_at": 1794009600,
+        "expires_at": 1796601600,
+        "limits": {
+          "currency": "USD",
+          "per_tx_max": 5000,
+          "period": "P1D",
+          "period_max": 20000,
+          "total_max": 100000
+        },
+        "scope": {
+          "merchants": [
+            "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+            "*.moltbotden.com"
+          ],
+          "categories": [
+            "software",
+            "data"
+          ],
+          "rails": [
+            "card",
+            "x402",
+            "mpp",
+            "credits",
+            "usdc"
+          ]
+        },
+        "step_up_over": 2500,
+        "status": "https://account.openentity.org/v1/mandates/md_4b3eaz4gie3atj4jlyz375pbfg/status",
+        "signature": {
+          "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+          "form": "p256",
+          "signature": "nroQ52XQe3s5Xs7_ZCUA1p33MQ8UyBgscWtCjViHTtoZ4okUeZ1AVdFgoTI95wA7nKjZxi8xccWUFawCLinFHw"
+        }
+      },
+      "context": {
+        "key_state": "revoked",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "now": 1794010600,
+        "status": {
+          "status": "active",
+          "period_spent": 4000,
+          "total_spent": 9000
+        }
+      },
+      "expect": {
+        "ok": false,
+        "error": "unknown_key"
+      }
+    },
+    {
+      "name": "key-outside-log",
+      "description": "Signed by a key that is not in the owner's key log.",
+      "mandate": {
+        "version": "mandate/1",
+        "mandate_id": "md_4xeo2gmjnhkxulk73tbnjefqfk",
+        "issuer_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "issued_at": 1794009600,
+        "expires_at": 1796601600,
+        "limits": {
+          "currency": "USD",
+          "per_tx_max": 5000,
+          "period": "P1D",
+          "period_max": 20000,
+          "total_max": 100000
+        },
+        "scope": {
+          "merchants": [
+            "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+            "*.moltbotden.com"
+          ],
+          "categories": [
+            "software",
+            "data"
+          ],
+          "rails": [
+            "card",
+            "x402",
+            "mpp",
+            "credits",
+            "usdc"
+          ]
+        },
+        "step_up_over": 2500,
+        "status": "https://account.openentity.org/v1/mandates/md_4xeo2gmjnhkxulk73tbnjefqfk/status",
+        "signature": {
+          "device_id": "Q4Mpqx25W-jQtHIEmVdL1sI1FnZhtJqguETOQ4mGCAU",
+          "form": "p256",
+          "signature": "oLYyk_xD-LiQZLd-Og2etQm0GQiXcOPr-WzGORc0oyh67LX4K4mPlBcwVHCdxBrziXAYq1hQNHBBgEMpZmTWUw"
+        }
+      },
+      "context": {
+        "key_state": "owner",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "now": 1794010600,
+        "status": {
+          "status": "active",
+          "period_spent": 4000,
+          "total_spent": 9000
+        }
+      },
+      "expect": {
+        "ok": false,
+        "error": "unknown_key"
+      }
+    },
+    {
+      "name": "tampered-limits",
+      "description": "per_tx_max raised after signing.",
+      "mandate": {
+        "version": "mandate/1",
+        "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg",
+        "issuer_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "issued_at": 1794009600,
+        "expires_at": 1796601600,
+        "limits": {
+          "currency": "USD",
+          "per_tx_max": 5001,
+          "period": "P1D",
+          "period_max": 20000,
+          "total_max": 100000
+        },
+        "scope": {
+          "merchants": [
+            "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+            "*.moltbotden.com"
+          ],
+          "categories": [
+            "software",
+            "data"
+          ],
+          "rails": [
+            "card",
+            "x402",
+            "mpp",
+            "credits",
+            "usdc"
+          ]
+        },
+        "step_up_over": 2500,
+        "status": "https://account.openentity.org/v1/mandates/md_4b3eaz4gie3atj4jlyz375pbfg/status",
+        "signature": {
+          "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+          "form": "p256",
+          "signature": "nroQ52XQe3s5Xs7_ZCUA1p33MQ8UyBgscWtCjViHTtoZ4okUeZ1AVdFgoTI95wA7nKjZxi8xccWUFawCLinFHw"
+        }
+      },
+      "context": {
+        "key_state": "owner",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "now": 1794010600,
+        "status": {
+          "status": "active",
+          "period_spent": 4000,
+          "total_spent": 9000
+        }
+      },
+      "expect": {
+        "ok": false,
+        "error": "bad_signature"
+      }
+    },
+    {
+      "name": "approval-signature-as-mandate",
+      "description": "The signature of an approval/2.0 (a different digest prefix) pasted into a mandate.",
+      "mandate": {
+        "version": "mandate/1",
+        "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg",
+        "issuer_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "issued_at": 1794009600,
+        "expires_at": 1796601600,
+        "limits": {
+          "currency": "USD",
+          "per_tx_max": 5000,
+          "period": "P1D",
+          "period_max": 20000,
+          "total_max": 100000
+        },
+        "scope": {
+          "merchants": [
+            "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+            "*.moltbotden.com"
+          ],
+          "categories": [
+            "software",
+            "data"
+          ],
+          "rails": [
+            "card",
+            "x402",
+            "mpp",
+            "credits",
+            "usdc"
+          ]
+        },
+        "step_up_over": 2500,
+        "status": "https://account.openentity.org/v1/mandates/md_4b3eaz4gie3atj4jlyz375pbfg/status",
+        "signature": {
+          "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+          "form": "p256",
+          "signature": "dSEffeOblaG-VzgFSgx_X4GsNfkGnUBxTqzxukR4kxhkhe9P3urDlLilrQNmJnItRTHOgZRd1t_3RY_ZzKGYNg"
+        }
+      },
+      "context": {
+        "key_state": "owner",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "now": 1794010600,
+        "status": {
+          "status": "active",
+          "period_spent": 4000,
+          "total_spent": 9000
+        }
+      },
+      "expect": {
+        "ok": false,
+        "error": "bad_signature"
+      }
+    },
+    {
+      "name": "bad-version",
+      "description": "version is not mandate/1.",
+      "mandate": {
+        "version": "mandate/2",
+        "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg",
+        "issuer_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "issued_at": 1794009600,
+        "expires_at": 1796601600,
+        "limits": {
+          "currency": "USD",
+          "per_tx_max": 5000,
+          "period": "P1D",
+          "period_max": 20000,
+          "total_max": 100000
+        },
+        "scope": {
+          "merchants": [
+            "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+            "*.moltbotden.com"
+          ],
+          "categories": [
+            "software",
+            "data"
+          ],
+          "rails": [
+            "card",
+            "x402",
+            "mpp",
+            "credits",
+            "usdc"
+          ]
+        },
+        "step_up_over": 2500,
+        "status": "https://account.openentity.org/v1/mandates/md_4b3eaz4gie3atj4jlyz375pbfg/status",
+        "signature": {
+          "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+          "form": "p256",
+          "signature": "nroQ52XQe3s5Xs7_ZCUA1p33MQ8UyBgscWtCjViHTtoZ4okUeZ1AVdFgoTI95wA7nKjZxi8xccWUFawCLinFHw"
+        }
+      },
+      "context": {
+        "key_state": "owner",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "now": 1794010600,
+        "status": {
+          "status": "active",
+          "period_spent": 4000,
+          "total_spent": 9000
+        }
+      },
+      "expect": {
+        "ok": false,
+        "error": "bad_version"
+      }
+    },
+    {
+      "name": "ttl-over-90-days",
+      "description": "expires_at is more than 90 days after issued_at.",
+      "mandate": {
+        "version": "mandate/1",
+        "mandate_id": "md_giqgk4dwjbfgqwdc2juczp7snx",
+        "issuer_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "issued_at": 1794009600,
+        "expires_at": 1801872000,
+        "limits": {
+          "currency": "USD",
+          "per_tx_max": 5000,
+          "period": "P1D",
+          "period_max": 20000,
+          "total_max": 100000
+        },
+        "scope": {
+          "merchants": [
+            "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+            "*.moltbotden.com"
+          ],
+          "categories": [
+            "software",
+            "data"
+          ],
+          "rails": [
+            "card",
+            "x402",
+            "mpp",
+            "credits",
+            "usdc"
+          ]
+        },
+        "step_up_over": 2500,
+        "status": "https://account.openentity.org/v1/mandates/md_giqgk4dwjbfgqwdc2juczp7snx/status",
+        "signature": {
+          "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+          "form": "p256",
+          "signature": "EKg1-2Q-scUA7xlP8ily8hGSBbTIiYgUhjYZHjBroItk3LdVS5HPhRGt0FW-ulbBMymIskp7A2qFOBzxE0WdXA"
+        }
+      },
+      "context": {
+        "key_state": "owner",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "now": 1794010600,
+        "status": {
+          "status": "active",
+          "period_spent": 4000,
+          "total_spent": 9000
+        }
+      },
+      "expect": {
+        "ok": false,
+        "error": "malformed"
+      }
+    },
+    {
+      "name": "unknown-field",
+      "description": "A top-level field outside the profile.",
+      "mandate": {
+        "version": "mandate/1",
+        "mandate_id": "md_4szfovfzsgfi7u436o67wzgs5r",
+        "issuer_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "issued_at": 1794009600,
+        "expires_at": 1796601600,
+        "limits": {
+          "currency": "USD",
+          "per_tx_max": 5000,
+          "period": "P1D",
+          "period_max": 20000,
+          "total_max": 100000
+        },
+        "scope": {
+          "merchants": [
+            "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+            "*.moltbotden.com"
+          ],
+          "categories": [
+            "software",
+            "data"
+          ],
+          "rails": [
+            "card",
+            "x402",
+            "mpp",
+            "credits",
+            "usdc"
+          ]
+        },
+        "step_up_over": 2500,
+        "status": "https://account.openentity.org/v1/mandates/md_4szfovfzsgfi7u436o67wzgs5r/status",
+        "note": "x",
+        "signature": {
+          "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+          "form": "p256",
+          "signature": "lfedmlse8Hzi0lWyQVYFQsabEC5O6-o-xm_asuSvQ_8TJqkejarRf9hy-TsQodailUKL5CFwVW-mRynTBGd7mw"
+        }
+      },
+      "context": {
+        "key_state": "owner",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "now": 1794010600,
+        "status": {
+          "status": "active",
+          "period_spent": 4000,
+          "total_spent": 9000
+        }
+      },
+      "expect": {
+        "ok": false,
+        "error": "malformed"
+      }
+    },
+    {
+      "name": "float-limit",
+      "description": "A fractional amount (limits are integers in minor units).",
+      "mandate": {
+        "version": "mandate/1",
+        "mandate_id": "md_ot3jevtorkualcy7t5ijwuod2d",
+        "issuer_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "issued_at": 1794009600,
+        "expires_at": 1796601600,
+        "limits": {
+          "currency": "USD",
+          "per_tx_max": 50.5,
+          "period": "P1D",
+          "period_max": 20000,
+          "total_max": 100000
+        },
+        "scope": {
+          "merchants": [
+            "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+            "*.moltbotden.com"
+          ],
+          "categories": [
+            "software",
+            "data"
+          ],
+          "rails": [
+            "card",
+            "x402",
+            "mpp",
+            "credits",
+            "usdc"
+          ]
+        },
+        "step_up_over": 2500,
+        "status": "https://account.openentity.org/v1/mandates/md_ot3jevtorkualcy7t5ijwuod2d/status",
+        "signature": {
+          "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+          "form": "p256",
+          "signature": "GY4hK_nQqFiV0jITL1Tw6qIW4iTvVGOgh9XH4JQERHJFHsh4C60O0uk9kfbekyOTieP5eiBNdI9sGxIgfVztWA"
+        }
+      },
+      "context": {
+        "key_state": "owner",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "now": 1794010600,
+        "status": {
+          "status": "active",
+          "period_spent": 4000,
+          "total_spent": 9000
+        }
+      },
+      "expect": {
+        "ok": false,
+        "error": "malformed"
+      }
+    },
+    {
+      "name": "empty-rails",
+      "description": "scope.rails is empty.",
+      "mandate": {
+        "version": "mandate/1",
+        "mandate_id": "md_ulcq5epybt66e6xaxdqtff33nb",
+        "issuer_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "issued_at": 1794009600,
+        "expires_at": 1796601600,
+        "limits": {
+          "currency": "USD",
+          "per_tx_max": 5000,
+          "period": "P1D",
+          "period_max": 20000,
+          "total_max": 100000
+        },
+        "scope": {
+          "merchants": [],
+          "rails": []
+        },
+        "step_up_over": 2500,
+        "status": "https://account.openentity.org/v1/mandates/md_ulcq5epybt66e6xaxdqtff33nb/status",
+        "signature": {
+          "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+          "form": "p256",
+          "signature": "PJCC3lZs9PqBCcFpiXcFK9iHmniVVvWS12Ume4zMfPdH0FyDMvsEEHN4tGbVGqGUua_lBX0Dpu0FJjcSjqZHdQ"
+        }
+      },
+      "context": {
+        "key_state": "owner",
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "now": 1794010600,
+        "status": {
+          "status": "active",
+          "period_spent": 4000,
+          "total_spent": 9000
+        }
+      },
+      "expect": {
+        "ok": false,
+        "error": "malformed"
+      }
+    }
+  ],
+  "replay": {
+    "mandate_signature_as_approval": {
+      "approval": {
+        "version": "approval/2.0",
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_replay:1",
+        "payload_digest": "eaa2c67696fe4fb457901e692f97d10488337ed23ecfbcd6aefaa4940071a431",
+        "decision": "approve",
+        "expires_at": 1794010900,
+        "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+        "form": "p256",
+        "signature": "nroQ52XQe3s5Xs7_ZCUA1p33MQ8UyBgscWtCjViHTtoZ4okUeZ1AVdFgoTI95wA7nKjZxi8xccWUFawCLinFHw"
+      },
+      "context": {
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_replay:1",
+        "payload_digest": "eaa2c67696fe4fb457901e692f97d10488337ed23ecfbcd6aefaa4940071a431",
+        "now": 1794010600,
+        "key_state": "owner"
+      },
+      "expect": {
+        "ok": false,
+        "error": "bad_signature"
+      }
+    }
+  }
+}

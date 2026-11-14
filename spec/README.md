@@ -10,6 +10,7 @@ Normative material for the Open Entity Identity Standard, `OEIS-1`. CC0-1.0.
 | `schemas/openentity-1.0.json` | JSON Schema 2020-12 for every object, one `$defs` entry per object (published at `https://openentity.org/spec/1.0.json`) |
 | `schemas/<Object>.json` | One file per object, each a `$ref` into the bundle so the two can never disagree |
 | `schemas/claims/<ns>-<name>.json` | JSON Schema for the `claim` of a registered custom claim type (`claim-types.md`) |
+| `commerce-profile.md` | The Commerce Profile: mandate/1, cart/1, receipt/1, the `openentity:merchant` extension, the checkout check, and the mapping to AP2 and Verifiable Intent |
 | `claim-types.md` | The attestation claim-type registry (section 8.3) |
 
 ## Declaration file bytes (decision)

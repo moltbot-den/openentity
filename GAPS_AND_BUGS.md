@@ -44,3 +44,15 @@ Backlog for this repo. Ticket ids are `G-YYYY-NNN` across the Open Entity produc
 - suggested-fix: Plan and protocol: docs/entity-gateway-plan.md and docs/adr/0005-entity-gateway.md in One-Frequency/oneentity.
 - linked-pr: https://github.com/moltbot-den/openentity/pull/134
 - linked-issue: (none yet)
+
+### G-2026-003 [in-progress] P1 feature
+
+- file: spec/commerce-profile.md, test-vectors/mandate-1/, test-vectors/cart-1/, test-vectors/receipt-1/, test-vectors/checkout-1/, sdk/ts/src/commerce.ts, sdk/python/openentity/commerce.py
+- area: Agentic commerce C1.1 to C1.3 (oneentity docs/commerce/PLAN.md)
+- discovered: 2026-11-14 by agentic commerce program
+- summary: The OEIS Commerce Profile (mandate/1, cart/1, receipt/1, merchant extension, three claim types) with its AP2 and Verifiable Intent mapping, test vectors, and verifyMandate, mandateCovers, signReceipt, verifyReceipt and verifyAgentForCheckout in the TypeScript and Python SDKs
+- owner-agent: openentity
+- reviewer-agent: (adversarial review pending)
+- suggested-fix: Land the profile in spec/, generate vectors from published throwaway keys, implement the verifiers once per SDK against the vectors. Swift and Kotlin follow in their own lanes (C1.3); the account service mandates API is C1.4. No package version changes: release is one batch at the end of the program.
+- linked-pr: (none yet)
+- linked-issue: (none yet)
