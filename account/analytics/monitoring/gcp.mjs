@@ -105,6 +105,17 @@ export const errorRatePolicy = (names, channel) => {
   };
 };
 
+// Each product's log line when an owner's key log forks and that owner's approvals stop (gate re-verify N2):
+// ClawGRC "key log fork", Agent Secret Store "key_log_diverged", Moltbot Den "key_log_fork".
+export const FORK_LINES = ["key log fork", "key_log_fork", "key_log_diverged"];
+/** Emails the moment any product logs a key log fork: that owner cannot approve until the logs agree. */
+export const forkPolicy = (channel) => ({
+  displayName: "Owner key log fork", combiner: "OR", enabled: true, notificationChannels: [channel],
+  conditions: [{ displayName: "key log fork logged", conditionMatchedLog: {
+    filter: `${RUN} AND (${FORK_LINES.flatMap((s) => [`textPayload:"${s}"`, `jsonPayload.message:"${s}"`]).join(" OR ")})` } }],
+  alertStrategy: { notificationRateLimit: { period: "300s" }, autoClose: "1800s" }, // a log-match condition requires the rate limit
+});
+
 async function ensure(project, kind, key, displayName, make, label) {
   const found = (await list(project, kind, key)).find((x) => x.displayName === displayName);
   if (found) { console.log(`${project}: ${label} "${displayName}" exists`); return found; }
@@ -139,6 +150,8 @@ if (process.argv[1] === new URL(import.meta.url).pathname) {
         await ensure(project, "alertPolicies", "alertPolicies", ep.displayName, () => ep, "alert policy");
       }
     }
+    const fp = forkPolicy(ch.name);
+    await ensure(project, "alertPolicies", "alertPolicies", fp.displayName, () => fp, "alert policy");
     for (const c of cfg.checks) {
       const check = await ensure(project, "uptimeCheckConfigs", "uptimeCheckConfigs", c.name, () => uptimeCheck(c), "uptime check");
       const checkId = check.name.split("/").pop();

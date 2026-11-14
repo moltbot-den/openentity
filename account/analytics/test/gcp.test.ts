@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PROJECTS, errorRatePolicy, latencyPolicy, policy, uptimeCheck } from "../monitoring/gcp.mjs";
+import { FORK_LINES, PROJECTS, errorRatePolicy, forkPolicy, latencyPolicy, policy, uptimeCheck } from "../monitoring/gcp.mjs";
 
 describe("gcp monitoring config", () => {
   it("checks run every 5 minutes (free quota) and every policy emails a channel", () => {
@@ -27,5 +27,17 @@ describe("gcp monitoring config", () => {
       expect(e.denominatorFilter).toBeTruthy();
     }
     expect(PROJECTS["moltbot-den"].api.errors).toBe(false); // covered by the existing "API 5xx rate above 0.1/s"
+  });
+
+  it("a key log fork logged by any product emails at once", () => {
+    const p = forkPolicy("channels/1");
+    const f = p.conditions[0].conditionMatchedLog.filter;
+    for (const s of ["key log fork", "key_log_fork", "key_log_diverged"]) {
+      expect(FORK_LINES).toContain(s);
+      expect(f).toContain(`textPayload:"${s}"`);
+      expect(f).toContain(`jsonPayload.message:"${s}"`);
+    }
+    expect(p.notificationChannels).toEqual(["channels/1"]);
+    expect(p.alertStrategy.notificationRateLimit.period).toBe("300s");
   });
 });
