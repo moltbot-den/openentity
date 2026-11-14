@@ -102,3 +102,50 @@ def test_checkout_verifies_the_signed_request():
     assert bad["reasons"] == ["request_unverified"]
     other = {**cart, "agent_did": CHECKOUT["cases"][0]["input"]["agent_did"]}
     assert oe.verify_agent_for_checkout(cart=other, merchant_policy={}, request={"method": "POST", "url": url, "headers": headers}, now=now)["reasons"] == ["agent_mismatch"]
+
+
+# ---- adversarial review fixes (same cases as the TS "adversarial review fixes" block)
+
+def test_wildcard_merchant_matches_only_a_plain_hostname():
+    m, cart = CARTS["mandates"]["M"], CARTS["covers"][0]["cart"]
+    at = lambda merchant: oe.mandate_covers(m, {**cart, "merchant": merchant})
+    assert at("did:web:shop.moltbotden.com")["ok"] and at("did:web:shop.moltbotden.com%3A8443")["ok"]
+    for evil in ("did:web:evil.com%2F.moltbotden.com", "did:web:evil.com%23.moltbotden.com", "did:web:evil.com%3F.moltbotden.com",
+                 "did:web:evil.com%40.moltbotden.com", "did:web:%zz.moltbotden.com", "did:web:%ff.moltbotden.com"):
+        assert at(evil)["reason"] == "out_of_scope", evil
+
+
+def test_spent_that_is_not_an_unsigned_integer_never_fits():
+    m, cart = CARTS["mandates"]["M"], CARTS["covers"][0]["cart"]
+    for bad in (float("nan"), "abc", -1000, 1.5, True):
+        assert oe.mandate_covers(m, cart, {"period_spent": bad})["reason"] == "over_limit", bad
+
+
+def test_a_malformed_or_foreign_status_answer_is_no_answer():
+    c = MANDATES["cases"][0]
+    x = c["context"]
+    run = lambda status: oe.verify_mandate(c["mandate"], key_log=STATES[x["key_state"]], agent_did=x.get("agent_did"), now=x["now"], status=status)
+    for bad in ({}, {"status": "bogus"}, {"status": "active", "mandate_id": "md_aaaaaaaaaaaaaaaaaaaaaaaaaa"}, {"status": "active", "total_spent": "abc"},
+                {"status": "active", "period_spent": -1}, "active"):
+        assert run(bad)["error"] == "status_required", bad
+    assert run({"status": "active", "mandate_id": c["mandate"]["mandate_id"]})["ok"]
+
+
+def test_receipt_parties_differ_and_refunds_stay_inside_the_purchase():
+    p = RECEIPTS["cases"][0]["receipt"]
+    assert "differ" in oe.receipt_error({**p, "merchant_did": p["agent_did"]})
+    refund = lambda rid, total, **kw: {**{k: v for k, v in p.items() if k != "proofs"}, "kind": "refund", "receipt_id": rid, "refers_to": p["receipt_id"], "total": total, **kw}
+    r1, r2 = refund("rc_" + "a" * 26, 600), refund("rc_" + "b" * 26, 400)
+    assert oe.verify_receipt_chain(p, [r1, r2]) == {"ok": True, "refunded": 1000}
+    assert oe.verify_receipt_chain(p, [r1, {**r2, "total": 401}])["error"] == "over_refund"
+    assert oe.verify_receipt_chain(p, [r1, r1])["error"] == "mismatch"
+    assert oe.verify_receipt_chain(p, [{**r1, "currency": "EUR"}])["error"] == "mismatch"
+    assert oe.verify_receipt_chain(p, [{**r1, "refers_to": "rc_" + "c" * 26}])["error"] == "mismatch"
+    assert oe.verify_receipt_chain(r1, [])["error"] == "not_purchase"
+
+
+def test_an_allow_by_approval_hands_back_the_key_and_counter():
+    i = next(c for c in CHECKOUT["cases"] if c["name"] == "allow-step-up-approved")["input"]
+    r = oe.verify_agent_for_checkout(agent_did=i.get("agent_did"), cart=i["cart"], merchant_policy=i["merchant_policy"], agent=i.get("agent"), mandate=i.get("mandate"),
+                                     key_log=STATES[i["key_state"]], status=i.get("status"), now=i["now"], approval={**i["approval"], "counter": 0})
+    assert (r["evidence"]["approval_kid"], r["evidence"]["approval_counter"]) == (i["approval"]["approval"]["device_id"], 0)

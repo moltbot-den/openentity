@@ -13,7 +13,7 @@ const SNAPSHOT = [
   "payloadDigest present publicKeyFromDidKey randomNonce receiptError record recordEntryHash recoverEip712 rotate sha256",
   "sha256Hex signAttestation signNote signObject signProof signReceipt signRequest signRevocation successorDocument trust",
   "validate verificationMethodId verifyAgentForCheckout verifyApproval verifyConsistency verifyInclusion verifyKeyLog",
-  "verifyMandate verifyNote verifyObject verifyPresentation verifyProof verifyReceipt verifyRequest verifyResponse withdraw",
+  "verifyMandate verifyNote verifyObject verifyPresentation verifyProof verifyReceipt verifyReceiptChain verifyRequest verifyResponse withdraw",
 ].join(" ");
 
 describe("public API", () => {

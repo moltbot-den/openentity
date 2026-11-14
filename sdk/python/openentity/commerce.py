@@ -158,10 +158,15 @@ def verify_mandate(mandate, *, key_log: dict, agent_did: str | None = None, now:
         if cred is None:
             raise _Fail("unknown_key", "device_id is not a current approver in the owner's key log")
         _check_signature(cred, m["signature"], mandate_digest(m), [f"https://{rp_id}"] if origins is None else origins, rp_id, False)
-        if status:
-            if status.get("status") == "revoked":
+        if status is not None:
+            # A status answer that is not exactly what section 2.2 says is no answer: it never lets a mandate through.
+            if (not isinstance(status, dict) or status.get("status") not in ("active", "revoked", "exhausted")
+                    or status.get("mandate_id", m["mandate_id"]) != m["mandate_id"]
+                    or any(k in status and not _uint(status[k]) for k in ("period_spent", "total_spent"))):
+                raise _Fail("status_required", "the status answer is malformed or for another mandate")
+            if status["status"] == "revoked":
                 raise _Fail("revoked", "the owner revoked the mandate")
-            if status.get("status") == "exhausted":
+            if status["status"] == "exhausted":
                 raise _Fail("exhausted", "the mandate is spent")
         elif m["expires_at"] - now > _DAY:
             raise _Fail("status_required", "a mandate with more than a day left needs a fresh status answer")
@@ -174,8 +179,18 @@ def verify_mandate(mandate, *, key_log: dict, agent_did: str | None = None, now:
         return {"ok": False, "error": f.code, "message": str(f)}
 
 
+_HOST = re.compile(r"[a-z0-9]([a-z0-9.-]*[a-z0-9])?(:\d+)?")
+
+
 def _did_host(did: str) -> str | None:
-    return unquote(did[8:].split(":")[0]).split(":")[0].lower() if did.startswith("did:web:") else None
+    """The host of a did:web DID, lowercase, without port; None for other methods and for anything that is not a plain hostname (%2F, %23, %3F, a bad escape)."""
+    if not did.startswith("did:web:"):
+        return None
+    try:
+        d = unquote(did[8:].split(":")[0], errors="strict").lower()
+    except UnicodeDecodeError:
+        return None
+    return d.split(":")[0] if _HOST.fullmatch(d) else None
 
 
 def _merchant_allowed(patterns: list, merchant: str) -> bool:
@@ -214,6 +229,8 @@ def mandate_covers(mandate: dict, cart, spent: dict | None = None) -> dict:
         return no("out_of_scope", f"merchant {c['merchant']} is not in scope")
     if s.get("categories") and any(x.get("category") not in s["categories"] for x in c["lines"]):
         return no("out_of_scope", "a line is outside the categories")
+    if not all(spent.get(k) is None or _uint(spent[k]) for k in ("period_spent", "total_spent")):
+        return no("over_limit", "spent must be unsigned integers")
     if c["total"] > lim["per_tx_max"]:
         return no("over_limit", "per_tx_max")
     if (spent.get("period_spent") or 0) + c["total"] > lim["period_max"]:
@@ -241,6 +258,8 @@ def receipt_error(r) -> str | None:
         return "refers_to is null for a purchase and the purchase's receipt_id for a refund or chargeback"
     if not _str(r["merchant_did"], _DID) or not _str(r["agent_did"], _DID):
         return "merchant_did and agent_did must be DIDs"
+    if r["merchant_did"] == r["agent_did"]:
+        return "merchant_did and agent_did must differ"
     if r["mandate_id"] is not None and not _str(r["mandate_id"], _MD_ID):
         return "mandate_id must be md_<26 base32> or null"
     if r["mandate_hash"] is not None and not _str(r["mandate_hash"], _HEX64):
@@ -302,6 +321,31 @@ def verify_receipt(receipt, *, resolver=default_resolver, require=("merchant",))
     return {"ok": True, "signed_by": signed}
 
 
+def verify_receipt_chain(purchase, later) -> dict:
+    """Structural check that refunds and chargebacks are consistent with their purchase: each refers_to the purchase, same parties,
+    currency and rail, no repeated receipt_id, and their sum at most the purchase total. Proofs are verify_receipt's job; run both."""
+    def bad(error, message):
+        return {"ok": False, "error": error, "message": message}
+    e = next((x for x in map(receipt_error, [purchase, *later]) if x), None)
+    if e:
+        return bad("malformed", e)
+    if purchase["kind"] != "purchase":
+        return bad("not_purchase", "the first receipt must be a purchase")
+    ids, refunded = {purchase["receipt_id"]}, 0
+    for x in later:
+        if x["kind"] == "purchase" or x["refers_to"] != purchase["receipt_id"]:
+            return bad("mismatch", "each later receipt must be a refund or chargeback of this purchase")
+        if x["receipt_id"] in ids:
+            return bad("mismatch", "receipt_id repeats")
+        ids.add(x["receipt_id"])
+        if any(x[k] != purchase[k] for k in ("merchant_did", "agent_did", "currency", "rail")):
+            return bad("mismatch", "parties, currency and rail must equal the purchase's")
+        refunded += x["total"]
+    if refunded > purchase["total"]:
+        return bad("over_refund", "refunds and chargebacks exceed the purchase total")
+    return {"ok": True, "refunded": refunded}
+
+
 # ---- the checkout check
 
 def verify_agent_for_checkout(*, cart, merchant_policy: dict, agent_did: str | None = None, request: dict | None = None,
@@ -311,7 +355,7 @@ def verify_agent_for_checkout(*, cart, merchant_policy: dict, agent_did: str | N
     "deny" with reasons out. Deny is final (bad signature, wrong agent, dead mandate, policy unmet); step_up means an owner approval
     of this exact cart would allow. `request` ({method, url, headers, body}) is verified here; or pass `agent_did` when the caller
     already did. `agent` is what the registry says (level, owner_did, security_band, security_issuer), never the request's claim.
-    `approval` is {approval, verifier_did, request_id}: the owner's approval/2.0 of this cart, with the merchant's own ids."""
+    `approval` is {approval, verifier_did, request_id, counter?}: the owner's approval/2.0 of this cart, with the merchant's own ids."""
     now = int(time.time()) if now is None else now
     evidence: dict = {}
 
@@ -370,9 +414,10 @@ def verify_agent_for_checkout(*, cart, merchant_policy: dict, agent_did: str | N
     if approval and key_log and owner:
         a = verify_approval(approval["approval"], key_log=key_log, verifier_did=approval["verifier_did"], owner_did=owner,
                             request_id=approval["request_id"], payload_digest=cart_digest(cart), decisions=("approve",), now=now,
-                            origins=origins)
+                            origins=origins, counter=approval.get("counter", 0))
         if a["ok"]:
             evidence["approval_request_id"] = approval["request_id"]
+            evidence["approval_kid"], evidence["approval_counter"] = a["kid"], a["counter"]
             return {"decision": "allow", "reasons": ["owner_approved_cart", why], "evidence": evidence}
         evidence["approval_error"] = a["error"]
     return {"decision": "step_up", "reasons": [why], "evidence": evidence}

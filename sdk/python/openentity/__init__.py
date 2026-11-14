@@ -6,7 +6,7 @@ from . import issuer  # noqa: F401
 from .agent import Owner, pair
 from .client import CLIENTS, DEFAULT_REGISTRY, DISPUTE_REASONS, adopt, dispute, find, present, record, rotate, withdraw
 from .commerce import (cart_digest, cart_error, mandate_covers, mandate_digest, receipt_error, sign_receipt,  # noqa: F401
-                       verify_agent_for_checkout, verify_mandate, verify_receipt, RAILS)
+                       verify_agent_for_checkout, verify_mandate, verify_receipt, verify_receipt_chain, RAILS)
 from .core import *  # noqa: F401,F403
 from .core import __all__ as _core
 from .errors import (REGISTRY_ERROR_CODES, HttpSigError, InvalidInputError, OpenEntityError, RegistryError,  # noqa: F401
@@ -28,6 +28,6 @@ __all__ = sorted([
     "http_sig_base", "sign_request", "verify_request", "verify_response", "Identity", "A2A_EXTENSION_URI", "a2a_extension", "agent_card", "build_did_document",
     "build_openentity_json", "sign_attestation", "sign_revocation", "TrustReport", "clear_trust_cache", "did_web_resolver", "trust",
     "cart_digest", "cart_error", "mandate_covers", "mandate_digest", "receipt_error", "sign_receipt", "verify_agent_for_checkout",
-    "verify_mandate", "verify_receipt", "RAILS",
+    "verify_mandate", "verify_receipt", "verify_receipt_chain", "RAILS",
     "validate", "approval_digest", "payload_digest", "verify_approval", "verify_key_log", "pair_sas", "Owner", "pair",
 ])

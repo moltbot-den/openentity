@@ -88,10 +88,11 @@ import {
   verifyPresentation,
   verifyProof,
   verifyReceipt,
+  verifyReceiptChain,
   verifyRequest,
   verifyResponse,
   withdraw
-} from "./chunk-WVOGJQLE.js";
+} from "./chunk-HXRB7BZE.js";
 export {
   A2A_EXTENSION_URI,
   CLIENTS,
@@ -182,6 +183,7 @@ export {
   verifyPresentation,
   verifyProof,
   verifyReceipt,
+  verifyReceiptChain,
   verifyRequest,
   verifyResponse,
   withdraw

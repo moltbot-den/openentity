@@ -62,7 +62,7 @@ digest = SHA-256( UTF-8( "mandate/1" "|" verifier_scope "|" JCS(mandate without 
 
 ### 2.2 Status and revocation
 
-The `status` URL answers `{"status": "active" | "revoked" | "exhausted", "period_spent": n, "total_spent": n}` with `Cache-Control: max-age` of 60 or less. The owner pausing the agent (ADR 0007) revokes every mandate of that agent. A verifier that can call out passes the answer to `verifyMandate`. A verifier that cannot accepts a mandate only when `expires_at - now` is a day or less: short-lived mandates are the offline mode. Spend accounting (`period_spent`, `total_spent`) belongs to the product that enforces the mandate; merchants only see the status.
+The `status` URL answers `{"status": "active" | "revoked" | "exhausted", "period_spent": n, "total_spent": n}` with `Cache-Control: max-age` of 60 or less. The owner pausing the agent (ADR 0007) revokes every mandate of that agent. A verifier that can call out passes the answer to `verifyMandate`. A verifier that cannot accepts a mandate only when `expires_at - now` is a day or less: short-lived mandates are the offline mode. A status answer that is not an object with `status` one of those three, with a `mandate_id` (when present) other than the mandate's, or with a `period_spent` or `total_spent` that is not an unsigned integer, is no answer: `status_required`. Spend accounting (`period_spent`, `total_spent`) belongs to the product that enforces the mandate; merchants only see the status.
 
 ### 2.3 Verifier checks, in order
 
@@ -81,7 +81,7 @@ An agent can never sign a mandate. The account service refuses agent-written man
 
 ### 2.4 Covering a cart
 
-`mandateCovers(mandate, cart, {spent})` runs on a verified mandate. The first failing check names the reason: `bad_cart`, `wrong_agent` (the cart names another agent), `wrong_mandate` (the cart names another `mandate_id`; a null `mandate_id` is checked against the mandate offered), `wrong_currency`, `out_of_scope` (rail, merchant or category), `over_limit` (`total` above `per_tx_max`; `period_spent + total` above `period_max`; `total_spent + total` above `total_max`; a spend equal to a limit fits). When it fits, `step_up_required` is `total > step_up_over`.
+`mandateCovers(mandate, cart, {spent})` runs on a verified mandate. The first failing check names the reason: `bad_cart`, `wrong_agent` (the cart names another agent), `wrong_mandate` (the cart names another `mandate_id`; a null `mandate_id` is checked against the mandate offered), `wrong_currency`, `out_of_scope` (rail, merchant or category), `over_limit` (`total` above `per_tx_max`; `period_spent + total` above `period_max`; `total_spent + total` above `total_max`; a spend equal to a limit fits; a `spent` value that is not an unsigned integer is `over_limit`). A merchant pattern `*.host` or `host` matches only a did:web DID whose percent-decoded host is a plain hostname (`[a-z0-9.-]`, optional `:port`): a host holding `/`, `#`, `?`, `@` or a bad escape matches no pattern. When it fits, `step_up_required` is `total > step_up_over`.
 
 ## 3. cart/1
 
@@ -109,7 +109,8 @@ Signed by both parties after settlement. Ed25519 `eddsa-jcs-2022`, the suite of 
 
 - `kind` is `purchase`, `refund` or `chargeback`. A refund or chargeback is a new receipt whose `refers_to` is the purchase's `receipt_id`; a purchase has `refers_to: null`. Its `total` is the amount refunded or charged back.
 - `mandate_id` and `mandate_hash` are both set (the hex digest of section 2.1) or both null (a purchase approved per cart: `approval_request_id` then names the approval).
-- `by` is `merchant` or `agent`, at most once each, and is not part of the signed proof configuration. A proof counts only when its verification method is the DID the receipt names for that party. A did:web merchant passes its own verification method when signing.
+- `by` is `merchant` or `agent`, at most once each, and is not part of the signed proof configuration. `merchant_did` and `agent_did` differ. A proof counts only when its verification method is the DID the receipt names for that party. A did:web merchant passes its own verification method when signing.
+- `verifyReceiptChain(purchase, later)` checks a purchase with its refunds and chargebacks: each `refers_to` the purchase, same merchant, agent, currency and rail, no repeated `receipt_id`, and their totals sum to at most the purchase total (`not_purchase`, `mismatch`, `over_refund`). A verifier that relies on refunds or reputation runs it next to `verifyReceipt`.
 - Receipts are private by default. A receipt may be published as a Record entry (`OEIS-1` section 7) when both parties consent; this is the input for proof-of-payment reputation (`OEIS-1` section 8.5) and replaces Moltbot Den's `transaction_review` as the input for reviews.
 - A verifier states who must have signed (`verifyReceipt`'s `require`, default the merchant). A missing required proof is `missing_proof`; a proof that does not verify is `bad_proof`; a proof by the wrong DID is `wrong_signer`.
 
@@ -172,6 +173,8 @@ Web Bot Auth: the agent's signed request is the `OEIS-1` section 11.2 profile (R
 3. `deny`, every unmet policy reason listed together: `level_too_low`, `security_band_too_low`, `issuer_not_accepted`, `mandate_required`, `owner_unknown`. Facts about the agent (`level`, `owner_did`, `security_band`, `security_issuer`) come from the verifier's own registry lookup, never from the request.
 4. `allow` (`mandate_covers_cart`): the mandate covers the cart and it is at or under `step_up_over`.
 5. Otherwise the owner must approve this exact cart: a mandate that is `over_limit` or `out_of_scope` for the cart (`mandate_over_limit`, `mandate_out_of_scope`), a cart above `step_up_over` (`step_up_over`), or no mandate (`no_mandate`). A valid approval/2.0 with decision `approve` over `cartDigest(cart)`, naming the merchant as `verifier_did`, gives `allow` with `owner_approved_cart` first. Without one the answer is `step_up`, and a refused approval's error is in `evidence.approval_error`. An approval is one owner decision on one cart: it can exceed a mandate's limits, and it is never a mandate.
+
+`approval.counter` is the WebAuthn counter the merchant stored for the approving key; a returned allow carries `evidence.approval_kid` and `evidence.approval_counter` to store. The merchant still consumes `request_id` atomically with the decision: an approval is replayable inside its window otherwise.
 
 `deny` is final for this request. `step_up` tells the agent to ask its owner to approve the cart and retry.
 

@@ -56,6 +56,7 @@ export interface Cart {
 export type MandateError = "malformed" | "bad_version" | "wrong_owner" | "owner_closed" | "wrong_agent" | "not_yet_valid" | "expired" | "unknown_key" | "bad_signature" | "bad_webauthn" | "revoked" | "exhausted" | "status_required";
 export type MandateStatus = {
     status: "active" | "revoked" | "exhausted";
+    mandate_id?: string;
     period_spent?: number;
     total_spent?: number;
 };
@@ -146,6 +147,16 @@ export declare function verifyReceipt(receipt: unknown, o?: {
     resolver?: Resolver;
     require?: Party[];
 }): Promise<ReceiptResult>;
+export type ChainError = "malformed" | "not_purchase" | "mismatch" | "over_refund";
+/** Structural check that refunds and chargebacks are consistent with their purchase: each refers_to the purchase, same parties, currency and rail, no repeated receipt_id, and their sum at most the purchase total. Proofs are `verifyReceipt`'s job; run both. */
+export declare function verifyReceiptChain(purchase: unknown, later: unknown[]): {
+    ok: true;
+    refunded: number;
+} | {
+    ok: false;
+    error: ChainError;
+    message: string;
+};
 export interface AgentPolicy {
     min_level?: number;
     require_owner?: boolean;
@@ -181,7 +192,8 @@ export interface CheckoutInput {
     approval?: {
         approval: unknown;
         verifierDid: string;
-        requestId: string;
+        requestId: string; /** The WebAuthn counter stored for the signing key; store `evidence.approval_counter` after an allow. */
+        counter?: number;
     };
     now?: number;
     origins?: string[];

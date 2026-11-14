@@ -30,7 +30,7 @@ export interface Cart {
   profile: "cart/1"; merchant: string; agent_did: string; lines: CartLine[]; total: number; currency: string; rail: string; mandate_id: string | null;
 }
 export type MandateError = "malformed" | "bad_version" | "wrong_owner" | "owner_closed" | "wrong_agent" | "not_yet_valid" | "expired" | "unknown_key" | "bad_signature" | "bad_webauthn" | "revoked" | "exhausted" | "status_required";
-export type MandateStatus = { status: "active" | "revoked" | "exhausted"; period_spent?: number; total_spent?: number };
+export type MandateStatus = { status: "active" | "revoked" | "exhausted"; mandate_id?: string; period_spent?: number; total_spent?: number };
 export type MandateResult =
   | { ok: true; kid: string; mandate_id: string; limits: Limits; scope: Scope; step_up_over: number; period_spent?: number; total_spent?: number }
   | { ok: false; error: MandateError; message: string };
@@ -138,9 +138,13 @@ export function verifyMandate(mandate: unknown, o: MandateOptions): MandateResul
     if (!cred) fail("unknown_key", "device_id is not a current approver in the owner's key log");
     const rpId = o.rpId ?? RP_ID;
     checkSignature(cred!, md.signature, mandateDigest(md), { origins: o.origins ?? [`https://${rpId}`], rpId, lowS: false });
-    if (o.status) {
-      if (o.status.status === "revoked") fail("revoked", "the owner revoked the mandate");
-      if (o.status.status === "exhausted") fail("exhausted", "the mandate is spent");
+    if (o.status !== undefined) {
+      const st = o.status as Obj;
+      // A status answer that is not exactly what section 2.2 says is no answer: it never lets a mandate through.
+      if (!isObj(st) || !["active", "revoked", "exhausted"].includes(st.status as string) || (st.mandate_id !== undefined && st.mandate_id !== md.mandate_id)
+        || (st.period_spent !== undefined && !isUint(st.period_spent)) || (st.total_spent !== undefined && !isUint(st.total_spent))) fail("status_required", "the status answer is malformed or for another mandate");
+      if (st.status === "revoked") fail("revoked", "the owner revoked the mandate");
+      if (st.status === "exhausted") fail("exhausted", "the mandate is spent");
     } else if (md.expires_at - now > DAY) fail("status_required", "a mandate with more than a day left needs a fresh status answer");
     return { ok: true, kid: cred!.kid, mandate_id: md.mandate_id, limits: md.limits, scope: md.scope, step_up_over: md.step_up_over, period_spent: o.status?.period_spent, total_spent: o.status?.total_spent };
   } catch (x) {
@@ -149,8 +153,14 @@ export function verifyMandate(mandate: unknown, o: MandateOptions): MandateResul
   }
 }
 
-/** The host of a did:web DID, lowercase, without port; null for other methods. */
-const didHost = (did: string) => (did.startsWith("did:web:") ? decodeURIComponent(did.slice(8).split(":")[0]).split(":")[0].toLowerCase() : null);
+const HOST = /^[a-z0-9]([a-z0-9.-]*[a-z0-9])?(:\d+)?$/;
+/** The host of a did:web DID, lowercase, without port; null for other methods and for anything that is not a plain hostname (%2F, %23, %3F, a bad escape). */
+function didHost(did: string): string | null {
+  if (!did.startsWith("did:web:")) return null;
+  let d: string;
+  try { d = decodeURIComponent(did.slice(8).split(":")[0]).toLowerCase(); } catch { return null; }
+  return HOST.test(d) ? d.split(":")[0] : null;
+}
 function merchantAllowed(patterns: string[], merchant: string): boolean {
   if (!patterns.length) return true;
   const host = didHost(merchant);
@@ -176,9 +186,11 @@ export function mandateCovers(mandate: Pick<Mandate, "mandate_id" | "agent_did" 
   if (!s.rails.includes(c.rail)) return no("out_of_scope", `rail ${c.rail} is not in scope`);
   if (!merchantAllowed(s.merchants, c.merchant)) return no("out_of_scope", `merchant ${c.merchant} is not in scope`);
   if (s.categories?.length && c.lines.some((x) => !x.category || !s.categories!.includes(x.category))) return no("out_of_scope", "a line is outside the categories");
+  const sp = o.spent ?? {};
+  if ((sp.period_spent !== undefined && !isUint(sp.period_spent)) || (sp.total_spent !== undefined && !isUint(sp.total_spent))) return no("over_limit", "spent must be unsigned integers");
   if (c.total > l.per_tx_max) return no("over_limit", "per_tx_max");
-  if ((o.spent?.period_spent ?? 0) + c.total > l.period_max) return no("over_limit", "period_max");
-  if ((o.spent?.total_spent ?? 0) + c.total > l.total_max) return no("over_limit", "total_max");
+  if ((sp.period_spent ?? 0) + c.total > l.period_max) return no("over_limit", "period_max");
+  if ((sp.total_spent ?? 0) + c.total > l.total_max) return no("over_limit", "total_max");
   return { ok: true, step_up_required: c.total > mandate.step_up_over };
 }
 
@@ -202,6 +214,7 @@ export function receiptError(r: unknown): string | null {
   if (!["purchase", "refund", "chargeback"].includes(r.kind as string)) return "kind must be purchase, refund or chargeback";
   if (r.kind === "purchase" ? r.refers_to !== null : typeof r.refers_to !== "string" || !RC_ID.test(r.refers_to)) return "refers_to is null for a purchase and the purchase's receipt_id for a refund or chargeback";
   if (typeof r.merchant_did !== "string" || !DID.test(r.merchant_did) || typeof r.agent_did !== "string" || !DID.test(r.agent_did)) return "merchant_did and agent_did must be DIDs";
+  if (r.merchant_did === r.agent_did) return "merchant_did and agent_did must differ";
   if (r.mandate_id !== null && !(typeof r.mandate_id === "string" && MD_ID.test(r.mandate_id))) return "mandate_id must be md_<26 base32> or null";
   if (r.mandate_hash !== null && !(typeof r.mandate_hash === "string" && HEX64.test(r.mandate_hash))) return "mandate_hash must be 64 lowercase hex or null";
   if ((r.mandate_id === null) !== (r.mandate_hash === null)) return "mandate_id and mandate_hash go together";
@@ -246,6 +259,26 @@ export async function verifyReceipt(receipt: unknown, o: { resolver?: Resolver; 
   return { ok: true, signed_by: signed };
 }
 
+export type ChainError = "malformed" | "not_purchase" | "mismatch" | "over_refund";
+/** Structural check that refunds and chargebacks are consistent with their purchase: each refers_to the purchase, same parties, currency and rail, no repeated receipt_id, and their sum at most the purchase total. Proofs are `verifyReceipt`'s job; run both. */
+export function verifyReceiptChain(purchase: unknown, later: unknown[]): { ok: true; refunded: number } | { ok: false; error: ChainError; message: string } {
+  const bad = (error: ChainError, message: string) => ({ ok: false as const, error, message });
+  const e = receiptError(purchase) ?? later.map(receiptError).find((x) => x);
+  if (e) return bad("malformed", e);
+  const p = purchase as Receipt, ids = new Set([p.receipt_id]);
+  if (p.kind !== "purchase") return bad("not_purchase", "the first receipt must be a purchase");
+  let refunded = 0;
+  for (const x of later as Receipt[]) {
+    if (x.kind === "purchase" || x.refers_to !== p.receipt_id) return bad("mismatch", "each later receipt must be a refund or chargeback of this purchase");
+    if (ids.has(x.receipt_id)) return bad("mismatch", "receipt_id repeats");
+    ids.add(x.receipt_id);
+    if (x.merchant_did !== p.merchant_did || x.agent_did !== p.agent_did || x.currency !== p.currency || x.rail !== p.rail) return bad("mismatch", "parties, currency and rail must equal the purchase's");
+    refunded += x.total;
+  }
+  if (refunded > p.total) return bad("over_refund", "refunds and chargebacks exceed the purchase total");
+  return { ok: true, refunded };
+}
+
 // ---------------------------------------------------------------- the checkout check
 
 export interface AgentPolicy { min_level?: number; require_owner?: boolean; require_mandate?: boolean; min_security_band?: string; accept_issuers?: string[] }
@@ -263,7 +296,7 @@ export interface CheckoutInput {
   keyLog?: Pick<KeyLogState, "did" | "root" | "approvers" | "closed">;
   status?: MandateStatus;
   /** The owner's per-cart approval/2.0 for this exact cart: `verifierDid` and `requestId` are the merchant's own. */
-  approval?: { approval: unknown; verifierDid: string; requestId: string };
+  approval?: { approval: unknown; verifierDid: string; requestId: string; /** The WebAuthn counter stored for the signing key; store `evidence.approval_counter` after an allow. */ counter?: number };
   now?: number;
   origins?: string[];
 }
@@ -319,9 +352,11 @@ export async function verifyAgentForCheckout(i: CheckoutInput): Promise<Checkout
   if (!needApproval) return { decision: "allow", reasons: ["mandate_covers_cart"], evidence };
   const why = !covered ? "no_mandate" : !covered.ok ? `mandate_${covered.reason}` : "step_up_over";
   if (i.approval && i.keyLog && owner) {
-    const a = verifyApproval(i.approval.approval, { keyLog: i.keyLog, verifierDid: i.approval.verifierDid, ownerDid: owner, requestId: i.approval.requestId, payloadDigest: cartDigest(cart), decisions: ["approve"], now, origins: i.origins });
+    const a = verifyApproval(i.approval.approval, { keyLog: i.keyLog, verifierDid: i.approval.verifierDid, ownerDid: owner, requestId: i.approval.requestId, payloadDigest: cartDigest(cart), decisions: ["approve"], now, origins: i.origins, counter: i.approval.counter });
     if (a.ok) {
       evidence.approval_request_id = i.approval.requestId;
+      evidence.approval_kid = a.kid;
+      evidence.approval_counter = a.counter;
       return { decision: "allow", reasons: ["owner_approved_cart", why], evidence };
     }
     evidence.approval_error = (a as { error: ApprovalError }).error;

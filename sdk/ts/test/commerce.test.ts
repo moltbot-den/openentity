@@ -97,3 +97,44 @@ describe("verifyAgentForCheckout", () => {
     expect((await oe.verifyAgentForCheckout({ ...base, cart: { ...cart, agent_did: c.agent_did }, request: { method: "POST", url, headers } })).reasons).toEqual(["agent_mismatch"]);
   });
 });
+
+describe("adversarial review fixes", () => {
+  const CV = json("cart-1/vectors.json"), M = CV.mandates.M, cart = CV.covers[0].cart;
+  const at = (merchant: string) => oe.mandateCovers(M, { ...cart, merchant });
+  it("a wildcard merchant matches only a plain hostname", () => {
+    expect(at("did:web:shop.moltbotden.com").ok).toBe(true);
+    expect(at("did:web:shop.moltbotden.com%3A8443").ok).toBe(true);
+    for (const evil of ["did:web:evil.com%2F.moltbotden.com", "did:web:evil.com%23.moltbotden.com", "did:web:evil.com%3F.moltbotden.com", "did:web:evil.com%40.moltbotden.com", "did:web:%zz.moltbotden.com"])
+      expect(at(evil), evil).toMatchObject({ ok: false, reason: "out_of_scope" });
+  });
+  it("spent that is not an unsigned integer never fits", () => {
+    for (const bad of [NaN, "abc", -1000, 1.5])
+      expect(oe.mandateCovers(M, cart, { spent: { period_spent: bad as number } }), String(bad)).toMatchObject({ ok: false, reason: "over_limit" });
+  });
+  it("a malformed or foreign status answer is no answer", () => {
+    const c = json("mandate-1/vectors.json").cases[0], x = c.context;
+    const run = (status: unknown) => oe.verifyMandate(c.mandate, { keyLog: keyState(x.key_state), agentDid: x.agent_did, now: x.now, status: status as never });
+    for (const bad of [{}, { status: "bogus" }, { status: "active", mandate_id: "md_aaaaaaaaaaaaaaaaaaaaaaaaaa" }, { status: "active", total_spent: "abc" }, { status: "active", period_spent: -1 }, "active", null])
+      expect(run(bad), JSON.stringify(bad)).toMatchObject({ ok: false, error: "status_required" });
+    expect(run({ status: "active", mandate_id: c.mandate.mandate_id }).ok).toBe(true);
+  });
+  it("a receipt cannot name one DID as merchant and agent, and refunds stay inside the purchase", () => {
+    const p = json("receipt-1/vectors.json").cases[0].receipt;
+    expect(oe.receiptError({ ...p, merchant_did: p.agent_did })).toMatch(/differ/);
+    const refund = (id: string, total: number, extra = {}) => ({ ...p, kind: "refund", receipt_id: id, refers_to: p.receipt_id, total, proofs: undefined, ...extra });
+    const r1 = refund("rc_aaaaaaaaaaaaaaaaaaaaaaaaaa", 600), r2 = refund("rc_bbbbbbbbbbbbbbbbbbbbbbbbbb", 400);
+    expect(oe.verifyReceiptChain(p, [r1, r2])).toEqual({ ok: true, refunded: 1000 });
+    expect(oe.verifyReceiptChain(p, [r1, { ...r2, total: 401 }])).toMatchObject({ ok: false, error: "over_refund" });
+    expect(oe.verifyReceiptChain(p, [r1, r1])).toMatchObject({ ok: false, error: "mismatch" });
+    expect(oe.verifyReceiptChain(p, [{ ...r1, currency: "EUR" }])).toMatchObject({ ok: false, error: "mismatch" });
+    expect(oe.verifyReceiptChain(p, [{ ...r1, refers_to: "rc_cccccccccccccccccccccccccc" }])).toMatchObject({ ok: false, error: "mismatch" });
+    expect(oe.verifyReceiptChain(r1, [])).toMatchObject({ ok: false, error: "not_purchase" });
+  });
+  it("an allow by approval hands back the key and counter to store", async () => {
+    const c = V_CHECKOUT.cases.find((k: { name: string }) => k.name === "allow-step-up-approved"), i = c.input;
+    const r = await oe.verifyAgentForCheckout({ agentDid: i.agent_did, cart: i.cart, merchantPolicy: i.merchant_policy, agent: i.agent, mandate: i.mandate, keyLog: keyState(i.key_state), status: i.status, now: i.now,
+      approval: { approval: i.approval.approval, verifierDid: i.approval.verifier_did, requestId: i.approval.request_id, counter: 0 } });
+    expect(r.evidence).toMatchObject({ approval_kid: i.approval.approval.device_id, approval_counter: 0 });
+  });
+});
+const V_CHECKOUT = json("checkout-1/vectors.json");

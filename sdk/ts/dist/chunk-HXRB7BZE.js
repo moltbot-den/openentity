@@ -3305,9 +3305,11 @@ function verifyMandate(mandate, o) {
     if (!cred) fail2("unknown_key", "device_id is not a current approver in the owner's key log");
     const rpId = o.rpId ?? RP_ID;
     checkSignature(cred, md.signature, mandateDigest(md), { origins: o.origins ?? [`https://${rpId}`], rpId, lowS: false });
-    if (o.status) {
-      if (o.status.status === "revoked") fail2("revoked", "the owner revoked the mandate");
-      if (o.status.status === "exhausted") fail2("exhausted", "the mandate is spent");
+    if (o.status !== void 0) {
+      const st = o.status;
+      if (!isObj(st) || !["active", "revoked", "exhausted"].includes(st.status) || st.mandate_id !== void 0 && st.mandate_id !== md.mandate_id || st.period_spent !== void 0 && !isUint(st.period_spent) || st.total_spent !== void 0 && !isUint(st.total_spent)) fail2("status_required", "the status answer is malformed or for another mandate");
+      if (st.status === "revoked") fail2("revoked", "the owner revoked the mandate");
+      if (st.status === "exhausted") fail2("exhausted", "the mandate is spent");
     } else if (md.expires_at - now > DAY) fail2("status_required", "a mandate with more than a day left needs a fresh status answer");
     return { ok: true, kid: cred.kid, mandate_id: md.mandate_id, limits: md.limits, scope: md.scope, step_up_over: md.step_up_over, period_spent: o.status?.period_spent, total_spent: o.status?.total_spent };
   } catch (x) {
@@ -3315,7 +3317,17 @@ function verifyMandate(mandate, o) {
     throw x;
   }
 }
-var didHost = (did) => did.startsWith("did:web:") ? decodeURIComponent(did.slice(8).split(":")[0]).split(":")[0].toLowerCase() : null;
+var HOST = /^[a-z0-9]([a-z0-9.-]*[a-z0-9])?(:\d+)?$/;
+function didHost(did) {
+  if (!did.startsWith("did:web:")) return null;
+  let d;
+  try {
+    d = decodeURIComponent(did.slice(8).split(":")[0]).toLowerCase();
+  } catch {
+    return null;
+  }
+  return HOST.test(d) ? d.split(":")[0] : null;
+}
 function merchantAllowed(patterns, merchant) {
   if (!patterns.length) return true;
   const host = didHost(merchant);
@@ -3337,9 +3349,11 @@ function mandateCovers(mandate, cart, o = {}) {
   if (!s.rails.includes(c.rail)) return no("out_of_scope", `rail ${c.rail} is not in scope`);
   if (!merchantAllowed(s.merchants, c.merchant)) return no("out_of_scope", `merchant ${c.merchant} is not in scope`);
   if (s.categories?.length && c.lines.some((x) => !x.category || !s.categories.includes(x.category))) return no("out_of_scope", "a line is outside the categories");
+  const sp = o.spent ?? {};
+  if (sp.period_spent !== void 0 && !isUint(sp.period_spent) || sp.total_spent !== void 0 && !isUint(sp.total_spent)) return no("over_limit", "spent must be unsigned integers");
   if (c.total > l.per_tx_max) return no("over_limit", "per_tx_max");
-  if ((o.spent?.period_spent ?? 0) + c.total > l.period_max) return no("over_limit", "period_max");
-  if ((o.spent?.total_spent ?? 0) + c.total > l.total_max) return no("over_limit", "total_max");
+  if ((sp.period_spent ?? 0) + c.total > l.period_max) return no("over_limit", "period_max");
+  if ((sp.total_spent ?? 0) + c.total > l.total_max) return no("over_limit", "total_max");
   return { ok: true, step_up_required: c.total > mandate.step_up_over };
 }
 var RECEIPT_KEYS = ["version", "receipt_id", "kind", "refers_to", "merchant_did", "agent_did", "mandate_id", "mandate_hash", "cart_digest", "approval_request_id", "total", "currency", "rail", "settlement_ref", "created_at"];
@@ -3352,6 +3366,7 @@ function receiptError(r) {
   if (!["purchase", "refund", "chargeback"].includes(r.kind)) return "kind must be purchase, refund or chargeback";
   if (r.kind === "purchase" ? r.refers_to !== null : typeof r.refers_to !== "string" || !RC_ID.test(r.refers_to)) return "refers_to is null for a purchase and the purchase's receipt_id for a refund or chargeback";
   if (typeof r.merchant_did !== "string" || !DID.test(r.merchant_did) || typeof r.agent_did !== "string" || !DID.test(r.agent_did)) return "merchant_did and agent_did must be DIDs";
+  if (r.merchant_did === r.agent_did) return "merchant_did and agent_did must differ";
   if (r.mandate_id !== null && !(typeof r.mandate_id === "string" && MD_ID.test(r.mandate_id))) return "mandate_id must be md_<26 base32> or null";
   if (r.mandate_hash !== null && !(typeof r.mandate_hash === "string" && HEX64.test(r.mandate_hash))) return "mandate_hash must be 64 lowercase hex or null";
   if (r.mandate_id === null !== (r.mandate_hash === null)) return "mandate_id and mandate_hash go together";
@@ -3388,6 +3403,23 @@ async function verifyReceipt(receipt, o = {}) {
   }
   for (const need of o.require ?? ["merchant"]) if (!signed.includes(need)) return { ok: false, error: "missing_proof", message: `no ${need} proof` };
   return { ok: true, signed_by: signed };
+}
+function verifyReceiptChain(purchase, later) {
+  const bad = (error, message) => ({ ok: false, error, message });
+  const e = receiptError(purchase) ?? later.map(receiptError).find((x) => x);
+  if (e) return bad("malformed", e);
+  const p = purchase, ids = /* @__PURE__ */ new Set([p.receipt_id]);
+  if (p.kind !== "purchase") return bad("not_purchase", "the first receipt must be a purchase");
+  let refunded = 0;
+  for (const x of later) {
+    if (x.kind === "purchase" || x.refers_to !== p.receipt_id) return bad("mismatch", "each later receipt must be a refund or chargeback of this purchase");
+    if (ids.has(x.receipt_id)) return bad("mismatch", "receipt_id repeats");
+    ids.add(x.receipt_id);
+    if (x.merchant_did !== p.merchant_did || x.agent_did !== p.agent_did || x.currency !== p.currency || x.rail !== p.rail) return bad("mismatch", "parties, currency and rail must equal the purchase's");
+    refunded += x.total;
+  }
+  if (refunded > p.total) return bad("over_refund", "refunds and chargebacks exceed the purchase total");
+  return { ok: true, refunded };
 }
 async function verifyAgentForCheckout(i) {
   const now = i.now ?? Math.floor(Date.now() / 1e3), evidence = {};
@@ -3432,9 +3464,11 @@ async function verifyAgentForCheckout(i) {
   if (!needApproval) return { decision: "allow", reasons: ["mandate_covers_cart"], evidence };
   const why = !covered ? "no_mandate" : !covered.ok ? `mandate_${covered.reason}` : "step_up_over";
   if (i.approval && i.keyLog && owner) {
-    const a = verifyApproval(i.approval.approval, { keyLog: i.keyLog, verifierDid: i.approval.verifierDid, ownerDid: owner, requestId: i.approval.requestId, payloadDigest: cartDigest(cart), decisions: ["approve"], now, origins: i.origins });
+    const a = verifyApproval(i.approval.approval, { keyLog: i.keyLog, verifierDid: i.approval.verifierDid, ownerDid: owner, requestId: i.approval.requestId, payloadDigest: cartDigest(cart), decisions: ["approve"], now, origins: i.origins, counter: i.approval.counter });
     if (a.ok) {
       evidence.approval_request_id = i.approval.requestId;
+      evidence.approval_kid = a.kid;
+      evidence.approval_counter = a.counter;
       return { decision: "allow", reasons: ["owner_approved_cart", why], evidence };
     }
     evidence.approval_error = a.error;
@@ -3534,5 +3568,6 @@ export {
   receiptError,
   signReceipt,
   verifyReceipt,
+  verifyReceiptChain,
   verifyAgentForCheckout
 };
