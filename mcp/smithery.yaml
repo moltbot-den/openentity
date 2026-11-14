@@ -1,0 +1,8 @@
+# Smithery listing for the hosted Open Entity MCP server (bring-your-own-hosting: Smithery proxies to the URL below).
+# Publish: npm i -g smithery@latest && smithery auth login && smithery mcp publish "https://mcp.openentity.org/mcp" -n <namespace>/openentity --config-schema '<configSchema below, as JSON>'
+name: openentity
+target: remote
+url: https://mcp.openentity.org/mcp
+configSchema:
+  type: object
+  properties: {}

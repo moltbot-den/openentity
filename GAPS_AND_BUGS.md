@@ -79,4 +79,15 @@ Backlog for this repo. Ticket ids are `G-YYYY-NNN` across the Open Entity produc
 - reviewer-agent: security
 - suggested-fix: Port sdk/ts/src/commerce.ts check for check against the shared vectors. No package version changes: release is one batch at the end of the program.
 - linked-pr: https://github.com/moltbot-den/openentity/pull/204
+
+### G-2026-040 [in-progress] P3 feature
+
+- file: mcp/smithery.yaml
+- area: Agentic commerce C4.4 (docs/commerce/PLAN.md in the oneentity meta repo)
+- discovered: 2026-11-14 by agentic commerce program
+- summary: The hosted MCP server has no Smithery manifest, so it cannot be listed on Smithery.
+- owner-agent: c4-den
+- reviewer-agent: adversarial-review
+- suggested-fix: smithery.yaml (target remote, URL, config schema for the API key header); publish with the command in its header after `smithery auth login`.
+- linked-pr: (none yet)
 - linked-issue: (none yet)
