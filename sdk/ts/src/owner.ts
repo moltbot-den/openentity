@@ -5,14 +5,18 @@ import { p256 } from "@noble/curves/nist.js";
 import { OpenEntityError } from "./errors.ts";
 import { canonicalize, parseJson, sha256Sync, toHex, b64url, unb64url, concat, equal } from "./core.ts";
 
-const RP_ID = "account.openentity.org";
-const DAY = 86_400;
+/** @internal */
+export const RP_ID = "account.openentity.org";
+/** @internal */
+export const DAY = 86_400;
 const WEEK = 7 * DAY;
 const MAX_TTL = 600;
 const HALF_N = p256.Point.Fn.ORDER >> 1n;
 const REQUEST_ID = /^[A-Za-z0-9:._-]{1,128}$/;
-const HEX64 = /^[0-9a-f]{64}$/;
-const DID = /^did:[a-z0-9]+:[A-Za-z0-9._%:-]*[A-Za-z0-9._%-]$/;
+/** @internal */
+export const HEX64 = /^[0-9a-f]{64}$/;
+/** @internal */
+export const DID = /^did:[a-z0-9]+:[A-Za-z0-9._%:-]*[A-Za-z0-9._%-]$/;
 
 /** A key in an owner key log: a device P-256 key (`p256`) or a passkey (`webauthn`). Descriptive fields (label, platform, attestation) pass through. */
 export interface Credential {
@@ -39,25 +43,31 @@ export type KeyLogResult = { ok: true; state: KeyLogState } | { ok: false; error
 export type ApprovalError = "malformed" | "bad_version" | "wrong_verifier" | "wrong_owner" | "owner_closed" | "wrong_request" | "wrong_payload" | "bad_decision" | "expired" | "expiry_too_far" | "unknown_key" | "bad_signature" | "bad_webauthn" | "counter_replayed";
 export type ApprovalResult = { ok: true; kid: string; counter: number } | { ok: false; error: ApprovalError; message: string };
 
-class Fail {
-  code: KeyLogError | ApprovalError;
+/** @internal shared with commerce.ts */
+export class Fail {
+  code: string;
   message: string;
-  constructor(code: KeyLogError | ApprovalError, message: string) {
+  constructor(code: string, message: string) {
     this.code = code;
     this.message = message;
   }
 }
-const fail = (code: KeyLogError | ApprovalError, message: string): never => {
+/** @internal */
+export const fail = (code: string, message: string): never => {
   throw new Fail(code, message);
 };
 
 type Obj = Record<string, unknown>;
-const isObj = (v: unknown): v is Obj => typeof v === "object" && v !== null && !Array.isArray(v);
-const exactKeys = (o: Obj, keys: string[]) => Object.keys(o).length === keys.length && keys.every((k) => Object.hasOwn(o, k));
-const isUint = (v: unknown): v is number => Number.isSafeInteger(v) && (v as number) >= 0;
+/** @internal */
+export const isObj = (v: unknown): v is Obj => typeof v === "object" && v !== null && !Array.isArray(v);
+/** @internal */
+export const exactKeys = (o: Obj, keys: string[]) => Object.keys(o).length === keys.length && keys.every((k) => Object.hasOwn(o, k));
+/** @internal */
+export const isUint = (v: unknown): v is number => Number.isSafeInteger(v) && (v as number) >= 0;
 
 /** Strict base64url: no padding, and only the one encoding of the bytes (re-encoding gives the same string). */
-function b64u(s: unknown): Uint8Array | null {
+/** @internal */
+export function b64u(s: unknown): Uint8Array | null {
   if (typeof s !== "string" || !/^[A-Za-z0-9_-]*$/.test(s) || s.length % 4 === 1) return null;
   const b = unb64url(s);
   return b64url(b) === s ? b : null;
@@ -79,7 +89,8 @@ function base32(b: Uint8Array): string {
 const MAX_DEPTH = 64; // containers on one path, in an entry, a payload summary or clientDataJSON (all four SDKs)
 
 /** Only safe integers (unless `ints` is false), well-formed strings and at most 64 nested containers, so all four SDKs read an entry, a summary or client data the same way. */
-function plainJson(v: unknown, ints = true, depth = 0): string | null {
+/** @internal */
+export function plainJson(v: unknown, ints = true, depth = 0): string | null {
   if (typeof v === "number") return !ints || Number.isSafeInteger(v) ? null : `number ${v} is not an integer within 2^53`;
   if (typeof v === "string") return /[\uD800-\uDFFF]/u.test(v) ? "string has a lone surrogate" : null;
   if ((Array.isArray(v) || isObj(v)) && depth >= MAX_DEPTH) return `nested deeper than ${MAX_DEPTH} levels`;
@@ -130,11 +141,14 @@ function ecdsa(raw: Uint8Array, msg: Uint8Array, pub: Uint8Array, prehash: boole
   }
 }
 
-interface SigOptions { origins: string[]; rpId: string; lowS: boolean }
-interface Signed { form: unknown; signature: unknown; authenticator_data?: unknown; client_data_json?: unknown }
+/** @internal */
+export interface SigOptions { origins: string[]; rpId: string; lowS: boolean }
+/** @internal */
+export interface Signed { form: unknown; signature: unknown; authenticator_data?: unknown; client_data_json?: unknown }
 
 /** Checks a p256 or webauthn signature by `cred` over `digest`; returns the WebAuthn signature counter (0 for p256). */
-function checkSignature(cred: Credential, s: Signed, digest: Uint8Array, o: SigOptions): number {
+/** @internal */
+export function checkSignature(cred: Credential, s: Signed, digest: Uint8Array, o: SigOptions): number {
   if (s.form !== cred.type) fail("bad_signature", `a ${cred.type} key cannot present a ${String(s.form)} signature`);
   const pub = jwkPoint(cred.jwk)!;
   const sig = b64u(s.signature)!;
@@ -164,7 +178,8 @@ function checkSignature(cred: Credential, s: Signed, digest: Uint8Array, o: SigO
 }
 
 /** Shape of the signature fields shared by approvals and key log `auth`. */
-function signedShape(s: Obj): string | null {
+/** @internal */
+export function signedShape(s: Obj): string | null {
   if (s.form !== "p256" && s.form !== "webauthn") return "form must be p256 or webauthn";
   if (!b64u(s.signature)) return "signature must be base64url";
   if (s.form === "webauthn" && (!b64u(s.authenticator_data) || !b64u(s.client_data_json))) return "webauthn needs authenticator_data and client_data_json in base64url";

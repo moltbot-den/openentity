@@ -1,3 +1,11 @@
+/** @internal */
+export declare const RP_ID = "account.openentity.org";
+/** @internal */
+export declare const DAY = 86400;
+/** @internal */
+export declare const HEX64: RegExp;
+/** @internal */
+export declare const DID: RegExp;
 /** A key in an owner key log: a device P-256 key (`p256`) or a passkey (`webauthn`). Descriptive fields (label, platform, attestation) pass through. */
 export interface Credential {
     kid: string;
@@ -51,6 +59,46 @@ export type ApprovalResult = {
     error: ApprovalError;
     message: string;
 };
+/** @internal shared with commerce.ts */
+export declare class Fail {
+    code: string;
+    message: string;
+    constructor(code: string, message: string);
+}
+/** @internal */
+export declare const fail: (code: string, message: string) => never;
+type Obj = Record<string, unknown>;
+/** @internal */
+export declare const isObj: (v: unknown) => v is Obj;
+/** @internal */
+export declare const exactKeys: (o: Obj, keys: string[]) => boolean;
+/** @internal */
+export declare const isUint: (v: unknown) => v is number;
+/** Strict base64url: no padding, and only the one encoding of the bytes (re-encoding gives the same string). */
+/** @internal */
+export declare function b64u(s: unknown): Uint8Array | null;
+/** Only safe integers (unless `ints` is false), well-formed strings and at most 64 nested containers, so all four SDKs read an entry, a summary or client data the same way. */
+/** @internal */
+export declare function plainJson(v: unknown, ints?: boolean, depth?: number): string | null;
+/** @internal */
+export interface SigOptions {
+    origins: string[];
+    rpId: string;
+    lowS: boolean;
+}
+/** @internal */
+export interface Signed {
+    form: unknown;
+    signature: unknown;
+    authenticator_data?: unknown;
+    client_data_json?: unknown;
+}
+/** Checks a p256 or webauthn signature by `cred` over `digest`; returns the WebAuthn signature counter (0 for p256). */
+/** @internal */
+export declare function checkSignature(cred: Credential, s: Signed, digest: Uint8Array, o: SigOptions): number;
+/** Shape of the signature fields shared by approvals and key log `auth`. */
+/** @internal */
+export declare function signedShape(s: Obj): string | null;
 /** ADR 0008: SHA-256 of `approval/2.0|verifier_did|owner_did|request_id|payload_digest|decision|expires_at`. Takes the approval object or the request fields. */
 export declare function approvalDigest(a: {
     verifier_did: string;
@@ -106,3 +154,4 @@ export interface KeyLogOptions {
  * runs from it, never from the entry's `ts`. Returns the state as of `now`, or the first failing entry's seq and rule.
  */
 export declare function verifyKeyLog(did: string, lines: string[], firstSeenAt: number[], opts?: KeyLogOptions): KeyLogResult;
+export {};

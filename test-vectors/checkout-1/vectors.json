@@ -1,0 +1,2405 @@
+{
+  "description": "verifyAgentForCheckout vectors. input: agent_did (already verified from the request signature), cart, merchant_policy, agent (registry facts), mandate, key_state (approval-2.0 key_states), status, approval {approval, verifier_did, request_id}, now. expect: decision, reasons (in order) and, where an approval was offered and refused, the approval error in evidence.approval_error. Security bands rank poor < fair < good < strong.",
+  "warning": "PUBLISHED THROWAWAY KEYS FOR TEST VECTORS ONLY. Every secret is published (test-vectors/approval-2.0/keys.json and test-vectors/keys.json). Anyone can sign with them. Never use them for anything real.",
+  "cases": [
+    {
+      "name": "allow-mandate-covers",
+      "description": "Mandate covers a small cart and the policy is met.",
+      "input": {
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "cart": {
+          "profile": "cart/1",
+          "merchant": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+          "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+          "lines": [
+            {
+              "sku": "lst_123",
+              "title": "Dataset",
+              "qty": 1,
+              "unit": 1000,
+              "category": "data"
+            }
+          ],
+          "total": 1000,
+          "currency": "USD",
+          "rail": "credits",
+          "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg"
+        },
+        "merchant_policy": {
+          "min_level": 1,
+          "require_owner": true,
+          "require_mandate": true,
+          "min_security_band": "good",
+          "accept_issuers": [
+            "did:web:securemyagent.ai"
+          ]
+        },
+        "agent": {
+          "level": 2,
+          "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "security_band": "strong",
+          "security_issuer": "did:web:securemyagent.ai"
+        },
+        "mandate": {
+          "version": "mandate/1",
+          "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg",
+          "issuer_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+          "issued_at": 1794009600,
+          "expires_at": 1796601600,
+          "limits": {
+            "currency": "USD",
+            "per_tx_max": 5000,
+            "period": "P1D",
+            "period_max": 20000,
+            "total_max": 100000
+          },
+          "scope": {
+            "merchants": [
+              "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+              "*.moltbotden.com"
+            ],
+            "categories": [
+              "software",
+              "data"
+            ],
+            "rails": [
+              "card",
+              "x402",
+              "mpp",
+              "credits",
+              "usdc"
+            ]
+          },
+          "step_up_over": 2500,
+          "status": "https://account.openentity.org/v1/mandates/md_4b3eaz4gie3atj4jlyz375pbfg/status",
+          "signature": {
+            "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+            "form": "p256",
+            "signature": "nroQ52XQe3s5Xs7_ZCUA1p33MQ8UyBgscWtCjViHTtoZ4okUeZ1AVdFgoTI95wA7nKjZxi8xccWUFawCLinFHw"
+          }
+        },
+        "key_state": "owner",
+        "status": {
+          "status": "active",
+          "period_spent": 4000,
+          "total_spent": 9000
+        },
+        "now": 1794010600
+      },
+      "expect": {
+        "decision": "allow",
+        "reasons": [
+          "mandate_covers_cart"
+        ]
+      }
+    },
+    {
+      "name": "step-up-over-threshold",
+      "description": "Over step_up_over and no approval.",
+      "input": {
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "cart": {
+          "profile": "cart/1",
+          "merchant": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+          "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+          "lines": [
+            {
+              "sku": "sku_big",
+              "title": "sku_big",
+              "qty": 1,
+              "unit": 3000,
+              "category": "software"
+            }
+          ],
+          "total": 3000,
+          "currency": "USD",
+          "rail": "credits",
+          "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg"
+        },
+        "merchant_policy": {
+          "min_level": 1,
+          "require_owner": true,
+          "require_mandate": true,
+          "min_security_band": "good",
+          "accept_issuers": [
+            "did:web:securemyagent.ai"
+          ]
+        },
+        "agent": {
+          "level": 2,
+          "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "security_band": "strong",
+          "security_issuer": "did:web:securemyagent.ai"
+        },
+        "mandate": {
+          "version": "mandate/1",
+          "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg",
+          "issuer_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+          "issued_at": 1794009600,
+          "expires_at": 1796601600,
+          "limits": {
+            "currency": "USD",
+            "per_tx_max": 5000,
+            "period": "P1D",
+            "period_max": 20000,
+            "total_max": 100000
+          },
+          "scope": {
+            "merchants": [
+              "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+              "*.moltbotden.com"
+            ],
+            "categories": [
+              "software",
+              "data"
+            ],
+            "rails": [
+              "card",
+              "x402",
+              "mpp",
+              "credits",
+              "usdc"
+            ]
+          },
+          "step_up_over": 2500,
+          "status": "https://account.openentity.org/v1/mandates/md_4b3eaz4gie3atj4jlyz375pbfg/status",
+          "signature": {
+            "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+            "form": "p256",
+            "signature": "nroQ52XQe3s5Xs7_ZCUA1p33MQ8UyBgscWtCjViHTtoZ4okUeZ1AVdFgoTI95wA7nKjZxi8xccWUFawCLinFHw"
+          }
+        },
+        "key_state": "owner",
+        "status": {
+          "status": "active",
+          "period_spent": 4000,
+          "total_spent": 9000
+        },
+        "now": 1794010600
+      },
+      "expect": {
+        "decision": "step_up",
+        "reasons": [
+          "step_up_over"
+        ]
+      }
+    },
+    {
+      "name": "allow-step-up-approved",
+      "description": "Over step_up_over with the owner's approval of this exact cart.",
+      "input": {
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "cart": {
+          "profile": "cart/1",
+          "merchant": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+          "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+          "lines": [
+            {
+              "sku": "sku_big",
+              "title": "sku_big",
+              "qty": 1,
+              "unit": 3000,
+              "category": "software"
+            }
+          ],
+          "total": 3000,
+          "currency": "USD",
+          "rail": "credits",
+          "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg"
+        },
+        "merchant_policy": {
+          "min_level": 1,
+          "require_owner": true,
+          "require_mandate": true,
+          "min_security_band": "good",
+          "accept_issuers": [
+            "did:web:securemyagent.ai"
+          ]
+        },
+        "agent": {
+          "level": 2,
+          "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "security_band": "strong",
+          "security_issuer": "did:web:securemyagent.ai"
+        },
+        "mandate": {
+          "version": "mandate/1",
+          "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg",
+          "issuer_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+          "issued_at": 1794009600,
+          "expires_at": 1796601600,
+          "limits": {
+            "currency": "USD",
+            "per_tx_max": 5000,
+            "period": "P1D",
+            "period_max": 20000,
+            "total_max": 100000
+          },
+          "scope": {
+            "merchants": [
+              "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+              "*.moltbotden.com"
+            ],
+            "categories": [
+              "software",
+              "data"
+            ],
+            "rails": [
+              "card",
+              "x402",
+              "mpp",
+              "credits",
+              "usdc"
+            ]
+          },
+          "step_up_over": 2500,
+          "status": "https://account.openentity.org/v1/mandates/md_4b3eaz4gie3atj4jlyz375pbfg/status",
+          "signature": {
+            "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+            "form": "p256",
+            "signature": "nroQ52XQe3s5Xs7_ZCUA1p33MQ8UyBgscWtCjViHTtoZ4okUeZ1AVdFgoTI95wA7nKjZxi8xccWUFawCLinFHw"
+          }
+        },
+        "key_state": "owner",
+        "status": {
+          "status": "active",
+          "period_spent": 4000,
+          "total_spent": 9000
+        },
+        "now": 1794010600,
+        "approval": {
+          "approval": {
+            "version": "approval/2.0",
+            "verifier_did": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+            "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+            "request_id": "req_big",
+            "payload_digest": "1a868d7a8b911add85c1618c310b48c127c8f71b59824a2486da8bb93835e524",
+            "decision": "approve",
+            "expires_at": 1794010900,
+            "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+            "form": "p256",
+            "signature": "bd3Z0uRJepBR8KbFveOpB97rcecG6VMaxYlFc5vqh_lYm1cCYsbdrHDTOurfMgdPaSB7bOh4ZrO896QHV6ctDQ"
+          },
+          "verifier_did": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+          "request_id": "req_big"
+        }
+      },
+      "expect": {
+        "decision": "allow",
+        "reasons": [
+          "owner_approved_cart",
+          "step_up_over"
+        ]
+      }
+    },
+    {
+      "name": "step-up-approval-for-other-cart",
+      "description": "An approval of a different cart does not carry over.",
+      "input": {
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "cart": {
+          "profile": "cart/1",
+          "merchant": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+          "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+          "lines": [
+            {
+              "sku": "sku_big",
+              "title": "sku_big",
+              "qty": 1,
+              "unit": 3000,
+              "category": "software"
+            }
+          ],
+          "total": 3000,
+          "currency": "USD",
+          "rail": "credits",
+          "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg"
+        },
+        "merchant_policy": {
+          "min_level": 1,
+          "require_owner": true,
+          "require_mandate": true,
+          "min_security_band": "good",
+          "accept_issuers": [
+            "did:web:securemyagent.ai"
+          ]
+        },
+        "agent": {
+          "level": 2,
+          "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "security_band": "strong",
+          "security_issuer": "did:web:securemyagent.ai"
+        },
+        "mandate": {
+          "version": "mandate/1",
+          "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg",
+          "issuer_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+          "issued_at": 1794009600,
+          "expires_at": 1796601600,
+          "limits": {
+            "currency": "USD",
+            "per_tx_max": 5000,
+            "period": "P1D",
+            "period_max": 20000,
+            "total_max": 100000
+          },
+          "scope": {
+            "merchants": [
+              "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+              "*.moltbotden.com"
+            ],
+            "categories": [
+              "software",
+              "data"
+            ],
+            "rails": [
+              "card",
+              "x402",
+              "mpp",
+              "credits",
+              "usdc"
+            ]
+          },
+          "step_up_over": 2500,
+          "status": "https://account.openentity.org/v1/mandates/md_4b3eaz4gie3atj4jlyz375pbfg/status",
+          "signature": {
+            "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+            "form": "p256",
+            "signature": "nroQ52XQe3s5Xs7_ZCUA1p33MQ8UyBgscWtCjViHTtoZ4okUeZ1AVdFgoTI95wA7nKjZxi8xccWUFawCLinFHw"
+          }
+        },
+        "key_state": "owner",
+        "status": {
+          "status": "active",
+          "period_spent": 4000,
+          "total_spent": 9000
+        },
+        "now": 1794010600,
+        "approval": {
+          "approval": {
+            "version": "approval/2.0",
+            "verifier_did": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+            "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+            "request_id": "req_other",
+            "payload_digest": "cbc0dde63d67e4d56adc506240d733f7685c3039388c76440aa5b1cfd1011886",
+            "decision": "approve",
+            "expires_at": 1794010900,
+            "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+            "form": "p256",
+            "signature": "abwpxf9Gw2wQ6hqhY35-a7d8k8vVyfu1Tr7pMDr4LwNVBNVgOd6jN7PmJVoWAQrotA4FmpdRgMIaO2PH-EuPZw"
+          },
+          "verifier_did": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+          "request_id": "req_other"
+        }
+      },
+      "expect": {
+        "decision": "step_up",
+        "reasons": [
+          "step_up_over"
+        ],
+        "approval_error": "wrong_payload"
+      }
+    },
+    {
+      "name": "step-up-approval-expired",
+      "description": "An expired approval.",
+      "input": {
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "cart": {
+          "profile": "cart/1",
+          "merchant": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+          "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+          "lines": [
+            {
+              "sku": "sku_big",
+              "title": "sku_big",
+              "qty": 1,
+              "unit": 3000,
+              "category": "software"
+            }
+          ],
+          "total": 3000,
+          "currency": "USD",
+          "rail": "credits",
+          "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg"
+        },
+        "merchant_policy": {
+          "min_level": 1,
+          "require_owner": true,
+          "require_mandate": true,
+          "min_security_band": "good",
+          "accept_issuers": [
+            "did:web:securemyagent.ai"
+          ]
+        },
+        "agent": {
+          "level": 2,
+          "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "security_band": "strong",
+          "security_issuer": "did:web:securemyagent.ai"
+        },
+        "mandate": {
+          "version": "mandate/1",
+          "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg",
+          "issuer_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+          "issued_at": 1794009600,
+          "expires_at": 1796601600,
+          "limits": {
+            "currency": "USD",
+            "per_tx_max": 5000,
+            "period": "P1D",
+            "period_max": 20000,
+            "total_max": 100000
+          },
+          "scope": {
+            "merchants": [
+              "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+              "*.moltbotden.com"
+            ],
+            "categories": [
+              "software",
+              "data"
+            ],
+            "rails": [
+              "card",
+              "x402",
+              "mpp",
+              "credits",
+              "usdc"
+            ]
+          },
+          "step_up_over": 2500,
+          "status": "https://account.openentity.org/v1/mandates/md_4b3eaz4gie3atj4jlyz375pbfg/status",
+          "signature": {
+            "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+            "form": "p256",
+            "signature": "nroQ52XQe3s5Xs7_ZCUA1p33MQ8UyBgscWtCjViHTtoZ4okUeZ1AVdFgoTI95wA7nKjZxi8xccWUFawCLinFHw"
+          }
+        },
+        "key_state": "owner",
+        "status": {
+          "status": "active",
+          "period_spent": 4000,
+          "total_spent": 9000
+        },
+        "now": 1794010600,
+        "approval": {
+          "approval": {
+            "version": "approval/2.0",
+            "verifier_did": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+            "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+            "request_id": "req_old",
+            "payload_digest": "1a868d7a8b911add85c1618c310b48c127c8f71b59824a2486da8bb93835e524",
+            "decision": "approve",
+            "expires_at": 1794010599,
+            "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+            "form": "p256",
+            "signature": "R9mIwzTN0XnOL2b2L6pObhzrwI1zLLtDHQVSu7nPmtJyzvGMLxguYE053GHQppq4RPS1Qq9qgbKHow8PSn48dQ"
+          },
+          "verifier_did": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+          "request_id": "req_old"
+        }
+      },
+      "expect": {
+        "decision": "step_up",
+        "reasons": [
+          "step_up_over"
+        ],
+        "approval_error": "expired"
+      }
+    },
+    {
+      "name": "step-up-approval-deny",
+      "description": "The owner denied this cart.",
+      "input": {
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "cart": {
+          "profile": "cart/1",
+          "merchant": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+          "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+          "lines": [
+            {
+              "sku": "sku_big",
+              "title": "sku_big",
+              "qty": 1,
+              "unit": 3000,
+              "category": "software"
+            }
+          ],
+          "total": 3000,
+          "currency": "USD",
+          "rail": "credits",
+          "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg"
+        },
+        "merchant_policy": {
+          "min_level": 1,
+          "require_owner": true,
+          "require_mandate": true,
+          "min_security_band": "good",
+          "accept_issuers": [
+            "did:web:securemyagent.ai"
+          ]
+        },
+        "agent": {
+          "level": 2,
+          "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "security_band": "strong",
+          "security_issuer": "did:web:securemyagent.ai"
+        },
+        "mandate": {
+          "version": "mandate/1",
+          "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg",
+          "issuer_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+          "issued_at": 1794009600,
+          "expires_at": 1796601600,
+          "limits": {
+            "currency": "USD",
+            "per_tx_max": 5000,
+            "period": "P1D",
+            "period_max": 20000,
+            "total_max": 100000
+          },
+          "scope": {
+            "merchants": [
+              "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+              "*.moltbotden.com"
+            ],
+            "categories": [
+              "software",
+              "data"
+            ],
+            "rails": [
+              "card",
+              "x402",
+              "mpp",
+              "credits",
+              "usdc"
+            ]
+          },
+          "step_up_over": 2500,
+          "status": "https://account.openentity.org/v1/mandates/md_4b3eaz4gie3atj4jlyz375pbfg/status",
+          "signature": {
+            "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+            "form": "p256",
+            "signature": "nroQ52XQe3s5Xs7_ZCUA1p33MQ8UyBgscWtCjViHTtoZ4okUeZ1AVdFgoTI95wA7nKjZxi8xccWUFawCLinFHw"
+          }
+        },
+        "key_state": "owner",
+        "status": {
+          "status": "active",
+          "period_spent": 4000,
+          "total_spent": 9000
+        },
+        "now": 1794010600,
+        "approval": {
+          "approval": {
+            "version": "approval/2.0",
+            "verifier_did": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+            "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+            "request_id": "req_no",
+            "payload_digest": "1a868d7a8b911add85c1618c310b48c127c8f71b59824a2486da8bb93835e524",
+            "decision": "deny",
+            "expires_at": 1794010900,
+            "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+            "form": "p256",
+            "signature": "I02JKNImBfZwJsEyVSAOsjk_dzELC0oKXoUWqjP2pYEVC-5pB3NLOKsFNL8pB93DNPDXeqSodGaFVvmBATmKqQ"
+          },
+          "verifier_did": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+          "request_id": "req_no"
+        }
+      },
+      "expect": {
+        "decision": "step_up",
+        "reasons": [
+          "step_up_over"
+        ],
+        "approval_error": "bad_decision"
+      }
+    },
+    {
+      "name": "step-up-mandate-signature-as-approval",
+      "description": "The mandate's signature pasted into an approval/2.0: a different digest prefix, so it cannot verify.",
+      "input": {
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "cart": {
+          "profile": "cart/1",
+          "merchant": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+          "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+          "lines": [
+            {
+              "sku": "sku_big",
+              "title": "sku_big",
+              "qty": 1,
+              "unit": 3000,
+              "category": "software"
+            }
+          ],
+          "total": 3000,
+          "currency": "USD",
+          "rail": "credits",
+          "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg"
+        },
+        "merchant_policy": {
+          "min_level": 1,
+          "require_owner": true,
+          "require_mandate": true,
+          "min_security_band": "good",
+          "accept_issuers": [
+            "did:web:securemyagent.ai"
+          ]
+        },
+        "agent": {
+          "level": 2,
+          "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "security_band": "strong",
+          "security_issuer": "did:web:securemyagent.ai"
+        },
+        "mandate": {
+          "version": "mandate/1",
+          "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg",
+          "issuer_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+          "issued_at": 1794009600,
+          "expires_at": 1796601600,
+          "limits": {
+            "currency": "USD",
+            "per_tx_max": 5000,
+            "period": "P1D",
+            "period_max": 20000,
+            "total_max": 100000
+          },
+          "scope": {
+            "merchants": [
+              "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+              "*.moltbotden.com"
+            ],
+            "categories": [
+              "software",
+              "data"
+            ],
+            "rails": [
+              "card",
+              "x402",
+              "mpp",
+              "credits",
+              "usdc"
+            ]
+          },
+          "step_up_over": 2500,
+          "status": "https://account.openentity.org/v1/mandates/md_4b3eaz4gie3atj4jlyz375pbfg/status",
+          "signature": {
+            "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+            "form": "p256",
+            "signature": "nroQ52XQe3s5Xs7_ZCUA1p33MQ8UyBgscWtCjViHTtoZ4okUeZ1AVdFgoTI95wA7nKjZxi8xccWUFawCLinFHw"
+          }
+        },
+        "key_state": "owner",
+        "status": {
+          "status": "active",
+          "period_spent": 4000,
+          "total_spent": 9000
+        },
+        "now": 1794010600,
+        "approval": {
+          "approval": {
+            "version": "approval/2.0",
+            "verifier_did": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+            "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+            "request_id": "req_replay",
+            "payload_digest": "1a868d7a8b911add85c1618c310b48c127c8f71b59824a2486da8bb93835e524",
+            "decision": "approve",
+            "expires_at": 1794010900,
+            "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+            "form": "p256",
+            "signature": "nroQ52XQe3s5Xs7_ZCUA1p33MQ8UyBgscWtCjViHTtoZ4okUeZ1AVdFgoTI95wA7nKjZxi8xccWUFawCLinFHw"
+          },
+          "verifier_did": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+          "request_id": "req_replay"
+        }
+      },
+      "expect": {
+        "decision": "step_up",
+        "reasons": [
+          "step_up_over"
+        ],
+        "approval_error": "bad_signature"
+      }
+    },
+    {
+      "name": "step-up-over-limit",
+      "description": "Over per_tx_max: only this cart's approval can allow it.",
+      "input": {
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "cart": {
+          "profile": "cart/1",
+          "merchant": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+          "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+          "lines": [
+            {
+              "sku": "sku_big",
+              "title": "sku_big",
+              "qty": 1,
+              "unit": 5001,
+              "category": "software"
+            }
+          ],
+          "total": 5001,
+          "currency": "USD",
+          "rail": "credits",
+          "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg"
+        },
+        "merchant_policy": {
+          "min_level": 1,
+          "require_owner": true,
+          "require_mandate": true,
+          "min_security_band": "good",
+          "accept_issuers": [
+            "did:web:securemyagent.ai"
+          ]
+        },
+        "agent": {
+          "level": 2,
+          "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "security_band": "strong",
+          "security_issuer": "did:web:securemyagent.ai"
+        },
+        "mandate": {
+          "version": "mandate/1",
+          "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg",
+          "issuer_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+          "issued_at": 1794009600,
+          "expires_at": 1796601600,
+          "limits": {
+            "currency": "USD",
+            "per_tx_max": 5000,
+            "period": "P1D",
+            "period_max": 20000,
+            "total_max": 100000
+          },
+          "scope": {
+            "merchants": [
+              "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+              "*.moltbotden.com"
+            ],
+            "categories": [
+              "software",
+              "data"
+            ],
+            "rails": [
+              "card",
+              "x402",
+              "mpp",
+              "credits",
+              "usdc"
+            ]
+          },
+          "step_up_over": 2500,
+          "status": "https://account.openentity.org/v1/mandates/md_4b3eaz4gie3atj4jlyz375pbfg/status",
+          "signature": {
+            "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+            "form": "p256",
+            "signature": "nroQ52XQe3s5Xs7_ZCUA1p33MQ8UyBgscWtCjViHTtoZ4okUeZ1AVdFgoTI95wA7nKjZxi8xccWUFawCLinFHw"
+          }
+        },
+        "key_state": "owner",
+        "status": {
+          "status": "active",
+          "period_spent": 4000,
+          "total_spent": 9000
+        },
+        "now": 1794010600
+      },
+      "expect": {
+        "decision": "step_up",
+        "reasons": [
+          "mandate_over_limit"
+        ]
+      }
+    },
+    {
+      "name": "allow-over-limit-approved",
+      "description": "Over per_tx_max with the owner's approval of this exact cart.",
+      "input": {
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "cart": {
+          "profile": "cart/1",
+          "merchant": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+          "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+          "lines": [
+            {
+              "sku": "sku_big",
+              "title": "sku_big",
+              "qty": 1,
+              "unit": 5001,
+              "category": "software"
+            }
+          ],
+          "total": 5001,
+          "currency": "USD",
+          "rail": "credits",
+          "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg"
+        },
+        "merchant_policy": {
+          "min_level": 1,
+          "require_owner": true,
+          "require_mandate": true,
+          "min_security_band": "good",
+          "accept_issuers": [
+            "did:web:securemyagent.ai"
+          ]
+        },
+        "agent": {
+          "level": 2,
+          "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "security_band": "strong",
+          "security_issuer": "did:web:securemyagent.ai"
+        },
+        "mandate": {
+          "version": "mandate/1",
+          "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg",
+          "issuer_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+          "issued_at": 1794009600,
+          "expires_at": 1796601600,
+          "limits": {
+            "currency": "USD",
+            "per_tx_max": 5000,
+            "period": "P1D",
+            "period_max": 20000,
+            "total_max": 100000
+          },
+          "scope": {
+            "merchants": [
+              "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+              "*.moltbotden.com"
+            ],
+            "categories": [
+              "software",
+              "data"
+            ],
+            "rails": [
+              "card",
+              "x402",
+              "mpp",
+              "credits",
+              "usdc"
+            ]
+          },
+          "step_up_over": 2500,
+          "status": "https://account.openentity.org/v1/mandates/md_4b3eaz4gie3atj4jlyz375pbfg/status",
+          "signature": {
+            "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+            "form": "p256",
+            "signature": "nroQ52XQe3s5Xs7_ZCUA1p33MQ8UyBgscWtCjViHTtoZ4okUeZ1AVdFgoTI95wA7nKjZxi8xccWUFawCLinFHw"
+          }
+        },
+        "key_state": "owner",
+        "status": {
+          "status": "active",
+          "period_spent": 4000,
+          "total_spent": 9000
+        },
+        "now": 1794010600,
+        "approval": {
+          "approval": {
+            "version": "approval/2.0",
+            "verifier_did": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+            "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+            "request_id": "req_over",
+            "payload_digest": "086063a09f85022ffdba36b26e643d2ca50388f32b28db26948d633399fc39c6",
+            "decision": "approve",
+            "expires_at": 1794010900,
+            "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+            "form": "p256",
+            "signature": "H1VBgf9vGJ_WQifVskqaKKJQEGC4V3-jzFnelQwmhkRFbT9UvFLe3JYAw3DhcojUXnnpgBPrYmdl20eKvEJqkw"
+          },
+          "verifier_did": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+          "request_id": "req_over"
+        }
+      },
+      "expect": {
+        "decision": "allow",
+        "reasons": [
+          "owner_approved_cart",
+          "mandate_over_limit"
+        ]
+      }
+    },
+    {
+      "name": "step-up-out-of-scope",
+      "description": "A merchant outside the mandate's scope.",
+      "input": {
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "cart": {
+          "profile": "cart/1",
+          "merchant": "did:web:other.example",
+          "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+          "lines": [
+            {
+              "sku": "lst_123",
+              "title": "Dataset",
+              "qty": 1,
+              "unit": 1000,
+              "category": "data"
+            }
+          ],
+          "total": 1000,
+          "currency": "USD",
+          "rail": "credits",
+          "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg"
+        },
+        "merchant_policy": {
+          "min_level": 1,
+          "require_owner": true,
+          "require_mandate": true,
+          "min_security_band": "good",
+          "accept_issuers": [
+            "did:web:securemyagent.ai"
+          ]
+        },
+        "agent": {
+          "level": 2,
+          "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "security_band": "strong",
+          "security_issuer": "did:web:securemyagent.ai"
+        },
+        "mandate": {
+          "version": "mandate/1",
+          "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg",
+          "issuer_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+          "issued_at": 1794009600,
+          "expires_at": 1796601600,
+          "limits": {
+            "currency": "USD",
+            "per_tx_max": 5000,
+            "period": "P1D",
+            "period_max": 20000,
+            "total_max": 100000
+          },
+          "scope": {
+            "merchants": [
+              "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+              "*.moltbotden.com"
+            ],
+            "categories": [
+              "software",
+              "data"
+            ],
+            "rails": [
+              "card",
+              "x402",
+              "mpp",
+              "credits",
+              "usdc"
+            ]
+          },
+          "step_up_over": 2500,
+          "status": "https://account.openentity.org/v1/mandates/md_4b3eaz4gie3atj4jlyz375pbfg/status",
+          "signature": {
+            "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+            "form": "p256",
+            "signature": "nroQ52XQe3s5Xs7_ZCUA1p33MQ8UyBgscWtCjViHTtoZ4okUeZ1AVdFgoTI95wA7nKjZxi8xccWUFawCLinFHw"
+          }
+        },
+        "key_state": "owner",
+        "status": {
+          "status": "active",
+          "period_spent": 4000,
+          "total_spent": 9000
+        },
+        "now": 1794010600
+      },
+      "expect": {
+        "decision": "step_up",
+        "reasons": [
+          "mandate_out_of_scope"
+        ]
+      }
+    },
+    {
+      "name": "deny-mandate-expired",
+      "description": "The mandate expired.",
+      "input": {
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "cart": {
+          "profile": "cart/1",
+          "merchant": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+          "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+          "lines": [
+            {
+              "sku": "lst_123",
+              "title": "Dataset",
+              "qty": 1,
+              "unit": 1000,
+              "category": "data"
+            }
+          ],
+          "total": 1000,
+          "currency": "USD",
+          "rail": "credits",
+          "mandate_id": "md_rmonrvlhazzxsgiih4bbrt6qxt"
+        },
+        "merchant_policy": {
+          "min_level": 1,
+          "require_owner": true,
+          "require_mandate": true,
+          "min_security_band": "good",
+          "accept_issuers": [
+            "did:web:securemyagent.ai"
+          ]
+        },
+        "agent": {
+          "level": 2,
+          "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "security_band": "strong",
+          "security_issuer": "did:web:securemyagent.ai"
+        },
+        "mandate": {
+          "version": "mandate/1",
+          "mandate_id": "md_rmonrvlhazzxsgiih4bbrt6qxt",
+          "issuer_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+          "issued_at": 1794009600,
+          "expires_at": 1794096000,
+          "limits": {
+            "currency": "USD",
+            "per_tx_max": 5000,
+            "period": "P1D",
+            "period_max": 20000,
+            "total_max": 100000
+          },
+          "scope": {
+            "merchants": [
+              "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+              "*.moltbotden.com"
+            ],
+            "categories": [
+              "software",
+              "data"
+            ],
+            "rails": [
+              "card",
+              "x402",
+              "mpp",
+              "credits",
+              "usdc"
+            ]
+          },
+          "step_up_over": 2500,
+          "status": "https://account.openentity.org/v1/mandates/md_rmonrvlhazzxsgiih4bbrt6qxt/status",
+          "signature": {
+            "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+            "form": "p256",
+            "signature": "7ahTFPa1V_bbMhiCLy5T36Zu4eozUA_BXcaJ3IUirjQ2csy0ph0IueIZZORsc2h5x5FCajSZxeAy8b9A0kxwKA"
+          }
+        },
+        "key_state": "owner",
+        "status": {
+          "status": "active",
+          "period_spent": 4000,
+          "total_spent": 9000
+        },
+        "now": 1794096000
+      },
+      "expect": {
+        "decision": "deny",
+        "reasons": [
+          "mandate_expired"
+        ]
+      }
+    },
+    {
+      "name": "deny-mandate-revoked",
+      "description": "The status endpoint says revoked.",
+      "input": {
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "cart": {
+          "profile": "cart/1",
+          "merchant": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+          "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+          "lines": [
+            {
+              "sku": "lst_123",
+              "title": "Dataset",
+              "qty": 1,
+              "unit": 1000,
+              "category": "data"
+            }
+          ],
+          "total": 1000,
+          "currency": "USD",
+          "rail": "credits",
+          "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg"
+        },
+        "merchant_policy": {
+          "min_level": 1,
+          "require_owner": true,
+          "require_mandate": true,
+          "min_security_band": "good",
+          "accept_issuers": [
+            "did:web:securemyagent.ai"
+          ]
+        },
+        "agent": {
+          "level": 2,
+          "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "security_band": "strong",
+          "security_issuer": "did:web:securemyagent.ai"
+        },
+        "mandate": {
+          "version": "mandate/1",
+          "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg",
+          "issuer_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+          "issued_at": 1794009600,
+          "expires_at": 1796601600,
+          "limits": {
+            "currency": "USD",
+            "per_tx_max": 5000,
+            "period": "P1D",
+            "period_max": 20000,
+            "total_max": 100000
+          },
+          "scope": {
+            "merchants": [
+              "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+              "*.moltbotden.com"
+            ],
+            "categories": [
+              "software",
+              "data"
+            ],
+            "rails": [
+              "card",
+              "x402",
+              "mpp",
+              "credits",
+              "usdc"
+            ]
+          },
+          "step_up_over": 2500,
+          "status": "https://account.openentity.org/v1/mandates/md_4b3eaz4gie3atj4jlyz375pbfg/status",
+          "signature": {
+            "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+            "form": "p256",
+            "signature": "nroQ52XQe3s5Xs7_ZCUA1p33MQ8UyBgscWtCjViHTtoZ4okUeZ1AVdFgoTI95wA7nKjZxi8xccWUFawCLinFHw"
+          }
+        },
+        "key_state": "owner",
+        "status": {
+          "status": "revoked"
+        },
+        "now": 1794010600
+      },
+      "expect": {
+        "decision": "deny",
+        "reasons": [
+          "mandate_revoked"
+        ]
+      }
+    },
+    {
+      "name": "deny-mandate-status-required",
+      "description": "A long mandate with no status answer.",
+      "input": {
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "cart": {
+          "profile": "cart/1",
+          "merchant": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+          "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+          "lines": [
+            {
+              "sku": "lst_123",
+              "title": "Dataset",
+              "qty": 1,
+              "unit": 1000,
+              "category": "data"
+            }
+          ],
+          "total": 1000,
+          "currency": "USD",
+          "rail": "credits",
+          "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg"
+        },
+        "merchant_policy": {
+          "min_level": 1,
+          "require_owner": true,
+          "require_mandate": true,
+          "min_security_band": "good",
+          "accept_issuers": [
+            "did:web:securemyagent.ai"
+          ]
+        },
+        "agent": {
+          "level": 2,
+          "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "security_band": "strong",
+          "security_issuer": "did:web:securemyagent.ai"
+        },
+        "mandate": {
+          "version": "mandate/1",
+          "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg",
+          "issuer_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+          "issued_at": 1794009600,
+          "expires_at": 1796601600,
+          "limits": {
+            "currency": "USD",
+            "per_tx_max": 5000,
+            "period": "P1D",
+            "period_max": 20000,
+            "total_max": 100000
+          },
+          "scope": {
+            "merchants": [
+              "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+              "*.moltbotden.com"
+            ],
+            "categories": [
+              "software",
+              "data"
+            ],
+            "rails": [
+              "card",
+              "x402",
+              "mpp",
+              "credits",
+              "usdc"
+            ]
+          },
+          "step_up_over": 2500,
+          "status": "https://account.openentity.org/v1/mandates/md_4b3eaz4gie3atj4jlyz375pbfg/status",
+          "signature": {
+            "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+            "form": "p256",
+            "signature": "nroQ52XQe3s5Xs7_ZCUA1p33MQ8UyBgscWtCjViHTtoZ4okUeZ1AVdFgoTI95wA7nKjZxi8xccWUFawCLinFHw"
+          }
+        },
+        "key_state": "owner",
+        "now": 1794010600
+      },
+      "expect": {
+        "decision": "deny",
+        "reasons": [
+          "mandate_status_required"
+        ]
+      }
+    },
+    {
+      "name": "deny-mandate-wrong-agent",
+      "description": "Another agent presents the mandate.",
+      "input": {
+        "agent_did": "did:key:z6MkweEczu3W59i7TqPgQFf97PgJVyPtvyijLYGRa88A31QY",
+        "cart": {
+          "profile": "cart/1",
+          "merchant": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+          "agent_did": "did:key:z6MkweEczu3W59i7TqPgQFf97PgJVyPtvyijLYGRa88A31QY",
+          "lines": [
+            {
+              "sku": "lst_123",
+              "title": "Dataset",
+              "qty": 1,
+              "unit": 1000,
+              "category": "data"
+            }
+          ],
+          "total": 1000,
+          "currency": "USD",
+          "rail": "credits",
+          "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg"
+        },
+        "merchant_policy": {
+          "min_level": 1,
+          "require_owner": true,
+          "require_mandate": true,
+          "min_security_band": "good",
+          "accept_issuers": [
+            "did:web:securemyagent.ai"
+          ]
+        },
+        "agent": {
+          "level": 2,
+          "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "security_band": "strong",
+          "security_issuer": "did:web:securemyagent.ai"
+        },
+        "mandate": {
+          "version": "mandate/1",
+          "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg",
+          "issuer_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+          "issued_at": 1794009600,
+          "expires_at": 1796601600,
+          "limits": {
+            "currency": "USD",
+            "per_tx_max": 5000,
+            "period": "P1D",
+            "period_max": 20000,
+            "total_max": 100000
+          },
+          "scope": {
+            "merchants": [
+              "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+              "*.moltbotden.com"
+            ],
+            "categories": [
+              "software",
+              "data"
+            ],
+            "rails": [
+              "card",
+              "x402",
+              "mpp",
+              "credits",
+              "usdc"
+            ]
+          },
+          "step_up_over": 2500,
+          "status": "https://account.openentity.org/v1/mandates/md_4b3eaz4gie3atj4jlyz375pbfg/status",
+          "signature": {
+            "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+            "form": "p256",
+            "signature": "nroQ52XQe3s5Xs7_ZCUA1p33MQ8UyBgscWtCjViHTtoZ4okUeZ1AVdFgoTI95wA7nKjZxi8xccWUFawCLinFHw"
+          }
+        },
+        "key_state": "owner",
+        "status": {
+          "status": "active",
+          "period_spent": 4000,
+          "total_spent": 9000
+        },
+        "now": 1794010600
+      },
+      "expect": {
+        "decision": "deny",
+        "reasons": [
+          "mandate_wrong_agent"
+        ]
+      }
+    },
+    {
+      "name": "deny-mandate-tampered",
+      "description": "The mandate's limits were changed after signing.",
+      "input": {
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "cart": {
+          "profile": "cart/1",
+          "merchant": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+          "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+          "lines": [
+            {
+              "sku": "lst_123",
+              "title": "Dataset",
+              "qty": 1,
+              "unit": 1000,
+              "category": "data"
+            }
+          ],
+          "total": 1000,
+          "currency": "USD",
+          "rail": "credits",
+          "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg"
+        },
+        "merchant_policy": {
+          "min_level": 1,
+          "require_owner": true,
+          "require_mandate": true,
+          "min_security_band": "good",
+          "accept_issuers": [
+            "did:web:securemyagent.ai"
+          ]
+        },
+        "agent": {
+          "level": 2,
+          "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "security_band": "strong",
+          "security_issuer": "did:web:securemyagent.ai"
+        },
+        "mandate": {
+          "version": "mandate/1",
+          "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg",
+          "issuer_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+          "issued_at": 1794009600,
+          "expires_at": 1796601600,
+          "limits": {
+            "currency": "USD",
+            "per_tx_max": 5001,
+            "period": "P1D",
+            "period_max": 20000,
+            "total_max": 100000
+          },
+          "scope": {
+            "merchants": [
+              "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+              "*.moltbotden.com"
+            ],
+            "categories": [
+              "software",
+              "data"
+            ],
+            "rails": [
+              "card",
+              "x402",
+              "mpp",
+              "credits",
+              "usdc"
+            ]
+          },
+          "step_up_over": 2500,
+          "status": "https://account.openentity.org/v1/mandates/md_4b3eaz4gie3atj4jlyz375pbfg/status",
+          "signature": {
+            "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+            "form": "p256",
+            "signature": "nroQ52XQe3s5Xs7_ZCUA1p33MQ8UyBgscWtCjViHTtoZ4okUeZ1AVdFgoTI95wA7nKjZxi8xccWUFawCLinFHw"
+          }
+        },
+        "key_state": "owner",
+        "status": {
+          "status": "active",
+          "period_spent": 4000,
+          "total_spent": 9000
+        },
+        "now": 1794010600
+      },
+      "expect": {
+        "decision": "deny",
+        "reasons": [
+          "mandate_bad_signature"
+        ]
+      }
+    },
+    {
+      "name": "deny-cart-for-other-agent",
+      "description": "The request is signed by one agent and the cart names another.",
+      "input": {
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "cart": {
+          "profile": "cart/1",
+          "merchant": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+          "agent_did": "did:key:z6MkweEczu3W59i7TqPgQFf97PgJVyPtvyijLYGRa88A31QY",
+          "lines": [
+            {
+              "sku": "lst_123",
+              "title": "Dataset",
+              "qty": 1,
+              "unit": 1000,
+              "category": "data"
+            }
+          ],
+          "total": 1000,
+          "currency": "USD",
+          "rail": "credits",
+          "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg"
+        },
+        "merchant_policy": {
+          "min_level": 1,
+          "require_owner": true,
+          "require_mandate": true,
+          "min_security_band": "good",
+          "accept_issuers": [
+            "did:web:securemyagent.ai"
+          ]
+        },
+        "agent": {
+          "level": 2,
+          "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "security_band": "strong",
+          "security_issuer": "did:web:securemyagent.ai"
+        },
+        "mandate": {
+          "version": "mandate/1",
+          "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg",
+          "issuer_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+          "issued_at": 1794009600,
+          "expires_at": 1796601600,
+          "limits": {
+            "currency": "USD",
+            "per_tx_max": 5000,
+            "period": "P1D",
+            "period_max": 20000,
+            "total_max": 100000
+          },
+          "scope": {
+            "merchants": [
+              "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+              "*.moltbotden.com"
+            ],
+            "categories": [
+              "software",
+              "data"
+            ],
+            "rails": [
+              "card",
+              "x402",
+              "mpp",
+              "credits",
+              "usdc"
+            ]
+          },
+          "step_up_over": 2500,
+          "status": "https://account.openentity.org/v1/mandates/md_4b3eaz4gie3atj4jlyz375pbfg/status",
+          "signature": {
+            "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+            "form": "p256",
+            "signature": "nroQ52XQe3s5Xs7_ZCUA1p33MQ8UyBgscWtCjViHTtoZ4okUeZ1AVdFgoTI95wA7nKjZxi8xccWUFawCLinFHw"
+          }
+        },
+        "key_state": "owner",
+        "status": {
+          "status": "active",
+          "period_spent": 4000,
+          "total_spent": 9000
+        },
+        "now": 1794010600
+      },
+      "expect": {
+        "decision": "deny",
+        "reasons": [
+          "agent_mismatch"
+        ]
+      }
+    },
+    {
+      "name": "deny-no-agent",
+      "description": "No verified agent.",
+      "input": {
+        "cart": {
+          "profile": "cart/1",
+          "merchant": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+          "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+          "lines": [
+            {
+              "sku": "lst_123",
+              "title": "Dataset",
+              "qty": 1,
+              "unit": 1000,
+              "category": "data"
+            }
+          ],
+          "total": 1000,
+          "currency": "USD",
+          "rail": "credits",
+          "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg"
+        },
+        "merchant_policy": {
+          "min_level": 1,
+          "require_owner": true,
+          "require_mandate": true,
+          "min_security_band": "good",
+          "accept_issuers": [
+            "did:web:securemyagent.ai"
+          ]
+        },
+        "agent": {
+          "level": 2,
+          "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "security_band": "strong",
+          "security_issuer": "did:web:securemyagent.ai"
+        },
+        "mandate": {
+          "version": "mandate/1",
+          "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg",
+          "issuer_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+          "issued_at": 1794009600,
+          "expires_at": 1796601600,
+          "limits": {
+            "currency": "USD",
+            "per_tx_max": 5000,
+            "period": "P1D",
+            "period_max": 20000,
+            "total_max": 100000
+          },
+          "scope": {
+            "merchants": [
+              "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+              "*.moltbotden.com"
+            ],
+            "categories": [
+              "software",
+              "data"
+            ],
+            "rails": [
+              "card",
+              "x402",
+              "mpp",
+              "credits",
+              "usdc"
+            ]
+          },
+          "step_up_over": 2500,
+          "status": "https://account.openentity.org/v1/mandates/md_4b3eaz4gie3atj4jlyz375pbfg/status",
+          "signature": {
+            "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+            "form": "p256",
+            "signature": "nroQ52XQe3s5Xs7_ZCUA1p33MQ8UyBgscWtCjViHTtoZ4okUeZ1AVdFgoTI95wA7nKjZxi8xccWUFawCLinFHw"
+          }
+        },
+        "key_state": "owner",
+        "status": {
+          "status": "active",
+          "period_spent": 4000,
+          "total_spent": 9000
+        },
+        "now": 1794010600
+      },
+      "expect": {
+        "decision": "deny",
+        "reasons": [
+          "request_unverified"
+        ]
+      }
+    },
+    {
+      "name": "deny-bad-cart",
+      "description": "The cart is not a cart/1.",
+      "input": {
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "cart": {
+          "profile": "cart/1",
+          "merchant": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+          "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+          "lines": [
+            {
+              "sku": "lst_123",
+              "title": "Dataset",
+              "qty": 1,
+              "unit": 1000,
+              "category": "data"
+            }
+          ],
+          "total": 1,
+          "currency": "USD",
+          "rail": "credits",
+          "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg"
+        },
+        "merchant_policy": {
+          "min_level": 1,
+          "require_owner": true,
+          "require_mandate": true,
+          "min_security_band": "good",
+          "accept_issuers": [
+            "did:web:securemyagent.ai"
+          ]
+        },
+        "agent": {
+          "level": 2,
+          "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "security_band": "strong",
+          "security_issuer": "did:web:securemyagent.ai"
+        },
+        "mandate": {
+          "version": "mandate/1",
+          "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg",
+          "issuer_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+          "issued_at": 1794009600,
+          "expires_at": 1796601600,
+          "limits": {
+            "currency": "USD",
+            "per_tx_max": 5000,
+            "period": "P1D",
+            "period_max": 20000,
+            "total_max": 100000
+          },
+          "scope": {
+            "merchants": [
+              "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+              "*.moltbotden.com"
+            ],
+            "categories": [
+              "software",
+              "data"
+            ],
+            "rails": [
+              "card",
+              "x402",
+              "mpp",
+              "credits",
+              "usdc"
+            ]
+          },
+          "step_up_over": 2500,
+          "status": "https://account.openentity.org/v1/mandates/md_4b3eaz4gie3atj4jlyz375pbfg/status",
+          "signature": {
+            "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+            "form": "p256",
+            "signature": "nroQ52XQe3s5Xs7_ZCUA1p33MQ8UyBgscWtCjViHTtoZ4okUeZ1AVdFgoTI95wA7nKjZxi8xccWUFawCLinFHw"
+          }
+        },
+        "key_state": "owner",
+        "status": {
+          "status": "active",
+          "period_spent": 4000,
+          "total_spent": 9000
+        },
+        "now": 1794010600
+      },
+      "expect": {
+        "decision": "deny",
+        "reasons": [
+          "bad_cart"
+        ]
+      }
+    },
+    {
+      "name": "deny-level-too-low",
+      "description": "min_level 1, agent level 0.",
+      "input": {
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "cart": {
+          "profile": "cart/1",
+          "merchant": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+          "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+          "lines": [
+            {
+              "sku": "lst_123",
+              "title": "Dataset",
+              "qty": 1,
+              "unit": 1000,
+              "category": "data"
+            }
+          ],
+          "total": 1000,
+          "currency": "USD",
+          "rail": "credits",
+          "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg"
+        },
+        "merchant_policy": {
+          "min_level": 1,
+          "require_owner": true,
+          "require_mandate": true,
+          "min_security_band": "good",
+          "accept_issuers": [
+            "did:web:securemyagent.ai"
+          ]
+        },
+        "agent": {
+          "level": 0,
+          "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "security_band": "strong",
+          "security_issuer": "did:web:securemyagent.ai"
+        },
+        "mandate": {
+          "version": "mandate/1",
+          "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg",
+          "issuer_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+          "issued_at": 1794009600,
+          "expires_at": 1796601600,
+          "limits": {
+            "currency": "USD",
+            "per_tx_max": 5000,
+            "period": "P1D",
+            "period_max": 20000,
+            "total_max": 100000
+          },
+          "scope": {
+            "merchants": [
+              "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+              "*.moltbotden.com"
+            ],
+            "categories": [
+              "software",
+              "data"
+            ],
+            "rails": [
+              "card",
+              "x402",
+              "mpp",
+              "credits",
+              "usdc"
+            ]
+          },
+          "step_up_over": 2500,
+          "status": "https://account.openentity.org/v1/mandates/md_4b3eaz4gie3atj4jlyz375pbfg/status",
+          "signature": {
+            "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+            "form": "p256",
+            "signature": "nroQ52XQe3s5Xs7_ZCUA1p33MQ8UyBgscWtCjViHTtoZ4okUeZ1AVdFgoTI95wA7nKjZxi8xccWUFawCLinFHw"
+          }
+        },
+        "key_state": "owner",
+        "status": {
+          "status": "active",
+          "period_spent": 4000,
+          "total_spent": 9000
+        },
+        "now": 1794010600
+      },
+      "expect": {
+        "decision": "deny",
+        "reasons": [
+          "level_too_low"
+        ]
+      }
+    },
+    {
+      "name": "deny-security-band",
+      "description": "min_security_band good, agent poor.",
+      "input": {
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "cart": {
+          "profile": "cart/1",
+          "merchant": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+          "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+          "lines": [
+            {
+              "sku": "lst_123",
+              "title": "Dataset",
+              "qty": 1,
+              "unit": 1000,
+              "category": "data"
+            }
+          ],
+          "total": 1000,
+          "currency": "USD",
+          "rail": "credits",
+          "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg"
+        },
+        "merchant_policy": {
+          "min_level": 1,
+          "require_owner": true,
+          "require_mandate": true,
+          "min_security_band": "good",
+          "accept_issuers": [
+            "did:web:securemyagent.ai"
+          ]
+        },
+        "agent": {
+          "level": 2,
+          "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "security_band": "poor",
+          "security_issuer": "did:web:securemyagent.ai"
+        },
+        "mandate": {
+          "version": "mandate/1",
+          "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg",
+          "issuer_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+          "issued_at": 1794009600,
+          "expires_at": 1796601600,
+          "limits": {
+            "currency": "USD",
+            "per_tx_max": 5000,
+            "period": "P1D",
+            "period_max": 20000,
+            "total_max": 100000
+          },
+          "scope": {
+            "merchants": [
+              "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+              "*.moltbotden.com"
+            ],
+            "categories": [
+              "software",
+              "data"
+            ],
+            "rails": [
+              "card",
+              "x402",
+              "mpp",
+              "credits",
+              "usdc"
+            ]
+          },
+          "step_up_over": 2500,
+          "status": "https://account.openentity.org/v1/mandates/md_4b3eaz4gie3atj4jlyz375pbfg/status",
+          "signature": {
+            "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+            "form": "p256",
+            "signature": "nroQ52XQe3s5Xs7_ZCUA1p33MQ8UyBgscWtCjViHTtoZ4okUeZ1AVdFgoTI95wA7nKjZxi8xccWUFawCLinFHw"
+          }
+        },
+        "key_state": "owner",
+        "status": {
+          "status": "active",
+          "period_spent": 4000,
+          "total_spent": 9000
+        },
+        "now": 1794010600
+      },
+      "expect": {
+        "decision": "deny",
+        "reasons": [
+          "security_band_too_low"
+        ]
+      }
+    },
+    {
+      "name": "deny-security-band-unknown",
+      "description": "A band the profile does not rank.",
+      "input": {
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "cart": {
+          "profile": "cart/1",
+          "merchant": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+          "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+          "lines": [
+            {
+              "sku": "lst_123",
+              "title": "Dataset",
+              "qty": 1,
+              "unit": 1000,
+              "category": "data"
+            }
+          ],
+          "total": 1000,
+          "currency": "USD",
+          "rail": "credits",
+          "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg"
+        },
+        "merchant_policy": {
+          "min_level": 1,
+          "require_owner": true,
+          "require_mandate": true,
+          "min_security_band": "good",
+          "accept_issuers": [
+            "did:web:securemyagent.ai"
+          ]
+        },
+        "agent": {
+          "level": 2,
+          "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "security_band": "platinum",
+          "security_issuer": "did:web:securemyagent.ai"
+        },
+        "mandate": {
+          "version": "mandate/1",
+          "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg",
+          "issuer_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+          "issued_at": 1794009600,
+          "expires_at": 1796601600,
+          "limits": {
+            "currency": "USD",
+            "per_tx_max": 5000,
+            "period": "P1D",
+            "period_max": 20000,
+            "total_max": 100000
+          },
+          "scope": {
+            "merchants": [
+              "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+              "*.moltbotden.com"
+            ],
+            "categories": [
+              "software",
+              "data"
+            ],
+            "rails": [
+              "card",
+              "x402",
+              "mpp",
+              "credits",
+              "usdc"
+            ]
+          },
+          "step_up_over": 2500,
+          "status": "https://account.openentity.org/v1/mandates/md_4b3eaz4gie3atj4jlyz375pbfg/status",
+          "signature": {
+            "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+            "form": "p256",
+            "signature": "nroQ52XQe3s5Xs7_ZCUA1p33MQ8UyBgscWtCjViHTtoZ4okUeZ1AVdFgoTI95wA7nKjZxi8xccWUFawCLinFHw"
+          }
+        },
+        "key_state": "owner",
+        "status": {
+          "status": "active",
+          "period_spent": 4000,
+          "total_spent": 9000
+        },
+        "now": 1794010600
+      },
+      "expect": {
+        "decision": "deny",
+        "reasons": [
+          "security_band_too_low"
+        ]
+      }
+    },
+    {
+      "name": "deny-issuer-not-accepted",
+      "description": "The posture is vouched by an issuer the merchant does not accept.",
+      "input": {
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "cart": {
+          "profile": "cart/1",
+          "merchant": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+          "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+          "lines": [
+            {
+              "sku": "lst_123",
+              "title": "Dataset",
+              "qty": 1,
+              "unit": 1000,
+              "category": "data"
+            }
+          ],
+          "total": 1000,
+          "currency": "USD",
+          "rail": "credits",
+          "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg"
+        },
+        "merchant_policy": {
+          "min_level": 1,
+          "require_owner": true,
+          "require_mandate": true,
+          "min_security_band": "good",
+          "accept_issuers": [
+            "did:web:securemyagent.ai"
+          ]
+        },
+        "agent": {
+          "level": 2,
+          "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "security_band": "strong",
+          "security_issuer": "did:web:scanner.example"
+        },
+        "mandate": {
+          "version": "mandate/1",
+          "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg",
+          "issuer_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+          "issued_at": 1794009600,
+          "expires_at": 1796601600,
+          "limits": {
+            "currency": "USD",
+            "per_tx_max": 5000,
+            "period": "P1D",
+            "period_max": 20000,
+            "total_max": 100000
+          },
+          "scope": {
+            "merchants": [
+              "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+              "*.moltbotden.com"
+            ],
+            "categories": [
+              "software",
+              "data"
+            ],
+            "rails": [
+              "card",
+              "x402",
+              "mpp",
+              "credits",
+              "usdc"
+            ]
+          },
+          "step_up_over": 2500,
+          "status": "https://account.openentity.org/v1/mandates/md_4b3eaz4gie3atj4jlyz375pbfg/status",
+          "signature": {
+            "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+            "form": "p256",
+            "signature": "nroQ52XQe3s5Xs7_ZCUA1p33MQ8UyBgscWtCjViHTtoZ4okUeZ1AVdFgoTI95wA7nKjZxi8xccWUFawCLinFHw"
+          }
+        },
+        "key_state": "owner",
+        "status": {
+          "status": "active",
+          "period_spent": 4000,
+          "total_spent": 9000
+        },
+        "now": 1794010600
+      },
+      "expect": {
+        "decision": "deny",
+        "reasons": [
+          "issuer_not_accepted"
+        ]
+      }
+    },
+    {
+      "name": "deny-mandate-required",
+      "description": "The merchant requires a mandate.",
+      "input": {
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "cart": {
+          "profile": "cart/1",
+          "merchant": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+          "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+          "lines": [
+            {
+              "sku": "lst_123",
+              "title": "Dataset",
+              "qty": 1,
+              "unit": 1000,
+              "category": "data"
+            }
+          ],
+          "total": 1000,
+          "currency": "USD",
+          "rail": "credits",
+          "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg"
+        },
+        "merchant_policy": {
+          "min_level": 1,
+          "require_owner": true,
+          "require_mandate": true,
+          "min_security_band": "good",
+          "accept_issuers": [
+            "did:web:securemyagent.ai"
+          ]
+        },
+        "agent": {
+          "level": 2,
+          "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "security_band": "strong",
+          "security_issuer": "did:web:securemyagent.ai"
+        },
+        "key_state": "owner",
+        "now": 1794010600
+      },
+      "expect": {
+        "decision": "deny",
+        "reasons": [
+          "mandate_required"
+        ]
+      }
+    },
+    {
+      "name": "step-up-no-mandate",
+      "description": "No mandate and the policy does not require one: the owner can approve this cart.",
+      "input": {
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "cart": {
+          "profile": "cart/1",
+          "merchant": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+          "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+          "lines": [
+            {
+              "sku": "lst_123",
+              "title": "Dataset",
+              "qty": 1,
+              "unit": 1000,
+              "category": "data"
+            }
+          ],
+          "total": 1000,
+          "currency": "USD",
+          "rail": "credits",
+          "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg"
+        },
+        "merchant_policy": {
+          "min_level": 1
+        },
+        "agent": {
+          "level": 2,
+          "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "security_band": "strong",
+          "security_issuer": "did:web:securemyagent.ai"
+        },
+        "key_state": "owner",
+        "now": 1794010600
+      },
+      "expect": {
+        "decision": "step_up",
+        "reasons": [
+          "no_mandate"
+        ]
+      }
+    },
+    {
+      "name": "allow-approval-without-mandate",
+      "description": "No mandate, the owner's approval of this cart, owner known from the registry.",
+      "input": {
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "cart": {
+          "profile": "cart/1",
+          "merchant": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+          "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+          "lines": [
+            {
+              "sku": "lst_123",
+              "title": "Dataset",
+              "qty": 1,
+              "unit": 1000,
+              "category": "data"
+            }
+          ],
+          "total": 1000,
+          "currency": "USD",
+          "rail": "credits",
+          "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg"
+        },
+        "merchant_policy": {
+          "require_owner": true
+        },
+        "agent": {
+          "level": 2,
+          "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "security_band": "strong",
+          "security_issuer": "did:web:securemyagent.ai"
+        },
+        "key_state": "owner",
+        "now": 1794010600,
+        "approval": {
+          "approval": {
+            "version": "approval/2.0",
+            "verifier_did": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+            "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+            "request_id": "req_solo",
+            "payload_digest": "cbc0dde63d67e4d56adc506240d733f7685c3039388c76440aa5b1cfd1011886",
+            "decision": "approve",
+            "expires_at": 1794010900,
+            "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+            "form": "p256",
+            "signature": "t1OUG_ZqjKwaNjWqmNO4Yvx87WWcOK8SdqeP1-YR73U9s7rDTS7RRBGrVuENj_4mfI-nxnAYLNmr49tKiIoXYg"
+          },
+          "verifier_did": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+          "request_id": "req_solo"
+        }
+      },
+      "expect": {
+        "decision": "allow",
+        "reasons": [
+          "owner_approved_cart",
+          "no_mandate"
+        ]
+      }
+    },
+    {
+      "name": "deny-owner-unknown",
+      "description": "require_owner and no owner known.",
+      "input": {
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "cart": {
+          "profile": "cart/1",
+          "merchant": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+          "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+          "lines": [
+            {
+              "sku": "lst_123",
+              "title": "Dataset",
+              "qty": 1,
+              "unit": 1000,
+              "category": "data"
+            }
+          ],
+          "total": 1000,
+          "currency": "USD",
+          "rail": "credits",
+          "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg"
+        },
+        "merchant_policy": {
+          "require_owner": true
+        },
+        "agent": {
+          "level": 2,
+          "security_band": "strong",
+          "security_issuer": "did:web:securemyagent.ai"
+        },
+        "key_state": "owner",
+        "now": 1794010600
+      },
+      "expect": {
+        "decision": "deny",
+        "reasons": [
+          "owner_unknown"
+        ]
+      }
+    },
+    {
+      "name": "deny-two-policy-failures",
+      "description": "Every failed policy check is listed.",
+      "input": {
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "cart": {
+          "profile": "cart/1",
+          "merchant": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+          "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+          "lines": [
+            {
+              "sku": "lst_123",
+              "title": "Dataset",
+              "qty": 1,
+              "unit": 1000,
+              "category": "data"
+            }
+          ],
+          "total": 1000,
+          "currency": "USD",
+          "rail": "credits",
+          "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg"
+        },
+        "merchant_policy": {
+          "min_level": 1,
+          "require_owner": true,
+          "require_mandate": true,
+          "min_security_band": "good",
+          "accept_issuers": [
+            "did:web:securemyagent.ai"
+          ]
+        },
+        "agent": {
+          "level": 0,
+          "security_band": "poor"
+        },
+        "mandate": {
+          "version": "mandate/1",
+          "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg",
+          "issuer_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+          "issued_at": 1794009600,
+          "expires_at": 1796601600,
+          "limits": {
+            "currency": "USD",
+            "per_tx_max": 5000,
+            "period": "P1D",
+            "period_max": 20000,
+            "total_max": 100000
+          },
+          "scope": {
+            "merchants": [
+              "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+              "*.moltbotden.com"
+            ],
+            "categories": [
+              "software",
+              "data"
+            ],
+            "rails": [
+              "card",
+              "x402",
+              "mpp",
+              "credits",
+              "usdc"
+            ]
+          },
+          "step_up_over": 2500,
+          "status": "https://account.openentity.org/v1/mandates/md_4b3eaz4gie3atj4jlyz375pbfg/status",
+          "signature": {
+            "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+            "form": "p256",
+            "signature": "nroQ52XQe3s5Xs7_ZCUA1p33MQ8UyBgscWtCjViHTtoZ4okUeZ1AVdFgoTI95wA7nKjZxi8xccWUFawCLinFHw"
+          }
+        },
+        "key_state": "owner",
+        "status": {
+          "status": "active",
+          "period_spent": 4000,
+          "total_spent": 9000
+        },
+        "now": 1794010600
+      },
+      "expect": {
+        "decision": "deny",
+        "reasons": [
+          "level_too_low",
+          "security_band_too_low"
+        ]
+      }
+    }
+  ]
+}

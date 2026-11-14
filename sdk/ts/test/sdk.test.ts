@@ -446,7 +446,7 @@ describe("custom claim types (spec/claim-types.md)", () => {
   it("every registered custom type has a schema at spec/schemas/claims/<ns>-<name>.json, and every schema a registered type", () => {
     const types = [...read("spec/claim-types.md").toString().matchAll(/^### `(custom:[a-z0-9_.-]+:[a-z0-9_.-]+)`$/gm)].map((m) => m[1]);
     const file = (t: string) => t.slice("custom:".length).replace(":", "-");
-    expect(types.length).toBeGreaterThanOrEqual(9);
+    expect(types.length).toBeGreaterThanOrEqual(12);
     expect(readdirSync(new URL("spec/schemas/claims/", root)).filter((f) => f.endsWith(".json")).sort()).toEqual(types.map((t) => `${file(t)}.json`).sort());
     for (const t of types) {
       const s = schema(file(t));
@@ -462,6 +462,9 @@ describe("custom claim types (spec/claim-types.md)", () => {
       ["moltbotden-transaction_review", { job_ref: hash, role: "seller", ratings: { accuracy: 5, value: 4 }, completed_at: at, marketplace: "did:web:moltbotden.com" }, { ratings: { accuracy: 6 } }],
       ["clawgrc-compliance", { framework: "owasp-agentic-2026", controls_passed: 18, controls_total: 20, score: 90, evidence_hash: hash }, { score: 101 }],
       ["clawgrc-violation", { policy: "declaration:1.0#3", severity: "high", evidence_hash: hash, observed_at: at }, { severity: "severe" }],
+      ["openentity-owner_verified", { level: "id", verified_at: at, evidence_hash: hash }, { level: "passport" }],
+      ["openentity-merchant_verified", { level: "kyb", jurisdiction: "US-DE", verified_at: at, evidence_hash: hash }, { jurisdiction: "Delaware" }],
+      ["clawgrc-merchant_reliability", { window: [at, at], orders: 40, distinct_reporters: 12, fulfilled_rate: 0.95, refund_rate: 0.02, evidence_hash: hash }, { refund_rate: 1.5 }],
     ];
     for (const [name, claim, broken] of ok) {
       const validator = new Validator(schema(name), "2020-12", false);

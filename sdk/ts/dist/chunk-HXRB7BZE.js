@@ -2948,7 +2948,7 @@ var package_default = {
     lint: "tsc --noEmit",
     typecheck: "tsc --noEmit",
     test: "vitest run --fsModuleCachePath node_modules/.vitest-cache-sdk-ts --testTimeout=60000 --hookTimeout=60000",
-    "gen:vectors": "node scripts/gen-vectors.ts && node scripts/gen-owner-vectors.ts"
+    "gen:vectors": "node scripts/gen-vectors.ts && node scripts/gen-owner-vectors.ts && node scripts/gen-commerce-vectors.ts"
   },
   dependencies: {
     "@cfworker/json-schema": "^4.1.1",
@@ -3220,6 +3220,262 @@ var Owner = class {
   }
 };
 
+// src/commerce.ts
+var MAX_TTL2 = 90 * DAY;
+var MD_ID = /^md_[a-z2-7]{26}$/;
+var RC_ID = /^rc_[a-z2-7]{26}$/;
+var CCY = /^[A-Z]{3}$/;
+var RAILS = ["card", "x402", "mpp", "credits", "usdc"];
+var PERIODS = ["P1D", "P7D", "P1M"];
+var BANDS = ["poor", "fair", "good", "strong"];
+var strs = (v) => Array.isArray(v) && v.every((x) => typeof x === "string" && x.length > 0 && x.length <= 253);
+var CART_KEYS = ["profile", "merchant", "agent_did", "lines", "total", "currency", "rail", "mandate_id"];
+var LINE_KEYS = ["sku", "title", "qty", "unit"];
+function cartError(c) {
+  if (!isObj(c) || !exactKeys(c, CART_KEYS)) return `cart/1 has exactly: ${CART_KEYS.join(", ")}`;
+  if (c.profile !== "cart/1") return "profile must be cart/1";
+  if (typeof c.merchant !== "string" || !DID.test(c.merchant)) return "merchant must be a DID";
+  if (typeof c.agent_did !== "string" || !DID.test(c.agent_did)) return "agent_did must be a DID";
+  if (typeof c.currency !== "string" || !CCY.test(c.currency)) return "currency must be 3 uppercase letters";
+  if (!RAILS.includes(c.rail)) return `rail must be one of ${RAILS.join(", ")}`;
+  if (c.mandate_id !== null && !(typeof c.mandate_id === "string" && MD_ID.test(c.mandate_id))) return "mandate_id must be md_<26 base32> or null";
+  if (!Array.isArray(c.lines) || !c.lines.length || c.lines.length > 100) return "lines must hold 1 to 100 lines";
+  let sum = 0;
+  for (const l of c.lines) {
+    if (!isObj(l)) return "a line must be an object";
+    const keys = Object.hasOwn(l, "category") ? [...LINE_KEYS, "category"] : LINE_KEYS;
+    if (!exactKeys(l, keys)) return `a line has exactly: ${keys.join(", ")}`;
+    if (typeof l.sku !== "string" || !l.sku || typeof l.title !== "string" || Object.hasOwn(l, "category") && typeof l.category !== "string") return "sku, title and category must be strings";
+    if (!isUint(l.qty) || !l.qty || !isUint(l.unit)) return "qty must be a positive integer and unit an integer in minor units";
+    sum += l.qty * l.unit;
+  }
+  if (!isUint(c.total) || c.total !== sum) return "total must equal the sum of qty * unit";
+  return plainJson(c);
+}
+function cartDigest(cart) {
+  const e = cartError(cart);
+  if (e) throw new OpenEntityError("invalid_input", e);
+  return payloadDigest(cart);
+}
+var MANDATE_KEYS = ["version", "mandate_id", "issuer_did", "agent_did", "issued_at", "expires_at", "limits", "scope", "step_up_over", "status", "signature"];
+function mandateFieldsError(m) {
+  const keys = Object.keys(m);
+  if (keys.some((k) => !MANDATE_KEYS.includes(k) && k !== "ap2") || MANDATE_KEYS.some((k) => !Object.hasOwn(m, k))) return `mandate/1 has ${MANDATE_KEYS.join(", ")} and optionally ap2`;
+  if (typeof m.mandate_id !== "string" || !MD_ID.test(m.mandate_id)) return "mandate_id must be md_<26 base32>";
+  if (typeof m.issuer_did !== "string" || !DID.test(m.issuer_did)) return "issuer_did must be a DID";
+  if (typeof m.agent_did !== "string" || !DID.test(m.agent_did)) return "agent_did must be a DID";
+  if (!isUint(m.issued_at) || !isUint(m.expires_at) || m.expires_at <= m.issued_at) return "issued_at and expires_at must be unix seconds, expires after issued";
+  if (m.expires_at - m.issued_at > MAX_TTL2) return "a mandate lasts at most 90 days";
+  const l = m.limits;
+  if (!isObj(l) || !exactKeys(l, ["currency", "per_tx_max", "period", "period_max", "total_max"])) return "limits must be {currency, per_tx_max, period, period_max, total_max}";
+  if (typeof l.currency !== "string" || !CCY.test(l.currency) || !PERIODS.includes(l.period)) return `limits.currency must be 3 uppercase letters and period one of ${PERIODS.join(", ")}`;
+  if (!isUint(l.per_tx_max) || !isUint(l.period_max) || !isUint(l.total_max)) return "limits amounts must be integers in minor units";
+  const s = m.scope;
+  if (!isObj(s) || Object.keys(s).some((k) => !["merchants", "categories", "rails"].includes(k)) || !Object.hasOwn(s, "merchants") || !Object.hasOwn(s, "rails")) return "scope must be {merchants, categories?, rails}";
+  if (!strs(s.merchants) || Object.hasOwn(s, "categories") && !strs(s.categories)) return "scope.merchants and scope.categories must be arrays of strings";
+  if (!Array.isArray(s.rails) || !s.rails.length || s.rails.some((r) => !RAILS.includes(r))) return `scope.rails must be a non-empty subset of ${RAILS.join(", ")}`;
+  if (!isUint(m.step_up_over)) return "step_up_over must be an integer in minor units";
+  if (typeof m.status !== "string" || !/^https:\/\/[^\s]+$/.test(m.status)) return "status must be an https URL";
+  if (Object.hasOwn(m, "ap2") && !(isObj(m.ap2) && exactKeys(m.ap2, ["checkout_mandate_hash"]) && (m.ap2.checkout_mandate_hash === null || typeof m.ap2.checkout_mandate_hash === "string"))) return "ap2 must be {checkout_mandate_hash: string | null}";
+  const sig = m.signature;
+  if (!isObj(sig) || typeof sig.device_id !== "string") return "signature must hold device_id, form, signature";
+  const keys2 = sig.form === "webauthn" ? ["device_id", "form", "signature", "authenticator_data", "client_data_json"] : ["device_id", "form", "signature"];
+  return signedShape(sig) ?? (exactKeys(sig, keys2) ? plainJson(m) : `signature must have exactly ${keys2.join(", ")}`);
+}
+function mandateDigest(m) {
+  if (!isObj(m)) throw new OpenEntityError("invalid_input", "mandate must be an object");
+  const { signature: _s, ...body } = m;
+  return sha256Sync("mandate/1|*|" + canonicalize(body));
+}
+function verifyMandate(mandate, o) {
+  try {
+    if (!isObj(mandate)) fail2("malformed", "mandate must be an object");
+    const m = mandate;
+    if (m.version !== "mandate/1") fail2("bad_version", `version ${String(m.version)} is not mandate/1`);
+    const bad = mandateFieldsError(m);
+    if (bad) fail2("malformed", bad);
+    const md = m;
+    const now = o.now ?? Math.floor(Date.now() / 1e3);
+    if (md.issuer_did !== o.keyLog.did) fail2("wrong_owner", "the mandate names another owner");
+    if (o.keyLog.closed) fail2("owner_closed", "the owner's key log is closed");
+    if (o.agentDid !== void 0 && md.agent_did !== o.agentDid) fail2("wrong_agent", "the mandate is for another agent");
+    if (now < md.issued_at) fail2("not_yet_valid", "the mandate is issued in the future");
+    if (now >= md.expires_at) fail2("expired", "the mandate expired");
+    const cred = o.keyLog.approvers.find((c) => c.kid === md.signature.device_id);
+    if (!cred) fail2("unknown_key", "device_id is not a current approver in the owner's key log");
+    const rpId = o.rpId ?? RP_ID;
+    checkSignature(cred, md.signature, mandateDigest(md), { origins: o.origins ?? [`https://${rpId}`], rpId, lowS: false });
+    if (o.status !== void 0) {
+      const st = o.status;
+      if (!isObj(st) || !["active", "revoked", "exhausted"].includes(st.status) || st.mandate_id !== void 0 && st.mandate_id !== md.mandate_id || st.period_spent !== void 0 && !isUint(st.period_spent) || st.total_spent !== void 0 && !isUint(st.total_spent)) fail2("status_required", "the status answer is malformed or for another mandate");
+      if (st.status === "revoked") fail2("revoked", "the owner revoked the mandate");
+      if (st.status === "exhausted") fail2("exhausted", "the mandate is spent");
+    } else if (md.expires_at - now > DAY) fail2("status_required", "a mandate with more than a day left needs a fresh status answer");
+    return { ok: true, kid: cred.kid, mandate_id: md.mandate_id, limits: md.limits, scope: md.scope, step_up_over: md.step_up_over, period_spent: o.status?.period_spent, total_spent: o.status?.total_spent };
+  } catch (x) {
+    if (x instanceof Fail) return { ok: false, error: x.code, message: x.message };
+    throw x;
+  }
+}
+var HOST = /^[a-z0-9]([a-z0-9.-]*[a-z0-9])?(:\d+)?$/;
+function didHost(did) {
+  if (!did.startsWith("did:web:")) return null;
+  let d;
+  try {
+    d = decodeURIComponent(did.slice(8).split(":")[0]).toLowerCase();
+  } catch {
+    return null;
+  }
+  return HOST.test(d) ? d.split(":")[0] : null;
+}
+function merchantAllowed(patterns, merchant) {
+  if (!patterns.length) return true;
+  const host = didHost(merchant);
+  return patterns.some((p) => {
+    if (p === merchant) return true;
+    if (p.startsWith("did:") || !host) return false;
+    const d = p.toLowerCase();
+    return d.startsWith("*.") ? host.endsWith(d.slice(1)) : host === d;
+  });
+}
+function mandateCovers(mandate, cart, o = {}) {
+  const no = (reason, detail) => ({ ok: false, step_up_required: false, reason, detail });
+  const bad = cartError(cart);
+  if (bad) return no("bad_cart", bad);
+  const c = cart, { limits: l, scope: s } = mandate;
+  if (c.agent_did !== mandate.agent_did) return no("wrong_agent", "the cart is for another agent");
+  if (c.mandate_id !== null && c.mandate_id !== mandate.mandate_id) return no("wrong_mandate", "the cart names another mandate");
+  if (c.currency !== l.currency) return no("wrong_currency", `the mandate is in ${l.currency}`);
+  if (!s.rails.includes(c.rail)) return no("out_of_scope", `rail ${c.rail} is not in scope`);
+  if (!merchantAllowed(s.merchants, c.merchant)) return no("out_of_scope", `merchant ${c.merchant} is not in scope`);
+  if (s.categories?.length && c.lines.some((x) => !x.category || !s.categories.includes(x.category))) return no("out_of_scope", "a line is outside the categories");
+  const sp = o.spent ?? {};
+  if (sp.period_spent !== void 0 && !isUint(sp.period_spent) || sp.total_spent !== void 0 && !isUint(sp.total_spent)) return no("over_limit", "spent must be unsigned integers");
+  if (c.total > l.per_tx_max) return no("over_limit", "per_tx_max");
+  if ((sp.period_spent ?? 0) + c.total > l.period_max) return no("over_limit", "period_max");
+  if ((sp.total_spent ?? 0) + c.total > l.total_max) return no("over_limit", "total_max");
+  return { ok: true, step_up_required: c.total > mandate.step_up_over };
+}
+var RECEIPT_KEYS = ["version", "receipt_id", "kind", "refers_to", "merchant_did", "agent_did", "mandate_id", "mandate_hash", "cart_digest", "approval_request_id", "total", "currency", "rail", "settlement_ref", "created_at"];
+function receiptError(r) {
+  if (!isObj(r)) return "receipt must be an object";
+  const extra = Object.keys(r).filter((k) => !RECEIPT_KEYS.includes(k) && k !== "proofs");
+  if (extra.length || RECEIPT_KEYS.some((k) => !Object.hasOwn(r, k))) return `receipt/1 has exactly: ${RECEIPT_KEYS.join(", ")}, proofs`;
+  if (r.version !== "receipt/1") return "version must be receipt/1";
+  if (typeof r.receipt_id !== "string" || !RC_ID.test(r.receipt_id)) return "receipt_id must be rc_<26 base32>";
+  if (!["purchase", "refund", "chargeback"].includes(r.kind)) return "kind must be purchase, refund or chargeback";
+  if (r.kind === "purchase" ? r.refers_to !== null : typeof r.refers_to !== "string" || !RC_ID.test(r.refers_to)) return "refers_to is null for a purchase and the purchase's receipt_id for a refund or chargeback";
+  if (typeof r.merchant_did !== "string" || !DID.test(r.merchant_did) || typeof r.agent_did !== "string" || !DID.test(r.agent_did)) return "merchant_did and agent_did must be DIDs";
+  if (r.merchant_did === r.agent_did) return "merchant_did and agent_did must differ";
+  if (r.mandate_id !== null && !(typeof r.mandate_id === "string" && MD_ID.test(r.mandate_id))) return "mandate_id must be md_<26 base32> or null";
+  if (r.mandate_hash !== null && !(typeof r.mandate_hash === "string" && HEX64.test(r.mandate_hash))) return "mandate_hash must be 64 lowercase hex or null";
+  if (r.mandate_id === null !== (r.mandate_hash === null)) return "mandate_id and mandate_hash go together";
+  if (typeof r.cart_digest !== "string" || !HEX64.test(r.cart_digest)) return "cart_digest must be 64 lowercase hex";
+  if (r.approval_request_id !== null && !(typeof r.approval_request_id === "string" && /^[A-Za-z0-9:._-]{1,128}$/.test(r.approval_request_id))) return "approval_request_id must be a request id or null";
+  if (!isUint(r.total) || !isUint(r.created_at)) return "total and created_at must be unsigned integers";
+  if (typeof r.currency !== "string" || !CCY.test(r.currency)) return "currency must be 3 uppercase letters";
+  if (!RAILS.includes(r.rail)) return `rail must be one of ${RAILS.join(", ")}`;
+  if (typeof r.settlement_ref !== "string" || !r.settlement_ref || r.settlement_ref.length > 256) return "settlement_ref must be 1 to 256 characters";
+  if (r.proofs !== void 0 && !Array.isArray(r.proofs)) return "proofs must be an array";
+  return plainJson(r);
+}
+async function signReceipt(receipt, kp, by, created, verificationMethod) {
+  const e = receiptError(receipt);
+  if (e) throw new OpenEntityError("invalid_input", e);
+  const r = receipt;
+  const signer = (verificationMethod ?? verificationMethodId(kp.did)).split("#")[0];
+  if (signer !== r[`${by}_did`]) throw new OpenEntityError("invalid_input", `${by}_did is not the signing key's DID`);
+  if (r.proofs?.some((p) => p.by === by)) throw new OpenEntityError("invalid_input", `already signed by ${by}`);
+  const proof = await signProof(r, kp, created, verificationMethod);
+  return { ...r, proofs: [...r.proofs ?? [], { by, ...proof }] };
+}
+async function verifyReceipt(receipt, o = {}) {
+  const e = receiptError(receipt);
+  if (e) return { ok: false, error: "malformed", message: e };
+  const r = receipt, signed = [];
+  for (const p of r.proofs ?? []) {
+    const { by, ...proof } = p;
+    if (by !== "merchant" && by !== "agent" || signed.includes(by)) return { ok: false, error: "malformed", message: "each proof names a distinct by: merchant or agent" };
+    if (typeof proof.verificationMethod !== "string" || proof.verificationMethod.split("#")[0] !== r[`${by}_did`]) return { ok: false, error: "wrong_signer", message: `the ${by} proof is not by ${by}_did` };
+    const v = await verifyProof(r, proof, o.resolver);
+    if (!v.ok) return { ok: false, error: "bad_proof", message: `${by}: ${v.error}` };
+    signed.push(by);
+  }
+  for (const need of o.require ?? ["merchant"]) if (!signed.includes(need)) return { ok: false, error: "missing_proof", message: `no ${need} proof` };
+  return { ok: true, signed_by: signed };
+}
+function verifyReceiptChain(purchase, later) {
+  const bad = (error, message) => ({ ok: false, error, message });
+  const e = receiptError(purchase) ?? later.map(receiptError).find((x) => x);
+  if (e) return bad("malformed", e);
+  const p = purchase, ids = /* @__PURE__ */ new Set([p.receipt_id]);
+  if (p.kind !== "purchase") return bad("not_purchase", "the first receipt must be a purchase");
+  let refunded = 0;
+  for (const x of later) {
+    if (x.kind === "purchase" || x.refers_to !== p.receipt_id) return bad("mismatch", "each later receipt must be a refund or chargeback of this purchase");
+    if (ids.has(x.receipt_id)) return bad("mismatch", "receipt_id repeats");
+    ids.add(x.receipt_id);
+    if (x.merchant_did !== p.merchant_did || x.agent_did !== p.agent_did || x.currency !== p.currency || x.rail !== p.rail) return bad("mismatch", "parties, currency and rail must equal the purchase's");
+    refunded += x.total;
+  }
+  if (refunded > p.total) return bad("over_refund", "refunds and chargebacks exceed the purchase total");
+  return { ok: true, refunded };
+}
+async function verifyAgentForCheckout(i) {
+  const now = i.now ?? Math.floor(Date.now() / 1e3), evidence = {};
+  const deny = (...reasons2) => ({ decision: "deny", reasons: reasons2, evidence });
+  const cartBad = cartError(i.cart);
+  if (cartBad) return deny("bad_cart");
+  const cart = i.cart, pol = i.merchantPolicy ?? {};
+  let agent = i.agentDid;
+  if (i.request) {
+    try {
+      agent = (await verifyRequest({ ...i.request, now })).did;
+      evidence.request = "verified";
+    } catch {
+      return deny("request_unverified");
+    }
+  }
+  if (!agent) return deny("request_unverified");
+  evidence.agent_did = agent;
+  if (cart.agent_did !== agent) return deny("agent_mismatch");
+  const f = i.agent ?? {};
+  const reasons = [];
+  if (pol.min_level !== void 0 && !((f.level ?? -1) >= pol.min_level)) reasons.push("level_too_low");
+  if (pol.min_security_band !== void 0) {
+    const need = BANDS.indexOf(pol.min_security_band), got = BANDS.indexOf(f.security_band ?? "");
+    if (got < 0 || got < need) reasons.push("security_band_too_low");
+    else if (pol.accept_issuers?.length && !pol.accept_issuers.includes(f.security_issuer ?? "")) reasons.push("issuer_not_accepted");
+  }
+  let owner = f.owner_did, covered;
+  if (i.mandate !== void 0) {
+    if (!i.keyLog) return deny("no_key_log");
+    const v = verifyMandate(i.mandate, { keyLog: i.keyLog, agentDid: agent, now, status: i.status, origins: i.origins });
+    if (!v.ok) return deny(`mandate_${v.error}`);
+    owner = i.mandate.issuer_did;
+    evidence.mandate_id = v.mandate_id;
+    evidence.mandate_hash = toHex(mandateDigest(i.mandate));
+    covered = mandateCovers(i.mandate, cart, { spent: i.status });
+    if (!covered.ok && covered.reason !== "over_limit" && covered.reason !== "out_of_scope") return deny(`mandate_${covered.reason}`);
+  } else if (pol.require_mandate) reasons.push("mandate_required");
+  if (pol.require_owner && !owner) reasons.push("owner_unknown");
+  if (reasons.length) return deny(...reasons);
+  const needApproval = !covered || !covered.ok || covered.step_up_required;
+  if (!needApproval) return { decision: "allow", reasons: ["mandate_covers_cart"], evidence };
+  const why = !covered ? "no_mandate" : !covered.ok ? `mandate_${covered.reason}` : "step_up_over";
+  if (i.approval && i.keyLog && owner) {
+    const a = verifyApproval(i.approval.approval, { keyLog: i.keyLog, verifierDid: i.approval.verifierDid, ownerDid: owner, requestId: i.approval.requestId, payloadDigest: cartDigest(cart), decisions: ["approve"], now, origins: i.origins, counter: i.approval.counter });
+    if (a.ok) {
+      evidence.approval_request_id = i.approval.requestId;
+      evidence.approval_kid = a.kid;
+      evidence.approval_counter = a.counter;
+      return { decision: "allow", reasons: ["owner_approved_cart", why], evidence };
+    }
+    evidence.approval_error = a.error;
+  }
+  return { decision: "step_up", reasons: [why], evidence };
+}
+
 export {
   OpenEntityError,
   HttpSigError,
@@ -3302,5 +3558,16 @@ export {
   verifyKeyLog,
   pairSas,
   pair,
-  Owner
+  Owner,
+  RAILS,
+  cartError,
+  cartDigest,
+  mandateDigest,
+  verifyMandate,
+  mandateCovers,
+  receiptError,
+  signReceipt,
+  verifyReceipt,
+  verifyReceiptChain,
+  verifyAgentForCheckout
 };
