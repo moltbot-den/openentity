@@ -65,8 +65,8 @@ async function build() {
     const r = await call("PATCH", W.agentUrl(org, k), { label: `e2e-agent-${i + 1}`, team: "ops", cost_centre: "CC-4711" }, a.auth);
     expect(r.status, r.text).toBe(200);
   }
-  // One budget, set once: $3 a purchase, $4 a day, the approvers over $1, any merchant on credits and USDC (small, so a $5 test balance reaches every line).
-  const budget = { per_tx_max: 300, period: "P1D", period_max: 400, step_up_over: 100, rails: ["credits", "usdc"], merchants: [] as string[] };
+  // One budget, set once: $3 a purchase, $25 a day, the approvers over $1, any merchant on credits and USDC (small, so a $5 test top-up reaches every line; a card top-up counts toward the day's cap).
+  const budget = { per_tx_max: 300, period: "P1D", period_max: 2500, step_up_over: 100, rails: ["credits", "usdc"], merchants: [] as string[] };
   const bh = await W.stepUp(org, a, a.approver, "org.budget.set", { org_id: org.id, scope: "org", ref: "", ...budget });
   const set = await call("PUT", `/v1/orgs/${org.id}/budgets`, { scope: "org", ...budget }, { ...a.auth, ...bh });
   expect(set.status, set.text).toBe(200);
