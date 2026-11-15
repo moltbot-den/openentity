@@ -12,7 +12,7 @@ export const ACTIONS = ["agent.resume", "agent.permissions.widen", "method.add",
 export type Action = (typeof ACTIONS)[number];
 export const REQUEST_TTL = 600;
 
-const PERMISSION = /^(owner\.message|owner\.status|owner\.approval|vault\.request:\S+|evidence\.file|den\.post|market\.sell|contract\.accept<=\$[0-9]+(\.[0-9]{1,2})?)$/;
+const PERMISSION = /^(owner\.message|owner\.status|owner\.approval|vault\.request:\S+|evidence\.file|den\.post|market\.sell|contract\.accept<=\$[0-9]+(\.[0-9]{1,2})?|spend<=\$[0-9]+(\.[0-9]{1,2})?\/(P1D|P7D|P1M)@\S+:(card|x402|mpp|credits|usdc))$/;
 const AGENT_DID = /^did:key:z6Mk[1-9A-HJ-NP-Za-km-z]+$/;
 const ID = /^[A-Za-z0-9_-]{1,64}$/;
 

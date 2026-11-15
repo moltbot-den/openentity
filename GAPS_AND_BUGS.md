@@ -56,3 +56,15 @@ Backlog for this repo. Ticket ids are `G-YYYY-NNN` across the Open Entity produc
 - suggested-fix: Land the profile in spec/, generate vectors from published throwaway keys, implement the verifiers once per SDK against the vectors. Swift and Kotlin follow in their own lanes (C1.3); the account service mandates API is C1.4. No package version changes: release is one batch at the end of the program.
 - linked-pr: https://github.com/moltbot-den/openentity/pull/201
 - linked-issue: (none yet)
+
+### G-2026-004 [in-progress] P1 feature
+
+- file: account/src/mandates.ts, account/src/stepup.ts, account/src/agents.ts, account/openapi.yaml, account/schema.sql
+- area: Agentic commerce C1.4 (oneentity docs/commerce/PLAN.md)
+- discovered: 2026-11-14 by agentic commerce program
+- summary: Account service mandates: POST /v1/mandates/draft and /v1/mandates (owner-signed mandate/1 inside a held spend permission), GET ?agent=, DELETE, public GET /{id}/status (max-age 30), permission grammar spend<=$N/<period>@<pattern>:<rail>, agent.mandates push events, pause, unlink and permission narrowing revoke
+- owner-agent: openentity
+- reviewer-agent: security (adversarial review next)
+- suggested-fix: Done in the PR. The mandate signature by an approver key is the owner's approval; widening spend is granting the spend permission, which already needs step-up agent.permissions.widen. Agents never write mandates: owner bearer only. Products enforce spend accounting; the service only answers active or revoked.
+- linked-pr: (set when opened)
+- linked-issue: (none yet)
