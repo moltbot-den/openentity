@@ -197,7 +197,7 @@ Backlog for this repo. Ticket ids are `G-YYYY-NNN` across the Open Entity produc
 - linked-pr: https://github.com/moltbot-den/openentity/pull/225
 - linked-issue: (none yet)
 
-### G-2026-067 [in-progress] P2 feature
+### G-2026-067 [fixed] P2 feature
 
 - file: registry/social/calendar.json, registry/test/social.test.ts
 - area: Agentic commerce C6 correction (docs/commerce/CONTENT.md in the oneentity meta repo)
@@ -206,5 +206,5 @@ Backlog for this repo. Ticket ids are `G-YYYY-NNN` across the Open Entity produc
 - owner-agent: openentity
 - reviewer-agent: adversarial-review
 - suggested-fix: The calendar test gains the post lint (banned words, typed counts, brand forms) so every entry, not only video scripts, is linted in CI.
-- linked-pr: (none yet)
+- linked-pr: https://github.com/moltbot-den/openentity/pull/227
 - linked-issue: (none yet)
