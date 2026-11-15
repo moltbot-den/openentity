@@ -3,8 +3,7 @@ import Foundation
 
 // OEIS-1 verification: eddsa-jcs-2022 proofs by did:key (offline) or did:web (through DIDWebResolver), RFC 9162 inclusion
 // proofs and the C2SP signed-note checkpoint. A port of sdk/ts/src/core.ts and sdk/ts/src/merkle.ts. EIP-712 proofs (did:pkh)
-// need secp256k1 and keccak, which CryptoKit lacks: they report `unsupported`. RFC 9421 HTTP message signatures are a
-// server-side profile, not here.
+// need secp256k1 and keccak, which CryptoKit lacks: they report `unsupported`. RFC 9421 request signatures are in HTTPSig.swift.
 
 /// Verifies the object's own `proof` by a did:key signer, offline, and returns the signer DID. Throws `verification_failed`,
 /// or `unsupported` for EIP-712 proofs and other signers (did:web needs `verifyObject(_:resolver:)`).
