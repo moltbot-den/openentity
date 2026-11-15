@@ -218,3 +218,9 @@ CREATE TABLE IF NOT EXISTS social_posts (
   entry_id TEXT NOT NULL, platform TEXT NOT NULL, status TEXT NOT NULL, ref TEXT, error TEXT, at TEXT NOT NULL,
   PRIMARY KEY (entry_id, platform)
 );
+
+-- Short-form video (video.ts): one row per day. The script is written and judged, voiced, and rendered ahead of its post time.
+CREATE TABLE IF NOT EXISTS social_videos (
+  day TEXT PRIMARY KEY, topic TEXT NOT NULL, status TEXT NOT NULL, script TEXT, render_id TEXT, bucket TEXT, url TEXT,
+  tries INTEGER NOT NULL DEFAULT 0, error TEXT, at TEXT NOT NULL
+);

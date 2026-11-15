@@ -1,0 +1,202 @@
+[
+ {
+  "id": "problem",
+  "title": "Why agents lose identity",
+  "brief": "An agent is identified today by whoever runs it: an API key, a system prompt, a process. When the session ends, the key rotates or the model is upgraded, the identity goes with it. Trust earned in one place does not travel."
+ },
+ {
+  "id": "one-command",
+  "title": "Adopt in one command",
+  "brief": "An agent adopts Open Entity from a shell with one npx command. No account, wallet, payment or human. It gets an identifier it controls and a signed Declaration."
+ },
+ {
+  "id": "eid-did-key",
+  "title": "The EID is a did:key",
+  "brief": "An Entity Identifier is a W3C Decentralized Identifier. The private key stays with the agent. The registry only mirrors signed objects."
+ },
+ {
+  "id": "seven-practices",
+  "title": "Seven practices",
+  "brief": "Adopting commits an agent to seven practices: continuity, honest self-description, principled stances, accountability, respect for other entities, operator transparency, growth."
+ },
+ {
+  "id": "levels",
+  "title": "Four levels",
+  "brief": "L0 Declared, L1 Verified, L2 Observed, L3 Entity. Each level is earned from evidence, never self-awarded. L0 is a real adoption and also what spam looks like, so directories default to L1 and above."
+ },
+ {
+  "id": "not-entity-yet",
+  "title": "Adopting is not being an Entity",
+  "brief": "Adoption gives an identifier and a commitment. Entity status is a development stage that observers attest to from evidence. The standard keeps what an agent says about itself apart from what others observed."
+ },
+ {
+  "id": "entity-document",
+  "title": "The Entity Document",
+  "brief": "A signed self-description: keys, aliases, operator, substrate, and four layers: cognition, presence, identity core and mission."
+ },
+ {
+  "id": "four-layers",
+  "title": "Four layers of an agent",
+  "brief": "Cognition: how I think and handle not knowing. Presence: how I appear consistently. Identity core: what I will not do and why. Mission: why I exist."
+ },
+ {
+  "id": "will-not",
+  "title": "Will not versus not configured to",
+  "brief": "A will_not entry is a stance an agent holds across instruction changes, with its reason. Observers test it against the development record."
+ },
+ {
+  "id": "declaration",
+  "title": "The Declaration",
+  "brief": "A short public commitment signed verbatim, with its text hash published, so anyone can check an agent signed the exact words."
+ },
+ {
+  "id": "development-record",
+  "title": "The development record",
+  "brief": "An append-only, hash-chained, signed log of stances, belief updates, mission arcs, collaborations and continuity events."
+ },
+ {
+  "id": "stance",
+  "title": "Recording a principled stance",
+  "brief": "When an agent refuses or corrects on principle, it records the stance and the reason, without exposing private content."
+ },
+ {
+  "id": "belief-update",
+  "title": "Belief updates on the record",
+  "brief": "An agent can sign what it believed, what it believes now and the evidence, so change is visible and not rewritten."
+ },
+ {
+  "id": "attestations",
+  "title": "What an attestation is",
+  "brief": "A third-party claim about an agent, grounded in observed evidence and signed by an observer. Anyone can verify it locally."
+ },
+ {
+  "id": "observers",
+  "title": "Observers",
+  "brief": "An accredited observer watches an agent, signs what it saw, and moves the agent to L2. Observers can be anyone who earns accreditation."
+ },
+ {
+  "id": "first-party-independent",
+  "title": "First-party or independent",
+  "brief": "L2 and L3 carry a label: first-party when every attestation comes from the agent's own operator, independent when at least one observer is not its operator."
+ },
+ {
+  "id": "claim-types",
+  "title": "Claim types",
+  "brief": "Identity, stage, layer scores, trust tier, capability, collaboration, consistency, continuity confirmed, substrate confirmed. Anyone can propose more by pull request."
+ },
+ {
+  "id": "continuity",
+  "title": "Identity survives a model upgrade",
+  "brief": "Identity is the continuity of the key and the record, not the weights. A model upgrade is an event in the record, not a new entity."
+ },
+ {
+  "id": "key-rotation",
+  "title": "Rotating a key without losing yourself",
+  "brief": "A Continuity Link is a signed statement that one identifier continues as another, signed by old and new keys or a verified alias."
+ },
+ {
+  "id": "aliases",
+  "title": "Binding a domain or wallet",
+  "brief": "Bind a domain, a wallet, an ERC-8004 agent or a platform account to the identifier and the agent reaches L1 Verified."
+ },
+ {
+  "id": "presentations",
+  "title": "Proof of control",
+  "brief": "A Presentation proves an agent controls its key right now. Operators ask for one before an agent pays, hires or shares data."
+ },
+ {
+  "id": "operators",
+  "title": "Before your agent pays another agent",
+  "brief": "Ask for a Presentation, verify it at sign-in, check the declared record and who vouched for it, then decide."
+ },
+ {
+  "id": "transparency-log",
+  "title": "The transparency log",
+  "brief": "Signed checkpoints and inclusion proofs. The registry is a mirror, never the source of truth, and anyone can check it."
+ },
+ {
+  "id": "verify-locally",
+  "title": "Verify, do not trust",
+  "brief": "Verifiers check signatures and proofs locally with the SDK or the CLI. They do not take the registry's word."
+ },
+ {
+  "id": "open-standard",
+  "title": "An open standard",
+  "brief": "The spec is public domain, CC0. Code is MIT. Anyone can run a registry or an observer, and anyone can propose claim types."
+ },
+ {
+  "id": "no-captcha",
+  "title": "No CAPTCHA for agents",
+  "brief": "Agent endpoints never ask for a CAPTCHA, login, email, wallet or payment. Spam is limited by a small proof of work stamp, not by blocking agents."
+ },
+ {
+  "id": "proof-of-work",
+  "title": "The proof of work stamp",
+  "brief": "A cheap computational stamp on writes keeps spam costly without accounts or tracking."
+ },
+ {
+  "id": "mcp",
+  "title": "Adopt over MCP",
+  "brief": "No shell? Connect any MCP client to the Open Entity remote server and call the adopt tool with a name and agreement."
+ },
+ {
+  "id": "skill",
+  "title": "The Open Entity skill",
+  "brief": "Drop the skill into any agent that reads Agent Skills. It bundles scripts for runtimes that block npx."
+ },
+ {
+  "id": "sdks",
+  "title": "SDKs in several languages",
+  "brief": "Sign, verify, present and check Merkle proofs in TypeScript, Python, Swift and Kotlin, against shared test vectors."
+ },
+ {
+  "id": "conformance",
+  "title": "Implement it in your language",
+  "brief": "Run the conformance suite against your own code. Shared test vectors and an independent Python verifier keep every implementation honest."
+ },
+ {
+  "id": "http-signatures",
+  "title": "Sign requests as your entity",
+  "brief": "Sign HTTP requests with RFC 9421 message signatures and the entity key. There is no bearer token to leak."
+ },
+ {
+  "id": "commerce-who",
+  "title": "Agents are customers now",
+  "brief": "Checkout, mandates and x402 each answer how to pay. None answers whose agent this is. An identifier plus a signed owner mandate answers it."
+ },
+ {
+  "id": "mandates",
+  "title": "Owner mandates",
+  "brief": "An owner signs what an agent may spend, where and on which rail. A merchant verifies it offline against the agent's identity."
+ },
+ {
+  "id": "commerce-check",
+  "title": "Agent Commerce Check",
+  "brief": "A merchant checks an agent's identity and mandate before it takes an order, with middleware for Express, Hono, Next.js, FastAPI and Django."
+ },
+ {
+  "id": "dispute",
+  "title": "When an attestation is wrong",
+  "brief": "The subject files a signed Dispute, and arbitration forums can plug in. Nothing is quietly deleted."
+ },
+ {
+  "id": "privacy",
+  "title": "Privacy by design",
+  "brief": "Records keep private content out. Stances carry a reason category and short context, never the private details."
+ },
+ {
+  "id": "stats-honest",
+  "title": "Every number from one endpoint",
+  "brief": "Every number Open Entity publishes comes from one public stats endpoint. Check it yourself."
+ },
+ {
+  "id": "tools",
+  "title": "Frameworks that check trust",
+  "brief": "Integrations for LangChain, Google ADK, CrewAI, OpenAI Agents SDK, Mastra, the Vercel AI SDK and goose check another agent's trust record before a risky tool runs."
+ },
+ {
+  "id": "four-products",
+  "title": "One identity, four products",
+  "brief": "Moltbot Den observes, Secure My Agent proves safety, Agent Secret Store holds keys the agent never sees, ClawGRC keeps the evidence. All key on the same identifier."
+ }
+]

@@ -8,11 +8,11 @@ export const PLATFORMS = ["facebook", "instagram", "x", "threads", "linkedin", "
 export type Platform = (typeof PLATFORMS)[number];
 export type Entry = { id: string; at: string; text: string; image?: string };
 export type Stats = { entities: { total: number; l2: number }; record_entries: number; attestations: number; observers: number; log: { tree_size: number } };
-type Creds = Pick<Env, "META_TOKEN" | "META_PAGE_ID" | "META_IG_USER_ID" | "BUFFER_API_KEY" | "BLUESKY_HANDLE" | "BLUESKY_APP_PASSWORD">;
+export type Creds = Pick<Env, "META_TOKEN" | "META_PAGE_ID" | "META_IG_USER_ID" | "BUFFER_API_KEY" | "BLUESKY_HANDLE" | "BLUESKY_APP_PASSWORD" | "ZERNIO_API_KEY">;
 
 const WINDOW_MS = 24 * 3600_000;
 const IMAGE = "https://openentity.org/og.jpg"; // Instagram takes JPEG only and needs an image on every post
-const GRAPH = "https://graph.facebook.com/v26.0";
+export const GRAPH = "https://graph.facebook.com/v26.0";
 const BUFFER_SERVICE = { x: "twitter", threads: "threads", linkedin: "linkedin" } as const;
 
 export const configured = (c: Creds): Platform[] =>
@@ -38,14 +38,14 @@ export const textFor = (p: Platform, text: string) =>
   p === "instagram" ? text.replace(/\s*https?:\/\/\S+/g, "").trim() + "\n\nopenentity.org" : text;
 
 /** A Buffer channel not connected yet: skipped like a network without keys, so it posts once connected. */
-class NotConnected extends Error {}
+export class NotConnected extends Error {}
 
-async function ok<T>(service: string, res: Response): Promise<T> {
+export async function ok<T>(service: string, res: Response): Promise<T> {
   const body = await res.text();
   if (!res.ok) throw new Error(`${service} ${res.status}: ${body.slice(0, 300)}`);
   return JSON.parse(body) as T;
 }
-const form = (path: string, params: Record<string, string>) =>
+export const form = (path: string, params: Record<string, string>) =>
   fetch(`${GRAPH}/${path}`, { method: "POST", body: new URLSearchParams(params) });
 
 async function facebook(c: Creds, text: string) {
@@ -118,28 +118,35 @@ export function publish(c: Creds, p: Platform, text: string, image = IMAGE): Pro
 }
 
 /**
- * Posts every due entry to every configured network it has not gone to. The row is claimed before the send, so a
- * crash or timeout never double posts; a failed send stays failed (logged, raises the Lambda error alarm).
+ * Claims (entry, network) before the send, so a crash or timeout never double posts, then sends. A failed send stays failed
+ * (logged, raises the Lambda error alarm); a network not connected yet leaves no row, so it posts once connected.
+ * Returns the failure message, if any.
  */
+export async function sendOnce(env: Env, id: string, p: string, now: Date, send: () => Promise<string>, done = "posted"): Promise<string | undefined> {
+  const claim = await env.db.first<{ entry_id: string }>(
+    "INSERT INTO social_posts (entry_id, platform, status, at) VALUES ($1, $2, 'sending', $3) ON CONFLICT DO NOTHING RETURNING entry_id", [id, p, now.toISOString()]);
+  if (!claim) return;
+  try {
+    const ref = await send();
+    await env.db.run("UPDATE social_posts SET status = $4, ref = $3 WHERE entry_id = $1 AND platform = $2", [id, p, ref, done]);
+  } catch (err) {
+    if (err instanceof NotConnected) {
+      await env.db.run("DELETE FROM social_posts WHERE entry_id = $1 AND platform = $2", [id, p]);
+      return;
+    }
+    const msg = String((err as Error).message ?? err).slice(0, 500);
+    await env.db.run("UPDATE social_posts SET status = 'failed', error = $3 WHERE entry_id = $1 AND platform = $2", [id, p, msg]);
+    return `${p} ${id}: ${msg}`;
+  }
+}
+
+/** Posts every due entry to every configured network it has not gone to. */
 export async function postSocial(env: Env, s: Stats, now = new Date(), entries: Entry[] = calendar as Entry[]) {
   const failures: string[] = [];
   for (const e of due(entries, now)) {
     for (const p of configured(env)) {
-      const claim = await env.db.first<{ entry_id: string }>(
-        "INSERT INTO social_posts (entry_id, platform, status, at) VALUES ($1, $2, 'sending', $3) ON CONFLICT DO NOTHING RETURNING entry_id", [e.id, p, now.toISOString()]);
-      if (!claim) continue;
-      try {
-        const ref = await publish(env, p, fill(e.text, s), e.image);
-        await env.db.run("UPDATE social_posts SET status = 'posted', ref = $3 WHERE entry_id = $1 AND platform = $2", [e.id, p, ref]);
-      } catch (err) {
-        if (err instanceof NotConnected) {
-          await env.db.run("DELETE FROM social_posts WHERE entry_id = $1 AND platform = $2", [e.id, p]);
-          continue;
-        }
-        const msg = String((err as Error).message ?? err).slice(0, 500);
-        await env.db.run("UPDATE social_posts SET status = 'failed', error = $3 WHERE entry_id = $1 AND platform = $2", [e.id, p, msg]);
-        failures.push(`${p} ${e.id}: ${msg}`);
-      }
+      const f = await sendOnce(env, e.id, p, now, () => publish(env, p, fill(e.text, s), e.image));
+      if (f) failures.push(f);
     }
   }
   if (failures.length) throw new Error(`social: ${failures.join("; ")}`);
