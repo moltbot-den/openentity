@@ -113,6 +113,21 @@ class CommerceTest {
     }
 
     @Test
+    fun statusWithUnicodeSpaceIsMalformed() {
+        val m = MANDATES["cases"].items()[0]["mandate"] as JsonValue.Obj
+        fun err(status: String) = mandateFieldsError(JsonValue.Obj(m.fields + ("status" to JsonValue.Str(status))))
+        assertEquals(null, err("https://a.example/x"))
+        for (sp in listOf(" ", "\u00a0", "\u2028", "\u3000", "\ufeff")) assertEquals("status must be an https URL", err("https://a.example/${sp}x"))
+    }
+
+    @Test
+    fun spentThatWrapsNeverFits() {
+        val cart = CARTS["covers"].items()[0]["cart"]!!
+        assertEquals("over_limit", mandateCovers(terms("M"), cart, periodSpent = Long.MAX_VALUE).reason)
+        assertEquals("over_limit", mandateCovers(terms("M"), cart, totalSpent = Long.MAX_VALUE).reason)
+    }
+
+    @Test
     fun aMalformedOrForeignStatusAnswerIsNoAnswer() {
         val c = MANDATES["cases"].items()[0]
         val x = c["context"]

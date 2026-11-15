@@ -14,7 +14,7 @@ private val MD_ID = Regex("md_[a-z2-7]{26}")
 private val RC_ID = Regex("rc_[a-z2-7]{26}")
 private val CCY = Regex("[A-Z]{3}")
 private val APPROVAL_REQUEST_ID = Regex("[A-Za-z0-9:._-]{1,128}")
-private val HTTPS_URL = Regex("https://[^\\s]+")
+private val HTTPS_URL = Regex("https://[^\\s\\u0085\\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000\\ufeff]+") // JS \\s, so TS and Kotlin agree
 private val HOST = Regex("[a-z0-9]([a-z0-9.-]*[a-z0-9])?(:\\d+)?")
 private val PERIODS = listOf("P1D", "P7D", "P1M")
 private val BANDS = listOf("poor", "fair", "good", "strong")
@@ -94,7 +94,7 @@ data class MandateTerms(val mandateId: String, val agentDid: String, val limits:
 
 private val MANDATE_KEYS = listOf("version", "mandate_id", "issuer_did", "agent_did", "issued_at", "expires_at", "limits", "scope", "step_up_over", "status", "signature")
 
-private fun mandateFieldsError(m: JsonValue.Obj): String? {
+internal fun mandateFieldsError(m: JsonValue.Obj): String? {
     val f = m.fields
     if (f.keys.any { it !in MANDATE_KEYS && it != "ap2" } || MANDATE_KEYS.any { it !in f }) return "mandate/1 has ${MANDATE_KEYS.joinToString(", ")} and optionally ap2"
     if (m["mandate_id"].str()?.let { MD_ID.matches(it) } != true) return "mandate_id must be md_<26 base32>"
@@ -244,7 +244,7 @@ fun mandateCovers(mandate: MandateTerms, cart: JsonValue, periodSpent: Long? = n
     if (c["rail"].str() !in s.rails) return no("out_of_scope", "rail ${c["rail"].str()} is not in scope")
     if (!merchantAllowed(s.merchants, c["merchant"].str()!!)) return no("out_of_scope", "merchant ${c["merchant"].str()} is not in scope")
     if (!s.categories.isNullOrEmpty() && c["lines"].arr()!!.any { it["category"].str().let { cat -> cat == null || cat.isEmpty() || cat !in s.categories } }) return no("out_of_scope", "a line is outside the categories")
-    if ((periodSpent ?: 0) < 0 || (totalSpent ?: 0) < 0) return no("over_limit", "spent must be unsigned integers")
+    if (listOf(periodSpent, totalSpent).any { it != null && it !in 0..9_007_199_254_740_991L }) return no("over_limit", "spent must be unsigned safe integers")
     if (total > l.perTxMax) return no("over_limit", "per_tx_max")
     if ((periodSpent ?: 0) + total > l.periodMax) return no("over_limit", "period_max")
     if ((totalSpent ?: 0) + total > l.totalMax) return no("over_limit", "total_max")

@@ -57,7 +57,6 @@ Backlog for this repo. Ticket ids are `G-YYYY-NNN` across the Open Entity produc
 - linked-pr: https://github.com/moltbot-den/openentity/pull/201
 - linked-issue: (none yet)
 
-<<<<<<< HEAD
 ### G-2026-004 [in-progress] P1 feature
 
 - file: account/src/mandates.ts, account/src/stepup.ts, account/src/agents.ts, account/openapi.yaml, account/schema.sql
