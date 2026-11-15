@@ -2,7 +2,7 @@
 // Verify and sign only: owners sign mandates on their devices, products verify. test/commerce.test.ts runs
 // test-vectors/{mandate-1,cart-1,receipt-1,checkout-1}; sdk/python runs the same files.
 import { OpenEntityError } from "./errors.ts";
-import { canonicalize, sha256Sync, toHex, signProof, verifyProof, verificationMethodId, type KeyPair, type Resolver, type Proof } from "./core.ts";
+import { canonicalize, sha256Sync, toHex, signProof, verifyProof, verificationMethodId, eip712Digest, eip712ObjectType, recoverEip712, unsecured, type KeyPair, type Resolver, type Proof } from "./core.ts";
 import { verifyRequest } from "./httpsig.ts";
 import { verifyApproval, verifyQuorum, payloadDigest, type KeyLogState, type ApprovalError } from "./owner.ts";
 import { Fail, fail, isObj, exactKeys, isUint, plainJson, checkSignature, signedShape, DID, HEX64, RP_ID, DAY } from "./owner.ts";
@@ -238,6 +238,27 @@ export async function signReceipt(receipt: object, kp: KeyPair, by: Party, creat
   if (r.proofs?.some((p) => p.by === by)) throw new OpenEntityError("invalid_input", `already signed by ${by}`);
   const proof = await signProof(r, kp, created, verificationMethod);
   return { ...r, proofs: [...(r.proofs ?? []), { by, ...proof }] };
+}
+
+const PKH = /^did:pkh:eip155:\d+:(0x[0-9a-fA-F]{40})$/;
+/** What a did:pkh party's wallet signs (EIP-712 typed data, OEIS-1 4.2) to sign a receipt: the digest of {objectType: "receipt/1", canonicalHash: SHA-256 of the receipt without `proof` and `proofs`, created}. The merchant's proof does not change it, so the buyer's wallet signs a receipt the merchant already signed. */
+export function receiptEip712Digest(receipt: object, created: string): Uint8Array {
+  const e = receiptError(receipt);
+  if (e) throw new OpenEntityError("invalid_input", e);
+  return eip712Digest(eip712ObjectType(receipt), toHex(sha256Sync(canonicalize(unsecured(receipt)))), created);
+}
+
+/** Adds `by`'s EIP-712 proof, the wallet's 65-byte signature over `receiptEip712Digest(receipt, created)`. Refused unless the signature recovers to the address of `${by}_did` (a did:pkh). */
+export function addReceiptEip712Proof(receipt: object, by: Party, signature: string, created: string): Receipt {
+  const digest = receiptEip712Digest(receipt, created), r = receipt as Receipt, did = r[`${by}_did`];
+  const address = PKH.exec(did)?.[1];
+  if (!address) throw new OpenEntityError("invalid_input", `${by}_did is not a did:pkh`);
+  if (r.proofs?.some((p) => p.by === by)) throw new OpenEntityError("invalid_input", `already signed by ${by}`);
+  let signer = "";
+  try { signer = recoverEip712(digest, signature); } catch { /* not a signature */ }
+  if (signer.toLowerCase() !== address.toLowerCase()) throw new OpenEntityError("invalid_input", `the signature is not by ${by}_did`);
+  const proof = { by, type: "EthereumEip712Signature2021", created, verificationMethod: `${did}#blockchainAccountId`, proofPurpose: "assertionMethod", proofValue: signature };
+  return { ...r, proofs: [...(r.proofs ?? []), proof as Proof & { by: Party }] };
 }
 
 export type ReceiptError = "malformed" | "missing_proof" | "wrong_signer" | "bad_proof";

@@ -133,6 +133,10 @@ export interface Receipt {
 export declare function receiptError(r: unknown): string | null;
 /** Adds `by`'s eddsa-jcs-2022 proof. Both parties sign the same bytes (the receipt without `proofs`), so the buyer countersigns without seeing the merchant's proof. A did:web merchant passes its own `verificationMethod`. */
 export declare function signReceipt(receipt: object, kp: KeyPair, by: Party, created?: string, verificationMethod?: string): Promise<Receipt>;
+/** What a did:pkh party's wallet signs (EIP-712 typed data, OEIS-1 4.2) to sign a receipt: the digest of {objectType: "receipt/1", canonicalHash: SHA-256 of the receipt without `proof` and `proofs`, created}. The merchant's proof does not change it, so the buyer's wallet signs a receipt the merchant already signed. */
+export declare function receiptEip712Digest(receipt: object, created: string): Uint8Array;
+/** Adds `by`'s EIP-712 proof, the wallet's 65-byte signature over `receiptEip712Digest(receipt, created)`. Refused unless the signature recovers to the address of `${by}_did` (a did:pkh). */
+export declare function addReceiptEip712Proof(receipt: object, by: Party, signature: string, created: string): Receipt;
 export type ReceiptError = "malformed" | "missing_proof" | "wrong_signer" | "bad_proof";
 export type ReceiptResult = {
     ok: true;

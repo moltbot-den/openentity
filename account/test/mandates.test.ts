@@ -1,4 +1,5 @@
 import { generateKeyPair, mandateDigest, signRequest, verifyMandate, canonicalize, buildPresentation, type KeyPair } from "@openentity/sdk";
+import { generateKeyPairSync } from "node:crypto";
 import { expect, test } from "vitest";
 import { createApp } from "../src/app.ts";
 import { keyLogState } from "../src/keylog.ts";
@@ -6,8 +7,12 @@ import { HOST, SERVICE_DID, approval, approvalHeader, caller, entry, ownerId, p2
 
 const DEN = "did:web:moltbotden.com";
 const calls: { product: string; type: string; data: any }[] = [];
+const denKey = generateKeyPairSync("ed25519"), denJwk = denKey.publicKey.export({ format: "jwk" }) as any;
+const denSeed = Buffer.from((denKey.privateKey.export({ format: "jwk" }) as any).d, "base64url");
 const fakeFetch = (async (input: RequestInfo | URL, init: RequestInit = {}) => {
-  const url = new URL(String(input)), body = JSON.parse(new TextDecoder().decode(init.body as Uint8Array));
+  const url = new URL(String(input));
+  if (url.href === "https://moltbotden.com/.well-known/did.json") return Response.json({ id: DEN, verificationMethod: [{ id: `${DEN}#key-1`, type: "JsonWebKey", controller: DEN, publicKeyJwk: { kty: "OKP", crv: "Ed25519", x: denJwk.x } }], authentication: [`${DEN}#key-1`], assertionMethod: [`${DEN}#key-1`] });
+  const body = JSON.parse(new TextDecoder().decode(init.body as Uint8Array));
   if (url.pathname === "/v1/oe/credentials/renew") return Response.json({ product: DEN, kind: "bearer", key: "k", expires_at: 1_900_000_000, previous_valid_until: 1 });
   calls.push({ product: url.origin, type: body.type, data: body.data });
   return new Response(null, { status: 204 });
@@ -68,7 +73,7 @@ test("issue: draft from a held permission, signed by the approver, stored, pushe
   expect(r.body).toMatchObject({ status: "active", mandate: signed });
   // a verifier checks it offline against the key log and the status answer
   const st = await call("GET", `/v1/mandates/${draft.mandate_id}/status`);
-  expect(st.body).toEqual({ mandate_id: draft.mandate_id, status: "active" });
+  expect(st.body).toEqual({ mandate_id: draft.mandate_id, status: "active", period_spent: 0, total_spent: 0 });
   expect(Number(/max-age=(\d+)/.exec(st.headers.get("cache-control") ?? "")?.[1])).toBeLessThanOrEqual(60);
   const keyLog = (await keyLogState(d, o.did))!;
   expect(verifyMandate(signed, { keyLog, agentDid: kp.did, status: st.body, origins: d.rp.origins, rpId: d.rp.id }).ok).toBe(true);
@@ -166,4 +171,52 @@ test("race: the agent is paused between the state check and the insert: the mand
   expect(r.status).toBe(423);
   await run("UPDATE agents SET state = 'active' WHERE did = $1", [kp.did]); // owner resumes
   expect((await call("GET", `/v1/mandates/${m.draft.mandate_id}/status`)).body.status).toBe("revoked");
+});
+
+/** The enforcing product reports what it has let the agent spend (PUT /v1/mandates/{id}/spend, signed by the product). */
+async function report(id: string, body: unknown, key: Uint8Array = denSeed) {
+  const raw = new TextEncoder().encode(JSON.stringify(body)), path = `/v1/mandates/${id}/spend`;
+  const h = await signRequest({ method: "PUT", url: `https://${HOST}${path}`, body: raw, privateKey: key, did: `${DEN}#key-1` });
+  return call("PUT", path, new TextDecoder().decode(raw), h);
+}
+
+test("spend: the product's report moves the status; total_spent at total_max is exhausted, and verifiers refuse it", async () => {
+  const o = await owner(), kp = await paired(o), { signed, draft } = await issue(o, kp.did), id = draft.mandate_id, max = draft.limits.total_max;
+  await call("POST", "/v1/mandates", signed, o.auth);
+  expect((await report(id, { period_spent: 1200, total_spent: 4000 })).body).toMatchObject({ mandate_id: id, status: "active", period_spent: 1200, total_spent: 4000 });
+  expect((await call("GET", `/v1/mandates/${id}/status`)).body).toEqual({ mandate_id: id, status: "active", period_spent: 1200, total_spent: 4000 });
+  expect((await report(id, { period_spent: 0, total_spent: max - 1 })).body.status).toBe("active");
+  // The total only grows: a lower report cannot reopen a spent mandate, and the period figure is the latest one.
+  const full = await report(id, { period_spent: 500, total_spent: max });
+  expect(full.body).toEqual({ mandate_id: id, status: "exhausted", period_spent: 500, total_spent: max });
+  expect((await report(id, { period_spent: 0, total_spent: 10 })).body).toMatchObject({ status: "exhausted", total_spent: max });
+  const st = await call("GET", `/v1/mandates/${id}/status`);
+  expect(st.body.status).toBe("exhausted");
+  const keyLog = (await keyLogState(d, o.did))!;
+  expect(verifyMandate(signed, { keyLog, agentDid: kp.did, status: st.body, origins: d.rp.origins, rpId: d.rp.id })).toMatchObject({ ok: false, error: "exhausted" });
+  // revoked wins over exhausted
+  await call("DELETE", `/v1/mandates/${id}`, undefined, o.auth);
+  expect((await call("GET", `/v1/mandates/${id}/status`)).body.status).toBe("revoked");
+});
+
+test("spend: a period figure older than the mandate's period reads as 0; total_spent stays", async () => {
+  const o = await owner(), kp = await paired(o), { signed, draft } = await issue(o, kp.did), id = draft.mandate_id;
+  await call("POST", "/v1/mandates", signed, o.auth);
+  await report(id, { period_spent: 4900, total_spent: 4900 });
+  await d.db.run("UPDATE mandate_spend SET reported_at = reported_at - 2 * 86400 WHERE mandate_id = $1", [id]); // P1D mandate: the report is now a period old
+  expect((await call("GET", `/v1/mandates/${id}/status`)).body).toEqual({ mandate_id: id, status: "active", period_spent: 0, total_spent: 4900 });
+});
+
+test("spend: refused for an unsigned call, an unknown signer, a product the agent is not paired to, bad numbers and an unknown mandate", async () => {
+  const o = await owner(), kp = await paired(o), { signed, draft } = await issue(o, kp.did), id = draft.mandate_id;
+  await call("POST", "/v1/mandates", signed, o.auth);
+  expect((await call("PUT", `/v1/mandates/${id}/spend`, { period_spent: 1, total_spent: 1 })).status).toBe(401);
+  expect((await report(id, { period_spent: 1, total_spent: 1 }, Buffer.alloc(32, 9))).status).toBe(401); // not the product's key
+  for (const bad of [{}, { period_spent: -1, total_spent: 1 }, { period_spent: 1.5, total_spent: 1 }, { period_spent: "1", total_spent: 1 }, { period_spent: 1 }, { period_spent: 1, total_spent: 1e300 }])
+    expect((await report(id, bad)).body?.error, JSON.stringify(bad)).toBe("bad_request");
+  expect((await report("md_aaaaaaaaaaaaaaaaaaaaaaaaaa", { period_spent: 1, total_spent: 1 })).status).toBe(404);
+  // a mandate of an agent this product is not linked to
+  await d.db.run("DELETE FROM agent_products WHERE agent_did = $1", [kp.did]);
+  expect((await report(id, { period_spent: 1, total_spent: 1 })).body.error).toBe("not_linked");
+  expect((await call("GET", `/v1/mandates/${id}/status`)).body).toMatchObject({ status: "active", total_spent: 0 });
 });

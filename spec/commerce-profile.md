@@ -62,7 +62,7 @@ digest = SHA-256( UTF-8( "mandate/1" "|" verifier_scope "|" JCS(mandate without 
 
 ### 2.2 Status and revocation
 
-The `status` URL answers `{"status": "active" | "revoked" | "exhausted", "period_spent": n, "total_spent": n}` with `Cache-Control: max-age` of 60 or less. The owner pausing the agent (ADR 0007) revokes every mandate of that agent. A verifier that can call out passes the answer to `verifyMandate`. A verifier that cannot accepts a mandate only when `expires_at - now` is a day or less: short-lived mandates are the offline mode. A status answer that is not an object with `status` one of those three, with a `mandate_id` (when present) other than the mandate's, or with a `period_spent` or `total_spent` that is not an unsigned integer, is no answer: `status_required`. Spend accounting (`period_spent`, `total_spent`) belongs to the product that enforces the mandate; merchants only see the status.
+The `status` URL answers `{"status": "active" | "revoked" | "exhausted", "period_spent": n, "total_spent": n}` with `Cache-Control: max-age` of 60 or less. The owner pausing the agent (ADR 0007) revokes every mandate of that agent. A verifier that can call out passes the answer to `verifyMandate`. A verifier that cannot accepts a mandate only when `expires_at - now` is a day or less: short-lived mandates are the offline mode. A status answer that is not an object with `status` one of those three, with a `mandate_id` (when present) other than the mandate's, or with a `period_spent` or `total_spent` that is not an unsigned integer, is no answer: `status_required`. Spend accounting (`period_spent`, `total_spent`) belongs to the product that enforces the mandate; merchants only see the status. The status answers `exhausted` once the reported `total_spent` is at least `limits.total_max` (`revoked` wins over `exhausted`); how a product reports its spend to the status service is that service's interface (the account service takes `PUT /v1/mandates/{id}/spend`, signed by the product, in `account/openapi.yaml`), and the answer carries `period_spent` and `total_spent` summed over the reporting products, 0 until one reports.
 
 ### 2.3 Verifier checks, in order
 
@@ -97,7 +97,7 @@ Exactly these keys (a line may omit `category`). `lines` holds 1 to 100 lines; `
 
 ## 4. receipt/1
 
-Signed by both parties after settlement. Ed25519 `eddsa-jcs-2022`, the suite of attestations. Both parties sign the same bytes, the receipt without `proofs`, so the buyer countersigns without seeing the merchant's proof.
+Signed by both parties after settlement. Ed25519 `eddsa-jcs-2022`, the suite of attestations. Both parties sign the same bytes, the receipt without `proofs`, so the buyer countersigns without seeing the merchant's proof. A party whose DID is a `did:pkh` wallet signs the EIP-712 suite of OEIS-1 section 4.2 instead: typed data `OpenEntityObject` with `objectType` `receipt/1` (a receipt has no `type`), `canonicalHash` the SHA-256 of the JCS form of the receipt without `proof` and `proofs`, and `created`; the proof is `EthereumEip712Signature2021` with `verificationMethod` `<did>#blockchainAccountId`, labelled by `by` like any other. The merchant's proof is outside the hash, so a wallet signs a receipt the merchant already signed and the two proofs may come in either order. Vectors: `test-vectors/receipt-1/pkh.json`.
 
 ```json
 { "version": "receipt/1", "receipt_id": "rc_<26 base32>", "kind": "purchase", "refers_to": null,

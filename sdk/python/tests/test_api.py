@@ -13,7 +13,7 @@ TS_INDEX = pathlib.Path(__file__).parents[2] / "ts" / "src" / "index.ts"
 SNAPSHOT = """
 A2A_EXTENSION_URI CLIENTS RAILS DECLARATION_SHA256 DECLARATION_TEXT DECLARATION_VERSION DEFAULT_REGISTRY DISPUTE_REASONS HttpSigError
 Identity InvalidInputError KeyPair OpenEntityError Owner REGISTRY_ERROR_CODES RegistryError SPEC TrustReport VerificationError
-a2a_extension adopt agent_card approval_digest base58btc_decode cart_digest cart_error mandate_covers mandate_digest receipt_error sign_receipt verify_agent_for_checkout verify_receipt verify_receipt_chain base58btc_encode build_declaration build_did_document build_document
+a2a_extension adopt agent_card add_receipt_eip712_proof approval_digest base58btc_decode cart_digest cart_error mandate_covers mandate_digest receipt_eip712_digest receipt_error sign_receipt verify_agent_for_checkout verify_receipt verify_receipt_chain base58btc_encode build_declaration build_did_document build_document
 build_openentity_json build_presentation build_rotation canonical_hash canonicalize check_stamp check_timestamp checkpoint_body
 clear_trust_cache consistency_proof default_resolver did_key_from_public_key did_web_resolver dispute eip712_digest find
 generate_key_pair hash_data http_sig_base inclusion_proof key_pair_from_jwk key_pair_from_seed leaf_hash log_leaf merkle_root

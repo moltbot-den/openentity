@@ -196,3 +196,10 @@ Verification
 ## Kotlin RFC 9421 request verification (G-2026-064, oneentity docs/commerce/PLAN.md C1.3)
 - [x] `verifyRequest` (did:key, did:web under `authentication`, signer pin), `request` on `verifyAgentForCheckout`, `HttpSigTest`, README
 - [ ] Ships with the next Kotlin release batch (no version bump here)
+
+## Agentic commerce production closeout (G-2026-066)
+- [x] Prod check: deploy.yml runs for #201 to #222 green; `/v1/commerce/check` deny and step_up (proof.mjs live), mandate status route, MCP tools (`openentity_commerce_check`, `openentity_mandate_*`) answer correctly
+- [x] (a) receipt/1 EIP-712 for did:pkh parties: Python hashes without `proofs`, `receiptEip712Digest` and `addReceiptEip712Proof` in TS and Python, `test-vectors/receipt-1/pkh.json`
+- [x] (b) checkout-1 vectors: WebAuthn counter advances, repeats and regresses inside `verifyAgentForCheckout` (TS, Python, Kotlin, Swift)
+- [x] (c) mandate status `exhausted` and spend: `PUT /v1/mandates/{id}/spend` by the enforcing product; spec section 2 states it
+- [ ] Moltbot Den lifts its did:pkh countersign guard and calls the spend report after the next SDK release batch

@@ -7,7 +7,8 @@ import re
 import time
 from urllib.parse import unquote
 
-from .core import canonicalize, default_resolver, sign_proof, verify_proof, verification_method_id
+from .core import (canonical_hash, canonicalize, default_resolver, eip712_digest, eip712_object_type, recover_eip712, sign_proof,
+                   verify_proof, verification_method_id)
 from .errors import InvalidInputError
 from .httpsig import verify_request
 from .owner import (_DAY, _DID, _HEX64, RP_ID, _check_signature, _Fail, _plain, _sha, _signed_shape, _uint, payload_digest,
@@ -296,6 +297,42 @@ def sign_receipt(receipt: dict, kp, by: str, created: str | None = None, method:
     if any(p.get("by") == by for p in receipt.get("proofs", [])):
         raise InvalidInputError(f"already signed by {by}")
     return {**receipt, "proofs": [*receipt.get("proofs", []), {"by": by, **sign_proof(receipt, kp, created, method)}]}
+
+
+_PKH = re.compile(r"did:pkh:eip155:\d+:(0x[0-9a-fA-F]{40})")
+
+
+def receipt_eip712_digest(receipt: dict, created: str) -> bytes:
+    """What a did:pkh party's wallet signs (EIP-712 typed data, OEIS-1 4.2) to sign a receipt: the digest of {objectType: "receipt/1",
+    canonicalHash: SHA-256 of the receipt without `proof` and `proofs`, created}. The merchant's proof does not change it."""
+    e = receipt_error(receipt)
+    if e:
+        raise InvalidInputError(e)
+    doc = {k: v for k, v in receipt.items() if k not in ("proof", "proofs")}
+    return eip712_digest(eip712_object_type(receipt), canonical_hash(doc).hex(), created)
+
+
+def add_receipt_eip712_proof(receipt: dict, by: str, signature: str, created: str) -> dict:
+    """Add `by`'s EIP-712 proof, the wallet's 65-byte signature over receipt_eip712_digest(receipt, created). Refused unless the
+    signature recovers to the address of `{by}_did` (a did:pkh)."""
+    digest = receipt_eip712_digest(receipt, created)
+    if by not in ("merchant", "agent"):
+        raise InvalidInputError("by must be merchant or agent")
+    did = receipt[f"{by}_did"]
+    m = _PKH.fullmatch(did)
+    if not m:
+        raise InvalidInputError(f"{by}_did is not a did:pkh")
+    if any(p.get("by") == by for p in receipt.get("proofs", [])):
+        raise InvalidInputError(f"already signed by {by}")
+    try:
+        signer = recover_eip712(digest, signature)
+    except (InvalidInputError, ValueError):
+        signer = ""
+    if signer.lower() != m.group(1).lower():
+        raise InvalidInputError(f"the signature is not by {by}_did")
+    proof = {"by": by, "type": "EthereumEip712Signature2021", "created": created, "verificationMethod": f"{did}#blockchainAccountId",
+             "proofPurpose": "assertionMethod", "proofValue": signature}
+    return {**receipt, "proofs": [*receipt.get("proofs", []), proof]}
 
 
 def verify_receipt(receipt, *, resolver=default_resolver, require=("merchant",)) -> dict:

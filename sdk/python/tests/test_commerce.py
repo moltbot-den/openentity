@@ -13,6 +13,7 @@ STATES = load("approval-2.0/vectors.json")["key_states"]
 MANDATES = load("mandate-1/vectors.json")
 CARTS = load("cart-1/vectors.json")
 RECEIPTS = load("receipt-1/vectors.json")
+PKH = load("receipt-1/pkh.json")
 CHECKOUT = load("checkout-1/vectors.json")
 
 
@@ -78,6 +79,24 @@ def test_sign_receipt_guards():
     assert again["proofs"][0] == base["proofs"][0]
 
 
+@pytest.mark.parametrize("c", PKH["cases"], ids=lambda c: c["name"])
+def test_receipt_with_a_pkh_party(c):
+    r = oe.verify_receipt(c["receipt"], require=c["require"])
+    assert ({"ok": True, "signed_by": r["signed_by"]} if r["ok"] else {"ok": False, "error": r["error"]}) == c["expect"], r.get("message")
+
+
+def test_pkh_receipt_signing_helpers():
+    s = PKH["signing"]
+    for r in (s["unsigned"], s["merchant_signed"]):
+        assert "0x" + oe.receipt_eip712_digest(r, s["created"]).hex() == s["digest"]
+    assert oe.add_receipt_eip712_proof(s["merchant_signed"], "agent", s["signature"], s["created"]) == s["countersigned"]
+    other = next(c for c in PKH["cases"] if c["name"] == "other-wallet")["receipt"]["proofs"][-1]["proofValue"]
+    for args, why in (((s["merchant_signed"], "agent", other), "not by agent_did"), ((s["countersigned"], "agent", s["signature"]), "already signed"),
+                      ((s["unsigned"], "merchant", s["signature"]), "not a did:pkh"), ((s["merchant_signed"], "agent", "0x1234"), "not by agent_did")):
+        with pytest.raises(InvalidInputError, match=why):
+            oe.add_receipt_eip712_proof(*args, s["created"])
+
+
 @pytest.mark.parametrize("c", CHECKOUT["cases"], ids=lambda c: c["name"])
 def test_checkout(c):
     i = c["input"]
@@ -88,6 +107,8 @@ def test_checkout(c):
     got = {"decision": r["decision"], "reasons": r["reasons"]}
     if "approval_error" in r["evidence"]:
         got["approval_error"] = r["evidence"]["approval_error"]
+    if "approval_counter" in c["expect"]:
+        got["approval_counter"] = r["evidence"]["approval_counter"]
     assert got == c["expect"]
 
 

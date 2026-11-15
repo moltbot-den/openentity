@@ -268,6 +268,13 @@ def eip712_digest(object_type: str, canonical_hash_hex: str, created: str) -> by
     return _keccak(b"\x19\x01" + domain + struct)
 
 
+def eip712_object_type(obj: dict) -> str:
+    """The EIP-712 `objectType` of an object: its `type`, `receipt/1` for a receipt (it has no `type`), else `EntityDocument`."""
+    if isinstance(obj.get("type"), str):
+        return obj["type"]
+    return "receipt/1" if obj.get("version") == "receipt/1" else "EntityDocument"
+
+
 # secp256k1, for public-key recovery only (no secret ever passes through this code).
 _P = 2**256 - 2**32 - 977
 _N = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141
@@ -354,9 +361,8 @@ def verify_proof(obj: dict, proof: dict, resolver=default_resolver) -> tuple[boo
         if proof.get("type") == "EthereumEip712Signature2021":
             if not keys.get("address"):
                 return False, "signer has no Ethereum address"
-            doc = {k: v for k, v in obj.items() if k != "proof"}
-            t = obj.get("type") if isinstance(obj.get("type"), str) else "EntityDocument"
-            digest = eip712_digest(t, canonical_hash(doc).hex(), proof["created"])
+            doc = {k: v for k, v in obj.items() if k not in ("proof", "proofs")}  # like hash_data: a receipt or a ContinuityLink carries proofs[]
+            digest = eip712_digest(eip712_object_type(obj), canonical_hash(doc).hex(), proof["created"])
             if recover_eip712(digest, proof["proofValue"]).lower() == keys["address"].lower():
                 return True, did
             return False, "EIP-712 signer does not match"

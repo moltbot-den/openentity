@@ -426,6 +426,8 @@ function pairVectors(): Record<string, object> {
   };
 }
 
+/** For gen-commerce-vectors: the web passkey and a WebAuthn assertion over a digest. */
+export const webPasskey = () => ({ kid: K.web.kid, assert: (digest: Uint8Array, o: Assert = {}) => assertion(K.web, digest, o) });
 export function buildOwnerVectors(): Record<string, object> {
   const out: Record<string, object> = {};
   const keys = {
