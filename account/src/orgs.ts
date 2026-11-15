@@ -48,7 +48,7 @@ export function routes(app: Hono, d: Deps) {
   const tag = (v: unknown, name: string): string | null => v === null ? null : typeof v === "string" && TAG.test(v) ? v : fail(400, "bad_request", `${name} is 1 to 64 characters without control characters, or null`);
 
   /** The step-up for an org action: the approval is the org's, signed by the acting admin's own registered device. */
-  const stepUp = async (c: Context, org: OrgRow, accountId: string, action: "org.member.set" | "org.quorum.set" | "org.resume" | "agent.permissions.widen" | "agent.resume", params: Record<string, unknown>) => {
+  const stepUp = async (c: Context, org: OrgRow, accountId: string, action: "org.member.set" | "org.quorum.set" | "org.resume" | "org.budget.set" | "agent.permissions.widen" | "agent.resume", params: Record<string, unknown>) => {
     const { kid } = await requireApproval(c, d, { accountId, ownerDid: org.owner_did, action, params });
     await memberDevice(d, org, accountId, kid);
   };
@@ -115,8 +115,10 @@ export function routes(app: Hono, d: Deps) {
     if (!cur && role === "none") fail(404, "not_found", "no such member");
     if (cur?.role === role) return;
     if (!cur && Number((await d.db.first<{ n: number }>("SELECT count(*) AS n FROM org_members WHERE org_id = $1", [org.id]))!.n) >= MAX_MEMBERS) fail(409, "too_many_members", `at most ${MAX_MEMBERS} members`);
+    const demoting = cur?.role === "admin" && role !== "admin";
+    const admins = (q: Pick<typeof d.db, "first">) => q.first<{ n: number }>("SELECT count(*) AS n FROM org_members WHERE org_id = $1 AND role = 'admin'", [org.id]).then((r) => Number(r!.n));
+    if (demoting && (await admins(d.db)) <= 1) fail(409, "last_admin", "an organisation keeps at least one admin"); // before the step-up, so a refusal keeps the approval
     if (strong(role) || strong(cur?.role)) await stepUp(c, org, acting, "org.member.set", { org_id: org.id, account_id: target, role });
-    if (cur?.role === "admin" && role !== "admin" && Number((await d.db.first<{ n: number }>("SELECT count(*) AS n FROM org_members WHERE org_id = $1 AND role = 'admin'", [org.id]))!.n) <= 1) fail(409, "last_admin", "an organisation keeps at least one admin");
     if (!strong(role)) {
       // A viewer or a removed member must not keep an approver key in the org log: an approver there can add keys and sign.
       const dev = await d.db.first<{ kid: string }>("SELECT kid FROM org_devices WHERE org_id = $1 AND account_id = $2", [org.id, target]);
@@ -126,12 +128,19 @@ export function routes(app: Hono, d: Deps) {
         await d.db.run("DELETE FROM org_devices WHERE org_id = $1 AND account_id = $2", [org.id, target]);
       }
     }
-    if (role === "none") {
-      await d.db.run("DELETE FROM org_members WHERE org_id = $1 AND account_id = $2", [org.id, target]);
-      await d.db.run("UPDATE agents SET account_id = $3 WHERE org_id = $1 AND account_id = $2", [org.id, target, acting]); // the pairer's seat passes to the admin who removed them
-    } else {
-      await d.db.run("INSERT INTO org_members (org_id, account_id, role, added_at) VALUES ($1, $2, $3, $4) ON CONFLICT (org_id, account_id) DO UPDATE SET role = $3", [org.id, target, role, now()]);
-    }
+    // The org row is locked for the write, so two admins demoting each other cannot both pass the count.
+    await d.db.tx(async (tx) => {
+      if (demoting) {
+        await tx.first("SELECT id FROM orgs WHERE id = $1 FOR UPDATE", [org.id]);
+        if (await admins(tx) <= 1) fail(409, "last_admin", "an organisation keeps at least one admin");
+      }
+      if (role === "none") {
+        await tx.run("DELETE FROM org_members WHERE org_id = $1 AND account_id = $2", [org.id, target]);
+        await tx.run("UPDATE agents SET account_id = $3 WHERE org_id = $1 AND account_id = $2", [org.id, target, acting]); // the pairer's seat passes to the admin who removed them
+      } else {
+        await tx.run("INSERT INTO org_members (org_id, account_id, role, added_at) VALUES ($1, $2, $3, $4) ON CONFLICT (org_id, account_id) DO UPDATE SET role = $3", [org.id, target, role, now()]);
+      }
+    });
     await bumpOrg(d, org.id);
   };
 
@@ -279,7 +288,7 @@ export function routes(app: Hono, d: Deps) {
   });
 
   app.put("/v1/orgs/:id/budgets", async (c) => {
-    const { org } = await me(c, "admin"), b = await json(c);
+    const { o, org } = await me(c, "admin"), b = await json(c);
     const scope = ["org", "team", "agent"].includes(b.scope) ? b.scope as "org" | "team" | "agent" : fail(400, "bad_request", "scope is org, team or agent");
     const budget = parseBudget(b);
     if (typeof budget === "string") fail(400, "bad_request", budget);
@@ -294,6 +303,9 @@ export function routes(app: Hono, d: Deps) {
     const children = all.filter((r) => scope === "org" ? true : scope === "team" ? r.scope === "agent" && teamOf(r.ref) === ref : false);
     const over = children.filter((r) => !within(JSON.parse(r.body), budget as Budget));
     if (over.length) fail(409, "children_exceed", `these narrower budgets would exceed this one: ${over.map((r) => `${r.scope} ${r.ref || "org"}`).join(", ")}`);
+    // With a quorum of 2 or more, one admin must not raise spending alone: a new or larger budget is a step-up signed by an admin device.
+    const prior = (await d.db.first<BudgetRow>("SELECT * FROM org_budgets WHERE org_id = $1 AND scope = $2 AND ref = $3", [org.id, scope, ref]));
+    if (org.quorum_m >= 2 && !(prior && within(budget as Budget, JSON.parse(prior.body)))) await stepUp(c, org, o.accountId, "org.budget.set", { org_id: org.id, scope, ref, ...(budget as Budget) });
     const t = now();
     await d.db.run("INSERT INTO org_budgets (id, org_id, scope, ref, body, updated_at) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (org_id, scope, ref) DO UPDATE SET body = $5, updated_at = $6",
       [newId("bud"), org.id, scope, ref, JSON.stringify(budget), t]);
@@ -331,6 +343,7 @@ export function routes(app: Hono, d: Deps) {
       check: async (md) => {
         // Signed by a device a member registered for the org, and inside every budget that applies to the agent.
         if (!(await quorumDevices(d, org)).some((v) => v.kid === md.signature?.device_id)) fail(403, "device_not_registered", "sign with a device an admin or approver registered for this organisation");
+        if (md.limits.currency !== "USD") fail(403, "over_budget", "org budgets are in USD cents; sign the mandate in USD");
         const list = await budgetsFor(org, a);
         if (!list.length) fail(403, "over_budget", "no budget applies to this agent");
         const bad = list.find((x) => !within(ofMandate(md), x.b));
@@ -407,7 +420,7 @@ export function routes(app: Hono, d: Deps) {
     const from = Number(c.req.query("from") ?? 0), to = Number(c.req.query("to") ?? now() + 1);
     if (!Number.isSafeInteger(from) || !Number.isSafeInteger(to) || from < 0 || to < from) fail(400, "bad_request", "from and to are unix seconds, from at most to");
     const tags = new Map((await orgAgents(org)).map((a) => [a.did, a]));
-    const tagOf = async (did: string) => tags.get(did) ?? await d.db.first<AgentRow>("SELECT * FROM agents WHERE did = $1", [did]);
+    const tagOf = async (did: string) => tags.get(did) ?? await d.db.first<AgentRow>("SELECT * FROM agents WHERE did = $1 AND org_id = $2", [did, org.id]); // an agent that left keeps no tags here: they may be another owner's now
     const lines: unknown[][] = [["kind", "id", "at", "agent_did", "team", "cost_centre", "state", "period", "period_max_cents", "per_tx_max_cents", "approvals", "detail"]];
     for (const m of await d.db.all<MandateRow>("SELECT * FROM mandates WHERE owner_did = $1 AND issued_at >= $2 AND issued_at < $3 ORDER BY issued_at, id", [org.owner_did, from, to])) {
       const v = mandateView(m), a = await tagOf(m.agent_did), md = v.mandate as Mandate;

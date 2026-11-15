@@ -42,7 +42,10 @@ test("an org with two agents and two approvers: one budget, quorum approvals, on
   const one = await W.pairAgent(org), two = await W.pairAgent(org);
 
   // One budget, set once: $20 a purchase, $50 a day, step-up over $10.
-  expect((await call("PUT", `/v1/orgs/${org.id}/budgets`, { scope: "org", per_tx_max: 2000, period: "P1D", period_max: 5000, step_up_over: 1000, rails: ["credits"], merchants: ["did:web:shop.example"] }, a.auth)).status).toBe(200);
+  const budget = { per_tx_max: 2000, period: "P1D", period_max: 5000, step_up_over: 1000, rails: ["credits"], merchants: ["did:web:shop.example"] };
+  expect((await call("PUT", `/v1/orgs/${org.id}/budgets`, { scope: "org", ...budget }, a.auth)).status).toBe(428); // a quorum of 2: one admin cannot raise spending alone
+  const bh = await W.stepUp(org, a, a.approver, "org.budget.set", { org_id: org.id, scope: "org", ref: "", ...budget });
+  expect((await call("PUT", `/v1/orgs/${org.id}/budgets`, { scope: "org", ...budget }, { ...a.auth, ...bh })).status).toBe(200);
   const mandates: Record<string, any> = {};
   for (const k of [one, two]) {
     const draft = (await call("POST", `/v1/orgs/${org.id}/mandates/draft`, { agent_did: k.did }, a.auth)).body.mandate;

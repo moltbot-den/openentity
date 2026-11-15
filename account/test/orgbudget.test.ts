@@ -13,8 +13,16 @@ test("within compares periods by their per-day rate, in integers", () => {
   const month = b({ period: "P1M", period_max: 600000 }); // $200 a day, like b()
   expect(within(b({ period_max: 20000 }), month)).toBe(true);
   expect(within(b({ period_max: 20001 }), month)).toBe(false);
-  expect(within(b({ period: "P7D", period_max: 140000 }), b())).toBe(true);
-  expect(within(b({ period: "P7D", period_max: 140001 }), b())).toBe(false);
+  expect(within(b({ period: "P7D", period_max: 20000 }), b())).toBe(true);
+  expect(within(b({ period: "P7D", period_max: 20001 }), b())).toBe(false);
+});
+
+test("within: a longer inner period may burn its whole cap inside one outer window, so the cap itself must fit", () => {
+  const day = b({ per_tx_max: 10000, period_max: 10000 });
+  expect(within(b({ per_tx_max: 10000, period: "P1M", period_max: 300000 }), day)).toBe(false); // $3000 in one day against a $100 day
+  expect(within(b({ per_tx_max: 10000, period: "P7D", period_max: 70000 }), day)).toBe(false);
+  expect(within(b({ per_tx_max: 10000, period: "P1M", period_max: 10000 }), day)).toBe(true);
+  expect(within(b({ per_tx_max: 10000, period: "P1D", period_max: 10000 }), b({ per_tx_max: 10000, period: "P1M", period_max: 300000 }))).toBe(true); // shorter inner: the rate test
 });
 
 test("within: merchants. An unrestricted wider budget allows any; a restricted one needs a listed subset, never 'any'", () => {

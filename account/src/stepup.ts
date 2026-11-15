@@ -8,10 +8,11 @@ import { newId, now } from "./db.ts";
 import { bearer, fail, json } from "./http.ts";
 import { keyLogState } from "./keylog.ts";
 import { orgOf } from "./orgbase.ts";
+import { type Budget, parseBudget } from "./orgbudget.ts";
 
-export const ACTIONS = ["agent.resume", "agent.permissions.widen", "method.add", "method.remove", "email.change", "account.delete", "deletion.cancel", "product.link", "org.member.set", "org.quorum.set", "org.resume"] as const;
+export const ACTIONS = ["agent.resume", "agent.permissions.widen", "method.add", "method.remove", "email.change", "account.delete", "deletion.cancel", "product.link", "org.member.set", "org.quorum.set", "org.resume", "org.budget.set"] as const;
 /** Actions an organisation's admin takes under the org's key log (POST /v1/step-up with org_id): the approval names the org as its owner. */
-export const ORG_ACTIONS: readonly string[] = ["org.member.set", "org.quorum.set", "org.resume", "agent.permissions.widen", "agent.resume"];
+export const ORG_ACTIONS: readonly string[] = ["org.member.set", "org.quorum.set", "org.resume", "org.budget.set", "agent.permissions.widen", "agent.resume"];
 export type Action = (typeof ACTIONS)[number];
 export const REQUEST_TTL = 600;
 
@@ -46,6 +47,9 @@ export function normalParams(action: string, p: any): Record<string, unknown> {
     case "org.member.set": need(ORG_ID.test(p.org_id ?? ""), "params.org_id"); need(typeof p.account_id === "string" && ID.test(p.account_id), "params.account_id");
       need(["admin", "approver", "viewer", "none"].includes(p.role), "params.role"); return { org_id: p.org_id, account_id: p.account_id, role: p.role };
     case "org.quorum.set": need(ORG_ID.test(p.org_id ?? ""), "params.org_id"); need(Number.isInteger(p.quorum_m) && p.quorum_m >= 1 && p.quorum_m <= 16, "params.quorum_m (1 to 16)"); return { org_id: p.org_id, quorum_m: p.quorum_m };
+    // A budget raise under a quorum of 2 or more: the approval names the whole budget, so it cannot be reused for a bigger one.
+    case "org.budget.set": need(ORG_ID.test(p.org_id ?? ""), "params.org_id"); need(["org", "team", "agent"].includes(p.scope) && typeof p.ref === "string" && p.ref.length <= 253, "params.scope and params.ref");
+      { const b = parseBudget(p); need(typeof b !== "string", "a valid budget"); return { org_id: p.org_id, scope: p.scope, ref: p.ref, ...(b as Budget) }; }
     case "org.resume": need(ORG_ID.test(p.org_id ?? ""), "params.org_id"); return { org_id: p.org_id };
     case "account.delete": case "deletion.cancel": return {};
     default: return fail(400, "unknown_action", `unknown action ${action}`);

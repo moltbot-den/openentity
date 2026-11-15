@@ -3638,7 +3638,7 @@ paths:
       operationId: setOrgBudget
       tags: [Organisations]
       summary: 'Set a budget'
-      description: 'Admin. Body {scope: org|team|agent, ref (team tag or agent DID; omitted for org), per_tx_max, period, period_max, step_up_over?, merchants?, rails}. A narrower budget stays inside the wider ones (400 exceeds_parent) and a wider one cannot drop below the narrower ones (409 children_exceed). Lowering a budget revokes the agents'' mandates that no longer fit it; the admin signs new ones.'
+      description: 'Admin. When the org quorum is 2 or more, a new budget or one that is not inside the old one is a step-up (428 approval_required): X-OE-Approval over a POST /v1/step-up request with org_id, action org.budget.set and params {org_id, scope, ref, per_tx_max, period, period_max, step_up_over, merchants, rails}. A lower budget needs none. Body {scope: org|team|agent, ref (team tag or agent DID; omitted for org), per_tx_max, period, period_max, step_up_over?, merchants?, rails}. A narrower budget stays inside the wider ones (400 exceeds_parent) and a wider one cannot drop below the narrower ones (409 children_exceed). Lowering a budget revokes the agents'' mandates that no longer fit it; the admin signs new ones.'
       x-available: day-8
       security:
         - ownerBearer: []
@@ -3661,6 +3661,9 @@ paths:
         '409':
           $ref: '#/components/responses/Error'
           description: 'error: children_exceed'
+        '428':
+          $ref: '#/components/responses/Error'
+          description: 'error: approval_required (quorum of 2 or more, budget raised)'
   /v1/orgs/{id}/budgets/{budget_id}:
     delete:
       operationId: deleteOrgBudget

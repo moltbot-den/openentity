@@ -96,7 +96,10 @@ test("devices: a key must be an approver of both logs, one member per key, and a
   // The last admin stays.
   const last = await stepUp(org, a, a.approver, "org.member.set", { org_id: org.id, account_id: a.accountId, role: "viewer" });
   expect((await call("PATCH", `/v1/orgs/${org.id}/members/${a.accountId}`, { role: "viewer" }, { ...a.auth, ...last })).body.error).toBe("last_admin");
+  // The refusal comes before the step-up, so it does not need (or burn) an approval.
+  expect((await call("PATCH", `/v1/orgs/${org.id}/members/${a.accountId}`, { role: "viewer" }, a.auth)).body.error).toBe("last_admin");
 });
+
 
 test("quorum: m devices of m members approve, each once; the bundle verifies with the SDK against the org's policy; a second org's or a replayed approval does not", async () => {
   const a = await person(), org = await newOrg(a), b = await person(), v = await person();

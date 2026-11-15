@@ -23,10 +23,12 @@ export function parseBudget(b: Record<string, any>): Budget | string {
   return { per_tx_max: b.per_tx_max, period: b.period, period_max: b.period_max, step_up_over: step, merchants, rails: b.rails };
 }
 
-/** Whether `inner` fits inside `outer`: per-transaction cap, the per-day rate of the period cap, the step-up threshold, rails and merchants. */
+/** Whether `inner` fits inside `outer`: per-transaction cap, the period cap (its per-day rate, or the whole cap when the inner period is longer), the step-up threshold, rails and merchants. */
 export function within(inner: Budget, outer: Budget): boolean {
   return inner.per_tx_max <= outer.per_tx_max
-    && inner.period_max * PERIOD_DAYS[outer.period] <= outer.period_max * PERIOD_DAYS[inner.period]
+    && (PERIOD_DAYS[inner.period] > PERIOD_DAYS[outer.period]
+      ? inner.period_max <= outer.period_max // a longer inner period can burn its whole cap inside one outer window
+      : inner.period_max * PERIOD_DAYS[outer.period] <= outer.period_max * PERIOD_DAYS[inner.period])
     && inner.step_up_over <= outer.step_up_over
     && inner.rails.every((r) => outer.rails.includes(r))
     && (outer.merchants.length === 0 || (inner.merchants.length > 0 && inner.merchants.every((m) => outer.merchants.includes(m))));

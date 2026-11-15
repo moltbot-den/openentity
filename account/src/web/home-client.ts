@@ -377,7 +377,13 @@ export function homeClient(cfg: { serviceDid: string; rpId: string; turnstile: s
         ev.preventDefault();
         try {
           const scope = $("budget-scope").value;
-          await api("PUT", `/v1/orgs/${org.id}/budgets`, { scope, ...(scope === "org" ? {} : { ref: $("budget-ref").value }), per_tx_max: cents($("budget-tx").value), period: $("budget-period").value, period_max: cents($("budget-max").value), rails: $("budget-rails").value.split(",").map((x) => x.trim()).filter(Boolean) });
+          const ref = scope === "org" ? "" : $("budget-ref").value, body = { per_tx_max: cents($("budget-tx").value), period: $("budget-period").value, period_max: cents($("budget-max").value), rails: $("budget-rails").value.split(",").map((x) => x.trim()).filter(Boolean) };
+          const put = (h?: Record<string, string>) => api("PUT", `/v1/orgs/${org.id}/budgets`, { scope, ...(scope === "org" ? {} : { ref }), ...body }, h);
+          // With a quorum of 2 or more a new or larger budget is a step-up; the server says so (428) only when it is one.
+          try { await put(); } catch (e) {
+            if ((e as { status?: number }).status !== 428) throw e;
+            await put(await orgStepUp("org.budget.set", { org_id: org.id, scope, ref, ...body }));
+          }
           await open(org.id);
         } catch (e) { orgError(e); }
       });
