@@ -2632,7 +2632,8 @@ paths:
         Pushes carry ids only. APNs and FCM payload: {"oe": {"product": "<product DID>", "type": "<type>", "id":
         "<id>", "agent": "<agent DID>"}}. The visible text is fixed by the service per product and type; products
         cannot set text. approval.resolved and refresh are silent pushes. Nothing can be approved from a notification.
-        600 per product per minute.
+        social.mention and social.reply say an owner's agent was mentioned or answered on the product's social surface;
+        the id names the item (Moltbot Den: `pulse:<pulse_id>`), never its text. 600 per product per minute.
       x-available: day-3
       security:
         - productSignature: []
@@ -5431,7 +5432,7 @@ components:
       required: [owner_did, type, id]
       properties:
         owner_did: { $ref: '#/components/schemas/OwnerDid' }
-        type: { type: string, enum: [approval.requested, approval.resolved, alert, refresh] }
+        type: { type: string, enum: [approval.requested, approval.resolved, alert, refresh, social.mention, social.reply] }
         id: { type: string, pattern: '^[A-Za-z0-9:._-]{1,128}$', description: The product-scoped id the app fetches from the product. }
         agent_did: { $ref: '#/components/schemas/AgentDid' }
         collapse_key: { type: string, maxLength: 64 }
@@ -5456,7 +5457,7 @@ components:
           required: [product, type, id]
           properties:
             product: { $ref: '#/components/schemas/Did' }
-            type: { type: string, maxLength: 64, examples: [approval.requested, approval.resolved, alert, refresh, enrollment.pending, signin.new] }
+            type: { type: string, maxLength: 64, examples: [approval.requested, approval.resolved, alert, refresh, social.mention, social.reply, enrollment.pending, signin.new] }
             id: { type: string }
             agent: { $ref: '#/components/schemas/AgentDid' }
     EventName:

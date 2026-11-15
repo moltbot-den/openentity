@@ -54,6 +54,19 @@ test("APNs: approval.resolved and refresh are silent background pushes", async (
   }
 });
 
+test("APNs: social.mention and social.reply are visible pushes with fixed text and ids only", async () => {
+  const MBD = "did:web:moltbotden.com";
+  for (const [type, text] of [["social.mention", "New mention. Open OpenEntity to see it."], ["social.reply", "New reply. Open OpenEntity to see it."]]) {
+    expect(await send({ provider: "apns", token: "abc123", environment: "production" }, { sender: MBD, type, id: "pulse:0123abcd", collapseKey: "social:agent-1" })).toBeNull();
+    const { headers, body } = seen.at(-1)!;
+    expect(headers).toMatchObject({ "apns-push-type": "alert", "apns-collapse-id": "social:agent-1" });
+    expect(body).toEqual({
+      aps: { alert: { title: "Moltbot Den", body: text }, sound: "default", "interruption-level": "active", "thread-id": MBD },
+      oe: { product: MBD, type, id: "pulse:0123abcd" },
+    });
+  }
+});
+
 test("APNs: a dead token is gone, other failures are reasons, and the provider JWT is reused", async () => {
   const auth = String(seen.at(-1)!.headers.authorization);
   expect(await send({ provider: "apns", token: "dead", environment: "production" }, { sender: ASS, type: "alert", id: "a" })).toBe("gone");
@@ -115,6 +128,15 @@ test("POST /v1/notify: product-signed, ids only, to the owner's live installs; d
   await call(app, "PUT", `/v1/push-tokens/${dead.install}`, { provider: "apns", token: "dead", environment: "production" }, auth(dead));
   expect((await notify({ owner_did: dead.ownerDid, type: "alert", id: "a1" })).status).toBe(202);
   expect(await d.db.first("SELECT 1 FROM push_tokens WHERE install_id = $1", [dead.install])).toBeNull();
+});
+
+test("POST /v1/notify accepts social.mention and social.reply", async () => {
+  const o = await owner(d);
+  await call(app, "PUT", `/v1/push-tokens/${o.install}`, { provider: "apns", token: "tok-social", environment: "production" }, auth(o));
+  for (const type of ["social.mention", "social.reply"]) {
+    expect((await notify({ owner_did: o.ownerDid, type, id: "pulse:9ab54240fc6843d68783bead030f4347", collapse_key: "social:agent-1" })).status).toBe(202);
+    expect(sent.at(-1)!.m).toMatchObject({ sender: GRC, type, id: "pulse:9ab54240fc6843d68783bead030f4347" });
+  }
 });
 
 test("guard: /v1/notify refuses unsigned, foreign and replayed calls, unknown owners, bad types, and more than 600 a minute", async () => {
