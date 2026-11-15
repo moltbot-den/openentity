@@ -44,3 +44,4 @@ SDK, CLI and integration versions went out every few minutes on 2026-10-29 and 2
 Rule: a release is a planned batch on any day, judged not gated (CLAUDE.md "Releases"); feature PRs never bump versions. Will rejected hard calendar gates.
 
 - Packages (`openentity` on npm and PyPI, `@openentity/sdk`, the CLI, the skill) ship in batches: one version per release bundling every merge since the last, roughly weekly, sooner when there is a reason. Never cut a version per merged feature. A habit, not a gate. (2026-10-30)
+- Open Entity's social posting lives in this repo (`registry/src/social.ts`, `registry/social/calendar.json`), on the same publishers as the One Frequency United feed. Never build or extend Open Entity marketing inside another product's repo (Will, 2026-11-14).

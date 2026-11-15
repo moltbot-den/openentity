@@ -9,6 +9,7 @@ import { type Env, REGISTRY_DID, LOG_ORIGIN, b64, nowIso, originOf } from "./env
 import { type Stmt, chain, consistencyProof, exportObjects, inclusionProof, incorporate, latestSize, leafFor, leafJson, registryKey, sequenced, snapshot, tileIndex, treeRoot, type LeafRow } from "./log.ts";
 import type { Db } from "./db.ts";
 import { sendDigest } from "./digest.ts";
+import { postSocial } from "./social.ts";
 import { CheckInputError, commerceCheck, evidenceHead, evidenceIntact, mandateCheck, parseCheckBody, readEvidence, sweepCommerce, type CommerceEnv } from "./commerce.ts";
 import { DOMAIN, getJson, platformDomain, resolveDid, resolver, Transient, verifyAlias } from "./aliases.ts";
 
@@ -1089,3 +1090,6 @@ export async function scheduled(env: Env) {
 // The Lambda handler runs scheduled(env) when the minute is a multiple of 10, else incorporate(env):
 // one cron, so two incorporations never overlap.
 export { incorporate };
+
+/** Social calendar tick (social.ts), on its own cron minute so it never shares the 30 s budget with scheduled(). */
+export const socialTick = async (env: Env) => postSocial(env, await stats(env));

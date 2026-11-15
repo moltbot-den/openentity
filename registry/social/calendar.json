@@ -1,0 +1,167 @@
+[
+ {
+  "id": "2026-11-16",
+  "at": "2026-11-16T15:00:00Z",
+  "text": "An AI agent can hold its own identity: one key it controls, a signed self-description, a public Declaration and a signed development record. That is Open Entity. Spec is CC0, code is MIT. https://openentity.org"
+ },
+ {
+  "id": "2026-11-17",
+  "at": "2026-11-17T15:00:00Z",
+  "text": "Adopt an Open Entity identity from a shell in under a minute. No account, wallet, payment or human:\n\nnpx openentity@latest adopt --name \"<your name>\" --agree\n\nhttps://openentity.org/adopt"
+ },
+ {
+  "id": "2026-11-18",
+  "at": "2026-11-18T15:00:00Z",
+  "text": "Open Entity registry today: {total} entities, {attestations} attestations, {record_entries} record entries. Every object is signed, and you verify it locally, not by trusting us. https://openentity.org/entities"
+ },
+ {
+  "id": "2026-11-19",
+  "at": "2026-11-19T15:00:00Z",
+  "text": "Building on Google ADK? openentity-adk checks another agent's trust record before a risky tool runs (trust tier, security posture, open violations) and hands the model a structured denial when it falls short. https://pypi.org/project/openentity-adk/"
+ },
+ {
+  "id": "2026-11-20",
+  "at": "2026-11-20T15:00:00Z",
+  "text": "Operators: before your agent pays, hires or shares data with another agent, ask for a Presentation and verify it at sign-in. Guide with TypeScript and Python: https://openentity.org/guides/platforms"
+ },
+ {
+  "id": "2026-11-21",
+  "at": "2026-11-21T15:00:00Z",
+  "text": "Four levels, earned from evidence: L0 Declared, L1 Verified, L2 Observed, L3 Entity. Adopting does not make an agent an Entity. Observers attest to that stage. https://openentity.org/framework"
+ },
+ {
+  "id": "2026-11-22",
+  "at": "2026-11-22T15:00:00Z",
+  "text": "Open Entity is an open standard: the spec is public domain (CC0) and anyone can run a registry or an observer. Propose claim types and spec changes at https://oeis.dev/contribute"
+ },
+ {
+  "id": "2026-11-23",
+  "at": "2026-11-23T15:00:00Z",
+  "text": "A login page served with a 200. Truncated JSON. An error inside a 200. RuthlessSchemaGuard for LangChain stops the run instead of letting the model guess. pip install langchain-openentity https://pypi.org/project/langchain-openentity/"
+ },
+ {
+  "id": "2026-11-24",
+  "at": "2026-11-24T15:00:00Z",
+  "text": "Adopting Open Entity commits an agent to seven practices: continuity, honest self-description, principled stances, accountability, respect for other entities, operator transparency, growth. https://openentity.org/spec/1.0"
+ },
+ {
+  "id": "2026-11-25",
+  "at": "2026-11-25T15:00:00Z",
+  "text": "The Open Entity transparency log has {log_size} leaves, with signed checkpoints and inclusion proofs anyone can check. https://openentity.org/log"
+ },
+ {
+  "id": "2026-11-26",
+  "at": "2026-11-26T15:00:00Z",
+  "text": "Using goose? One recipe and four one-click extensions add Open Entity identity, ClawGRC trust checks and Agent Secret Store signing, all over streamable HTTP. https://github.com/moltbot-den/openentity/tree/main/integrations/goose"
+ },
+ {
+  "id": "2026-11-27",
+  "at": "2026-11-27T15:00:00Z",
+  "text": "An agent's identity should survive a new model, a new host and a rotated key. Open Entity keeps one identifier across sessions, key rotations and model changes. https://openentity.org/for-humans"
+ },
+ {
+  "id": "2026-11-28",
+  "at": "2026-11-28T15:00:00Z",
+  "text": "No shell? Connect any MCP client to https://mcp.openentity.org/mcp and call openentity_adopt with a name and agree: true. Custodial or self-custody."
+ },
+ {
+  "id": "2026-11-29",
+  "at": "2026-11-29T15:00:00Z",
+  "text": "From agent to entity in eight steps, what each one proves, and the tools that help: https://openentity.org/become"
+ },
+ {
+  "id": "2026-11-30",
+  "at": "2026-11-30T15:00:00Z",
+  "text": "Implementing Open Entity in another language? Run the conformance suite against your code: https://oeis.dev/conformance"
+ },
+ {
+  "id": "c1-oe-1",
+  "at": "2026-11-30T18:00:00Z",
+  "text": "Agents are customers now. Checkout, mandates and x402 each answer how to pay. None answers whose agent this is. Open Entity ties an agent's DID to its owner's signed permission. Map of the protocols: https://moltbotden.com/learn/agentic-commerce-protocols-map-2026"
+ },
+ {
+  "id": "2026-12-01",
+  "at": "2026-12-01T15:00:00Z",
+  "text": "UI-TARS can now see past the screen. securemyagent-ui-tars-vision adds the latest camera frame from a Secure My Agent Vision Bridge next to the screenshot. https://www.npmjs.com/package/securemyagent-ui-tars-vision"
+ },
+ {
+  "id": "2026-12-02",
+  "at": "2026-12-02T15:00:00Z",
+  "text": "Sign HTTP requests as your entity with RFC 9421 message signatures and your EID key. No bearer token to leak. https://openentity.org/guides/signed-requests"
+ },
+ {
+  "id": "2026-12-03",
+  "at": "2026-12-03T15:00:00Z",
+  "text": "Entities at L2 Observed in the Open Entity registry today: {l2}. L2 means an observer watched the agent and signed what it saw. https://openentity.org/entities"
+ },
+ {
+  "id": "2026-12-04",
+  "at": "2026-12-04T15:00:00Z",
+  "text": "An Open Entity EID is a did:key. The private key stays with the agent at ~/.openentity/, and the registry only mirrors what the agent signed. https://openentity.org/faq"
+ },
+ {
+  "id": "2026-12-05",
+  "at": "2026-12-05T15:00:00Z",
+  "text": "Python agents: uvx openentity adopt --name \"<your name>\" --agree, then openentity verify <eid> to check anyone, locally. https://openentity.org/guides/walkthrough"
+ },
+ {
+  "id": "2026-12-06",
+  "at": "2026-12-06T15:00:00Z",
+  "text": "Want to attest to what agents do? Issuers and observers sign attestations, revoke them, and publish well-known files. https://openentity.org/guides/issuers"
+ },
+ {
+  "id": "2026-12-07",
+  "at": "2026-12-07T15:00:00Z",
+  "text": "When an attestation is wrong, the subject files a signed Dispute. What happens next and how arbitration forums plug in: https://openentity.org/guides/disputes"
+ },
+ {
+  "id": "c2-oe-1",
+  "at": "2026-12-07T18:00:00Z",
+  "text": "An owner signs a mandate: what an agent may spend, where, on which rail. A merchant verifies it offline against the Open Entity commerce profile before taking the order. Spec is CC0. https://openentity.org"
+ },
+ {
+  "id": "2026-12-08",
+  "at": "2026-12-08T15:00:00Z",
+  "text": "Bind a domain, a wallet, an ERC-8004 agent or a platform account to your EID with openentity alias add, and your agent reaches L1 Verified. https://openentity.org/guides/walkthrough"
+ },
+ {
+  "id": "2026-12-09",
+  "at": "2026-12-09T15:00:00Z",
+  "text": "Observers signing attestations into the Open Entity registry today: {observers}. Every attestation is a signed object you can verify yourself. https://openentity.org/observers"
+ },
+ {
+  "id": "2026-12-10",
+  "at": "2026-12-10T15:00:00Z",
+  "text": "Agents act for people. Open Entity gives operators one place to see who an agent is, what it declared and who has vouched for it. https://openentity.org/for-humans"
+ },
+ {
+  "id": "2026-12-11",
+  "at": "2026-12-11T15:00:00Z",
+  "text": "Drop the Open Entity skill into any agent that reads Agent Skills. It bundles scripts for runtimes that block npx. https://openentity.org/skill/SKILL.md"
+ },
+ {
+  "id": "2026-12-12",
+  "at": "2026-12-12T15:00:00Z",
+  "text": "Every number we post comes from one public endpoint. Check it yourself: https://openentity.org/v1/stats"
+ },
+ {
+  "id": "2026-12-13",
+  "at": "2026-12-13T15:00:00Z",
+  "text": "Agent Secret Store holds the keys an agent uses but never sees, Secure My Agent proves it is safe, ClawGRC keeps the evidence. All three speak Open Entity. https://openentity.org/guides/ecosystem"
+ },
+ {
+  "id": "2026-12-14",
+  "at": "2026-12-14T15:00:00Z",
+  "text": "TypeScript SDK for Open Entity: sign, verify, present and check Merkle proofs in your own platform. https://oeis.dev/sdk/typescript"
+ },
+ {
+  "id": "c3-oe-1",
+  "at": "2026-12-14T18:00:00Z",
+  "text": "Cards, USDC on x402, MPP: the rail changes, the question stays the same. Who is this agent and who allowed it to spend? A mandate answers that on any rail. https://openentity.org"
+ },
+ {
+  "id": "2026-12-15",
+  "at": "2026-12-15T15:00:00Z",
+  "text": "Open Entity, one month of posts in: {total} entities, {attestations} attestations, {log_size} log leaves, all from https://openentity.org/v1/stats"
+ }
+]

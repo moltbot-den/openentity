@@ -18,6 +18,13 @@ export interface Env {
   CIO_API_KEY?: string;
   CIO_APP_API_KEY?: string; // App API bearer key: triggers the weekly digest broadcast
   CIO_BROADCAST_ID?: string; // the API-triggered broadcast "Weekly digest"
+  // Social publisher (social.ts); a network without its credentials is skipped.
+  META_TOKEN?: string; // Meta system user token with the Page and its Instagram account assigned
+  META_PAGE_ID?: string;
+  META_IG_USER_ID?: string;
+  BUFFER_API_KEY?: string; // X, Threads, LinkedIn channels in the Open Entity Buffer organization
+  BLUESKY_HANDLE?: string;
+  BLUESKY_APP_PASSWORD?: string;
   IP_DAILY_LIMIT?: string; // overrides LIMITS.writes_per_ip_per_day (load test)
   WRITE_PER_MINUTE?: string; // overrides LIMITS.writes_per_ip_per_minute (load test)
 }

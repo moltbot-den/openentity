@@ -6,7 +6,7 @@ import { handle } from "hono/aws-lambda";
 import { s3Blobs } from "../../registry/src/blob.ts";
 import { type Db, dataApiDb } from "../../registry/src/db.ts";
 import type { Env } from "../../registry/src/env.ts";
-import { incorporate, app as registry, scheduled } from "../../registry/src/index.ts";
+import { incorporate, app as registry, scheduled, socialTick } from "../../registry/src/index.ts";
 import { backfillObjects } from "../../registry/src/log.ts";
 import { createSite, fsAssets } from "../../site/server/index.ts";
 import { createMcp } from "../../mcp/src/index.ts";
@@ -46,6 +46,12 @@ async function init(): Promise<Ready> {
     CIO_API_KEY: s.CIO_API_KEY,
     CIO_APP_API_KEY: s.CIO_APP_API_KEY,
     CIO_BROADCAST_ID: s.CIO_BROADCAST_ID,
+    META_TOKEN: s.META_TOKEN,
+    META_PAGE_ID: s.META_PAGE_ID,
+    META_IG_USER_ID: s.META_IG_USER_ID,
+    BUFFER_API_KEY: s.BUFFER_API_KEY,
+    BLUESKY_HANDLE: s.BLUESKY_HANDLE,
+    BLUESKY_APP_PASSWORD: s.BLUESKY_APP_PASSWORD,
   };
   const reg = (req: Request) => Promise.resolve(registry.fetch(req, env));
   // The MCP door runs in-process and mints stamps on the caller's behalf, so a stamp would only cost this Lambda
@@ -114,6 +120,7 @@ export const handler = async (event: any, context: any) => {
   }
   if (event?.source !== "openentity.cron") return onHttp(event, context);
   const { env } = await boot();
-  // Same split as before: leaves every minute, stats, snapshot, accreditation and cleanup every tenth minute.
-  await (new Date(event.time).getUTCMinutes() % 10 === 0 ? scheduled(env) : incorporate(env));
+  // Leaves every minute; stats, snapshot, accreditation and cleanup every tenth minute; social posts at minute 5 of each ten.
+  const m = new Date(event.time).getUTCMinutes() % 10;
+  await (m === 0 ? scheduled(env) : m === 5 ? Promise.all([incorporate(env), socialTick(env)]) : incorporate(env));
 };
