@@ -13,6 +13,7 @@ packages:
   - integrations/commerce-check
   - integrations/mastra
   - redirects
+  - social-video
   - infra
   - account/analytics
 onlyBuiltDependencies:

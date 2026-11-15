@@ -1,0 +1,6 @@
+{
+ "region": "us-east-1",
+ "functionName": "remotion-render-4-0-533-mem2048mb-disk2048mb-120sec",
+ "serveUrl": "https://remotionlambda-useast1-szraqis9jf.s3.us-east-1.amazonaws.com/sites/openentity-social/index.html",
+ "bucket": "remotionlambda-useast1-szraqis9jf"
+}

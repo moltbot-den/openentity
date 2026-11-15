@@ -181,6 +181,20 @@ export class OpenEntityStack extends Stack {
     logBucket.grantPut(fn);
     snapshotBucket?.grantRead(fn);
     snapshotBucket?.grantPut(fn);
+    // Short-form video (registry/src/video*.ts): Claude on Bedrock writes the script, Polly voices it, Remotion Lambda renders it
+    // into the Remotion bucket (deployed by scripts/remotion-deploy.ts, whose names are fixed by Remotion), which serves the mp4 over HTTPS.
+    if (!load) {
+      fn.addToRolePolicy(new iam.PolicyStatement({
+        actions: ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"],
+        resources: ["arn:aws:bedrock:*::foundation-model/anthropic.*", `arn:aws:bedrock:*:${this.account}:inference-profile/*anthropic.*`],
+      }));
+      fn.addToRolePolicy(new iam.PolicyStatement({ actions: ["polly:SynthesizeSpeech"], resources: ["*"] }));
+      fn.addToRolePolicy(new iam.PolicyStatement({ actions: ["lambda:InvokeFunction"], resources: [`arn:aws:lambda:${this.region}:${this.account}:function:remotion-render-*`] }));
+      fn.addToRolePolicy(new iam.PolicyStatement({
+        actions: ["s3:ListBucket", "s3:GetObject", "s3:PutObject", "s3:PutObjectAcl"],
+        resources: ["arn:aws:s3:::remotionlambda-useast1-*", "arn:aws:s3:::remotionlambda-useast1-*/*"],
+      }));
+    }
     const url = fn.addFunctionUrl({ authType: lambda.FunctionUrlAuthType.NONE });
 
     new scheduler.Schedule(this, "Cron", {

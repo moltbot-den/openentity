@@ -6,7 +6,7 @@ import { handle } from "hono/aws-lambda";
 import { s3Blobs } from "../../registry/src/blob.ts";
 import { type Db, dataApiDb } from "../../registry/src/db.ts";
 import type { Env } from "../../registry/src/env.ts";
-import { incorporate, app as registry, scheduled, socialTick } from "../../registry/src/index.ts";
+import { incorporate, app as registry, scheduled, socialTick, videoRun } from "../../registry/src/index.ts";
 import { backfillObjects } from "../../registry/src/log.ts";
 import { createSite, fsAssets } from "../../site/server/index.ts";
 import { createMcp } from "../../mcp/src/index.ts";
@@ -50,6 +50,7 @@ async function init(): Promise<Ready> {
     META_PAGE_ID: s.META_PAGE_ID,
     META_IG_USER_ID: s.META_IG_USER_ID,
     BUFFER_API_KEY: s.BUFFER_API_KEY,
+    ZERNIO_API_KEY: s.ZERNIO_API_KEY,
     BLUESKY_HANDLE: s.BLUESKY_HANDLE,
     BLUESKY_APP_PASSWORD: s.BLUESKY_APP_PASSWORD,
   };
@@ -122,5 +123,5 @@ export const handler = async (event: any, context: any) => {
   const { env } = await boot();
   // Leaves every minute; stats, snapshot, accreditation and cleanup every tenth minute; social posts at minute 5 of each ten.
   const m = new Date(event.time).getUTCMinutes() % 10;
-  await (m === 0 ? scheduled(env) : m === 5 ? Promise.all([incorporate(env), socialTick(env)]) : incorporate(env));
+  await (m === 0 ? scheduled(env) : m === 5 ? Promise.all([incorporate(env), socialTick(env), videoRun(env)]) : incorporate(env));
 };

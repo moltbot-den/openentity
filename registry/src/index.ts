@@ -10,6 +10,8 @@ import { type Stmt, chain, consistencyProof, exportObjects, inclusionProof, inco
 import type { Db } from "./db.ts";
 import { sendDigest } from "./digest.ts";
 import { postSocial } from "./social.ts";
+import { videoTick } from "./video.ts";
+import { postVideo } from "./video-post.ts";
 import { CheckInputError, commerceCheck, evidenceHead, evidenceIntact, mandateCheck, parseCheckBody, readEvidence, sweepCommerce, type CommerceEnv } from "./commerce.ts";
 import { DOMAIN, getJson, platformDomain, resolveDid, resolver, Transient, verifyAlias } from "./aliases.ts";
 
@@ -1093,3 +1095,11 @@ export { incorporate };
 
 /** Social calendar tick (social.ts), on its own cron minute so it never shares the 30 s budget with scheduled(). */
 export const socialTick = async (env: Env) => postSocial(env, await stats(env));
+
+/** Video cron step (video.ts, video-post.ts): post what is due, then advance the render-ahead pipeline by one step. */
+export const videoRun = async (env: Env) => {
+  const { awsVideoDeps } = await import("./video-aws.ts");
+  const done = await Promise.allSettled([postVideo(env), stats(env).then((s) => videoTick(env, s, new Date(), awsVideoDeps()))]);
+  const bad = done.filter((r) => r.status === "rejected");
+  if (bad.length) throw new Error(bad.map((r) => String((r as PromiseRejectedResult).reason?.message ?? (r as PromiseRejectedResult).reason)).join("; "));
+};

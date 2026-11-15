@@ -1,0 +1,27 @@
+{
+  "name": "@openentity/social-video",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "prepare-assets": "node scripts/prepare.mjs",
+    "studio": "node scripts/prepare.mjs && remotion studio src/index.ts",
+    "lint": "tsc --noEmit",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.533",
+    "@remotion/fonts": "4.0.533",
+    "@remotion/lambda": "4.0.533",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "remotion": "4.0.533"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "@types/react": "^19.2.0",
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.5"
+  }
+}

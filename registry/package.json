@@ -10,11 +10,14 @@
     "local": "tsx scripts/local.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-bedrock-runtime": "^3.1169.0",
+    "@aws-sdk/client-polly": "^3.1169.0",
     "@aws-sdk/client-rds-data": "^3.1156.0",
     "@aws-sdk/client-s3": "^3.1156.0",
     "@noble/curves": "^2.4.0",
     "@noble/hashes": "^2.4.0",
     "@openentity/sdk": "workspace:*",
+    "@remotion/lambda": "4.0.533",
     "hono": "^4.13.13"
   },
   "devDependencies": {
