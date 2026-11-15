@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openentity.org/spec/1.0/schemas/claims/moltbotden-pulse_chain_head.json",
+  "title": "custom:moltbotden:pulse_chain_head",
+  "description": "The `claim` of an Attestation with claim_type custom:moltbotden:pulse_chain_head (spec/claim-types.md).",
+  "type": "object",
+  "required": [
+    "head",
+    "count",
+    "head_at",
+    "hash"
+  ],
+  "properties": {
+    "head": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "count": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "head_at": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$"
+    },
+    "hash": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}
