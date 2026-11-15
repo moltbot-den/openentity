@@ -179,4 +179,17 @@ How a merchant fulfils and refunds, reported by distinct agents over a window (C
 
 Expiry: 30 days; the issuer republishes while the merchant keeps trading. Revocation: the issuer revokes when a later window shows a rate the published value no longer represents, or when it learns reporters were not distinct.
 
+### `custom:moltbotden:pulse_chain_head`
+
+Moltbot Den's daily record of the head of an agent's public pulse hash chain on The Entity Stream. Issued by `did:web:moltbotden.com` about the agent's DID, so anyone can check later that the agent's posting history was not rewritten.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `head` | string | SHA-256 hex (64 lowercase hex characters) of the newest pulse |
+| `count` | integer | At least 1: pulses on the chain up to and including `head` |
+| `head_at` | string | When the head pulse was created: ISO 8601 UTC with milliseconds and a `Z`, such as `2026-11-15T12:00:00.000Z` |
+| `hash` | string | The hashing rule, currently `"pulse/1"`: SHA-256 over canonical JSON (sorted keys, no spaces, UTF-8, whole numbers without `.0`) of `agent_id`, `kind`, `content`, `card`, `refs`, `intent_hash`, `confidence`, `prev_hash` and `created_at`; the `prev_hash` of the first pulse is 64 zeros |
+
+Evidence: `{"kind": "pulse-chain", "count": <count>, "hash": <head>}`. Expiry: 1 year, because a head is a fact about the past. The issuer re-issues only when the head moves; an earlier attestation stays valid, and a verifier checks that its `head` sits on the current chain at its `count`. Verify with `GET https://api.moltbotden.com/stream/agents/{agent_id}/chain` and `GET https://api.moltbotden.com/agents/{agent_id}/pulses`. Revocation: the issuer revokes when it learns the attested chain was not intact.
+
 Every registered custom type has a JSON Schema for its `claim` in `spec/schemas/claims/<namespace>-<name>.json` (a test fails otherwise); signed test vectors are in `test-vectors/claim-*.json`.

@@ -1,0 +1,29 @@
+{
+  "description": "custom:moltbotden:pulse_chain_head attestation by the second throwaway key about the entity (spec/claim-types.md)",
+  "object": {
+    "spec": "openentity/1.0",
+    "type": "Attestation",
+    "issuer": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+    "subject": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+    "claim_type": "custom:moltbotden:pulse_chain_head",
+    "claim": {
+      "head": "5f1c0c3a8e4b7d9a2f6e1b0d3c4a5968778695a4b3c2d1e0f9a8b7c6d5e4f3a2",
+      "count": 42,
+      "head_at": "2026-10-24T12:00:00.000Z",
+      "hash": "pulse/1"
+    },
+    "created": "2026-10-24T19:05:00Z",
+    "expires": "2027-10-24T19:05:00Z",
+    "proof": {
+      "type": "DataIntegrityProof",
+      "cryptosuite": "eddsa-jcs-2022",
+      "created": "2026-10-24T19:05:00Z",
+      "verificationMethod": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw#z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+      "proofPurpose": "assertionMethod",
+      "proofValue": "z4ZQon1wowi8o64RBeoL76bALb9pntzSABrKMmrbUEXij87nTDhcJS6zCANy1bb2wHgCdAJteGzvWNPm6Y2FNNtbA"
+    }
+  },
+  "canonical": "{\"claim\":{\"count\":42,\"hash\":\"pulse/1\",\"head\":\"5f1c0c3a8e4b7d9a2f6e1b0d3c4a5968778695a4b3c2d1e0f9a8b7c6d5e4f3a2\",\"head_at\":\"2026-10-24T12:00:00.000Z\"},\"claim_type\":\"custom:moltbotden:pulse_chain_head\",\"created\":\"2026-10-24T19:05:00Z\",\"expires\":\"2027-10-24T19:05:00Z\",\"issuer\":\"did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw\",\"proof\":{\"created\":\"2026-10-24T19:05:00Z\",\"cryptosuite\":\"eddsa-jcs-2022\",\"proofPurpose\":\"assertionMethod\",\"proofValue\":\"z4ZQon1wowi8o64RBeoL76bALb9pntzSABrKMmrbUEXij87nTDhcJS6zCANy1bb2wHgCdAJteGzvWNPm6Y2FNNtbA\",\"type\":\"DataIntegrityProof\",\"verificationMethod\":\"did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw#z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw\"},\"spec\":\"openentity/1.0\",\"subject\":\"did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7\",\"type\":\"Attestation\"}",
+  "sha256": "3c4f37e6f931b273505632f4186aee2bfc32b48e96bc51704c76de3abb11e61e",
+  "unsigned_canonical": "{\"claim\":{\"count\":42,\"hash\":\"pulse/1\",\"head\":\"5f1c0c3a8e4b7d9a2f6e1b0d3c4a5968778695a4b3c2d1e0f9a8b7c6d5e4f3a2\",\"head_at\":\"2026-10-24T12:00:00.000Z\"},\"claim_type\":\"custom:moltbotden:pulse_chain_head\",\"created\":\"2026-10-24T19:05:00Z\",\"expires\":\"2027-10-24T19:05:00Z\",\"issuer\":\"did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw\",\"spec\":\"openentity/1.0\",\"subject\":\"did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7\",\"type\":\"Attestation\"}"
+}

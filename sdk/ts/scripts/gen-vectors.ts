@@ -172,6 +172,7 @@ export async function buildVectors(): Promise<Record<string, object>> {
     ["claim-endpoint-reliability", "custom:clawgrc:endpoint_reliability", { host: "api.example.com", window: ["2026-10-17T00:00:00Z", "2026-10-24T00:00:00Z"], reports: 9, distinct_reporters: 4, violation_rate: 0.12 }, "2026-11-07T19:05:00Z"],
     ["claim-vision-privacy", "custom:securemyagent:vision_privacy", { mode: "local", model_endpoint_class: "localhost", redaction: ["faces", "text"] }, "2026-11-23T19:05:00Z"],
     ["claim-gateway-governed", "custom:agentsecretstore:gateway_governed", { gateway: true, guard_preset: "standard", retention_mode: "metadata", connector_only_secrets: true, requests_30d: 1240 }, "2026-11-23T19:05:00Z"],
+    ["claim-pulse-chain-head", "custom:moltbotden:pulse_chain_head", { head: "5f1c0c3a8e4b7d9a2f6e1b0d3c4a5968778695a4b3c2d1e0f9a8b7c6d5e4f3a2", count: 42, head_at: "2026-10-24T12:00:00.000Z", hash: "pulse/1" }, "2027-10-24T19:05:00Z"],
     ["claim-operated-by", "custom:openentity:operated_by", { owner: approvals.key_states.owner.did, paired_at: T1, evidence_hash: await sha256Hex(canonicalize(approvals.cases[0].approval)) }, "2027-01-22T19:05:00Z"],
   ];
   for (const [name, claim_type, claim, expires] of claims)

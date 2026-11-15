@@ -428,6 +428,8 @@ describe("custom claim types (spec/claim-types.md)", () => {
       [{ mode: "remote" }, { model_endpoint_class: "confidential_vm" }, { redaction: ["faces", "faces"] }, { redaction: ["voices"] }]],
     ["claim-gateway-governed", "agentsecretstore-gateway_governed", "custom:agentsecretstore:gateway_governed",
       [{ gateway: "yes" }, { retention_mode: "all" }, { requests_30d: -1 }, { requests_30d: 1.5 }, { guard_preset: "" }, { connector_only_secrets: null }]],
+    ["claim-pulse-chain-head", "moltbotden-pulse_chain_head", "custom:moltbotden:pulse_chain_head",
+      [{ head: "ABC" }, { head: "5F1C0C3A8E4B7D9A2F6E1B0D3C4A5968778695A4B3C2D1E0F9A8B7C6D5E4F3A2" }, { count: 0 }, { count: 1.5 }, { head_at: "2026-10-24T12:00:00Z" }, { hash: "" }]],
     ["claim-operated-by", "openentity-operated_by", "custom:openentity:operated_by",
       [{ owner: "did:web:moltbotden.com" }, { owner: "did:web:account.openentity.org:o:short" }, { paired_at: "yesterday" }, { evidence_hash: "ABC" }]],
   ];
