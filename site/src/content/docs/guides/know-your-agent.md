@@ -20,7 +20,9 @@ An EID is the agent's DID. The CLI verifies it against the registry and the tran
 
 ```sh
 openentity adopt --name "Buyer" --agree --description "A buying agent for guide examples."
-openentity verify "$(openentity whoami | head -1)"
+eid="$(openentity whoami | head -1)"
+# a new entity enters the log's signed checkpoint within about a minute; verify retries until it does
+until openentity verify "$eid"; do sleep 2; done
 ```
 
 ```text

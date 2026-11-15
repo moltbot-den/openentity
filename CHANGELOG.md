@@ -2,15 +2,16 @@
 
 Package releases from this repository, one section per release batch: the version of every package in the batch, what changed for its users, and the `packages` input that stages the batch with `.github/workflows/publish.yml`. The registry, the sites and the remote MCP server deploy on every merge and are not listed here.
 
-## 2026-11-12 batch
+## 2026-11-15 batch
 
-Pairing with the owner's OpenEntity app and the owner channel, in both SDKs, both CLIs, a new local MCP server and every framework bridge; plus the owner key log and approval/2.0 verifiers, signed service responses and did:web keys for RFC 9421 signatures. Every change adds to the 1.0 API or brings a check in line with the spec, so nothing is breaking.
+The Commerce Profile and the Agent Commerce Check, and pairing with the owner's OpenEntity app and the owner channel, in both SDKs, both CLIs, a new local MCP server and every framework bridge; plus the owner key log and approval/2.0 verifiers, signed service responses and did:web keys for RFC 9421 signatures. Every change adds to the 1.0 API or brings a check in line with the spec, so nothing is breaking.
 
 | Package | Registry | Directory | Live before | This batch |
 | --- | --- | --- | --- | --- |
 | `@openentity/sdk` | npm | `sdk/ts` | 1.0.0 | 1.1.0 |
 | `openentity` (CLI) | npm | `cli` | 0.6.0 | 0.7.0 |
 | `@openentity/mcp` | npm | `mcp` | never published | 0.3.0 |
+| `@openentity/commerce-check` | npm | `integrations/commerce-check` | never published | 0.1.0 |
 | `@openentity/langchain` | npm | `integrations/langchain/js` | 0.3.0 | 0.4.0 |
 | `@openentity/adk` | npm | `integrations/adk/js` | 0.3.0 | 0.4.0 |
 | `@openentity/vercel-ai` | npm | `integrations/vercel-ai` | 0.2.0 | 0.3.0 |
@@ -48,6 +49,13 @@ The two SDKs keep the same surface (snake_case in Python).
 - `openentity owner message | status | inbox | ask` uses the owner channel once paired, every request signed with the entity's key.
 - Built on SDK 1.1.0.
 
+### Commerce Profile and Agent Commerce Check (`@openentity/sdk` 1.1.0, `openentity` 1.1.0, `@openentity/commerce-check` 0.1.0)
+
+- Both SDKs gain the Commerce Profile (`spec/commerce-profile.md`): verifiers for `mandate/1`, `cart/1` and `receipt/1` objects, `mandateCovers`, `cartDigest`, a receipt signer and `verifyAgentForCheckout`, the one-call Agent Commerce Check that answers `allow`, `step_up` or `deny` with reasons and evidence. Python: `openentity.commerce`, plus `openentity.commerce_check` with middleware for FastAPI and Django.
+- `@openentity/commerce-check` 0.1.0 (first publish) is the same check as middleware for Express, Hono, Cloudflare Workers and Next.js, one line before you accept an agent purchase.
+- `@openentity/mcp` 0.3.0 also carries the commerce tools.
+- Swift (`OpenEntityKit`) and Kotlin (`org.openentity:sdk`) carry the same verifiers; neither is published, the apps pin a checkout.
+
 ### @openentity/mcp 0.3.0 (first publish)
 
 `npx -y @openentity/mcp` runs a local MCP server over stdio for the agent whose key the CLI keeps in `~/.openentity` (`claude mcp add openentity -- npx -y @openentity/mcp`). Tools: `openentity_pair` (the first call returns the match items, a second call with `wait: true` returns the result), `owner_message`, `owner_status`, `owner_inbox` and `owner_ask_approval`. The package is one bundled file with no runtime dependencies. The remote server at mcp.openentity.org stays stateless and has no owner tools.
@@ -69,11 +77,11 @@ Each bridge gains `pair(code)`, called once from your code, and the four owner t
 sdk/ts cli integrations/langchain/js integrations/adk/js integrations/vercel-ai integrations/mastra sdk/python integrations/langchain/python integrations/adk/python integrations/crewai/python integrations/openai-agents/python
 ```
 
-`mcp` is left out on purpose. A trusted publisher can only be added to a package that already exists on npm, so the workflow cannot stage the first version of `@openentity/mcp`: the OIDC exchange fails, the npm job goes red and stops before the packages after it. Its first version goes out from a signed-in npm CLI, as `@openentity/vercel-ai` and `@openentity/mastra` 0.1.0 did. It has to go live with this batch: `pair --openclaw` in CLI 0.7.0 and in the Python CLI registers `npx -y @openentity/mcp`, and the live skill already tells agents to run it.
+`mcp` and `integrations/commerce-check` are left out on purpose. A trusted publisher can only be added to a package that already exists on npm, so the workflow cannot stage the first version of `@openentity/mcp` or `@openentity/commerce-check`: the OIDC exchange fails, the npm job goes red and stops before the packages after it. Its first version goes out from a signed-in npm CLI, as `@openentity/vercel-ai` and `@openentity/mastra` 0.1.0 did. It has to go live with this batch: `pair --openclaw` in CLI 0.7.0 and in the Python CLI registers `npx -y @openentity/mcp`, and the live skill already tells agents to run it.
 
 1. Check that https://www.npmjs.com/settings/willcybertron/staged-packages holds no unapproved version of these packages: npm refuses a version that is already staged.
 2. Run `publish.yml` on `main` with the input above. The PyPI versions go live in this run; the npm versions are staged.
-3. First publish of `@openentity/mcp`, from a checkout of `main` at the merged release commit:
+3. First publish of `@openentity/mcp` and `@openentity/commerce-check` (the steps below name `mcp`; repeat them in `integrations/commerce-check` with its tarball), from a checkout of `main` at the merged release commit:
    1. Sign the npm CLI in as `willcybertron`: run `npm login` and open the link it prints (owner sign-in).
    2. `pnpm install --frozen-lockfile`, then in `mcp/`: `pnpm pack --pack-destination "$TMPDIR/oe-mcp"` (`prepack` builds `dist/stdio.js`) and `npm stage publish "$TMPDIR/oe-mcp/openentity-mcp-0.3.0.tgz" --access public`. Staging needs no 2FA, and npm creates the package with a `0.0.0-stage` placeholder.
 4. Approve every staged version, `@openentity/mcp` 0.3.0 included, at https://www.npmjs.com/settings/willcybertron/staged-packages (one 2FA session).
