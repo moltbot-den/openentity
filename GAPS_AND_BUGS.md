@@ -79,4 +79,16 @@ Backlog for this repo. Ticket ids are `G-YYYY-NNN` across the Open Entity produc
 - reviewer-agent: security
 - suggested-fix: Port sdk/ts/src/commerce.ts check for check against the shared vectors. No package version changes: release is one batch at the end of the program.
 - linked-pr: https://github.com/moltbot-den/openentity/pull/204
+||||||| parent of 8df61ca (feat(sdk): Swift commerce profile: verifyMandate, mandateCovers, signReceipt, verifyReceipt, verifyAgentForCheckout (C1.3))
+
+### G-2026-005 [in-progress] P1 feature
+
+- file: sdk/swift/Sources/OpenEntityKit/Commerce.swift, sdk/swift/Tests/OpenEntityKitTests/CommerceTests.swift, sdk/swift/README.md
+- area: Agentic commerce C1.3 Swift (oneentity docs/commerce/PLAN.md)
+- discovered: 2026-11-14 by agentic commerce program
+- summary: OpenEntityKit gets verifyMandate, mandateCovers, signReceipt, verifyReceipt and verifyAgentForCheckout (plus cartDigest, mandateDigest, receiptError), passing every vector in test-vectors/mandate-1, cart-1, receipt-1 and checkout-1 with the TS and Python results
+- owner-agent: openentity
+- reviewer-agent: security (adversarial review before merge)
+- suggested-fix: Port sdk/ts/src/commerce.ts check for check on the existing Owner.swift primitives. No RFC 9421 request verification (the caller passes the verified agentDid) and no verifyReceiptChain. No package version changes: OpenEntityKit is consumed by path.
+- linked-pr: (none yet)
 - linked-issue: (none yet)
