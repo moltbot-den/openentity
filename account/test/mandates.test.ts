@@ -199,6 +199,14 @@ test("spend: the product's report moves the status; total_spent at total_max is 
   expect((await call("GET", `/v1/mandates/${id}/status`)).body.status).toBe("revoked");
 });
 
+test("spend: a period figure older than the mandate's period reads as 0; total_spent stays", async () => {
+  const o = await owner(), kp = await paired(o), { signed, draft } = await issue(o, kp.did), id = draft.mandate_id;
+  await call("POST", "/v1/mandates", signed, o.auth);
+  await report(id, { period_spent: 4900, total_spent: 4900 });
+  await d.db.run("UPDATE mandate_spend SET reported_at = reported_at - 2 * 86400 WHERE mandate_id = $1", [id]); // P1D mandate: the report is now a period old
+  expect((await call("GET", `/v1/mandates/${id}/status`)).body).toEqual({ mandate_id: id, status: "active", period_spent: 0, total_spent: 4900 });
+});
+
 test("spend: refused for an unsigned call, an unknown signer, a product the agent is not paired to, bad numbers and an unknown mandate", async () => {
   const o = await owner(), kp = await paired(o), { signed, draft } = await issue(o, kp.did), id = draft.mandate_id;
   await call("POST", "/v1/mandates", signed, o.auth);

@@ -150,9 +150,12 @@ export function routes(app: Hono, d: Deps) {
   const status = async (id: string) => {
     const r = ID.test(id) ? await d.db.first<Row & { state: string }>("SELECT m.*, a.state FROM mandates m JOIN agents a ON a.did = m.agent_did WHERE m.id = $1", [id]) : null;
     if (!r) fail(404, "not_found", "no such mandate");
-    const s = (await d.db.first<{ p: string; t: string }>("SELECT COALESCE(SUM(period_spent), 0) AS p, COALESCE(SUM(total_spent), 0) AS t FROM mandate_spend WHERE mandate_id = $1", [id]))!;
+    const limits = (JSON.parse(r!.body) as Mandate).limits;
+    // A period figure counts only while its report is inside the current period (rolling window of the period's length); older reports read as 0.
+    const since = now() - PERIOD_DAYS[limits.period] * 86400;
+    const s = (await d.db.first<{ p: string; t: string }>("SELECT COALESCE(SUM(CASE WHEN reported_at > $2 THEN period_spent ELSE 0 END), 0) AS p, COALESCE(SUM(total_spent), 0) AS t FROM mandate_spend WHERE mandate_id = $1", [id, since]))!;
     const period_spent = Number(s.p), total_spent = Number(s.t);
-    const state = r!.revoked_at !== null || r!.state !== "active" ? "revoked" : total_spent >= (JSON.parse(r!.body) as Mandate).limits.total_max ? "exhausted" : "active";
+    const state = r!.revoked_at !== null || r!.state !== "active" ? "revoked" : total_spent >= limits.total_max ? "exhausted" : "active";
     return { r: r!, body: { mandate_id: id, status: state, period_spent, total_spent } };
   };
   app.get("/v1/mandates/:id/status", async (c) => {
