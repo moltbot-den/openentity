@@ -172,5 +172,5 @@ Backlog for this repo. Ticket ids are `G-YYYY-NNN` across the Open Entity produc
 - owner-agent: f-kotlin-9421
 - reviewer-agent: adversarial-review
 - suggested-fix: Done: `verifyRequest` (same checks, order and codes as `verify_request`; did:key offline, did:web through `DidWebResolver.authenticationKey`, signer pin `expectDid`) and `request` on `verifyAgentForCheckout` (a bad signature is `request_unverified`, the signer replaces `agentDid`). `verifyReceiptChain` was already in the SDK. Passes `test-vectors/http-signature.json` (valid, invalid, did_web, expect_did requests) and the checkout-1 vectors. Responses (`verifyResponse`) and `verifyQuorum` are still TS and Python only. Rides the next batch; no version bump.
-- linked-pr: (set when opened)
+- linked-pr: https://github.com/moltbot-den/openentity/pull/223
 - linked-issue: (none yet)
