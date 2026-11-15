@@ -4,6 +4,7 @@ One line of middleware before you accept an agent's purchase: it calls the hoste
 
 Guide, the checks, every reason code and the evidence record: https://openentity.org/guides/commerce-check
 
+<!-- oe:skip needs @openentity/commerce-check, released with the next package batch -->
 ```ts
 import { expressCheck } from "@openentity/commerce-check";
 
@@ -15,6 +16,7 @@ app.post("/buy", expressCheck({ cart: cartFor, policy: { require_mandate: true, 
 
 `proof.mjs` is the independent run: a fresh merchant and a fresh agent against the hosted check, one case per decision, then every `evidence_id` fetched back and its hash checked.
 
+<!-- oe:skip runs against the live openentity.org from a checkout of the repository -->
 ```sh
 node proof.mjs --out report.json    # live: deny and step_up (an agent alone has no owner mandate)
 ```
