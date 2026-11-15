@@ -361,3 +361,22 @@ ALTER TABLE entitlements ADD COLUMN IF NOT EXISTS delivered_at bigint;
 ALTER TABLE entitlements ADD COLUMN IF NOT EXISTS send_attempts integer NOT NULL DEFAULT 0;
 ALTER TABLE entitlements ADD COLUMN IF NOT EXISTS next_send_at bigint;
 CREATE INDEX IF NOT EXISTS entitlements_pending ON entitlements (next_send_at) WHERE delivered_at IS NULL;
+
+-- Mandates (mandate.ts, commerce profile section 2): the owner-signed mandate/1 as stored, never written by an agent.
+-- Revoked rows stay, so a revoked mandate's signed body cannot be created again. mandate_seqs is the agent.mandates counter.
+CREATE TABLE IF NOT EXISTS mandates (
+  id text PRIMARY KEY,
+  account_id text NOT NULL REFERENCES accounts (id),
+  owner_did text NOT NULL,
+  agent_did text NOT NULL,
+  body text NOT NULL,                         -- JSON, the signed mandate/1
+  issued_at bigint NOT NULL,
+  expires_at bigint NOT NULL,
+  revoked_at bigint,
+  revoke_reason text
+);
+CREATE INDEX IF NOT EXISTS mandates_agent ON mandates (agent_did);
+CREATE TABLE IF NOT EXISTS mandate_seqs (
+  agent_did text PRIMARY KEY,
+  seq integer NOT NULL
+);

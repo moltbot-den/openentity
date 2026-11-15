@@ -159,6 +159,8 @@ tags:
     description: Owner DID documents and hash-chained key logs (PLAN 3, ADR 0007).
   - name: Pairing
     description: Owner side of pairing an agent (PLAN 8.1).
+  - name: Mandates
+    description: Owner-signed spend mandates for agents (commerce profile). The owner's device signs; agents never write.
   - name: Agents
     description: The owner's paired agents, pause, resume, commands and messages (PLAN 8.2, 8.3).
   - name: Agent-written approvals
@@ -1690,6 +1692,171 @@ paths:
         '404':
           $ref: '#/components/responses/Error'
           description: 'error: not_found'
+  /v1/mandates/draft:
+    post:
+      operationId: draftMandate
+      tags: [Mandates]
+      summary: The unsigned mandate/1 for a spend permission the agent holds
+      description: |
+        Turns one spend permission the agent holds (`spend<=$N/<period>@<merchant>:<rail>`) into a mandate/1 with a fresh
+        mandate_id, this service's status URL and a digest (hex of the mandate/1 signing digest). The owner's device signs
+        it with an approver key in the key log; POST /v1/mandates then stores it. Owner session only.
+      x-available: day-8
+      security:
+        - ownerBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [agent_did, permission]
+              properties:
+                agent_did: { $ref: '#/components/schemas/AgentDid' }
+                permission: { $ref: '#/components/schemas/Permission' }
+                expires_in_days: { type: integer, minimum: 1, maximum: 90, default: 30 }
+      responses:
+        '200':
+          description: The mandate to sign.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [mandate, digest]
+                properties:
+                  mandate: { type: object, description: 'mandate/1 without `signature`.' }
+                  digest: { type: string, pattern: '^[0-9a-f]{64}$' }
+        '400':
+          $ref: '#/components/responses/Error'
+          description: 'error: bad_request, invalid_permission'
+        '401':
+          $ref: '#/components/responses/Error'
+          description: 'error: unauthorized'
+        '403':
+          $ref: '#/components/responses/Error'
+          description: 'error: key_log_required'
+        '404':
+          $ref: '#/components/responses/Error'
+          description: 'error: not_found'
+  /v1/mandates:
+    post:
+      operationId: createMandate
+      tags: [Mandates]
+      summary: Store a signed mandate/1
+      description: |
+        The body is a mandate/1 signed by an approver key of the owner's key log (verifyMandate of @openentity/sdk). The
+        signature is the owner's approval: widening spend is granting the spend permission (step-up
+        agent.permissions.widen), and a mandate must sit inside a spend permission the agent holds. Refused: a signature
+        that does not verify or an unknown device (403 mandate_invalid), a mandate issued more than 10 minutes ago,
+        a status URL that is not this service's, an id already issued, even one revoked (409 mandate_exists), no
+        covering permission (403 spend_not_granted), a paused agent (423 agent_paused). Agents can never write
+        mandates: the route takes only an owner session. Sends agent.mandates to the agent's products.
+      x-available: day-8
+      security:
+        - ownerBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: 'A signed mandate/1 (spec/commerce-profile.md section 2).'
+      responses:
+        '201':
+          description: Stored.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MandateRecord'
+        '400':
+          $ref: '#/components/responses/Error'
+          description: 'error: mandate_invalid, bad_request'
+        '401':
+          $ref: '#/components/responses/Error'
+          description: 'error: unauthorized'
+        '403':
+          $ref: '#/components/responses/Error'
+          description: 'error: mandate_invalid, spend_not_granted, key_log_required'
+        '404':
+          $ref: '#/components/responses/Error'
+          description: 'error: not_found'
+        '409':
+          $ref: '#/components/responses/Error'
+          description: 'error: mandate_exists, too_many_mandates'
+        '423':
+          $ref: '#/components/responses/Error'
+          description: 'error: agent_paused'
+    get:
+      operationId: listMandates
+      tags: [Mandates]
+      summary: The owner's mandates, newest first
+      x-available: day-8
+      security:
+        - ownerBearer: []
+      parameters:
+        - { name: agent, in: query, required: false, schema: { $ref: '#/components/schemas/AgentDid' } }
+      responses:
+        '200':
+          description: At most 200.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [mandates]
+                properties:
+                  mandates:
+                    type: array
+                    items: { $ref: '#/components/schemas/MandateRecord' }
+        '401':
+          $ref: '#/components/responses/Error'
+          description: 'error: unauthorized'
+  /v1/mandates/{id}:
+    delete:
+      operationId: revokeMandate
+      tags: [Mandates]
+      summary: Revoke a mandate
+      description: 'Final, a revoked mandate never comes back. Idempotent. Sends agent.mandates.'
+      x-available: day-8
+      security:
+        - ownerBearer: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, pattern: '^md_[a-z2-7]{26}$' } }
+      responses:
+        '204':
+          description: Revoked.
+        '401':
+          $ref: '#/components/responses/Error'
+          description: 'error: unauthorized'
+        '404':
+          $ref: '#/components/responses/Error'
+          description: 'error: not_found'
+  /v1/mandates/{id}/status:
+    get:
+      operationId: mandateStatus
+      tags: [Mandates]
+      summary: Is the mandate still valid (public, max-age 30)
+      description: |
+        The status URL inside every mandate (commerce profile section 2.2). `revoked` once the owner revoked it, paused
+        or unlinked the agent, or narrowed the permission under it. Expiry is the verifier's check of `expires_at`.
+        Spend accounting (`period_spent`, `exhausted`) belongs to the product that enforces the mandate. No auth.
+      x-available: day-8
+      security: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, pattern: '^md_[a-z2-7]{26}$' } }
+      responses:
+        '200':
+          description: Status. Cache-Control public, max-age 30.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [mandate_id, status]
+                properties:
+                  mandate_id: { type: string }
+                  status: { type: string, enum: [active, revoked] }
+        '404':
+          $ref: '#/components/responses/Error'
+          description: 'error: not_found'
   /v1/agents/{agent_did}/pause:
     post:
       operationId: pauseAgent
@@ -2836,6 +3003,8 @@ paths:
         - agent.resumed: lift that;
         - agent.unlinked: revoke the agent's credentials;
         - agent.permissions: replace the agent's permissions;
+        - agent.mandates: replace the agent's active mandates with `data.mandates` (signed mandate/1 objects; empty after
+          a pause, unlink or revoke); apply only if `seq` is newer than the one held; check each with verifyMandate;
         - owner.deleted: this IS the owner-delete call; delete the owner's data;
         - plan.changed: this IS the signed plan-grant call; grant or end the plan and record `source`.
         Products need no other endpoint for owner deletion or plan grants. Dedupe `id` for at least 24 hours (a
@@ -3222,10 +3391,13 @@ components:
     Permission:
       type: string
       maxLength: 256
-      pattern: '^(owner\.message|owner\.status|owner\.approval|vault\.request:\S+|evidence\.file|den\.post|market\.sell|contract\.accept<=\$[0-9]+(\.[0-9]{1,2})?)$'
+      pattern: '^(owner\.message|owner\.status|owner\.approval|vault\.request:\S+|evidence\.file|den\.post|market\.sell|contract\.accept<=\$[0-9]+(\.[0-9]{1,2})?|spend<=\$[0-9]+(\.[0-9]{1,2})?/(P1D|P7D|P1M)@\S+:(card|x402|mpp|credits|usdc))$'
       description: |
         An agent permission (PLAN 7.6): owner.message, owner.status, owner.approval, vault.request:<path pattern> (one
-        path per string), evidence.file, den.post, market.sell, contract.accept<=$N (whole or two-decimal dollars).
+        path per string), evidence.file, den.post, market.sell, contract.accept<=$N (whole or two-decimal dollars),
+        spend<=$N/<period>@<merchant>:<rail> (commerce profile section 7: at most $N a period P1D, P7D or P1M, at a
+        merchant DID or domain pattern or `*`, on one rail of card, x402, mpp, credits, usdc; the ceiling for the
+        agent's mandates, see POST /v1/mandates/draft).
         `vault.request:*` grants the whole vault. Inside a path, `*` matches one path level only:
         `vault.request:prod/*` covers `prod/db` but not `prod/db/password`. Agent Secret Store enforces exactly this.
     Platform:
@@ -4746,8 +4918,8 @@ components:
       type: object
       description: |
         The body of POST /v1/oe/events. Types the service sends: agent.paired, agent.paused, agent.resumed,
-        agent.unlinked, agent.permissions, owner.deleted (the owner-delete call), plan.changed (the signed plan-grant
-        call). Products ignore types they do not know.
+        agent.unlinked, agent.permissions, agent.mandates, owner.deleted (the owner-delete call), plan.changed (the signed
+        plan-grant call). Products ignore types they do not know.
       required: [id, type, created_at, data]
       properties:
         id: { type: string, pattern: '^evt_[A-Za-z0-9_-]{1,60}$', description: Dedupe for at least 24 hours. }
@@ -4765,6 +4937,8 @@ components:
           then: { properties: { data: { $ref: '#/components/schemas/AgentUnlinkedData' } } }
         - if: { properties: { type: { const: agent.permissions } } }
           then: { properties: { data: { $ref: '#/components/schemas/AgentPermissionsData' } } }
+        - if: { properties: { type: { const: agent.mandates } } }
+          then: { properties: { data: { $ref: '#/components/schemas/AgentMandatesData' } } }
         - if: { properties: { type: { const: owner.deleted } } }
           then: { properties: { data: { $ref: '#/components/schemas/OwnerDeletedData' } } }
         - if: { properties: { type: { const: plan.changed } } }
@@ -4781,6 +4955,22 @@ components:
         framework: { type: [string, 'null'], maxLength: 64, description: What the agent named at claim, e.g. openclaw. }
         seq: { type: integer, minimum: 1, description: 'The agent''s permissions counter, as on agent.permissions: apply these permissions only if newer than the ones held.' }
         link_epoch: { type: integer, minimum: 1, description: 'This link of the agent to its owner: it rises with every confirmed pairing. Drop an agent.paired or agent.unlinked older than the link held.' }
+    AgentMandatesData:
+      type: object
+      required: [agent_did, owner_did, mandates, seq]
+      properties:
+        agent_did: { $ref: '#/components/schemas/AgentDid' }
+        owner_did: { $ref: '#/components/schemas/OwnerDid' }
+        mandates: { type: array, items: { type: object, description: A signed mandate/1. } }
+        seq: { type: integer, minimum: 1, description: The agent's mandate counter. Replace the held list only if newer. }
+    MandateRecord:
+      type: object
+      required: [mandate, status, revoked_at, revoke_reason]
+      properties:
+        mandate: { type: object, description: The signed mandate/1. }
+        status: { type: string, enum: [active, revoked, expired] }
+        revoked_at: { oneOf: [{ $ref: '#/components/schemas/UnixSeconds' }, { type: 'null' }] }
+        revoke_reason: { type: [string, 'null'], description: 'owner, agent_paused, agent_unlinked or permission_removed.' }
     AgentPausedData:
       type: object
       required: [agent_did, owner_did, paused_at, seq]

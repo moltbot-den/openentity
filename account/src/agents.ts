@@ -8,6 +8,7 @@ import type { Deps } from "./app.ts";
 import { bump, newId, now } from "./db.ts";
 import { bearer, fail, json } from "./http.ts";
 import { track } from "./events.ts";
+import { covered, revokeFor } from "./mandates.ts";
 import { notifyOwner } from "./notify.ts";
 import { callProduct, reaches, sendEvent } from "./outbound.ts";
 import { agentSigned, productSigned } from "./rfc9421.ts";
@@ -52,6 +53,7 @@ export async function ownersAgent(d: Deps, accountId: string, did: string): Prom
  * never sees an earlier owner's messages, label or status. Its socket closes (4003) and its products get agent.unlinked.
  */
 async function unlink(d: Deps, a: AgentRow, message: string) {
+  await revokeFor(d, a, "agent_unlinked");
   const files = await d.db.tx(async (tx) => {
     await tx.run("UPDATE agents SET state = 'unlinked', unlinked_at = $2, label = NULL, status = NULL WHERE did = $1", [a.did, now()]);
     await tx.run("DELETE FROM messages WHERE agent_did = $1", [a.did]);
@@ -113,6 +115,7 @@ const productsOf = async (d: Deps, did: string) => (await d.db.all<{ product: st
 export async function pause(d: Deps, a: AgentRow, source: string): Promise<boolean> {
   const t = now(), seq = await changePause(d, a, "active", "paused", t);
   if (seq === null) return false;
+  await revokeFor(d, a, "agent_paused"); // every mandate of the agent, before anything else: status flips first
   await deliver(d, a.did, { type: "command", command: "pause", args: { source } });
   await closeSocket(d, a.did, a.connection_id, 4001, "agent_paused", "the owner paused this agent; reconnect to receive the resume command");
   const data = { agent_did: a.did, owner_did: a.owner_did, paused_at: t, seq };
@@ -460,6 +463,7 @@ export async function setPermissions(d: Deps, a: AgentRow, next: string[]) {
   const data = { agent_did: a.did, owner_did: a.owner_did, permissions: next, seq: Number(row!.perm_seq) };
   await Promise.all((await productsOf(d, a.did)).map((p) => sendEvent(d, p, "agent.permissions", data)));
   await deliver(d, a.did, { type: "permissions", permissions: next });
+  await revokeFor(d, a, "permission_removed", (m) => covered(next, m)); // narrowing ends the mandates it no longer covers
 }
 
 /**

@@ -16,6 +16,7 @@ import type { QueuedEvent } from "./events.ts";
 import { HttpError, bearer, fail, ipOf, json, str } from "./http.ts";
 import type { SigningKey } from "./keys.ts";
 import * as keylog from "./keylog.ts";
+import * as mandates from "./mandates.ts";
 import * as methods from "./methods.ts";
 import * as notify from "./notify.ts";
 import * as pairing from "./pairing.ts";
@@ -166,7 +167,7 @@ export function createApp(d: Deps) {
     return c.body(null, 204);
   });
 
-  for (const m of [signin, methods, deletion, notify, store, approve, keylog, stepup, pairing, agents, events]) m.routes(app, d);
+  for (const m of [signin, methods, deletion, notify, store, approve, keylog, stepup, pairing, agents, mandates, events]) m.routes(app, d);
   return app;
 }
 
