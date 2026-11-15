@@ -18,7 +18,7 @@ Rules read from each target's contributing file on this date. One pull request p
 
 | Target | Kind | What we list | Status |
 |---|---|---|---|
-| awesome-agent-payments-protocol by tsubasakong (Identity / Interop) | PR | Open Entity: agent identity, `mandate/1`, `receipt/1` and Agent Commerce Check | See the PR in the table above once opened |
+| awesome-agent-payments-protocol by tsubasakong (Identity / Interop) | PR | Open Entity: agent identity, `mandate/1`, `receipt/1` and Agent Commerce Check | Open: https://github.com/tsubasakong/awesome-agent-payments-protocol/pull/138 (2026-11-15). No maintainer comments yet |
 | awesome-agentic-payments by bitrefill | none | Accepts official sources of the maintaining organisations only | Not eligible |
 | awesome-x402 by xpaysh, Merit-Systems/awesome-agentic-commerce | none | x402 resources; 400 to 1100 open issues and PRs, last push July | Not worth a PR; revisit when active |
 | x402.org ecosystem page | Foundation process | Moltbot Den as a facilitator-using merchant | Draft in `STANDARDS-COMMERCE.md` section 3, owner sends |
