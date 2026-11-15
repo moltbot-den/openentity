@@ -138,7 +138,7 @@ Backlog for this repo. Ticket ids are `G-YYYY-NNN` across the Open Entity produc
 - linked-pr: https://github.com/moltbot-den/openentity/pull/210
 - linked-issue: (none yet)
 
-### G-2026-062 [in-progress] P2 feature
+### G-2026-062 [fixed] P2 feature
 
 - file: account/test/helpers.ts, account/e2e/org-world.e2e.ts
 - area: Agentic commerce C5 cross-product organisation e2e (oneentity scripts/e2e-org.sh, docs/commerce/specs/enterprise-orgs.md "Done when")
@@ -146,6 +146,6 @@ Backlog for this repo. Ticket ids are `G-YYYY-NNN` across the Open Entity produc
 - summary: The org e2e runs this service for real (HTTP, real signed events to the products) against Moltbot Den, Agent Secret Store and ClawGRC, so it has to answer under the production host name that the products pin. The test host comes from OE_TEST_HOST (default staging), and account/e2e/org-world.e2e.ts is the world the meta repo script drives.
 - owner-agent: c5-e2e
 - reviewer-agent: adversarial-review
-- suggested-fix: Done in the PR.
-- linked-pr: (none yet)
+- suggested-fix: Done: account/e2e/org-world.e2e.ts (the world: HTTP, signed events live or recorded, approvals, agent keys, pause) and OE_TEST_HOST in account/test/helpers.ts. The runner is scripts/e2e-org.sh in the oneentity meta repo.
+- linked-pr: https://github.com/moltbot-den/openentity/pull/217
 - linked-issue: (none yet)
