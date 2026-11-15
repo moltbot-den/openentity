@@ -20,7 +20,9 @@ In this order; each failure is a reason code in the answer.
 | `mandate`: the `mandate/1` verifies against the owner's key log, is not revoked, and covers the cart | `mandate_required`, `mandate_expired`, `mandate_revoked`, `mandate_wrong_agent`, `mandate_bad_signature`, `mandate_status_unavailable`, `no_key_log` |
 | `policy`: your `agent_policy`, inline or published in your Entity Document under `openentity:merchant` | `step_up`: above the mandate's `step_up_over`, the owner must approve this exact cart |
 
-`step_up` is not a refusal: the answer carries the cart and its digest. The owner approves it in the OpenEntity app (an `approval/2.0` whose `payload_digest` is that digest), the agent sends the approval back, and the same check answers `allow`. An approval works once. `deny` is final.
+What gets each answer: `deny` when the request is unsigned, signed for another host or replayed, names another agent, fails your policy, or carries a dead mandate. `step_up` when the signature and policy hold but no mandate covers the cart: no `OE-Mandate` and `require_mandate` is off (`no_mandate`), the cart is over the mandate's `step_up_over` (`step_up_over`) or its limits (`mandate_over_limit`). `allow` when a mandate from the owner covers the cart (`mandate_covers_cart`) or the owner approved this exact cart (`owner_approved_cart`). A mandate is signed by the owner's device in the OpenEntity app, so `allow` needs a real owner; an agent alone reaches `deny` and `step_up`.
+
+`step_up` is not a refusal: the answer carries the cart and its digest. The owner approves it in the OpenEntity app (an `approval/2.0` whose `payload_digest` is that digest), the agent sends the approval back, and the same check answers `allow`. Your middleware passes it on through the `approval` option (a function that returns `{approval, verifier_did, request_id}` from the retried request, for example from a header you choose); `verifier_did` and `request_id` are the ones you gave the owner, and `verifier_did` is your merchant DID. An approval works once. `deny` is final.
 
 A mandate is accepted only with a live status answer from the OpenEntity Account: when it cannot be fetched the check answers `deny` with `mandate_status_unavailable` (the one-day offline rule belongs to the library below). The check keeps a ten-minute reservation of every cart it allowed, and adds it to the mandate's `period_spent` and `total_spent`, so rapid carts cannot pass the same status snapshot. Settled spend is still counted by the account that enforces the mandate; keep your own ledger of what you charge.
 
@@ -52,7 +54,7 @@ The answer is `{decision, reasons, agent_did?, owner_did?, mandate_id?, cart?, c
 
 Every call writes one record to a hash chain: the digest of the inputs, the result of each check, the attestation hashes used, the mandate hash, the decision, the time and the verifier version. Each record carries `prev_hash`, and its own `hash` is the SHA-256 of its RFC 8785 form without `hash`.
 
-`GET /v1/commerce/evidence/<evidence_id>` returns the record and `intact: true` when its hash holds. `GET /v1/commerce/head` returns the newest hash. Records are kept for `400` days, the longest card dispute window plus margin, then deleted. The record holds a digest of your request, not the request.
+`GET /v1/commerce/evidence/<evidence_id>` returns the record and `intact: true` when its hash holds. `intact` belongs to the answer, not to the record: to check a record yourself, drop `hash` and `intact`, canonicalize what is left (RFC 8785; `canonicalize` in `@openentity/sdk`), take the SHA-256 and compare it with `hash`. A record has `evidence_id`, `seq`, `created_at`, `inputs_digest`, `checks` (one result per check: `pass`, `fail`, `step_up` or `skipped`), `attestation_ids`, `mandate_hash`, `decision`, `reasons`, `agent_did`, `owner_did`, `verifier_version`, `prev_hash` and `hash`. `GET /v1/commerce/head` returns the newest `seq` and `hash`. Records are kept for `400` days, the longest card dispute window plus margin, then deleted. The record holds a digest of your request, not the request.
 
 ## Middleware
 
@@ -60,11 +62,20 @@ Every call writes one record to a hash chain: the digest of the inputs, the resu
 ```ts
 import { expressCheck } from "@openentity/commerce-check"; // also honoCheck (Hono, Workers) and nextCheck (Next.js)
 
+// Your cart/1 for this request. `merchant` is the did:web of the host agents call (did:web:shop.example, or did:web:127.0.0.1%3A8080 on a
+// local port); the check refuses a signature made for another host. `agentDid` is the signer; the check verifies it, you only name it here.
+const cartFor = (req, agentDid) => {
+  const total = Number(new URL(req.url).searchParams.get("total") ?? 1000); // minor units
+  return { profile: "cart/1", merchant: "did:web:shop.example", agent_did: agentDid, lines: [{ sku: "dataset-1", title: "Dataset", qty: 1, unit: total }], total, currency: "USD", rail: "credits", mandate_id: null };
+};
+
 app.post("/buy", expressCheck({
   policy: { require_mandate: true, require_owner: true },
-  cart: (req, agentDid) => cartFor(req, agentDid), // your cart/1
+  cart: cartFor,
 }), (req, res) => res.json({ bought: true, evidence_id: req.agentCheck.evidence_id }));
 ```
+
+Until the package is released, call the hosted check yourself as in [One call](#one-call): the middleware is that call plus the status codes below. The package's `examples/` and `proof.mjs` (a fresh merchant and a fresh agent that hit all three decisions and fetch every evidence record back) show the whole loop.
 
 `step_up` answers `428` with the cart, `deny` answers `403`, both with the `evidence_id`; set `enforce: false` for observe mode, which attaches `req.agentCheck` and never blocks. If the check cannot run, an enforcing server answers `503` and an observing one carries on. Agents sign your public URL, so behind a proxy set `publicOrigin: "https://shop.example"` (`public_origin` in Python): the check refuses a request signed for another host, and a URL built from the incoming `Host` header would let anyone choose it. The raw body bytes are sent as `body_b64`; for Express keep them with `express.json({ verify: (req, _res, buf) => (req.rawBody = buf) })`.
 

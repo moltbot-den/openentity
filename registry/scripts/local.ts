@@ -3,7 +3,9 @@
 // The MCP server is at /mcp. `node cli/dist/cli.js conformance http://127.0.0.1:8787` from the repository root.
 import { generateKeyPairSync, randomBytes } from "node:crypto";
 import { createServer } from "node:http";
+import { readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
+import { type CommerceEnv } from "../src/commerce.ts";
 import { Readable } from "node:stream";
 import { createMcp } from "../../mcp/src/index.ts";
 import { memoryBlobs } from "../src/blob.ts";
@@ -12,7 +14,12 @@ import { type Env, REGISTRY_DID } from "../src/env.ts";
 import { app, incorporate } from "../src/index.ts";
 
 const port = Number(process.argv[2] ?? 8787);
-const env: Env = {
+// COMMERCE_VECTOR_OWNER=1: Agent Commerce Check takes its owner key log from the published throwaway owner of test-vectors/keylog-1
+// (its iPhone approver key is in test-vectors/approval-2.0/keys.json) and answers every mandate status "active", so a local run can
+// show `allow` without an owner's device. Never set in production.
+const vec = (p: string) => JSON.parse(readFileSync(new URL(`../../test-vectors/${p}`, import.meta.url), "utf8"));
+const owner = process.env.COMMERCE_VECTOR_OWNER ? vec("keylog-1/add-approver.json") : undefined;
+const env: Env & Partial<CommerceEnv> = {
   db: await pgliteDb(),
   log: memoryBlobs(),
   STAMP_BITS: "8",
@@ -24,6 +31,10 @@ const env: Env = {
   HASH_SALT: randomBytes(16).toString("hex"),
   WRITE_PER_MINUTE: process.env.WRITE_PER_MINUTE, // the doc-snippets guard raises both limits: one IP runs every block
   IP_DAILY_LIMIT: process.env.IP_DAILY_LIMIT,
+  ...(owner && {
+    commerceOwner: async (did: string) => (did === owner.did ? { lines: owner.log, serviceKeys: owner.service_keys, origins: owner.origins } : null),
+    commerceStatus: async (url: string) => ({ mandate_id: url.split("/")[5], status: "active" }),
+  }),
 };
 // The registry's own Entity Document is logged on first read (spec 10.1), so the log starts with a signed checkpoint.
 await app.fetch(new Request(`http://127.0.0.1:${port}/v1/entities/${REGISTRY_DID}/document`), env);

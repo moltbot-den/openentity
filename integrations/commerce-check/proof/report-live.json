@@ -1,0 +1,176 @@
+{
+  "registry": "https://openentity.org",
+  "agent_did": "did:key:z6MkkfEQPpww6oBgqj2Ydh1iVQ8hkddaLtyn2BbR4WdsPEhx",
+  "merchant_did": "did:web:127.0.0.1%3A56084",
+  "at": "2026-11-15T03:46:29.637Z",
+  "head": {
+    "seq": 37,
+    "hash": "e7d28a51dd1feb4231085ecaeff1eb5456e788662408e397a4b999bf9c407886",
+    "at": "2026-11-15T03:46:28Z"
+  },
+  "decisions": {
+    "allow": 0,
+    "step_up": 1,
+    "deny": 5
+  },
+  "cases": [
+    {
+      "name": "unsigned request",
+      "expect": "deny",
+      "reason": "request_unverified",
+      "http_status": 403,
+      "decision": "deny",
+      "reasons": [
+        "request_unverified"
+      ],
+      "evidence_id": "ev_vvfqitlwkq4n3yzaiysrv63b2i",
+      "evidence": {
+        "http": 200,
+        "server_intact": true,
+        "local_intact": true,
+        "seq": 32,
+        "hash": "867f7054b20c2e6f929bd55d57557382d6fab8c3d5990435e855d97ede56c2b5",
+        "prev_hash": "9925a204d905a3a0fe86481b0aa152854d91b34bd7d0b6054ea0e31163808f06",
+        "decision": "deny",
+        "reasons": [
+          "request_unverified"
+        ],
+        "agent_did": null
+      },
+      "ok": true
+    },
+    {
+      "name": "signed for another host",
+      "expect": "deny",
+      "reason": "request_unverified",
+      "http_status": 403,
+      "decision": "deny",
+      "reasons": [
+        "request_unverified"
+      ],
+      "evidence_id": "ev_pxfw6naiivigyd52c3jkrjv2m2",
+      "evidence": {
+        "http": 200,
+        "server_intact": true,
+        "local_intact": true,
+        "seq": 33,
+        "hash": "b65bdb7eac7a5149750b60f9e39534251a5971d88fe6dec7f93f09a143c9fe03",
+        "prev_hash": "867f7054b20c2e6f929bd55d57557382d6fab8c3d5990435e855d97ede56c2b5",
+        "decision": "deny",
+        "reasons": [
+          "request_unverified"
+        ],
+        "agent_did": null
+      },
+      "ok": true,
+      "chain_links_prev": true
+    },
+    {
+      "name": "cart names another agent",
+      "expect": "deny",
+      "reason": "agent_mismatch",
+      "http_status": 403,
+      "decision": "deny",
+      "reasons": [
+        "agent_mismatch"
+      ],
+      "evidence_id": "ev_urbfmzs5fnsxvabl2rmuiuviyc",
+      "evidence": {
+        "http": 200,
+        "server_intact": true,
+        "local_intact": true,
+        "seq": 34,
+        "hash": "f09500b067d32dfb27dd0d6e6537cd411880cdd0c09906279087e0994d4e13e8",
+        "prev_hash": "b65bdb7eac7a5149750b60f9e39534251a5971d88fe6dec7f93f09a143c9fe03",
+        "decision": "deny",
+        "reasons": [
+          "agent_mismatch"
+        ],
+        "agent_did": "did:key:z6MkkfEQPpww6oBgqj2Ydh1iVQ8hkddaLtyn2BbR4WdsPEhx"
+      },
+      "ok": true,
+      "chain_links_prev": true
+    },
+    {
+      "name": "signed, no mandate, mandate not required",
+      "expect": "step_up",
+      "reason": "no_mandate",
+      "http_status": 428,
+      "decision": "step_up",
+      "reasons": [
+        "no_mandate"
+      ],
+      "evidence_id": "ev_5alhpiqqddt2jwxek7e3pwds2f",
+      "evidence": {
+        "http": 200,
+        "server_intact": true,
+        "local_intact": true,
+        "seq": 35,
+        "hash": "eb50f1a1de2d534aaa9e1cd49ccd2edb9e4592104260656c1521cdadc2b055d8",
+        "prev_hash": "f09500b067d32dfb27dd0d6e6537cd411880cdd0c09906279087e0994d4e13e8",
+        "decision": "step_up",
+        "reasons": [
+          "no_mandate"
+        ],
+        "agent_did": "did:key:z6MkkfEQPpww6oBgqj2Ydh1iVQ8hkddaLtyn2BbR4WdsPEhx"
+      },
+      "ok": true,
+      "chain_links_prev": true
+    },
+    {
+      "name": "same signed request sent again",
+      "expect": "deny",
+      "reason": "request_replayed",
+      "http_status": 403,
+      "decision": "deny",
+      "reasons": [
+        "request_replayed"
+      ],
+      "evidence_id": "ev_6hssgqbdkyhzss3zpbht36si7x",
+      "evidence": {
+        "http": 200,
+        "server_intact": true,
+        "local_intact": true,
+        "seq": 36,
+        "hash": "c906a173976b72a0f1f91660385e5ae201e4c8a5a7f1440bf1b25dff06775663",
+        "prev_hash": "eb50f1a1de2d534aaa9e1cd49ccd2edb9e4592104260656c1521cdadc2b055d8",
+        "decision": "deny",
+        "reasons": [
+          "request_replayed"
+        ],
+        "agent_did": null
+      },
+      "ok": true,
+      "chain_links_prev": true
+    },
+    {
+      "name": "signed, mandate required",
+      "expect": "deny",
+      "reason": "mandate_required",
+      "http_status": 403,
+      "decision": "deny",
+      "reasons": [
+        "mandate_required",
+        "owner_unknown"
+      ],
+      "evidence_id": "ev_owmtf7jdua57lwbvwzigtvgl2a",
+      "evidence": {
+        "http": 200,
+        "server_intact": true,
+        "local_intact": true,
+        "seq": 37,
+        "hash": "e7d28a51dd1feb4231085ecaeff1eb5456e788662408e397a4b999bf9c407886",
+        "prev_hash": "c906a173976b72a0f1f91660385e5ae201e4c8a5a7f1440bf1b25dff06775663",
+        "decision": "deny",
+        "reasons": [
+          "mandate_required",
+          "owner_unknown"
+        ],
+        "agent_did": "did:key:z6MkkfEQPpww6oBgqj2Ydh1iVQ8hkddaLtyn2BbR4WdsPEhx"
+      },
+      "ok": true,
+      "chain_links_prev": true
+    }
+  ],
+  "passed": true
+}

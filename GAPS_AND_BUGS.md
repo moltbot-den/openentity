@@ -114,7 +114,6 @@ Backlog for this repo. Ticket ids are `G-YYYY-NNN` across the Open Entity produc
 - reviewer-agent: adversarial-review
 - suggested-fix: verifyAgentForCheckout behind the registry route with registry facts, the owner key log (first_seen kept per entry, fork detection), mandate status from the account service only, single-use request nonces and approvals, per-IP limit; middleware calls the hosted route. Package versions untouched: the release batch ships @openentity/commerce-check and openentity.commerce.
 - linked-pr: https://github.com/moltbot-den/openentity/pull/206
-||||||| parent of d931818 (feat(account): organisations, shared budgets and quorum approvals (C5))
 ### G-2026-060 [in-progress] P1 feature
 
 - file: account/src/orgs.ts, account/src/orgbase.ts, account/src/orgbudget.ts, account/src/stepup.ts, account/src/agents.ts, account/src/mandates.ts, account/src/pairing.ts, account/src/keylog.ts, account/src/web/home-client.ts, account/openapi.yaml, account/schema.sql, sdk/ts/src/owner.ts, sdk/ts/src/commerce.ts, sdk/python/openentity/owner.py, sdk/python/openentity/commerce.py, test-vectors/quorum-1, spec/commerce-profile.md
@@ -124,5 +123,17 @@ Backlog for this repo. Ticket ids are `G-YYYY-NNN` across the Open Entity produc
 - owner-agent: openentity
 - reviewer-agent: security (adversarial review next)
 - suggested-fix: Done in the PR. Decisions: the org DID is `:o:<id>` (not `:org:<hash>`), so every verifier and product that accepts an owner DID accepts an org; budgets are per-agent ceilings (a pooled counter needs product spend reports); the quorum device list is the service's policy because the key log cannot tell one member's devices apart. No package version changes: release is one batch at the end of the program. Open: iOS and Android app screens (org switcher, org approvals, signing as the org owner, adding a device to the org log), verifyQuorum in the Swift and Kotlin SDKs if an app ever verifies, and the product duties in the enterprise-orgs brief (Den, ASS, SMA, ClawGRC).
+- linked-pr: (none yet)
+- linked-issue: (none yet)
+
+### G-2026-061 [in-progress] P2 feature
+
+- file: integrations/commerce-check/proof.mjs, integrations/commerce-check/proof-mandate.mjs, integrations/commerce-check/README.md, registry/scripts/local.ts, site/src/content/docs/guides/commerce-check.md
+- area: Agentic commerce C3.4 independent-agent proof (docs/commerce/PLAN.md in the oneentity meta repo)
+- discovered: 2026-11-14 by agentic commerce program
+- summary: A fresh merchant and a fresh agent using only the public docs hit deny and step_up on openentity.org and allow on a local registry, and every evidence_id is fetched back and its hash checked. Doc gaps found and fixed: the middleware snippet used an undefined `cartFor`, the package README was listed in `files` but missing, the evidence hash rule (`intact` is not hashed) and the record fields were unstated, what produces each decision and how a step_up retry carries the approval were unstated. Also removed two stray merge-conflict marker lines from this file and tasks/todo.md. Allow on openentity.org needs an owner's mandate and the production account's sign-in is closed until launch (SIGNIN_OPEN=0), so that case runs against a local registry that trusts the published throwaway owner.
+- owner-agent: c3-proof
+- reviewer-agent: adversarial-review
+- suggested-fix: Done in the PR: proof.mjs (`--registry`, `--mandate-case`, report.json), proof-mandate.mjs, COMMERCE_VECTOR_OWNER=1 in the local registry, reports in integrations/commerce-check/proof/. Re-run proof.mjs against production for the allow case once sign-in opens and an owner device can sign.
 - linked-pr: (none yet)
 - linked-issue: (none yet)
