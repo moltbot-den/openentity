@@ -162,3 +162,15 @@ Backlog for this repo. Ticket ids are `G-YYYY-NNN` across the Open Entity produc
 - linked-pr: https://github.com/moltbot-den/openentity/pull/220
 - linked-issue: (none yet)
 
+
+### G-2026-064 [fixed] P2 feature
+
+- file: sdk/kotlin/src/main/kotlin/org/openentity/sdk/HttpSig.kt, sdk/kotlin/src/main/kotlin/org/openentity/sdk/Commerce.kt, sdk/kotlin/src/main/kotlin/org/openentity/sdk/DidWeb.kt
+- area: Agentic commerce C1.3 leftover (docs/commerce/PLAN.md in the oneentity meta repo), Kotlin SDK
+- discovered: 2026-11-15 by agentic commerce program
+- summary: The Kotlin SDK could not verify the RFC 9421 request signature (spec 11.2 Web Bot Auth), so verifyAgentForCheckout took an agentDid on trust where the TS and Python SDKs verify the request itself
+- owner-agent: f-kotlin-9421
+- reviewer-agent: adversarial-review
+- suggested-fix: Done: `verifyRequest` (same checks, order and codes as `verify_request`; did:key offline, did:web through `DidWebResolver.authenticationKey`, signer pin `expectDid`) and `request` on `verifyAgentForCheckout` (a bad signature is `request_unverified`, the signer replaces `agentDid`). `verifyReceiptChain` was already in the SDK. Passes `test-vectors/http-signature.json` (valid, invalid, did_web, expect_did requests) and the checkout-1 vectors. Responses (`verifyResponse`) and `verifyQuorum` are still TS and Python only. Rides the next batch; no version bump.
+- linked-pr: (set when opened)
+- linked-issue: (none yet)

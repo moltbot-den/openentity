@@ -223,4 +223,36 @@ class CommerceTest {
         val r = verifyAgentForCheckout(null, i["cart"]!!, AgentPolicy(), i["now"].long())
         assertEquals(listOf("request_unverified"), r.reasons)
     }
+
+    private val agentDid = CHECKOUT["cases"].items()[0]["input"]["agent_did"].text()
+    private val checkoutUrl = "https://shop.example/checkout"
+    private val signed = signRequest("POST", checkoutUrl, ByteArray(0), seed(1), agentDid, 1_800_000_000L) // seed 1..32 is the entity throwaway key of keys.json
+
+    private fun requestCheckout(request: CheckoutRequest, agent: String?, now: Long = 1_800_000_000L): CheckoutDecision {
+        val first = CHECKOUT["cases"].items()[0]["input"]!!
+        val cart = JsonValue.Obj((first["cart"] as JsonValue.Obj).fields + ("mandate_id" to JsonValue.Null))
+        return verifyAgentForCheckout(agent, cart, AgentPolicy(), now, request = request)
+    }
+
+    @Test
+    fun checkoutVerifiesTheSignedRequestItself() {
+        val r = requestCheckout(CheckoutRequest("POST", checkoutUrl, signed), agent = "did:key:z6MkSomeoneElse") // the request's signer wins over agentDid
+        assertEquals(listOf("no_mandate"), r.reasons)
+        assertEquals("step_up", r.decision)
+        assertEquals("verified", r.evidence["request"])
+        assertEquals(agentDid, r.evidence["agent_did"])
+    }
+
+    @Test
+    fun aBadRequestSignatureIsFinalEvenWithAnAgentDid() {
+        for ((req, now) in listOf(
+            CheckoutRequest("POST", "https://shop.example/other", signed) to 1_800_000_000L, // url tampered
+            CheckoutRequest("POST", checkoutUrl, signed - "Signature") to 1_800_000_000L, // unsigned
+            CheckoutRequest("POST", checkoutUrl, signed) to 1_800_001_000L, // stale
+        )) {
+            val d = requestCheckout(req, agent = agentDid, now = now)
+            assertEquals("deny", d.decision)
+            assertEquals(listOf("request_unverified"), d.reasons)
+        }
+    }
 }
