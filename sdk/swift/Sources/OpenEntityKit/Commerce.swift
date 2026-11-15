@@ -4,7 +4,7 @@ import Foundation
 // OEIS Commerce Profile (spec/commerce-profile.md): mandate/1, cart/1, receipt/1 and the one-call checkout check. A port of
 // sdk/ts/src/commerce.ts: the same checks in the same order with the same error codes. test-vectors/{mandate-1,cart-1,receipt-1,
 // checkout-1} define all of it. Owners sign mandates on their devices and products verify, so there is no mandate signer here.
-// Not here: verifying the agent's RFC 9421 request (pass the verified `agentDid`) and verifyReceiptChain.
+// The agent's RFC 9421 request verifies in HTTPSig.swift; `verifyAgentForCheckout(request:)` calls it.
 
 let maxMandateTTL: Int64 = 90 * day
 public let commerceRails = ["card", "x402", "mpp", "credits", "usdc"]
@@ -414,6 +414,37 @@ public func verifyReceipt(_ receipt: JSONValue, require: [Party] = [.merchant], 
     return ReceiptVerified(signedBy: signed)
 }
 
+public struct ReceiptChainError: Error, Equatable, Sendable {
+    /// `malformed`, `not_purchase`, `mismatch` or `over_refund`.
+    public let code, message: String
+}
+
+/// Structural check that refunds and chargebacks are consistent with their purchase: each refers_to the purchase, same parties,
+/// currency and rail, no repeated receipt_id, and their sum at most the purchase total. Returns the refunded total. Proofs are
+/// `verifyReceipt`'s job; run both.
+public func verifyReceiptChain(_ purchase: JSONValue, _ later: [JSONValue]) -> Result<Int64, ReceiptChainError> {
+    func bad(_ code: String, _ message: String) -> Result<Int64, ReceiptChainError> { .failure(ReceiptChainError(code: code, message: message)) }
+    if let e = ([purchase] + later).lazy.compactMap(receiptError).first { return bad("malformed", e) }
+    guard let id = purchase["receipt_id"]?.stringValue, let total = uint(purchase["total"]), purchase["kind"]?.stringValue.map({ same($0, "purchase") }) == true else {
+        return bad("not_purchase", "the first receipt must be a purchase")
+    }
+    var ids = [id], refunded: Int64 = 0
+    for x in later {
+        guard let rid = x["receipt_id"]?.stringValue, let refers = x["refers_to"]?.stringValue, same(refers, id), let t = uint(x["total"]) else {
+            return bad("mismatch", "each later receipt must be a refund or chargeback of this purchase")
+        }
+        if ids.contains(where: { same($0, rid) }) { return bad("mismatch", "receipt_id repeats") }
+        ids.append(rid)
+        for k in ["merchant_did", "agent_did", "currency", "rail"] where !same(x[k]?.stringValue ?? "", purchase[k]?.stringValue ?? "") {
+            return bad("mismatch", "parties, currency and rail must equal the purchase's")
+        }
+        let (sum, overflow) = refunded.addingReportingOverflow(t)
+        if overflow { return bad("over_refund", "refunds and chargebacks exceed the purchase total") }
+        refunded = sum
+    }
+    return refunded > total ? bad("over_refund", "refunds and chargebacks exceed the purchase total") : .success(refunded)
+}
+
 // ---------------------------------------------------------------- the checkout check
 
 /// What the merchant demands of an agent.
@@ -448,6 +479,8 @@ public struct CheckoutApproval: Sendable {
 }
 
 public struct CheckoutEvidence: Equatable, Sendable {
+    /// `verified` when `verifyAgentForCheckout(request:)` checked the agent's signed request itself.
+    public var request: String?
     public var agentDid, mandateId, mandateHash, approvalRequestId, approvalKid, approvalError: String?
     public var approvalCounter: UInt32?
 }
@@ -461,12 +494,51 @@ public struct CheckoutDecision: Sendable {
 
 /// The one-call check behind Agent Commerce Check: agent, owner, mandate, cart and merchant policy in, `allow`, `step_up` or `deny`
 /// with reasons out. Deny is final (bad cart, wrong agent, dead mandate, policy unmet); `step_up` means an owner approval of this
-/// exact cart would allow. `agentDid` is the agent whose signed request the caller already verified (this SDK has no RFC 9421
-/// verifier); nil denies `request_unverified`. `keyLog` is the mandate issuer's, and `status` the mandate status answer.
+/// exact cart would allow. `agentDid` is the agent whose signed request the caller already verified (or use the `request:` overload,
+/// which verifies it); nil denies `request_unverified`. `keyLog` is the mandate issuer's, and `status` the mandate status answer.
 public func verifyAgentForCheckout(agentDid: String?, cart: JSONValue, policy: AgentPolicy, agent facts: AgentFacts = AgentFacts(),
                                    mandate: JSONValue? = nil, keyLog: (any OwnerKeys)? = nil, status: JSONValue? = nil,
                                    approval: CheckoutApproval? = nil, now: Int64, origins: [String]? = nil) -> CheckoutDecision {
+    checkout(agentDid: agentDid, requestVerified: false, cart: cart, policy: policy, agent: facts, mandate: mandate, keyLog: keyLog,
+             status: status, approval: approval, now: now, origins: origins)
+}
+
+/// The agent's signed HTTP request, as the merchant received it: `url` is the absolute target URI the agent signed.
+public struct SignedRequest: Sendable {
+    public let method, url: String
+    public let headers: [String: String]
+    public let body: Data
+    public let maxAge: Int64
+
+    public init(method: String, url: String, headers: [String: String], body: Data = Data(), maxAge: Int64 = 300) {
+        self.method = method
+        self.url = url
+        self.headers = headers
+        self.body = body
+        self.maxAge = maxAge
+    }
+}
+
+/// The same check, verifying the agent's RFC 9421 `request` itself (`verifyRequest`, at `now`): a request that does not verify, or
+/// is signed by anything but a did:key, denies `request_unverified`. The cart's `agent_did` must be the signer.
+public func verifyAgentForCheckout(request: SignedRequest, cart: JSONValue, policy: AgentPolicy, agent facts: AgentFacts = AgentFacts(),
+                                   mandate: JSONValue? = nil, keyLog: (any OwnerKeys)? = nil, status: JSONValue? = nil,
+                                   approval: CheckoutApproval? = nil, now: Int64, origins: [String]? = nil) async -> CheckoutDecision {
+    // The cart is judged first, as in the TS SDK: a bad cart denies `bad_cart` whatever the request.
+    var agentDid: String?
+    if cartError(cart) == nil {
+        agentDid = try? await verifyRequest(method: request.method, url: request.url, headers: request.headers, body: request.body,
+                                            now: now, maxAge: request.maxAge).did
+    }
+    return checkout(agentDid: agentDid, requestVerified: agentDid != nil, cart: cart, policy: policy, agent: facts, mandate: mandate,
+                    keyLog: keyLog, status: status, approval: approval, now: now, origins: origins)
+}
+
+private func checkout(agentDid: String?, requestVerified: Bool, cart: JSONValue, policy: AgentPolicy, agent facts: AgentFacts,
+                      mandate: JSONValue?, keyLog: (any OwnerKeys)?, status: JSONValue?, approval: CheckoutApproval?, now: Int64,
+                      origins: [String]?) -> CheckoutDecision {
     var evidence = CheckoutEvidence()
+    if requestVerified { evidence.request = "verified" }
     func deny(_ reasons: String...) -> CheckoutDecision { CheckoutDecision(decision: "deny", reasons: reasons, evidence: evidence) }
     if cartError(cart) != nil { return deny("bad_cart") }
     guard let agent = agentDid else { return deny("request_unverified") }

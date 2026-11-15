@@ -24,24 +24,26 @@ public actor DIDWebResolver {
         self.now = now
     }
 
-    /// The Ed25519 keys of the DID document of `method` (`did:web:...#fragment`), by absolute method id.
-    func keys(for method: String) async throws(OpenEntityError) -> Keys {
+    /// The Ed25519 keys of the DID document of `method` (`did:web:...#fragment`), by absolute method id. With `authentication`, only
+    /// the methods the document lists under `authentication` (the keys that may sign HTTP requests), cached apart from the full set.
+    func keys(for method: String, authentication: Bool = false) async throws(OpenEntityError) -> Keys {
         let did = String(decoding: method.utf8.prefix { $0 != UInt8(ascii: "#") }, as: UTF8.self)
         let url = try didWebURL(did)  // also limits `did` to ASCII, so the String-keyed maps compare bytes
-        if let hit = cache[did] {
+        let slot = authentication ? "authentication:" + did : did
+        if let hit = cache[slot] {
             let age = now() - hit.at
             if age < 600 && (age < 30 || hit.keys.contains { same($0.id, method) }) { return hit.keys }
         }
-        let task = inflight[did] ?? Task { [fetch] in
+        let task = inflight[slot] ?? Task { [fetch] in
             let document = try await fetch(url)
-            return try ed25519Methods(did, document)
+            return try ed25519Methods(did, document, authentication: authentication)
         }
-        inflight[did] = task
+        inflight[slot] = task
         let result = await task.result
-        if inflight[did] == task { inflight[did] = nil }
+        if inflight[slot] == task { inflight[slot] = nil }
         switch result {
         case .success(let keys):
-            cache[did] = (now(), keys)
+            cache[slot] = (now(), keys)
             return keys
         case .failure(let error as OpenEntityError):
             throw error
@@ -125,14 +127,19 @@ func isPathSegment(_ s: String) -> Bool {
 /// did-web-1 steps 2 and 3: the document must name exactly `did`; its Ed25519 keys by absolute method id (`#key-1` is
 /// relative to the DID). A `publicKeyMultibase` Ed25519 multikey or an OKP Ed25519 `publicKeyJwk` with strict base64url `x`;
 /// the method `type` does not decide, and any other key yields nothing. A repeated id keeps its last key, as in TS.
-func ed25519Methods(_ did: String, _ document: JSONValue) throws(OpenEntityError) -> DIDWebResolver.Keys {
+/// With `authentication`, only the methods listed under the document's `authentication` (by id or embedded object).
+func ed25519Methods(_ did: String, _ document: JSONValue, authentication: Bool = false) throws(OpenEntityError) -> DIDWebResolver.Keys {
     guard let id = document["id"]?.stringValue, same(id, did) else {
         throw OpenEntityError("verification_failed", "the document at \(did)'s URL names another DID")
     }
+    func absolute(_ ref: String) -> String { ref.utf8.first == UInt8(ascii: "#") ? did + ref : ref }
+    let allowed: [String]? = authentication
+        ? (document["authentication"]?.arrayValue ?? []).compactMap { ($0.stringValue ?? $0["id"]?.stringValue).map(absolute) } : nil
     var keys: DIDWebResolver.Keys = []
     for method in document["verificationMethod"]?.arrayValue ?? [] {
         guard let ref = method["id"]?.stringValue else { continue }
-        let id = ref.utf8.first == UInt8(ascii: "#") ? did + ref : ref
+        let id = absolute(ref)
+        if let allowed, !allowed.contains(where: { same($0, id) }) { continue }
         var key: [UInt8]?
         if let multibase = method["publicKeyMultibase"]?.stringValue {
             key = try? didKeyPublicKey("did:key:" + multibase)

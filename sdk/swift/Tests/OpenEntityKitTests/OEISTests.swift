@@ -4,7 +4,7 @@ import OpenEntityKit
 import Testing
 
 // The OEIS-1 vectors in test-vectors/, checked as the "test vectors" suite of sdk/ts/test/sdk.test.ts checks them.
-// http-signature.json is the RFC 9421 profile the registry and agents use server side; this SDK does not implement it.
+// http-signature.json (RFC 9421) is checked in HTTPSigTests.swift.
 
 let oeisKeys = (try? vector("keys.json")) ?? .null
 let entity = oeisKeys.at("entity").at("eid").str, second = oeisKeys.at("second").at("eid").str
