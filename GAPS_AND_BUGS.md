@@ -104,3 +104,15 @@ Backlog for this repo. Ticket ids are `G-YYYY-NNN` across the Open Entity produc
 - suggested-fix: smithery.yaml (target remote, URL, config schema for the API key header); publish with the command in its header after `smithery auth login`.
 - linked-pr: (none yet)
 - linked-issue: (none yet)
+
+### G-2026-050 [in-progress] P1 feature
+
+- file: registry/src/commerce.ts, registry/src/index.ts, registry/schema.sql, mcp/src/commerce.ts, integrations/commerce-check/, sdk/python/openentity/commerce_check.py
+- area: Agentic commerce C3.1, C3.2 and C4.3 OpenEntity part (docs/commerce/PLAN.md in the oneentity meta repo)
+- discovered: 2026-11-14 by agentic commerce program
+- summary: Merchants have no hosted way to check an agent purchase: POST /v1/commerce/check answers allow, step_up or deny with a hash-chained evidence record kept 400 days, with MCP tools openentity_commerce_check and openentity_mandate_*, and middleware for Express, Hono/Workers, Next.js, FastAPI and Django.
+- owner-agent: c3-oe
+- reviewer-agent: adversarial-review
+- suggested-fix: verifyAgentForCheckout behind the registry route with registry facts, the owner key log (first_seen kept per entry, fork detection), mandate status from the account service only, single-use request nonces and approvals, per-IP limit; middleware calls the hosted route. Package versions untouched: the release batch ships @openentity/commerce-check and openentity.commerce.
+- linked-pr: https://github.com/moltbot-den/openentity/pull/206
+- linked-issue: (none yet)

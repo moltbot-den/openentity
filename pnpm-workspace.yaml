@@ -10,6 +10,7 @@ packages:
   - integrations/langchain/js
   - integrations/adk/js
   - integrations/vercel-ai
+  - integrations/commerce-check
   - integrations/mastra
   - redirects
   - infra

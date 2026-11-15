@@ -9,6 +9,7 @@ import { type Env, REGISTRY_DID, LOG_ORIGIN, b64, nowIso, originOf } from "./env
 import { type Stmt, chain, consistencyProof, exportObjects, inclusionProof, incorporate, latestSize, leafFor, leafJson, registryKey, sequenced, snapshot, tileIndex, treeRoot, type LeafRow } from "./log.ts";
 import type { Db } from "./db.ts";
 import { sendDigest } from "./digest.ts";
+import { CheckInputError, commerceCheck, evidenceHead, evidenceIntact, mandateCheck, parseCheckBody, readEvidence, sweepCommerce, type CommerceEnv } from "./commerce.ts";
 import { DOMAIN, getJson, platformDomain, resolveDid, resolver, Transient, verifyAlias } from "./aliases.ts";
 
 type C = Context<{ Bindings: Env }>;
@@ -795,6 +796,42 @@ app.post("/verify", async (c) => {
   });
 });
 
+
+// ---------- Agent Commerce Check (docs/commerce spec agent-commerce-check): free, no key, no login ----------
+
+const CHECKS_PER_MINUTE = 30, CHECKS_PER_HOUR = 20000;
+async function commerceBudget(c: C) {
+  // Every check stores a record for 400 days: a global hourly cap bounds what a spread of addresses can store. ponytail: one global counter, per-ASN limits if it is ever hit.
+  if ((await bump(c.env.db, "ccg", nowIso().slice(0, 13))) > CHECKS_PER_HOUR) fail(429, "rate_limited", "commerce checks are paused for this hour");
+  if ((await bump(c.env.db, `ccm:${await salted(c.env, clientIp(c))}`, nowIso().slice(0, 16))) > CHECKS_PER_MINUTE) fail(429, "rate_limited", `at most ${CHECKS_PER_MINUTE} commerce checks per minute per IP`);
+}
+app.post("/commerce/check", async (c) => {
+  await commerceBudget(c);
+  const body = await readJson(c, false);
+  try {
+    const r = await commerceCheck(c.env as CommerceEnv, parseCheckBody(body));
+    return c.json(r);
+  } catch (e) {
+    if (e instanceof CheckInputError) return fail(400, e.code, e.message);
+    throw e;
+  }
+});
+/** The record a merchant keeps for a dispute: re-hash it (JCS without `hash`) and compare. The id is a random 128-bit token. */
+app.get("/commerce/evidence/:id", async (c) => {
+  await fetchBudget(c);
+  const r = await readEvidence(c.env, c.req.param("id"));
+  return r ? c.json({ ...r, intact: await evidenceIntact(r) }) : fail(404, "evidence_not_found", "no such evidence record (kept 400 days)");
+});
+app.post("/commerce/mandate", async (c) => {
+  await commerceBudget(c);
+  const o = await readJson(c, false);
+  try { return c.json(await mandateCheck(c.env as CommerceEnv, o?.mandate, typeof o?.agent_did === "string" ? o.agent_did : undefined)); } catch (e) {
+    if (e instanceof CheckInputError) return fail(400, e.code, e.message);
+    throw e;
+  }
+});
+app.get("/commerce/head", async (c) => c.json(await evidenceHead(c.env)));
+
 async function stats(env: Env) {
   const db = env.db;
   const byLevel = await db.all<{ level: number; n: number }>("SELECT level, COUNT(*) AS n FROM entities WHERE suppressed = 0 AND level IS NOT NULL GROUP BY level");
@@ -1042,6 +1079,7 @@ export async function scheduled(env: Env) {
   if (s) await sendDigest(env, s).catch((e) => console.error("digest", e));
   // IP and stamp counters live 7 days, email hashes 24 hours, per-minute counters 1 hour (PRD 8, 7.3).
   const ago = (ms: number, len: number) => new Date(Date.now() - ms).toISOString().slice(0, len);
+  await step("commerce", () => sweepCommerce(env));
   await step("cleanup", () => env.db.run("DELETE FROM rate_events WHERE (key LIKE 'sub:%' AND window_start < $1) OR (key LIKE 'ipm:%' AND window_start < $2) OR (key LIKE 'fsm:%' AND window_start < $2) OR (key LIKE 'rdm:%' AND window_start < $2) OR window_start < $3 OR (window_start = 'fs' AND count < $4)", [ago(86400_000, 10), ago(3600_000, 16), ago(7 * 86400_000, 10), Math.floor(Date.now() / 1000) - FUNNEL_TTL]));
   // Heartbeat: one per fully successful run (every 10 minutes). The CronStalled alarm treats a missing one as a failure.
   if (failures.length) throw new AggregateError(failures, `scheduled: ${failures.length} step(s) failed`);

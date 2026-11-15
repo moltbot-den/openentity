@@ -35,7 +35,7 @@ export async function getJson(url: string, accept = "application/json", strict =
 }
 
 /** GET text from a host the caller does not control: public https hosts only, connected to the one address validated (no second resolution), no redirects, 5 s overall, 256 KB at most. Null on any failure. */
-async function getText(url: string, accept: string, strict = false): Promise<string | null> {
+export async function getText(url: string, accept: string, strict = false): Promise<string | null> {
   let u: URL;
   try { u = new URL(url); } catch { return null; }
   const pin = await publicAddress(u, strict);

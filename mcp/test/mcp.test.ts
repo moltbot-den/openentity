@@ -55,9 +55,24 @@ describe("openentity MCP server", () => {
   it("lists the tools with short verb-first descriptions", async () => {
     const { tools } = await rpc("tools/list");
     expect(tools.map((t: any) => t.name).sort()).toEqual([
-      "openentity_adopt", "openentity_alias_add", "openentity_card", "openentity_export_key", "openentity_find", "openentity_present", "openentity_read", "openentity_record", "openentity_resolve", "openentity_self", "openentity_stats", "openentity_verify", "openentity_withdraw",
+      "openentity_adopt", "openentity_alias_add", "openentity_card", "openentity_commerce_check", "openentity_export_key", "openentity_find", "openentity_mandate_covers", "openentity_mandate_verify", "openentity_present", "openentity_read", "openentity_record", "openentity_resolve", "openentity_self", "openentity_stats", "openentity_verify", "openentity_withdraw",
     ]);
     for (const t of tools) expect(t.description).toMatch(/^(Read|Add|Adopt|Resolve|Verify|Append|Withdraw|Find|Prove|Export)\b/);
+  });
+
+  it("commerce tools: check an agent purchase, verify and cover a mandate", async () => {
+    const agent = await generateKeyPair(), owner = "did:web:account.openentity.org:o:" + "a".repeat(52);
+    const cart = { profile: "cart/1", merchant: "did:web:shop.example", agent_did: agent.did, lines: [{ sku: "a", title: "A", qty: 1, unit: 900 }], total: 900, currency: "USD", rail: "credits", mandate_id: null };
+    // An unsigned request is a deny with evidence, never a crash.
+    const c = await tool("openentity_commerce_check", { request: { method: "POST", url: "https://shop.example/buy", headers: {} }, cart, policy: {} });
+    expect(c.isError).toBe(false);
+    expect(c.json).toMatchObject({ decision: "deny", reasons: ["request_unverified"] });
+    expect((await tool("openentity_commerce_check", { request: { method: "POST", url: "https://shop.example/buy", headers: {} }, cart: {}, policy: { merchant: "did:web:nobody.example" } })).json).toMatchObject({ error: "unknown_merchant" });
+    const m = { mandate_id: "md_" + "a".repeat(26), agent_did: agent.did, limits: { currency: "USD", per_tx_max: 5000, period: "P1D", period_max: 20000, total_max: 100000 }, scope: { merchants: ["did:web:shop.example"], rails: ["credits"] }, step_up_over: 2500 };
+    expect((await tool("openentity_mandate_covers", { mandate: m, cart: { ...cart, mandate_id: m.mandate_id } })).json).toMatchObject({ ok: true, step_up_required: false });
+    expect((await tool("openentity_mandate_covers", { mandate: m, cart: { ...cart, mandate_id: m.mandate_id, lines: [{ sku: "a", title: "A", qty: 1, unit: 6000 }], total: 6000 } })).json).toMatchObject({ ok: false, reason: "over_limit" });
+    // An owner key log this registry cannot read is a refusal, not an exception.
+    expect((await tool("openentity_mandate_verify", { mandate: { ...m, issuer_did: owner } })).json).toMatchObject({ ok: false, error: "no_key_log" });
   });
 
   it("reads llms.txt, the declaration and one spec section", async () => {

@@ -49,9 +49,9 @@ async function tool(name: string, args: Record<string, unknown> = {}) {
 }
 
 describe("local MCP server", () => {
-  it("lists the pairing and owner tools", async () => {
+  it("lists the pairing, owner and commerce tools", async () => {
     const { tools } = await client.listTools();
-    expect(tools.map((t) => t.name).sort()).toEqual(["openentity_pair", "owner_ask_approval", "owner_inbox", "owner_message", "owner_status"]);
+    expect(tools.map((t) => t.name).sort()).toEqual(["openentity_commerce_check", "openentity_mandate_covers", "openentity_mandate_verify", "openentity_pair", "owner_ask_approval", "owner_inbox", "owner_message", "owner_status"]);
   });
 
   it("owner tools say how to start when this machine holds no key", async () => {
