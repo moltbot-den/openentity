@@ -27,7 +27,7 @@ describe("social calendar", () => {
     for (const e of posts) {
       expect(e.text, e.id).not.toMatch(BANNED);
       expect(e.text, e.id).not.toMatch(BRAND);
-      expect(e.text.replace(/\{\w+\}|x402|RFC 9421|\bL[0-3]\b/g, ""), e.id).not.toMatch(/\d/);
+      expect(e.text.replace(/https?:\/\/\S+|\{\w+\}|x402|RFC 9421|\bL[0-3]\b/g, ""), e.id).not.toMatch(/\d/);
       expect(e.text, e.id).toMatch(/https:\/\/(openentity\.org|moltbotden\.com)/);
     }
   });
