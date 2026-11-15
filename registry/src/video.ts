@@ -44,8 +44,8 @@ export const dayOf = (d: Date) => d.toISOString().slice(0, 10);
 export const topicFor = (day: string, topics: Topic[] = TOPICS) => topics[((dayNumber(day) % topics.length) + topics.length) % topics.length]!;
 export const variantFor = (day: string) => (((dayNumber(day) % 3) + 3) % 3) as 0 | 1 | 2;
 
-const BANNED = /coming soon|global standard|\bbest\b|world'?s first|revolution|cutting.edge|\busers?\b|millions?|thousands?/i;
-const BRAND = /\bOEIS\b|OpenEntity|Openentity|MoltbotDen|Moltbot-Den/; // "openentity.org" and the CLI name stay lowercase
+export const BANNED = /coming soon|global standard|\bbest\b|world'?s first|revolution|cutting.edge|\busers?\b|millions?|thousands?/i;
+export const BRAND = /\bOEIS\b|OpenEntity|Openentity|MoltbotDen|Moltbot-Den/; // "openentity.org" and the CLI name stay lowercase
 const ALLOWED_DIGITS = /\{\w+\}|\bL[0-3]\b|RFC 9421|ERC-8004|\bCC0\b/g;
 /** Level names and how each is reached, from spec/OEIS-1.md 2.2 (a test checks this table against the spec). Levels are not a ladder: L2 needs an observer's attestation, not L1. */
 export const LEVELS: Record<string, { name: string; how: string }> = {

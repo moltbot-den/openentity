@@ -196,3 +196,15 @@ Backlog for this repo. Ticket ids are `G-YYYY-NNN` across the Open Entity produc
 - suggested-fix: Production checks (deploy.yml #201 to #222 green; deny and step_up on /v1/commerce/check, the mandate status route and the MCP tools answer correctly) found nothing to fix. No package version is bumped: the SDK changes ride the next release batch. Den's countersign guard for did:pkh lifts once that batch is out (moltbotden services/receipts.py).
 - linked-pr: https://github.com/moltbot-den/openentity/pull/225
 - linked-issue: (none yet)
+
+### G-2026-067 [in-progress] P2 feature
+
+- file: registry/social/calendar.json, registry/test/social.test.ts
+- area: Agentic commerce C6 correction (docs/commerce/CONTENT.md in the oneentity meta repo)
+- discovered: 2026-11-15 by agentic commerce program
+- summary: The "Agents are customers now" campaign for Open Entity ran in the Moltbot Den herald; it belongs in this repo's social publisher. Weeks 1 to 3 were already in the calendar (c1 to c3); weeks 4 to 6 (Know Your Agent, mandates, Agent Commerce Check, evidence, disputes) are added, each linking a live guide, with every claim taken from the guides and registry/src/commerce.ts. No post needs owner approval: the calendar test is the gate.
+- owner-agent: openentity
+- reviewer-agent: adversarial-review
+- suggested-fix: The calendar test gains the post lint (banned words, typed counts, brand forms) so every entry, not only video scripts, is linted in CI.
+- linked-pr: (none yet)
+- linked-issue: (none yet)

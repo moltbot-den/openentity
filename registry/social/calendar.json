@@ -163,5 +163,30 @@
   "id": "2026-12-15",
   "at": "2026-12-15T15:00:00Z",
   "text": "Open Entity, one month of posts in: {total} entities, {attestations} attestations, {log_size} log leaves, all from https://openentity.org/v1/stats"
+ },
+ {
+  "id": "c4-oe-1",
+  "at": "2026-12-21T18:00:00Z",
+  "text": "Know Your Agent asks four questions before an agent checks out: which agent, who stands behind it, is it safe, did its owner allow this. Each answer is a signed object you verify yourself. https://openentity.org/guides/know-your-agent"
+ },
+ {
+  "id": "c4-oe-2",
+  "at": "2026-12-22T18:00:00Z",
+  "text": "A mandate is a signed, bounded permission from an owner to one agent: limits, scope, an expiry and a status URL. An agent can never write its own, and the same mandate covers a card, x402, MPP, credits or USDC. https://openentity.org/guides/mandates"
+ },
+ {
+  "id": "c5-oe-1",
+  "at": "2026-12-28T18:00:00Z",
+  "text": "Before you take an agent's money, one call answers allow, step_up or deny with reasons: the request signature, its registry level, an accountable owner, its Secure My Agent security band, any live ClawGRC violation, and the mandate. Free, no key. https://openentity.org/guides/commerce-check"
+ },
+ {
+  "id": "c6-oe-1",
+  "at": "2027-01-04T18:00:00Z",
+  "text": "Every Agent Commerce Check call writes a hash-chained evidence record that you can re-verify yourself. Records outlast the longest card dispute window. https://openentity.org/guides/commerce-check"
+ },
+ {
+  "id": "c6-oe-2",
+  "at": "2027-01-05T18:00:00Z",
+  "text": "When an attestation about your agent is wrong, file a signed Dispute. It goes into the public transparency log, where everyone can check it against whatever answer follows. https://openentity.org/guides/disputes"
  }
 ]
