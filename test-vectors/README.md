@@ -56,8 +56,8 @@ Four directories hold the vectors for `spec/commerce-profile.md`, each one `vect
 |---|---|
 | `mandate-1/` | The mandate/1 digest and every verifier check: valid, offline, expired, not yet valid, revoked, exhausted, wrong agent, wrong owner, closed owner, revoked and foreign device keys, tampered limits, and the digest replay in both directions (an approval signature as a mandate, a mandate signature as an approval) |
 | `cart-1/` | cart/1 canonical forms and digests, carts `cartDigest` refuses, and `mandateCovers` cases: at and over every limit, merchant DID and domain patterns, rails, categories, agent, mandate and currency mismatches |
-| `receipt-1/` | receipt/1 purchase, refund and chargeback with merchant, agent and both proofs; missing, tampered, mislabelled and foreign proofs; malformed receipts |
-| `checkout-1/` | `verifyAgentForCheckout` decisions: allow, step_up (with a valid, expired, denied, wrong-cart and replayed approval) and deny for each mandate and policy failure |
+| `receipt-1/` | receipt/1 purchase, refund and chargeback with merchant, agent and both proofs; missing, tampered, mislabelled and foreign proofs; malformed receipts; `pkh.json` for a buyer whose DID is a did:pkh wallet (EIP-712 countersign, either proof order, tampered, other wallet, a hash that covers `proofs`) |
+| `checkout-1/` | `verifyAgentForCheckout` decisions: allow, step_up (with a valid, expired, denied, wrong-cart and replayed approval, and a web passkey approval whose signature counter advances, repeats or regresses) and deny for each mandate and policy failure |
 
 ## did:web issuers
 

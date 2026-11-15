@@ -12,6 +12,7 @@ import {
   RAILS,
   SPEC,
   a2aExtension,
+  addReceiptEip712Proof,
   adopt,
   agentCard,
   approvalDigest,
@@ -59,6 +60,7 @@ import {
   present,
   publicKeyFromDidKey,
   randomNonce,
+  receiptEip712Digest,
   receiptError,
   record,
   recordEntryHash,
@@ -93,7 +95,7 @@ import {
   verifyRequest,
   verifyResponse,
   withdraw
-} from "./chunk-L37RZYGA.js";
+} from "./chunk-ZYMEN23F.js";
 export {
   A2A_EXTENSION_URI,
   CLIENTS,
@@ -108,6 +110,7 @@ export {
   RAILS,
   SPEC,
   a2aExtension,
+  addReceiptEip712Proof,
   adopt,
   agentCard,
   approvalDigest,
@@ -155,6 +158,7 @@ export {
   present,
   publicKeyFromDidKey,
   randomNonce,
+  receiptEip712Digest,
   receiptError,
   record,
   recordEntryHash,

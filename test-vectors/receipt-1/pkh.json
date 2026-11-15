@@ -1,0 +1,508 @@
+{
+  "description": "receipt/1 vectors for a buyer whose DID is a did:pkh wallet (spec/commerce-profile.md section 4). The wallet signs EIP-712 typed data {objectType: \"receipt/1\", canonicalHash: SHA-256 of JCS(receipt without `proof` and `proofs`), created} under domain {name: \"Open Entity\", version: \"1\"}; the merchant signs eddsa-jcs-2022 as in vectors.json. cases: verifyReceipt(receipt, {require}) must equal `expect`. signing: receiptEip712Digest(unsigned, created) and (merchant_signed, created) both equal `digest` (the merchant's proof is outside the hash), addReceiptEip712Proof(merchant_signed, \"agent\", signature, created) equals `countersigned`, and it refuses a signature by another wallet. The wallet key is the SHA-256 of the string `openentity commerce vector wallet`: a published throwaway.",
+  "warning": "PUBLISHED THROWAWAY KEYS FOR TEST VECTORS ONLY. Every secret is published (test-vectors/approval-2.0/keys.json and test-vectors/keys.json). Anyone can sign with them. Never use them for anything real.",
+  "merchant_did": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+  "agent_did": "did:pkh:eip155:8453:0x3B6aF10b854Bac4D12E106eE7039b4d1353C794b",
+  "cases": [
+    {
+      "name": "merchant-then-wallet",
+      "description": "The merchant signed with Ed25519, then the buyer's wallet countersigned: the typed data hashes the receipt without `proofs`, so the merchant's proof does not change what the wallet signs.",
+      "receipt": {
+        "version": "receipt/1",
+        "receipt_id": "rc_epnbabxzpxpezkdskl76iw5vnp",
+        "kind": "purchase",
+        "refers_to": null,
+        "merchant_did": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+        "agent_did": "did:pkh:eip155:8453:0x3B6aF10b854Bac4D12E106eE7039b4d1353C794b",
+        "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg",
+        "mandate_hash": "c4038f40931a25f9c093468b42eaf10972dfd438afab758d0d5cd5c40b6c8cdd",
+        "cart_digest": "cbc0dde63d67e4d56adc506240d733f7685c3039388c76440aa5b1cfd1011886",
+        "approval_request_id": null,
+        "total": 1000,
+        "currency": "USD",
+        "rail": "x402",
+        "settlement_ref": "0xabababababababababababababababababababababababababababababababab",
+        "created_at": 1794009700,
+        "proofs": [
+          {
+            "by": "merchant",
+            "type": "DataIntegrityProof",
+            "cryptosuite": "eddsa-jcs-2022",
+            "created": "2026-11-07T00:02:00Z",
+            "verificationMethod": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw#z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+            "proofPurpose": "assertionMethod",
+            "proofValue": "z2fCT3zjFipFPz3Kiz71X8SBNgFtRyzwKUwy2Ky439jmry2XKjwhywGNexMue5gGs21M33YVELtHDfUSvzm4bjd9W"
+          },
+          {
+            "by": "agent",
+            "type": "EthereumEip712Signature2021",
+            "created": "2026-11-07T00:02:00Z",
+            "verificationMethod": "did:pkh:eip155:8453:0x3B6aF10b854Bac4D12E106eE7039b4d1353C794b#blockchainAccountId",
+            "proofPurpose": "assertionMethod",
+            "proofValue": "0x9c6ab2488e4d928d66779cc08edecdf5a1cb661e32c5fecbf42334e8735bebf016e28460e6c0883514fc66147c6501fac99c30f76aea619597c59b65def8e0601b"
+          }
+        ]
+      },
+      "require": [
+        "merchant",
+        "agent"
+      ],
+      "expect": {
+        "ok": true,
+        "signed_by": [
+          "merchant",
+          "agent"
+        ]
+      }
+    },
+    {
+      "name": "wallet-then-merchant",
+      "description": "The wallet signed first and the merchant after: order does not matter.",
+      "receipt": {
+        "version": "receipt/1",
+        "receipt_id": "rc_epnbabxzpxpezkdskl76iw5vnp",
+        "kind": "purchase",
+        "refers_to": null,
+        "merchant_did": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+        "agent_did": "did:pkh:eip155:8453:0x3B6aF10b854Bac4D12E106eE7039b4d1353C794b",
+        "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg",
+        "mandate_hash": "c4038f40931a25f9c093468b42eaf10972dfd438afab758d0d5cd5c40b6c8cdd",
+        "cart_digest": "cbc0dde63d67e4d56adc506240d733f7685c3039388c76440aa5b1cfd1011886",
+        "approval_request_id": null,
+        "total": 1000,
+        "currency": "USD",
+        "rail": "x402",
+        "settlement_ref": "0xabababababababababababababababababababababababababababababababab",
+        "created_at": 1794009700,
+        "proofs": [
+          {
+            "by": "agent",
+            "type": "EthereumEip712Signature2021",
+            "created": "2026-11-07T00:02:00Z",
+            "verificationMethod": "did:pkh:eip155:8453:0x3B6aF10b854Bac4D12E106eE7039b4d1353C794b#blockchainAccountId",
+            "proofPurpose": "assertionMethod",
+            "proofValue": "0x9c6ab2488e4d928d66779cc08edecdf5a1cb661e32c5fecbf42334e8735bebf016e28460e6c0883514fc66147c6501fac99c30f76aea619597c59b65def8e0601b"
+          },
+          {
+            "by": "merchant",
+            "type": "DataIntegrityProof",
+            "cryptosuite": "eddsa-jcs-2022",
+            "created": "2026-11-07T00:02:00Z",
+            "verificationMethod": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw#z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+            "proofPurpose": "assertionMethod",
+            "proofValue": "z2fCT3zjFipFPz3Kiz71X8SBNgFtRyzwKUwy2Ky439jmry2XKjwhywGNexMue5gGs21M33YVELtHDfUSvzm4bjd9W"
+          }
+        ]
+      },
+      "require": [
+        "merchant",
+        "agent"
+      ],
+      "expect": {
+        "ok": true,
+        "signed_by": [
+          "agent",
+          "merchant"
+        ]
+      }
+    },
+    {
+      "name": "wallet-only",
+      "description": "Only the wallet signed; the merchant's proof is required too.",
+      "receipt": {
+        "version": "receipt/1",
+        "receipt_id": "rc_epnbabxzpxpezkdskl76iw5vnp",
+        "kind": "purchase",
+        "refers_to": null,
+        "merchant_did": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+        "agent_did": "did:pkh:eip155:8453:0x3B6aF10b854Bac4D12E106eE7039b4d1353C794b",
+        "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg",
+        "mandate_hash": "c4038f40931a25f9c093468b42eaf10972dfd438afab758d0d5cd5c40b6c8cdd",
+        "cart_digest": "cbc0dde63d67e4d56adc506240d733f7685c3039388c76440aa5b1cfd1011886",
+        "approval_request_id": null,
+        "total": 1000,
+        "currency": "USD",
+        "rail": "x402",
+        "settlement_ref": "0xabababababababababababababababababababababababababababababababab",
+        "created_at": 1794009700,
+        "proofs": [
+          {
+            "by": "agent",
+            "type": "EthereumEip712Signature2021",
+            "created": "2026-11-07T00:02:00Z",
+            "verificationMethod": "did:pkh:eip155:8453:0x3B6aF10b854Bac4D12E106eE7039b4d1353C794b#blockchainAccountId",
+            "proofPurpose": "assertionMethod",
+            "proofValue": "0x9c6ab2488e4d928d66779cc08edecdf5a1cb661e32c5fecbf42334e8735bebf016e28460e6c0883514fc66147c6501fac99c30f76aea619597c59b65def8e0601b"
+          }
+        ]
+      },
+      "require": [
+        "merchant",
+        "agent"
+      ],
+      "expect": {
+        "ok": false,
+        "error": "missing_proof"
+      }
+    },
+    {
+      "name": "wallet-only-agent-required",
+      "description": "Only the wallet signed and only the agent's proof is required.",
+      "receipt": {
+        "version": "receipt/1",
+        "receipt_id": "rc_epnbabxzpxpezkdskl76iw5vnp",
+        "kind": "purchase",
+        "refers_to": null,
+        "merchant_did": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+        "agent_did": "did:pkh:eip155:8453:0x3B6aF10b854Bac4D12E106eE7039b4d1353C794b",
+        "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg",
+        "mandate_hash": "c4038f40931a25f9c093468b42eaf10972dfd438afab758d0d5cd5c40b6c8cdd",
+        "cart_digest": "cbc0dde63d67e4d56adc506240d733f7685c3039388c76440aa5b1cfd1011886",
+        "approval_request_id": null,
+        "total": 1000,
+        "currency": "USD",
+        "rail": "x402",
+        "settlement_ref": "0xabababababababababababababababababababababababababababababababab",
+        "created_at": 1794009700,
+        "proofs": [
+          {
+            "by": "agent",
+            "type": "EthereumEip712Signature2021",
+            "created": "2026-11-07T00:02:00Z",
+            "verificationMethod": "did:pkh:eip155:8453:0x3B6aF10b854Bac4D12E106eE7039b4d1353C794b#blockchainAccountId",
+            "proofPurpose": "assertionMethod",
+            "proofValue": "0x9c6ab2488e4d928d66779cc08edecdf5a1cb661e32c5fecbf42334e8735bebf016e28460e6c0883514fc66147c6501fac99c30f76aea619597c59b65def8e0601b"
+          }
+        ]
+      },
+      "require": [
+        "agent"
+      ],
+      "expect": {
+        "ok": true,
+        "signed_by": [
+          "agent"
+        ]
+      }
+    },
+    {
+      "name": "tampered-total",
+      "description": "total changed after the wallet signed.",
+      "receipt": {
+        "version": "receipt/1",
+        "receipt_id": "rc_epnbabxzpxpezkdskl76iw5vnp",
+        "kind": "purchase",
+        "refers_to": null,
+        "merchant_did": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+        "agent_did": "did:pkh:eip155:8453:0x3B6aF10b854Bac4D12E106eE7039b4d1353C794b",
+        "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg",
+        "mandate_hash": "c4038f40931a25f9c093468b42eaf10972dfd438afab758d0d5cd5c40b6c8cdd",
+        "cart_digest": "cbc0dde63d67e4d56adc506240d733f7685c3039388c76440aa5b1cfd1011886",
+        "approval_request_id": null,
+        "total": 1,
+        "currency": "USD",
+        "rail": "x402",
+        "settlement_ref": "0xabababababababababababababababababababababababababababababababab",
+        "created_at": 1794009700,
+        "proofs": [
+          {
+            "by": "merchant",
+            "type": "DataIntegrityProof",
+            "cryptosuite": "eddsa-jcs-2022",
+            "created": "2026-11-07T00:02:00Z",
+            "verificationMethod": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw#z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+            "proofPurpose": "assertionMethod",
+            "proofValue": "z2fCT3zjFipFPz3Kiz71X8SBNgFtRyzwKUwy2Ky439jmry2XKjwhywGNexMue5gGs21M33YVELtHDfUSvzm4bjd9W"
+          },
+          {
+            "by": "agent",
+            "type": "EthereumEip712Signature2021",
+            "created": "2026-11-07T00:02:00Z",
+            "verificationMethod": "did:pkh:eip155:8453:0x3B6aF10b854Bac4D12E106eE7039b4d1353C794b#blockchainAccountId",
+            "proofPurpose": "assertionMethod",
+            "proofValue": "0x9c6ab2488e4d928d66779cc08edecdf5a1cb661e32c5fecbf42334e8735bebf016e28460e6c0883514fc66147c6501fac99c30f76aea619597c59b65def8e0601b"
+          }
+        ]
+      },
+      "require": [
+        "merchant",
+        "agent"
+      ],
+      "expect": {
+        "ok": false,
+        "error": "bad_proof"
+      }
+    },
+    {
+      "name": "other-wallet",
+      "description": "Another wallet's signature under the agent's DID.",
+      "receipt": {
+        "version": "receipt/1",
+        "receipt_id": "rc_epnbabxzpxpezkdskl76iw5vnp",
+        "kind": "purchase",
+        "refers_to": null,
+        "merchant_did": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+        "agent_did": "did:pkh:eip155:8453:0x3B6aF10b854Bac4D12E106eE7039b4d1353C794b",
+        "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg",
+        "mandate_hash": "c4038f40931a25f9c093468b42eaf10972dfd438afab758d0d5cd5c40b6c8cdd",
+        "cart_digest": "cbc0dde63d67e4d56adc506240d733f7685c3039388c76440aa5b1cfd1011886",
+        "approval_request_id": null,
+        "total": 1000,
+        "currency": "USD",
+        "rail": "x402",
+        "settlement_ref": "0xabababababababababababababababababababababababababababababababab",
+        "created_at": 1794009700,
+        "proofs": [
+          {
+            "by": "merchant",
+            "type": "DataIntegrityProof",
+            "cryptosuite": "eddsa-jcs-2022",
+            "created": "2026-11-07T00:02:00Z",
+            "verificationMethod": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw#z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+            "proofPurpose": "assertionMethod",
+            "proofValue": "z2fCT3zjFipFPz3Kiz71X8SBNgFtRyzwKUwy2Ky439jmry2XKjwhywGNexMue5gGs21M33YVELtHDfUSvzm4bjd9W"
+          },
+          {
+            "by": "agent",
+            "type": "EthereumEip712Signature2021",
+            "created": "2026-11-07T00:02:00Z",
+            "verificationMethod": "did:pkh:eip155:8453:0x3B6aF10b854Bac4D12E106eE7039b4d1353C794b#blockchainAccountId",
+            "proofPurpose": "assertionMethod",
+            "proofValue": "0x300f67011610a77f0879630d6a7bd135e7c66fd9417de1c8d29c342ee6df4bd6393409cf8ffeefe4822783eb23f8f98c7192a28ad8d135f386fc8bb7f783bece1c"
+          }
+        ]
+      },
+      "require": [
+        "merchant",
+        "agent"
+      ],
+      "expect": {
+        "ok": false,
+        "error": "bad_proof"
+      }
+    },
+    {
+      "name": "hash-covers-proofs",
+      "description": "A signature over the receipt WITH the merchant's proof inside (hashing minus `proof` only): the buyer could not have signed it before the merchant, and it is refused.",
+      "receipt": {
+        "version": "receipt/1",
+        "receipt_id": "rc_epnbabxzpxpezkdskl76iw5vnp",
+        "kind": "purchase",
+        "refers_to": null,
+        "merchant_did": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+        "agent_did": "did:pkh:eip155:8453:0x3B6aF10b854Bac4D12E106eE7039b4d1353C794b",
+        "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg",
+        "mandate_hash": "c4038f40931a25f9c093468b42eaf10972dfd438afab758d0d5cd5c40b6c8cdd",
+        "cart_digest": "cbc0dde63d67e4d56adc506240d733f7685c3039388c76440aa5b1cfd1011886",
+        "approval_request_id": null,
+        "total": 1000,
+        "currency": "USD",
+        "rail": "x402",
+        "settlement_ref": "0xabababababababababababababababababababababababababababababababab",
+        "created_at": 1794009700,
+        "proofs": [
+          {
+            "by": "merchant",
+            "type": "DataIntegrityProof",
+            "cryptosuite": "eddsa-jcs-2022",
+            "created": "2026-11-07T00:02:00Z",
+            "verificationMethod": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw#z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+            "proofPurpose": "assertionMethod",
+            "proofValue": "z2fCT3zjFipFPz3Kiz71X8SBNgFtRyzwKUwy2Ky439jmry2XKjwhywGNexMue5gGs21M33YVELtHDfUSvzm4bjd9W"
+          },
+          {
+            "by": "agent",
+            "type": "EthereumEip712Signature2021",
+            "created": "2026-11-07T00:02:00Z",
+            "verificationMethod": "did:pkh:eip155:8453:0x3B6aF10b854Bac4D12E106eE7039b4d1353C794b#blockchainAccountId",
+            "proofPurpose": "assertionMethod",
+            "proofValue": "0x62f6105fd139d308f03f53491bd4f13777fdbb101258f259b808f55b527bdeab58391a89f7b2c0375e35fbdc3c5c961893cf9365e13a8cda65a9e25dc7a08af61c"
+          }
+        ]
+      },
+      "require": [
+        "merchant",
+        "agent"
+      ],
+      "expect": {
+        "ok": false,
+        "error": "bad_proof"
+      }
+    },
+    {
+      "name": "object-type-entity-document",
+      "description": "Signed with objectType EntityDocument instead of receipt/1: another domain, refused.",
+      "receipt": {
+        "version": "receipt/1",
+        "receipt_id": "rc_epnbabxzpxpezkdskl76iw5vnp",
+        "kind": "purchase",
+        "refers_to": null,
+        "merchant_did": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+        "agent_did": "did:pkh:eip155:8453:0x3B6aF10b854Bac4D12E106eE7039b4d1353C794b",
+        "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg",
+        "mandate_hash": "c4038f40931a25f9c093468b42eaf10972dfd438afab758d0d5cd5c40b6c8cdd",
+        "cart_digest": "cbc0dde63d67e4d56adc506240d733f7685c3039388c76440aa5b1cfd1011886",
+        "approval_request_id": null,
+        "total": 1000,
+        "currency": "USD",
+        "rail": "x402",
+        "settlement_ref": "0xabababababababababababababababababababababababababababababababab",
+        "created_at": 1794009700,
+        "proofs": [
+          {
+            "by": "merchant",
+            "type": "DataIntegrityProof",
+            "cryptosuite": "eddsa-jcs-2022",
+            "created": "2026-11-07T00:02:00Z",
+            "verificationMethod": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw#z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+            "proofPurpose": "assertionMethod",
+            "proofValue": "z2fCT3zjFipFPz3Kiz71X8SBNgFtRyzwKUwy2Ky439jmry2XKjwhywGNexMue5gGs21M33YVELtHDfUSvzm4bjd9W"
+          },
+          {
+            "by": "agent",
+            "type": "EthereumEip712Signature2021",
+            "created": "2026-11-07T00:02:00Z",
+            "verificationMethod": "did:pkh:eip155:8453:0x3B6aF10b854Bac4D12E106eE7039b4d1353C794b#blockchainAccountId",
+            "proofPurpose": "assertionMethod",
+            "proofValue": "0x063793dc6728fdc27462067e8e7acf771e34aea2525663d2f14912da6936591f2fe896357deaa91f69d6c29f72ab5d4d09d56581aefa43ff2d1e870ddfede4661c"
+          }
+        ]
+      },
+      "require": [
+        "merchant",
+        "agent"
+      ],
+      "expect": {
+        "ok": false,
+        "error": "bad_proof"
+      }
+    },
+    {
+      "name": "proof-mislabelled-merchant",
+      "description": "The wallet's proof presented as the merchant's.",
+      "receipt": {
+        "version": "receipt/1",
+        "receipt_id": "rc_epnbabxzpxpezkdskl76iw5vnp",
+        "kind": "purchase",
+        "refers_to": null,
+        "merchant_did": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+        "agent_did": "did:pkh:eip155:8453:0x3B6aF10b854Bac4D12E106eE7039b4d1353C794b",
+        "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg",
+        "mandate_hash": "c4038f40931a25f9c093468b42eaf10972dfd438afab758d0d5cd5c40b6c8cdd",
+        "cart_digest": "cbc0dde63d67e4d56adc506240d733f7685c3039388c76440aa5b1cfd1011886",
+        "approval_request_id": null,
+        "total": 1000,
+        "currency": "USD",
+        "rail": "x402",
+        "settlement_ref": "0xabababababababababababababababababababababababababababababababab",
+        "created_at": 1794009700,
+        "proofs": [
+          {
+            "by": "merchant",
+            "type": "EthereumEip712Signature2021",
+            "created": "2026-11-07T00:02:00Z",
+            "verificationMethod": "did:pkh:eip155:8453:0x3B6aF10b854Bac4D12E106eE7039b4d1353C794b#blockchainAccountId",
+            "proofPurpose": "assertionMethod",
+            "proofValue": "0x9c6ab2488e4d928d66779cc08edecdf5a1cb661e32c5fecbf42334e8735bebf016e28460e6c0883514fc66147c6501fac99c30f76aea619597c59b65def8e0601b"
+          }
+        ]
+      },
+      "require": [
+        "merchant",
+        "agent"
+      ],
+      "expect": {
+        "ok": false,
+        "error": "wrong_signer"
+      }
+    }
+  ],
+  "signing": {
+    "wallet_address": "0x3B6aF10b854Bac4D12E106eE7039b4d1353C794b",
+    "agent_did": "did:pkh:eip155:8453:0x3B6aF10b854Bac4D12E106eE7039b4d1353C794b",
+    "created": "2026-11-07T00:02:00Z",
+    "unsigned": {
+      "version": "receipt/1",
+      "receipt_id": "rc_epnbabxzpxpezkdskl76iw5vnp",
+      "kind": "purchase",
+      "refers_to": null,
+      "merchant_did": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+      "agent_did": "did:pkh:eip155:8453:0x3B6aF10b854Bac4D12E106eE7039b4d1353C794b",
+      "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg",
+      "mandate_hash": "c4038f40931a25f9c093468b42eaf10972dfd438afab758d0d5cd5c40b6c8cdd",
+      "cart_digest": "cbc0dde63d67e4d56adc506240d733f7685c3039388c76440aa5b1cfd1011886",
+      "approval_request_id": null,
+      "total": 1000,
+      "currency": "USD",
+      "rail": "x402",
+      "settlement_ref": "0xabababababababababababababababababababababababababababababababab",
+      "created_at": 1794009700
+    },
+    "merchant_signed": {
+      "version": "receipt/1",
+      "receipt_id": "rc_epnbabxzpxpezkdskl76iw5vnp",
+      "kind": "purchase",
+      "refers_to": null,
+      "merchant_did": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+      "agent_did": "did:pkh:eip155:8453:0x3B6aF10b854Bac4D12E106eE7039b4d1353C794b",
+      "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg",
+      "mandate_hash": "c4038f40931a25f9c093468b42eaf10972dfd438afab758d0d5cd5c40b6c8cdd",
+      "cart_digest": "cbc0dde63d67e4d56adc506240d733f7685c3039388c76440aa5b1cfd1011886",
+      "approval_request_id": null,
+      "total": 1000,
+      "currency": "USD",
+      "rail": "x402",
+      "settlement_ref": "0xabababababababababababababababababababababababababababababababab",
+      "created_at": 1794009700,
+      "proofs": [
+        {
+          "by": "merchant",
+          "type": "DataIntegrityProof",
+          "cryptosuite": "eddsa-jcs-2022",
+          "created": "2026-11-07T00:02:00Z",
+          "verificationMethod": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw#z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+          "proofPurpose": "assertionMethod",
+          "proofValue": "z2fCT3zjFipFPz3Kiz71X8SBNgFtRyzwKUwy2Ky439jmry2XKjwhywGNexMue5gGs21M33YVELtHDfUSvzm4bjd9W"
+        }
+      ]
+    },
+    "digest": "0xcf211da275dd9b4e7bb94c1b97ce31d9992b37dfe2c85b595de901a8657c218b",
+    "signature": "0x9c6ab2488e4d928d66779cc08edecdf5a1cb661e32c5fecbf42334e8735bebf016e28460e6c0883514fc66147c6501fac99c30f76aea619597c59b65def8e0601b",
+    "countersigned": {
+      "version": "receipt/1",
+      "receipt_id": "rc_epnbabxzpxpezkdskl76iw5vnp",
+      "kind": "purchase",
+      "refers_to": null,
+      "merchant_did": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+      "agent_did": "did:pkh:eip155:8453:0x3B6aF10b854Bac4D12E106eE7039b4d1353C794b",
+      "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg",
+      "mandate_hash": "c4038f40931a25f9c093468b42eaf10972dfd438afab758d0d5cd5c40b6c8cdd",
+      "cart_digest": "cbc0dde63d67e4d56adc506240d733f7685c3039388c76440aa5b1cfd1011886",
+      "approval_request_id": null,
+      "total": 1000,
+      "currency": "USD",
+      "rail": "x402",
+      "settlement_ref": "0xabababababababababababababababababababababababababababababababab",
+      "created_at": 1794009700,
+      "proofs": [
+        {
+          "by": "merchant",
+          "type": "DataIntegrityProof",
+          "cryptosuite": "eddsa-jcs-2022",
+          "created": "2026-11-07T00:02:00Z",
+          "verificationMethod": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw#z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+          "proofPurpose": "assertionMethod",
+          "proofValue": "z2fCT3zjFipFPz3Kiz71X8SBNgFtRyzwKUwy2Ky439jmry2XKjwhywGNexMue5gGs21M33YVELtHDfUSvzm4bjd9W"
+        },
+        {
+          "by": "agent",
+          "type": "EthereumEip712Signature2021",
+          "created": "2026-11-07T00:02:00Z",
+          "verificationMethod": "did:pkh:eip155:8453:0x3B6aF10b854Bac4D12E106eE7039b4d1353C794b#blockchainAccountId",
+          "proofPurpose": "assertionMethod",
+          "proofValue": "0x9c6ab2488e4d928d66779cc08edecdf5a1cb661e32c5fecbf42334e8735bebf016e28460e6c0883514fc66147c6501fac99c30f76aea619597c59b65def8e0601b"
+        }
+      ]
+    }
+  }
+}

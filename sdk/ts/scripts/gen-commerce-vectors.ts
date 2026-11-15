@@ -5,7 +5,9 @@ import { p256 } from "@noble/curves/nist.js";
 import { sha256 as nobleSha256 } from "@noble/hashes/sha2.js";
 import { readFileSync } from "node:fs";
 import { canonicalize, keyPairFromSeed, approvalDigest, payloadDigest, mandateDigest, signReceipt, signProof, cartDigest } from "../src/index.ts";
-import { buildOwnerVectors } from "./gen-owner-vectors.ts";
+import { hashTypedData } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
+import { buildOwnerVectors, webPasskey } from "./gen-owner-vectors.ts";
 
 const sha = (d: string | Uint8Array) => nobleSha256(typeof d === "string" ? new TextEncoder().encode(d) : d);
 const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
@@ -18,6 +20,7 @@ const base32 = (b: Uint8Array) => {
 const id = (prefix: string, name: string) => `${prefix}_${base32(sha(`${prefix} vector ${name}`)).slice(0, 26)}`;
 
 const owner = buildOwnerVectors();
+const web = webPasskey();
 const AK = (owner["approval-2.0/keys.json"] as { keys: Record<string, { secret: string; kid: string }> }).keys;
 const AV = owner["approval-2.0/vectors.json"] as { key_states: Record<string, { did: string }>; cases: { approval: Record<string, unknown> }[] };
 const OWNER_DID = AV.key_states.owner.did;
@@ -199,17 +202,60 @@ export async function buildCommerceVectors(): Promise<Record<string, object>> {
     rcase("no-mandate", "A purchase approved per cart: no mandate, an approval request id.", await byM({ ...purchase, mandate_id: null, mandate_hash: null, approval_request_id: "req_cart:7" }), { ok: true, signed_by: ["merchant"] }),
     rcase("unknown-kind", "kind outside the profile.", { ...purchase, kind: "void" }, { ok: false, error: "malformed" }),
   ];
+  // ---------------------------------------------------------------- receipts with a did:pkh party (EIP-712, signed by the wallet through viem, independent of the SDK digest)
+  const wallet = privateKeyToAccount(`0x${hex(sha("openentity commerce vector wallet"))}`);
+  const PKH = `did:pkh:eip155:8453:${wallet.address}`;
+  const wallet2 = privateKeyToAccount(`0x${hex(sha("openentity commerce vector other wallet"))}`);
+  const pkhPurchase = { ...purchase, agent_did: PKH };
+  const typed = (obj: object, objectType = "receipt/1", created = CREATED) => ({
+    domain: { name: "Open Entity", version: "1" },
+    types: { OpenEntityObject: [{ name: "objectType", type: "string" }, { name: "canonicalHash", type: "bytes32" }, { name: "created", type: "string" }] },
+    primaryType: "OpenEntityObject" as const,
+    message: { objectType, canonicalHash: `0x${hex(sha(canonicalize(obj)))}` as `0x${string}`, created },
+  });
+  const eipProof = async (obj: object, who = wallet, objectType = "receipt/1") =>
+    ({ by: "agent", type: "EthereumEip712Signature2021", created: CREATED, verificationMethod: `${PKH}#blockchainAccountId`, proofPurpose: "assertionMethod", proofValue: await who.signTypedData(typed(obj, objectType)) });
+  const pkhByM = await signReceipt(pkhPurchase, merchant, "merchant", CREATED);
+  const walletProof = await eipProof(pkhPurchase);
+  const pkhBoth = { ...pkhByM, proofs: [...pkhByM.proofs!, walletProof] };
+  const pkhCase = (name: string, description: string, receipt: unknown, expect: object, require = ["merchant", "agent"]) => ({ name, description, receipt, require, expect });
+  const pkhCases = [
+    pkhCase("merchant-then-wallet", "The merchant signed with Ed25519, then the buyer's wallet countersigned: the typed data hashes the receipt without `proofs`, so the merchant's proof does not change what the wallet signs.", pkhBoth, { ok: true, signed_by: ["merchant", "agent"] }),
+    pkhCase("wallet-then-merchant", "The wallet signed first and the merchant after: order does not matter.", { ...pkhPurchase, proofs: [walletProof, pkhByM.proofs![0]] }, { ok: true, signed_by: ["agent", "merchant"] }),
+    pkhCase("wallet-only", "Only the wallet signed; the merchant's proof is required too.", { ...pkhPurchase, proofs: [walletProof] }, { ok: false, error: "missing_proof" }),
+    pkhCase("wallet-only-agent-required", "Only the wallet signed and only the agent's proof is required.", { ...pkhPurchase, proofs: [walletProof] }, { ok: true, signed_by: ["agent"] }, ["agent"]),
+    pkhCase("tampered-total", "total changed after the wallet signed.", { ...pkhBoth, total: 1 }, { ok: false, error: "bad_proof" }),
+    pkhCase("other-wallet", "Another wallet's signature under the agent's DID.", { ...pkhByM, proofs: [...pkhByM.proofs!, await eipProof(pkhPurchase, wallet2)] }, { ok: false, error: "bad_proof" }),
+    pkhCase("hash-covers-proofs", "A signature over the receipt WITH the merchant's proof inside (hashing minus `proof` only): the buyer could not have signed it before the merchant, and it is refused.", { ...pkhByM, proofs: [...pkhByM.proofs!, await eipProof(pkhByM)] }, { ok: false, error: "bad_proof" }),
+    pkhCase("object-type-entity-document", "Signed with objectType EntityDocument instead of receipt/1: another domain, refused.", { ...pkhByM, proofs: [...pkhByM.proofs!, await eipProof(pkhPurchase, wallet, "EntityDocument")] }, { ok: false, error: "bad_proof" }),
+    pkhCase("proof-mislabelled-merchant", "The wallet's proof presented as the merchant's.", { ...pkhPurchase, proofs: [{ ...walletProof, by: "merchant" }] }, { ok: false, error: "wrong_signer" }),
+  ];
+  const pkhSigning = {
+    wallet_address: wallet.address,
+    agent_did: PKH,
+    created: CREATED,
+    unsigned: pkhPurchase,
+    merchant_signed: pkhByM,
+    digest: hashTypedData(typed(pkhPurchase)),
+    signature: walletProof.proofValue,
+    countersigned: pkhBoth,
+  };
   // ---------------------------------------------------------------- checkout decisions
   const VERIFIER = MERCHANT;
   const approve = (c: unknown, name: string, o: Record<string, unknown> = {}) => {
     const f = { verifier_did: VERIFIER, owner_did: OWNER_DID, request_id: `req_${name}`, payload_digest: cartDigest(c), decision: "approve", expires_at: NOW + 300, ...o };
     return { approval: { version: "approval/2.0", ...f, ...p256Sign("ios", approvalDigest(f as never)) }, verifier_did: f.verifier_did, request_id: f.request_id };
   };
+  // A WebAuthn approval (the owner's web passkey) carries a signature counter; `counter` in the input is the one the merchant stored for that key.
+  const approveWeb = (c: unknown, name: string, signed: number, stored: number) => {
+    const f = { verifier_did: VERIFIER, owner_did: OWNER_DID, request_id: `req_${name}`, payload_digest: cartDigest(c), decision: "approve", expires_at: NOW + 300 };
+    return { approval: { version: "approval/2.0", ...f, device_id: web.kid, form: "webauthn", ...web.assert(approvalDigest(f as never), { counter: signed }) }, verifier_did: f.verifier_did, request_id: f.request_id, counter: stored };
+  };
   const big = stepUp(3000), over = stepUp(5001);
   const policy = { min_level: 1, require_owner: true, require_mandate: true, min_security_band: "good", accept_issuers: ["did:web:securemyagent.ai"] };
   const facts = { level: 2, owner_did: OWNER_DID, security_band: "strong", security_issuer: "did:web:securemyagent.ai" };
   const base = { agent_did: AGENT, cart: cart(), merchant_policy: policy, agent: facts, mandate: M.long, key_state: "owner", status: active, now: NOW };
-  const k = (name: string, description: string, input: Record<string, unknown>, expect: { decision: string; reasons: string[]; approval_error?: string }) => ({ name, description, input: { ...base, ...input }, expect });
+  const k = (name: string, description: string, input: Record<string, unknown>, expect: { decision: string; reasons: string[]; approval_error?: string; approval_counter?: number }) => ({ name, description, input: { ...base, ...input }, expect });
   const checkoutCases = [
     k("allow-mandate-covers", "Mandate covers a small cart and the policy is met.", {}, { decision: "allow", reasons: ["mandate_covers_cart"] }),
     k("step-up-over-threshold", "Over step_up_over and no approval.", { cart: big }, { decision: "step_up", reasons: ["step_up_over"] }),
@@ -218,6 +264,10 @@ export async function buildCommerceVectors(): Promise<Record<string, object>> {
     k("step-up-approval-expired", "An expired approval.", { cart: big, approval: approve(big, "old", { expires_at: NOW - 1 }) }, { decision: "step_up", reasons: ["step_up_over"], approval_error: "expired" }),
     k("step-up-approval-deny", "The owner denied this cart.", { cart: big, approval: approve(big, "no", { decision: "deny" }) }, { decision: "step_up", reasons: ["step_up_over"], approval_error: "bad_decision" }),
     k("step-up-mandate-signature-as-approval", "The mandate's signature pasted into an approval/2.0: a different digest prefix, so it cannot verify.", { cart: big, approval: { approval: { ...approve(big, "replay").approval, device_id: M.long.signature.device_id, signature: M.long.signature.signature }, verifier_did: VERIFIER, request_id: "req_replay" } }, { decision: "step_up", reasons: ["step_up_over"], approval_error: "bad_signature" }),
+    k("allow-webauthn-counter-advances", "A web passkey approval whose signature counter (7) is above the stored one (6): allowed, and evidence returns 7 to store.", { cart: big, approval: approveWeb(big, "web7", 7, 6) }, { decision: "allow", reasons: ["owner_approved_cart", "step_up_over"], approval_counter: 7 }),
+    k("allow-webauthn-no-counter", "An authenticator that keeps no counter signs 0 and 0 is stored: allowed.", { cart: big, approval: approveWeb(big, "web0", 0, 0) }, { decision: "allow", reasons: ["owner_approved_cart", "step_up_over"], approval_counter: 0 }),
+    k("step-up-webauthn-counter-replayed", "The same approval offered again after its counter (7) was stored: the counter did not increase, so it is a replay.", { cart: big, approval: approveWeb(big, "web7", 7, 7) }, { decision: "step_up", reasons: ["step_up_over"], approval_error: "counter_replayed" }),
+    k("step-up-webauthn-counter-regressed", "A cloned authenticator signs counter 5 below the stored 6.", { cart: big, approval: approveWeb(big, "web5", 5, 6) }, { decision: "step_up", reasons: ["step_up_over"], approval_error: "counter_replayed" }),
     k("step-up-over-limit", "Over per_tx_max: only this cart's approval can allow it.", { cart: over }, { decision: "step_up", reasons: ["mandate_over_limit"] }),
     k("allow-over-limit-approved", "Over per_tx_max with the owner's approval of this exact cart.", { cart: over, approval: approve(over, "over") }, { decision: "allow", reasons: ["owner_approved_cart", "mandate_over_limit"] }),
     k("step-up-out-of-scope", "A merchant outside the mandate's scope.", { cart: cart({ merchant: "did:web:other.example" }) }, { decision: "step_up", reasons: ["mandate_out_of_scope"] }),
@@ -277,6 +327,9 @@ export async function buildCommerceVectors(): Promise<Record<string, object>> {
     "cart-1/vectors.json": w("cart/1 vectors. carts: valid summaries with their canonical form and payload digest (the payload_digest of the approval/2.0 that approves the purchase). invalid: cartDigest must refuse. mandates: signed mandate/1 objects the covers cases refer to by name. covers: mandateCovers(mandates[mandate], cart, {spent}) must equal `expect`.", {
       carts, invalid: cartsInvalid, mandates: CP, covers: coversCases,
     }),
+    "receipt-1/pkh.json": w("receipt/1 vectors for a buyer whose DID is a did:pkh wallet (spec/commerce-profile.md section 4). The wallet signs EIP-712 typed data {objectType: \"receipt/1\", canonicalHash: SHA-256 of JCS(receipt without `proof` and `proofs`), created} under domain {name: \"Open Entity\", version: \"1\"}; the merchant signs eddsa-jcs-2022 as in vectors.json. cases: verifyReceipt(receipt, {require}) must equal `expect`. signing: receiptEip712Digest(unsigned, created) and (merchant_signed, created) both equal `digest` (the merchant's proof is outside the hash), addReceiptEip712Proof(merchant_signed, \"agent\", signature, created) equals `countersigned`, and it refuses a signature by another wallet. The wallet key is the SHA-256 of the string `openentity commerce vector wallet`: a published throwaway.", {
+      merchant_did: MERCHANT, agent_did: PKH, cases: pkhCases, signing: pkhSigning,
+    }),
     "receipt-1/vectors.json": w("receipt/1 vectors. Merchant key is the OEIS `second` key, agent the `entity` key (test-vectors/keys.json). cases: verifyReceipt(receipt, {require}) must equal `expect`; `require` defaults to [merchant]. Proofs are eddsa-jcs-2022 over the receipt without `proofs`; `by` is outside the signed proof configuration.", {
       merchant_did: MERCHANT, agent_did: AGENT, cases: receiptCases,
     }),
@@ -297,5 +350,5 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     mkdirSync(new URL(path.split("/")[0] + "/", dir), { recursive: true });
     writeFileSync(new URL(path, dir), serialize(v));
   }
-  console.log("wrote mandate-1, cart-1, receipt-1, checkout-1 and quorum-1 vectors to", dir.pathname);
+  console.log("wrote mandate-1, cart-1, receipt-1 (and pkh), checkout-1 and quorum-1 vectors to", dir.pathname);
 }

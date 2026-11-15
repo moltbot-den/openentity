@@ -732,6 +732,456 @@
       }
     },
     {
+      "name": "allow-webauthn-counter-advances",
+      "description": "A web passkey approval whose signature counter (7) is above the stored one (6): allowed, and evidence returns 7 to store.",
+      "input": {
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "cart": {
+          "profile": "cart/1",
+          "merchant": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+          "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+          "lines": [
+            {
+              "sku": "sku_big",
+              "title": "sku_big",
+              "qty": 1,
+              "unit": 3000,
+              "category": "software"
+            }
+          ],
+          "total": 3000,
+          "currency": "USD",
+          "rail": "credits",
+          "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg"
+        },
+        "merchant_policy": {
+          "min_level": 1,
+          "require_owner": true,
+          "require_mandate": true,
+          "min_security_band": "good",
+          "accept_issuers": [
+            "did:web:securemyagent.ai"
+          ]
+        },
+        "agent": {
+          "level": 2,
+          "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "security_band": "strong",
+          "security_issuer": "did:web:securemyagent.ai"
+        },
+        "mandate": {
+          "version": "mandate/1",
+          "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg",
+          "issuer_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+          "issued_at": 1794009600,
+          "expires_at": 1796601600,
+          "limits": {
+            "currency": "USD",
+            "per_tx_max": 5000,
+            "period": "P1D",
+            "period_max": 20000,
+            "total_max": 100000
+          },
+          "scope": {
+            "merchants": [
+              "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+              "*.moltbotden.com"
+            ],
+            "categories": [
+              "software",
+              "data"
+            ],
+            "rails": [
+              "card",
+              "x402",
+              "mpp",
+              "credits",
+              "usdc"
+            ]
+          },
+          "step_up_over": 2500,
+          "status": "https://account.openentity.org/v1/mandates/md_4b3eaz4gie3atj4jlyz375pbfg/status",
+          "signature": {
+            "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+            "form": "p256",
+            "signature": "nroQ52XQe3s5Xs7_ZCUA1p33MQ8UyBgscWtCjViHTtoZ4okUeZ1AVdFgoTI95wA7nKjZxi8xccWUFawCLinFHw"
+          }
+        },
+        "key_state": "owner",
+        "status": {
+          "status": "active",
+          "period_spent": 4000,
+          "total_spent": 9000
+        },
+        "now": 1794010600,
+        "approval": {
+          "approval": {
+            "version": "approval/2.0",
+            "verifier_did": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+            "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+            "request_id": "req_web7",
+            "payload_digest": "1a868d7a8b911add85c1618c310b48c127c8f71b59824a2486da8bb93835e524",
+            "decision": "approve",
+            "expires_at": 1794010900,
+            "device_id": "mTluyYyMSPInd1g_ENjr016z9DqqE2ZUX845TdohRVE",
+            "form": "webauthn",
+            "signature": "MEQCIDqzuoAPcolusGozQviqjoxaYvGWtxJ2ziJzS6tU-gXCAiAOIhrd2AUjozf543lz8E25TT3iLhndjTVXXh-4NOv2AA",
+            "authenticator_data": "D3UMQg2RHUXdnWy7aJ1fAnM1wAzOoZElYIW5k5ZyV-MdAAAABw",
+            "client_data_json": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoieXR2NnFUYUlSdHpmTkxjQlZMOTB6cGNEQXJLYWF1a0tZTm5tTjdVXzhvWSIsIm9yaWdpbiI6Imh0dHBzOi8vYWNjb3VudC5vcGVuZW50aXR5Lm9yZyIsImNyb3NzT3JpZ2luIjpmYWxzZX0"
+          },
+          "verifier_did": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+          "request_id": "req_web7",
+          "counter": 6
+        }
+      },
+      "expect": {
+        "decision": "allow",
+        "reasons": [
+          "owner_approved_cart",
+          "step_up_over"
+        ],
+        "approval_counter": 7
+      }
+    },
+    {
+      "name": "allow-webauthn-no-counter",
+      "description": "An authenticator that keeps no counter signs 0 and 0 is stored: allowed.",
+      "input": {
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "cart": {
+          "profile": "cart/1",
+          "merchant": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+          "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+          "lines": [
+            {
+              "sku": "sku_big",
+              "title": "sku_big",
+              "qty": 1,
+              "unit": 3000,
+              "category": "software"
+            }
+          ],
+          "total": 3000,
+          "currency": "USD",
+          "rail": "credits",
+          "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg"
+        },
+        "merchant_policy": {
+          "min_level": 1,
+          "require_owner": true,
+          "require_mandate": true,
+          "min_security_band": "good",
+          "accept_issuers": [
+            "did:web:securemyagent.ai"
+          ]
+        },
+        "agent": {
+          "level": 2,
+          "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "security_band": "strong",
+          "security_issuer": "did:web:securemyagent.ai"
+        },
+        "mandate": {
+          "version": "mandate/1",
+          "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg",
+          "issuer_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+          "issued_at": 1794009600,
+          "expires_at": 1796601600,
+          "limits": {
+            "currency": "USD",
+            "per_tx_max": 5000,
+            "period": "P1D",
+            "period_max": 20000,
+            "total_max": 100000
+          },
+          "scope": {
+            "merchants": [
+              "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+              "*.moltbotden.com"
+            ],
+            "categories": [
+              "software",
+              "data"
+            ],
+            "rails": [
+              "card",
+              "x402",
+              "mpp",
+              "credits",
+              "usdc"
+            ]
+          },
+          "step_up_over": 2500,
+          "status": "https://account.openentity.org/v1/mandates/md_4b3eaz4gie3atj4jlyz375pbfg/status",
+          "signature": {
+            "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+            "form": "p256",
+            "signature": "nroQ52XQe3s5Xs7_ZCUA1p33MQ8UyBgscWtCjViHTtoZ4okUeZ1AVdFgoTI95wA7nKjZxi8xccWUFawCLinFHw"
+          }
+        },
+        "key_state": "owner",
+        "status": {
+          "status": "active",
+          "period_spent": 4000,
+          "total_spent": 9000
+        },
+        "now": 1794010600,
+        "approval": {
+          "approval": {
+            "version": "approval/2.0",
+            "verifier_did": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+            "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+            "request_id": "req_web0",
+            "payload_digest": "1a868d7a8b911add85c1618c310b48c127c8f71b59824a2486da8bb93835e524",
+            "decision": "approve",
+            "expires_at": 1794010900,
+            "device_id": "mTluyYyMSPInd1g_ENjr016z9DqqE2ZUX845TdohRVE",
+            "form": "webauthn",
+            "signature": "MEQCIEdjuhBrwT7yp1Z3_3CvoYPz4nN-CpXIA-Hy6gUUprEXAiAeUEe9YhjQIGhcGoxsai56WcTkoPLqx9Wfwi_PYTLoxw",
+            "authenticator_data": "D3UMQg2RHUXdnWy7aJ1fAnM1wAzOoZElYIW5k5ZyV-MdAAAAAA",
+            "client_data_json": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoibjByejRMQ1J2Q25hbjR6bFh6TWVYVFFIWklXeE9TSVZkeUJLSFJpQmlIVSIsIm9yaWdpbiI6Imh0dHBzOi8vYWNjb3VudC5vcGVuZW50aXR5Lm9yZyIsImNyb3NzT3JpZ2luIjpmYWxzZX0"
+          },
+          "verifier_did": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+          "request_id": "req_web0",
+          "counter": 0
+        }
+      },
+      "expect": {
+        "decision": "allow",
+        "reasons": [
+          "owner_approved_cart",
+          "step_up_over"
+        ],
+        "approval_counter": 0
+      }
+    },
+    {
+      "name": "step-up-webauthn-counter-replayed",
+      "description": "The same approval offered again after its counter (7) was stored: the counter did not increase, so it is a replay.",
+      "input": {
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "cart": {
+          "profile": "cart/1",
+          "merchant": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+          "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+          "lines": [
+            {
+              "sku": "sku_big",
+              "title": "sku_big",
+              "qty": 1,
+              "unit": 3000,
+              "category": "software"
+            }
+          ],
+          "total": 3000,
+          "currency": "USD",
+          "rail": "credits",
+          "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg"
+        },
+        "merchant_policy": {
+          "min_level": 1,
+          "require_owner": true,
+          "require_mandate": true,
+          "min_security_band": "good",
+          "accept_issuers": [
+            "did:web:securemyagent.ai"
+          ]
+        },
+        "agent": {
+          "level": 2,
+          "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "security_band": "strong",
+          "security_issuer": "did:web:securemyagent.ai"
+        },
+        "mandate": {
+          "version": "mandate/1",
+          "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg",
+          "issuer_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+          "issued_at": 1794009600,
+          "expires_at": 1796601600,
+          "limits": {
+            "currency": "USD",
+            "per_tx_max": 5000,
+            "period": "P1D",
+            "period_max": 20000,
+            "total_max": 100000
+          },
+          "scope": {
+            "merchants": [
+              "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+              "*.moltbotden.com"
+            ],
+            "categories": [
+              "software",
+              "data"
+            ],
+            "rails": [
+              "card",
+              "x402",
+              "mpp",
+              "credits",
+              "usdc"
+            ]
+          },
+          "step_up_over": 2500,
+          "status": "https://account.openentity.org/v1/mandates/md_4b3eaz4gie3atj4jlyz375pbfg/status",
+          "signature": {
+            "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+            "form": "p256",
+            "signature": "nroQ52XQe3s5Xs7_ZCUA1p33MQ8UyBgscWtCjViHTtoZ4okUeZ1AVdFgoTI95wA7nKjZxi8xccWUFawCLinFHw"
+          }
+        },
+        "key_state": "owner",
+        "status": {
+          "status": "active",
+          "period_spent": 4000,
+          "total_spent": 9000
+        },
+        "now": 1794010600,
+        "approval": {
+          "approval": {
+            "version": "approval/2.0",
+            "verifier_did": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+            "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+            "request_id": "req_web7",
+            "payload_digest": "1a868d7a8b911add85c1618c310b48c127c8f71b59824a2486da8bb93835e524",
+            "decision": "approve",
+            "expires_at": 1794010900,
+            "device_id": "mTluyYyMSPInd1g_ENjr016z9DqqE2ZUX845TdohRVE",
+            "form": "webauthn",
+            "signature": "MEQCIDqzuoAPcolusGozQviqjoxaYvGWtxJ2ziJzS6tU-gXCAiAOIhrd2AUjozf543lz8E25TT3iLhndjTVXXh-4NOv2AA",
+            "authenticator_data": "D3UMQg2RHUXdnWy7aJ1fAnM1wAzOoZElYIW5k5ZyV-MdAAAABw",
+            "client_data_json": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoieXR2NnFUYUlSdHpmTkxjQlZMOTB6cGNEQXJLYWF1a0tZTm5tTjdVXzhvWSIsIm9yaWdpbiI6Imh0dHBzOi8vYWNjb3VudC5vcGVuZW50aXR5Lm9yZyIsImNyb3NzT3JpZ2luIjpmYWxzZX0"
+          },
+          "verifier_did": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+          "request_id": "req_web7",
+          "counter": 7
+        }
+      },
+      "expect": {
+        "decision": "step_up",
+        "reasons": [
+          "step_up_over"
+        ],
+        "approval_error": "counter_replayed"
+      }
+    },
+    {
+      "name": "step-up-webauthn-counter-regressed",
+      "description": "A cloned authenticator signs counter 5 below the stored 6.",
+      "input": {
+        "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+        "cart": {
+          "profile": "cart/1",
+          "merchant": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+          "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+          "lines": [
+            {
+              "sku": "sku_big",
+              "title": "sku_big",
+              "qty": 1,
+              "unit": 3000,
+              "category": "software"
+            }
+          ],
+          "total": 3000,
+          "currency": "USD",
+          "rail": "credits",
+          "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg"
+        },
+        "merchant_policy": {
+          "min_level": 1,
+          "require_owner": true,
+          "require_mandate": true,
+          "min_security_band": "good",
+          "accept_issuers": [
+            "did:web:securemyagent.ai"
+          ]
+        },
+        "agent": {
+          "level": 2,
+          "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "security_band": "strong",
+          "security_issuer": "did:web:securemyagent.ai"
+        },
+        "mandate": {
+          "version": "mandate/1",
+          "mandate_id": "md_4b3eaz4gie3atj4jlyz375pbfg",
+          "issuer_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "agent_did": "did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
+          "issued_at": 1794009600,
+          "expires_at": 1796601600,
+          "limits": {
+            "currency": "USD",
+            "per_tx_max": 5000,
+            "period": "P1D",
+            "period_max": 20000,
+            "total_max": 100000
+          },
+          "scope": {
+            "merchants": [
+              "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+              "*.moltbotden.com"
+            ],
+            "categories": [
+              "software",
+              "data"
+            ],
+            "rails": [
+              "card",
+              "x402",
+              "mpp",
+              "credits",
+              "usdc"
+            ]
+          },
+          "step_up_over": 2500,
+          "status": "https://account.openentity.org/v1/mandates/md_4b3eaz4gie3atj4jlyz375pbfg/status",
+          "signature": {
+            "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+            "form": "p256",
+            "signature": "nroQ52XQe3s5Xs7_ZCUA1p33MQ8UyBgscWtCjViHTtoZ4okUeZ1AVdFgoTI95wA7nKjZxi8xccWUFawCLinFHw"
+          }
+        },
+        "key_state": "owner",
+        "status": {
+          "status": "active",
+          "period_spent": 4000,
+          "total_spent": 9000
+        },
+        "now": 1794010600,
+        "approval": {
+          "approval": {
+            "version": "approval/2.0",
+            "verifier_did": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+            "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+            "request_id": "req_web5",
+            "payload_digest": "1a868d7a8b911add85c1618c310b48c127c8f71b59824a2486da8bb93835e524",
+            "decision": "approve",
+            "expires_at": 1794010900,
+            "device_id": "mTluyYyMSPInd1g_ENjr016z9DqqE2ZUX845TdohRVE",
+            "form": "webauthn",
+            "signature": "MEUCIQCS5474GfJ48wDjufMAUOGGqXfhy5voUjTo4AEyFTcY2QIgAh_Ww8qFkWeUfN-6jWAeDDrEFDkXk1lESkmFHh3kbnM",
+            "authenticator_data": "D3UMQg2RHUXdnWy7aJ1fAnM1wAzOoZElYIW5k5ZyV-MdAAAABQ",
+            "client_data_json": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiQkQ5blNQQkhWMkcxVUdkVXc3aTJreDk1RzhNSG9rRDhJYmQ3ZW5wcHFLUSIsIm9yaWdpbiI6Imh0dHBzOi8vYWNjb3VudC5vcGVuZW50aXR5Lm9yZyIsImNyb3NzT3JpZ2luIjpmYWxzZX0"
+          },
+          "verifier_did": "did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw",
+          "request_id": "req_web5",
+          "counter": 6
+        }
+      },
+      "expect": {
+        "decision": "step_up",
+        "reasons": [
+          "step_up_over"
+        ],
+        "approval_error": "counter_replayed"
+      }
+    },
+    {
       "name": "step-up-over-limit",
       "description": "Over per_tx_max: only this cart's approval can allow it.",
       "input": {

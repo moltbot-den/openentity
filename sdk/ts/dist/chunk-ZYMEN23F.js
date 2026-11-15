@@ -237,9 +237,7 @@ async function verifyProof(obj, proof, resolver = defaultResolver) {
     }
     if (proof.type === "EthereumEip712Signature2021") {
       if (!keys.address) return { ok: false, signer, error: "signer has no Ethereum address" };
-      const type = obj.type;
-      const objectType = typeof type === "string" ? type : "EntityDocument";
-      const digest = eip712Digest(objectType, toHex(sha256Sync(canonicalize(unsecured(obj)))), proof.created);
+      const digest = eip712Digest(eip712ObjectType(obj), toHex(sha256Sync(canonicalize(unsecured(obj)))), proof.created);
       if (recoverEip712(digest, proofValue).toLowerCase() === keys.address.toLowerCase()) return { ok: true, signer };
       return { ok: false, signer, error: "EIP-712 signer does not match" };
     }
@@ -252,6 +250,10 @@ async function verifyObject(obj, resolver) {
   if (!obj?.proof) return { ok: false, error: "missing proof" };
   return verifyProof(obj, obj.proof, resolver);
 }
+var eip712ObjectType = (obj) => {
+  const { type, version } = obj;
+  return typeof type === "string" ? type : version === "receipt/1" ? version : "EntityDocument";
+};
 var keccak = (s) => keccak_256(utf8(s));
 var EIP712_DOMAIN = keccak(
   concat(keccak("EIP712Domain(string name,string version)"), keccak("Open Entity"), keccak("1"))
@@ -3405,6 +3407,26 @@ async function signReceipt(receipt, kp, by, created, verificationMethod) {
   const proof = await signProof(r, kp, created, verificationMethod);
   return { ...r, proofs: [...r.proofs ?? [], { by, ...proof }] };
 }
+var PKH = /^did:pkh:eip155:\d+:(0x[0-9a-fA-F]{40})$/;
+function receiptEip712Digest(receipt, created) {
+  const e = receiptError(receipt);
+  if (e) throw new OpenEntityError("invalid_input", e);
+  return eip712Digest(eip712ObjectType(receipt), toHex(sha256Sync(canonicalize(unsecured(receipt)))), created);
+}
+function addReceiptEip712Proof(receipt, by, signature, created) {
+  const digest = receiptEip712Digest(receipt, created), r = receipt, did = r[`${by}_did`];
+  const address = PKH.exec(did)?.[1];
+  if (!address) throw new OpenEntityError("invalid_input", `${by}_did is not a did:pkh`);
+  if (r.proofs?.some((p) => p.by === by)) throw new OpenEntityError("invalid_input", `already signed by ${by}`);
+  let signer = "";
+  try {
+    signer = recoverEip712(digest, signature);
+  } catch {
+  }
+  if (signer.toLowerCase() !== address.toLowerCase()) throw new OpenEntityError("invalid_input", `the signature is not by ${by}_did`);
+  const proof = { by, type: "EthereumEip712Signature2021", created, verificationMethod: `${did}#blockchainAccountId`, proofPurpose: "assertionMethod", proofValue: signature };
+  return { ...r, proofs: [...r.proofs ?? [], proof] };
+}
 async function verifyReceipt(receipt, o = {}) {
   const e = receiptError(receipt);
   if (e) return { ok: false, error: "malformed", message: e };
@@ -3593,6 +3615,8 @@ export {
   mandateCovers,
   receiptError,
   signReceipt,
+  receiptEip712Digest,
+  addReceiptEip712Proof,
   verifyReceipt,
   verifyReceiptChain,
   verifyAgentForCheckout

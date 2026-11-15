@@ -73,6 +73,26 @@ describe("receipt/1", () => {
   });
 });
 
+describe("receipt/1 with a did:pkh party (EIP-712)", () => {
+  const V = json("receipt-1/pkh.json"), S = V.signing;
+  for (const c of V.cases)
+    it(c.name, async () => {
+      const r = await oe.verifyReceipt(c.receipt, { require: c.require });
+      expect(r.ok ? { ok: true, signed_by: r.signed_by } : { ok: false, error: r.error }, r.ok ? "" : r.message).toEqual(c.expect);
+    });
+  it("the wallet signs the same digest before and after the merchant's proof", () => {
+    for (const r of [S.unsigned, S.merchant_signed]) expect(`0x${hex(oe.receiptEip712Digest(r, S.created))}`).toBe(S.digest);
+  });
+  it("addReceiptEip712Proof attaches the wallet's signature and refuses another wallet, a repeat and an Ed25519 party", () => {
+    expect(oe.addReceiptEip712Proof(S.merchant_signed, "agent", S.signature, S.created)).toEqual(S.countersigned);
+    const other = V.cases.find((c: { name: string }) => c.name === "other-wallet").receipt.proofs.at(-1).proofValue;
+    expect(() => oe.addReceiptEip712Proof(S.merchant_signed, "agent", other, S.created)).toThrow(/not by agent_did/);
+    expect(() => oe.addReceiptEip712Proof(S.countersigned, "agent", S.signature, S.created)).toThrow(/already signed/);
+    expect(() => oe.addReceiptEip712Proof(S.unsigned, "merchant", S.signature, S.created)).toThrow(/not a did:pkh/);
+    expect(() => oe.addReceiptEip712Proof(S.merchant_signed, "agent", "0x1234", S.created)).toThrow(/not by agent_did/);
+  });
+});
+
 describe("verifyAgentForCheckout", () => {
   const V = json("checkout-1/vectors.json");
   for (const c of V.cases)
@@ -80,9 +100,9 @@ describe("verifyAgentForCheckout", () => {
       const i = c.input;
       const r = await oe.verifyAgentForCheckout({
         agentDid: i.agent_did, cart: i.cart, merchantPolicy: i.merchant_policy, agent: i.agent, mandate: i.mandate, keyLog: keyState(i.key_state), status: i.status, now: i.now,
-        approval: i.approval && { approval: i.approval.approval, verifierDid: i.approval.verifier_did, requestId: i.approval.request_id },
+        approval: i.approval && { approval: i.approval.approval, verifierDid: i.approval.verifier_did, requestId: i.approval.request_id, counter: i.approval.counter },
       });
-      expect({ decision: r.decision, reasons: r.reasons, ...(r.evidence.approval_error ? { approval_error: r.evidence.approval_error } : {}) }).toEqual(c.expect);
+      expect({ decision: r.decision, reasons: r.reasons, ...(r.evidence.approval_error ? { approval_error: r.evidence.approval_error } : {}), ...(c.expect.approval_counter !== undefined ? { approval_counter: r.evidence.approval_counter } : {}) }).toEqual(c.expect);
     });
   it("verifies the agent's own signed request", async () => {
     const seed = Uint8Array.from({ length: 32 }, (_, i) => i + 77);

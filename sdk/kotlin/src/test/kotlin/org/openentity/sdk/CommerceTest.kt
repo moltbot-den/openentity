@@ -195,7 +195,7 @@ class CommerceTest {
             ),
             agent = AgentFacts(f.opt("level")?.long()?.toInt(), f.opt("owner_did")?.text(), f.opt("security_band")?.text(), f.opt("security_issuer")?.text()),
             mandate = i.opt("mandate"), keyLog = keys(i["key_state"].text()), status = i.opt("status"),
-            approval = a?.let { CheckoutApproval(it["approval"]!!, it["verifier_did"].text(), it["request_id"].text(), approvalCounter) },
+            approval = a?.let { CheckoutApproval(it["approval"]!!, it["verifier_did"].text(), it["request_id"].text(), it.opt("counter")?.long() ?: approvalCounter) },
         )
     }
 
@@ -203,7 +203,7 @@ class CommerceTest {
     fun checkoutVectors() {
         for (c in CHECKOUT["cases"].items()) {
             val r = checkout(c["input"]!!)
-            val got = buildMap<String, Any> { put("decision", r.decision); put("reasons", r.reasons); r.evidence["approval_error"]?.let { put("approval_error", it) } }
+            val got = buildMap<String, Any> { put("decision", r.decision); put("reasons", r.reasons); r.evidence["approval_error"]?.let { put("approval_error", it) }; if (c["expect"].opt("approval_counter") != null) put("approval_counter", r.evidence["approval_counter"]!!) }
             assertEquals(c["name"].text(), canonicalize(c["expect"]!!), canonicalize(json(got)))
         }
     }

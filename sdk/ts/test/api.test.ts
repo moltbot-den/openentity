@@ -5,12 +5,12 @@ import * as node from "../src/node.ts";
 // The public surface. Changing it on purpose means editing this list in the same PR; a stray export or a rename fails here.
 const SNAPSHOT = [
   "A2A_EXTENSION_URI CLIENTS DECLARATION_SHA256 DECLARATION_TEXT DECLARATION_VERSION DEFAULT_REGISTRY DISPUTE_REASONS",
-  "HttpSigError OpenEntityError Owner RAILS SPEC a2aExtension adopt agentCard approvalDigest base58btcDecode base58btcEncode",
+  "HttpSigError OpenEntityError Owner RAILS SPEC a2aExtension addReceiptEip712Proof adopt agentCard approvalDigest base58btcDecode base58btcEncode",
   "buildDeclaration buildDidDocument buildDocument buildOpenEntityJson buildPresentation buildRotation canonicalize cartDigest",
   "cartError checkStamp checkTimestamp checkpointBody clearTrustCache consistencyProof didKeyFromPublicKey didWebResolver",
   "dispute eip712Digest find generateKeyPair hashData httpSigBase inclusionProof keyPairFromJwk keyPairFromSeed leafHash logLeaf",
   "mandateCovers mandateDigest merkleRoot mintStamp nodeHash normalizeEid noteVkey nowSeconds pair pairSas parseJson",
-  "payloadDigest present publicKeyFromDidKey randomNonce receiptError record recordEntryHash recoverEip712 rotate sha256",
+  "payloadDigest present publicKeyFromDidKey randomNonce receiptEip712Digest receiptError record recordEntryHash recoverEip712 rotate sha256",
   "sha256Hex signAttestation signNote signObject signProof signReceipt signRequest signRevocation successorDocument trust",
   "validate verificationMethodId verifyAgentForCheckout verifyApproval verifyConsistency verifyInclusion verifyKeyLog",
   "verifyMandate verifyNote verifyObject verifyPresentation verifyProof verifyQuorum verifyReceipt verifyReceiptChain verifyRequest verifyResponse withdraw",

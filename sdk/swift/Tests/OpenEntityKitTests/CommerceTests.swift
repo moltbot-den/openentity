@@ -234,7 +234,7 @@ struct CheckoutTests {
         verifyAgentForCheckout(
             agentDid: i["agent_did"]?.stringValue, cart: i.at("cart"), policy: policy(i.at("merchant_policy")), agent: facts(i.at("agent")),
             mandate: i["mandate"], keyLog: ownerKeys(i.at("key_state").str), status: i["status"],
-            approval: i["approval"].map { CheckoutApproval(approval: $0.at("approval"), verifierDid: $0.at("verifier_did").str, requestId: $0.at("request_id").str, counter: counter) },
+            approval: i["approval"].map { CheckoutApproval(approval: $0.at("approval"), verifierDid: $0.at("verifier_did").str, requestId: $0.at("request_id").str, counter: $0["counter"].map { UInt32($0.int) } ?? counter) },
             now: i.at("now").int)
     }
 

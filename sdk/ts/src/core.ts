@@ -273,9 +273,7 @@ export async function verifyProof(obj: object, proof: Proof, resolver: Resolver 
     }
     if (proof.type === "EthereumEip712Signature2021") {
       if (!keys.address) return { ok: false, signer, error: "signer has no Ethereum address" };
-      const type = (obj as { type?: unknown }).type;
-      const objectType = typeof type === "string" ? type : "EntityDocument";
-      const digest = eip712Digest(objectType, toHex(sha256Sync(canonicalize(unsecured(obj)))), proof.created);
+      const digest = eip712Digest(eip712ObjectType(obj), toHex(sha256Sync(canonicalize(unsecured(obj)))), proof.created);
       if (recoverEip712(digest, proofValue).toLowerCase() === keys.address.toLowerCase()) return { ok: true, signer };
       return { ok: false, signer, error: "EIP-712 signer does not match" };
     }
@@ -289,6 +287,11 @@ export async function verifyObject(obj: { proof?: Proof }, resolver?: Resolver):
   return verifyProof(obj, obj.proof, resolver);
 }
 
+/** The EIP-712 `objectType` of an object: its `type`, `receipt/1` for a receipt (it has no `type`), else `EntityDocument`. @internal */
+export const eip712ObjectType = (obj: object): string => {
+  const { type, version } = obj as { type?: unknown; version?: unknown };
+  return typeof type === "string" ? type : version === "receipt/1" ? version : "EntityDocument";
+};
 /** @internal */
 export const keccak = (s: string | Uint8Array): Uint8Array => keccak_256(utf8(s));
 /** @internal */

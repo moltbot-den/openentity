@@ -376,6 +376,15 @@ CREATE TABLE IF NOT EXISTS mandates (
   revoke_reason text
 );
 CREATE INDEX IF NOT EXISTS mandates_agent ON mandates (agent_did);
+-- What each enforcing product reports it let the agent spend under a mandate (PUT /v1/mandates/{id}/spend); the status answer sums them.
+CREATE TABLE IF NOT EXISTS mandate_spend (
+  mandate_id text NOT NULL REFERENCES mandates (id),
+  product text NOT NULL,
+  period_spent bigint NOT NULL,
+  total_spent bigint NOT NULL,
+  reported_at bigint NOT NULL,
+  PRIMARY KEY (mandate_id, product)
+);
 CREATE TABLE IF NOT EXISTS mandate_seqs (
   agent_did text PRIMARY KEY,
   seq integer NOT NULL

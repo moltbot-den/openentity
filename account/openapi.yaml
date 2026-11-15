@@ -1851,8 +1851,10 @@ paths:
       summary: Is the mandate still valid (public, max-age 30)
       description: |
         The status URL inside every mandate (commerce profile section 2.2). `revoked` once the owner revoked it, paused
-        or unlinked the agent, or narrowed the permission under it. Expiry is the verifier's check of `expires_at`.
-        Spend accounting (`period_spent`, `exhausted`) belongs to the product that enforces the mandate. No auth.
+        or unlinked the agent, or narrowed the permission under it; `exhausted` once the products' reported `total_spent`
+        reaches the mandate's `total_max` (revoked wins). Expiry is the verifier's check of `expires_at`. Spend accounting
+        belongs to the product that enforces the mandate: `period_spent` and `total_spent` are the sums of what the
+        products reported with PUT /v1/mandates/{id}/spend, 0 until one does. No auth.
       x-available: day-8
       security: []
       parameters:
@@ -1864,10 +1866,63 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [mandate_id, status]
+                required: [mandate_id, status, period_spent, total_spent]
                 properties:
                   mandate_id: { type: string }
-                  status: { type: string, enum: [active, revoked] }
+                  status: { type: string, enum: [active, revoked, exhausted] }
+                  period_spent: { type: integer, minimum: 0, description: Minor units, summed over the reporting products. }
+                  total_spent: { type: integer, minimum: 0, description: Minor units, summed over the reporting products. }
+        '404':
+          $ref: '#/components/responses/Error'
+          description: 'error: not_found'
+  /v1/mandates/{id}/spend:
+    put:
+      operationId: reportMandateSpend
+      tags: [Product to account]
+      summary: The enforcing product reports the agent's spend under a mandate
+      description: |
+        Signed by the product that enforces the mandate (one of the agent's linked products). `total_spent` only grows
+        (a lower report is ignored) and `period_spent` is the latest figure for the current period, both in the
+        mandate's currency minor units. The public status answer sums the products' reports and turns `exhausted`
+        when `total_spent` reaches the mandate's `total_max`. Answers the new status.
+      security:
+        - productSignature: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, pattern: '^md_[a-z2-7]{26}$' } }
+        - $ref: '#/components/parameters/SignatureInputHeader'
+        - $ref: '#/components/parameters/ContentDigestHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [period_spent, total_spent]
+              properties:
+                period_spent: { type: integer, minimum: 0 }
+                total_spent: { type: integer, minimum: 0 }
+      responses:
+        '200':
+          description: The mandate's status, as GET /v1/mandates/{id}/status.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [mandate_id, status, period_spent, total_spent]
+                properties:
+                  mandate_id: { type: string }
+                  status: { type: string, enum: [active, revoked, exhausted] }
+                  period_spent: { type: integer, minimum: 0 }
+                  total_spent: { type: integer, minimum: 0 }
+        '400':
+          $ref: '#/components/responses/Error'
+          description: 'error: bad_request'
+        '401':
+          $ref: '#/components/responses/Error'
+          description: 'error: signature_invalid, signature_replayed'
+        '403':
+          $ref: '#/components/responses/Error'
+          description: 'error: unknown_signer, not_linked'
         '404':
           $ref: '#/components/responses/Error'
           description: 'error: not_found'

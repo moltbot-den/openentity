@@ -184,4 +184,15 @@ Backlog for this repo. Ticket ids are `G-YYYY-NNN` across the Open Entity produc
 - reviewer-agent: adversarial-review
 - suggested-fix: verifyRequest (did:key offline, did:web and signer pins as in TS), verifyReceiptChain and a verifyAgentForCheckout(request:) overload, all passing test-vectors/http-signature.json. Additive; no package version change, rides the next batch.
 - linked-pr: https://github.com/moltbot-den/openentity/pull/224
+
+### G-2026-066 [in-progress] P2 bug
+
+- file: sdk/ts/src/commerce.ts, sdk/ts/src/core.ts, sdk/python/openentity/commerce.py, sdk/python/openentity/core.py, account/src/mandates.ts, test-vectors/receipt-1/pkh.json, test-vectors/checkout-1/vectors.json
+- area: Agentic commerce C7 production closeout (docs/commerce/PLAN.md in the oneentity meta repo; leftovers of C1, C2.3 and C3)
+- discovered: 2026-11-15 by agentic commerce plan
+- summary: (a) receipt/1 countersign for did:pkh buyers: the Python SDK hashed EIP-712 proofs over the receipt including `proofs`, so a wallet could not sign a receipt the merchant had already signed (TS already stripped it); both SDKs gain receiptEip712Digest and addReceiptEip712Proof and the vectors pin it. (b) checkout-1 gains the approval/2.0 WebAuthn counter replay vectors. (c) the mandate status answer never reported `exhausted` or spend: products now report with PUT /v1/mandates/{id}/spend and the status turns `exhausted` when total_spent reaches total_max.
+- owner-agent: openentity
+- reviewer-agent: adversarial-review
+- suggested-fix: Production checks (deploy.yml #201 to #222 green; deny and step_up on /v1/commerce/check, the mandate status route and the MCP tools answer correctly) found nothing to fix. No package version is bumped: the SDK changes ride the next release batch. Den's countersign guard for did:pkh lifts once that batch is out (moltbotden services/receipts.py).
+- linked-pr: (none yet)
 - linked-issue: (none yet)

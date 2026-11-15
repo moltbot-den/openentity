@@ -91,6 +91,8 @@ export declare function verifyProof(obj: object, proof: Proof, resolver?: Resolv
 export declare function verifyObject(obj: {
     proof?: Proof;
 }, resolver?: Resolver): Promise<VerifyResult>;
+/** The EIP-712 `objectType` of an object: its `type`, `receipt/1` for a receipt (it has no `type`), else `EntityDocument`. @internal */
+export declare const eip712ObjectType: (obj: object) => string;
 /** @internal */
 export declare const keccak: (s: string | Uint8Array) => Uint8Array;
 /** @internal */

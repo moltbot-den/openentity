@@ -10,6 +10,7 @@ import { type AgentRow, ownersAgent } from "./agents.ts";
 import type { Deps } from "./app.ts";
 import { now } from "./db.ts";
 import { bearer, fail, json } from "./http.ts";
+import { productSigned } from "./rfc9421.ts";
 import { base32, keyLogState } from "./keylog.ts";
 import { sendEvent } from "./outbound.ts";
 
@@ -145,12 +146,31 @@ export function routes(app: Hono, d: Deps) {
     return c.body(null, 204);
   });
 
-  // Public: merchants and products poll this (profile section 2.2). Spend accounting is the enforcing product's.
-  app.get("/v1/mandates/:id/status", async (c) => {
-    const id = c.req.param("id");
+  // Public: merchants and products poll this (profile section 2.2). Spend is what the enforcing products reported (PUT .../spend).
+  const status = async (id: string) => {
     const r = ID.test(id) ? await d.db.first<Row & { state: string }>("SELECT m.*, a.state FROM mandates m JOIN agents a ON a.did = m.agent_did WHERE m.id = $1", [id]) : null;
     if (!r) fail(404, "not_found", "no such mandate");
+    const s = (await d.db.first<{ p: string; t: string }>("SELECT COALESCE(SUM(period_spent), 0) AS p, COALESCE(SUM(total_spent), 0) AS t FROM mandate_spend WHERE mandate_id = $1", [id]))!;
+    const period_spent = Number(s.p), total_spent = Number(s.t);
+    const state = r!.revoked_at !== null || r!.state !== "active" ? "revoked" : total_spent >= (JSON.parse(r!.body) as Mandate).limits.total_max ? "exhausted" : "active";
+    return { r: r!, body: { mandate_id: id, status: state, period_spent, total_spent } };
+  };
+  app.get("/v1/mandates/:id/status", async (c) => {
     c.header("cache-control", "public, max-age=30");
-    return c.json({ mandate_id: id, status: r!.revoked_at !== null || r!.state !== "active" ? "revoked" : "active" });
+    return c.json((await status(c.req.param("id"))).body);
+  });
+
+  // The product that enforces a mandate reports the agent's spend under it. total_spent only grows (a lower report cannot reopen
+  // a spent mandate); period_spent is the latest figure for the current period. A product reports for agents it is linked to.
+  app.put("/v1/mandates/:id/spend", async (c) => {
+    const { did: product } = await productSigned(c, d);
+    const b = await json(c), id = c.req.param("id");
+    for (const k of ["period_spent", "total_spent"]) if (!Number.isSafeInteger(b[k]) || b[k] < 0) fail(400, "bad_request", `${k} must be an unsigned integer in minor units`);
+    const { r } = await status(id);
+    if (!(await d.db.first("SELECT 1 FROM agent_products WHERE agent_did = $1 AND product = $2", [r.agent_did, product]))) fail(403, "not_linked", "this product is not linked to the mandate's agent");
+    await d.db.run(
+      "INSERT INTO mandate_spend (mandate_id, product, period_spent, total_spent, reported_at) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (mandate_id, product) DO UPDATE SET period_spent = EXCLUDED.period_spent, total_spent = GREATEST(mandate_spend.total_spent, EXCLUDED.total_spent), reported_at = EXCLUDED.reported_at",
+      [id, product, b.period_spent, b.total_spent, now()]);
+    return c.json((await status(id)).body);
   });
 }
