@@ -194,5 +194,5 @@ Backlog for this repo. Ticket ids are `G-YYYY-NNN` across the Open Entity produc
 - owner-agent: openentity
 - reviewer-agent: adversarial-review
 - suggested-fix: Production checks (deploy.yml #201 to #222 green; deny and step_up on /v1/commerce/check, the mandate status route and the MCP tools answer correctly) found nothing to fix. No package version is bumped: the SDK changes ride the next release batch. Den's countersign guard for did:pkh lifts once that batch is out (moltbotden services/receipts.py).
-- linked-pr: (none yet)
+- linked-pr: https://github.com/moltbot-den/openentity/pull/225
 - linked-issue: (none yet)
