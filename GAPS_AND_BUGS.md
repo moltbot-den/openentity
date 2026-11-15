@@ -90,5 +90,5 @@ Backlog for this repo. Ticket ids are `G-YYYY-NNN` across the Open Entity produc
 - owner-agent: openentity
 - reviewer-agent: security (adversarial review before merge)
 - suggested-fix: Port sdk/ts/src/commerce.ts check for check on the existing Owner.swift primitives. No RFC 9421 request verification (the caller passes the verified agentDid) and no verifyReceiptChain. No package version changes: OpenEntityKit is consumed by path.
-- linked-pr: (none yet)
+- linked-pr: https://github.com/moltbot-den/openentity/pull/205
 - linked-issue: (none yet)
