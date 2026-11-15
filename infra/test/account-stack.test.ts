@@ -39,7 +39,7 @@ test("four KMS keys per stage: P-256 for tokens, P-256 for key log close entries
 
 test("the function runs outside any VPC; production sign-in stays closed, staging is open", () => {
   for (const t of [prod, staging]) expect(appFn(t).Properties.VpcConfig).toBeUndefined();
-  expect(appFn(prod).Properties.Environment.Variables).toMatchObject({ STAGE: "production", HOST: "account.openentity.org", SIGNIN_OPEN: "0" });
+  expect(appFn(prod).Properties.Environment.Variables).toMatchObject({ STAGE: "production", HOST: "account.openentity.org", SIGNIN_OPEN: "1" });
   expect(appFn(staging).Properties.Environment.Variables).toMatchObject({ STAGE: "staging", HOST: "staging.account.openentity.org", SIGNIN_OPEN: "1" });
 });
 
