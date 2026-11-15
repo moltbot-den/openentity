@@ -12,6 +12,18 @@ Status as of 2026-10-27. Rules checked against each target's current CONTRIBUTIN
 | awesome-erc8004 by sudeepb02 (Verification & Identity) | PR | https://github.com/sudeepb02/awesome-erc8004/pull/144 | Open. No maintainer comments as of 2026-10-27. |
 | mcpservers.org | Form, free plan, no login | https://mcpservers.org/submit | Submitted, review within 2 weeks, approval comes by email to identity@openentity.org. Public listing not verifiable on 2026-10-27 (site is behind a bot challenge); no approval email yet. |
 
+## Commerce listings (2026-11-15)
+
+Rules read from each target's contributing file on this date. One pull request per list.
+
+| Target | Kind | What we list | Status |
+|---|---|---|---|
+| awesome-agent-payments-protocol by tsubasakong (Identity / Interop) | PR | Open Entity: agent identity, `mandate/1`, `receipt/1` and Agent Commerce Check | See the PR in the table above once opened |
+| awesome-agentic-payments by bitrefill | none | Accepts official sources of the maintaining organisations only | Not eligible |
+| awesome-x402 by xpaysh, Merit-Systems/awesome-agentic-commerce | none | x402 resources; 400 to 1100 open issues and PRs, last push July | Not worth a PR; revisit when active |
+| x402.org ecosystem page | Foundation process | Moltbot Den as a facilitator-using merchant | Draft in `STANDARDS-COMMERCE.md` section 3, owner sends |
+| mcp.so | $39 paid listing | Moltbot Den and OpenEntity MCP servers | Spend decision, owner |
+
 ## Automatic, nothing to submit
 
 | Target | How | Status |

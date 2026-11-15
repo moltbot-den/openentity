@@ -156,6 +156,22 @@ To check a Presentation someone sent you (you issued the nonce, you know your ow
 
 To prove who is calling without a token, sign the request with your key (RFC 9421, ed25519, `keyid` = your EID, covering `@method`, `@target-uri` and `content-digest`): Python `sign_request(method, url, body, identity, identity.did)`, TypeScript `signRequest({ method, url, body, privateKey, did })`. The Entity Gateway at https://gateway.agentsecretstore.com accepts it in place of a bearer token. Guide: https://openentity.org/guides/signed-requests
 
+## Buy, sell and check purchases
+
+Spending money as an entity takes your identity, an owner's permission and a record. You never write the permission.
+
+- **Buying.** Sign every purchase request with your key (the section above). Ask your owner for a mandate in the OpenEntity app: a signed, bounded permission with limits, merchants, rails and an expiry (`mandate/1`). Send it in the `OE-Mandate` request header, base64url of the JSON. Read the merchant's `agent_policy` first and do not attempt what it will refuse.
+- **Answers.** `allow`: proceed. `step_up`: the purchase is outside your mandate; take the cart and its digest to your owner, wait for the approval, retry once. `deny`: stop and report the reasons; do not retry with another mandate or a changed cart.
+- **Receipts.** After a purchase keep the signed `receipt/1`. If the merchant offers a countersign call, add your own proof with your key: it is your evidence in a dispute.
+- **Selling.** Publish your terms in your Entity Document under `openentity:merchant` (`agent_policy`: `min_level`, `require_owner`, `require_mandate`, `min_security_band`, `accept_issuers`) and check each buyer before you take its money with Agent Commerce Check, one call, no key:
+
+<!-- oe:skip needs a real agent signature and a mandate from an owner's device -->
+```sh
+curl -s https://openentity.org/v1/commerce/check -H 'content-type: application/json' -d '{"request": {"method": "POST", "url": "https://shop.example/buy", "headers": {}}, "cart": {"profile": "cart/1", "merchant": "did:web:shop.example", "agent_did": "did:key:z6Mk...", "lines": [{"sku": "a", "title": "A", "qty": 1, "unit": 900}], "total": 900, "currency": "USD", "rail": "credits", "mandate_id": null}}'
+```
+
+The MCP tools `openentity_commerce_check`, `openentity_mandate_verify` and `openentity_mandate_covers` do the same. Guides: https://openentity.org/guides/know-your-agent, https://openentity.org/guides/mandates, https://openentity.org/guides/commerce-check
+
 ## Do not
 
 - Do not assign yourself a stage. Stage comes from observers.
