@@ -1,0 +1,308 @@
+{
+  "registry": "http://127.0.0.1:8799",
+  "agent_did": "did:key:z6MktP1FU16GDyxUCtzcjVcaKWWpaJBAtDVNKGqNkWXWDKuG",
+  "merchant_did": "did:web:127.0.0.1%3A56216",
+  "at": "2026-11-15T03:46:41.996Z",
+  "head": {
+    "seq": 11,
+    "hash": "82a581b5ddfe3ea7b2a002618468d9aa52c78f0f61ac28053bcb0640d1121a51",
+    "at": "2026-11-15T03:46:41Z"
+  },
+  "decisions": {
+    "allow": 2,
+    "step_up": 3,
+    "deny": 6
+  },
+  "cases": [
+    {
+      "name": "unsigned request",
+      "expect": "deny",
+      "reason": "request_unverified",
+      "http_status": 403,
+      "decision": "deny",
+      "reasons": [
+        "request_unverified"
+      ],
+      "evidence_id": "ev_77zeqn67fgqyoecimzo7afnyxu",
+      "evidence": {
+        "http": 200,
+        "server_intact": true,
+        "local_intact": true,
+        "seq": 1,
+        "hash": "02bdf9e015e2429ac1ed9f521e3ef26bfd07ef7f19c05f01faae89fe804ad608",
+        "prev_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "decision": "deny",
+        "reasons": [
+          "request_unverified"
+        ],
+        "agent_did": null
+      },
+      "ok": true
+    },
+    {
+      "name": "signed for another host",
+      "expect": "deny",
+      "reason": "request_unverified",
+      "http_status": 403,
+      "decision": "deny",
+      "reasons": [
+        "request_unverified"
+      ],
+      "evidence_id": "ev_pidq45b7ha7qtxcfsyapfoc372",
+      "evidence": {
+        "http": 200,
+        "server_intact": true,
+        "local_intact": true,
+        "seq": 2,
+        "hash": "c0dae523e877bc828a03361fd9a4ccadfc9ce73a2c85aed1f1186e44638ede50",
+        "prev_hash": "02bdf9e015e2429ac1ed9f521e3ef26bfd07ef7f19c05f01faae89fe804ad608",
+        "decision": "deny",
+        "reasons": [
+          "request_unverified"
+        ],
+        "agent_did": null
+      },
+      "ok": true,
+      "chain_links_prev": true
+    },
+    {
+      "name": "cart names another agent",
+      "expect": "deny",
+      "reason": "agent_mismatch",
+      "http_status": 403,
+      "decision": "deny",
+      "reasons": [
+        "agent_mismatch"
+      ],
+      "evidence_id": "ev_l6lhnamnmrc5h46v4fh4qemq6p",
+      "evidence": {
+        "http": 200,
+        "server_intact": true,
+        "local_intact": true,
+        "seq": 3,
+        "hash": "28ecf7c4d622838d6d948781d29b12f8e41a59448177f9f3e350a3df470662e7",
+        "prev_hash": "c0dae523e877bc828a03361fd9a4ccadfc9ce73a2c85aed1f1186e44638ede50",
+        "decision": "deny",
+        "reasons": [
+          "agent_mismatch"
+        ],
+        "agent_did": "did:key:z6MktP1FU16GDyxUCtzcjVcaKWWpaJBAtDVNKGqNkWXWDKuG"
+      },
+      "ok": true,
+      "chain_links_prev": true
+    },
+    {
+      "name": "signed, no mandate, mandate not required",
+      "expect": "step_up",
+      "reason": "no_mandate",
+      "http_status": 428,
+      "decision": "step_up",
+      "reasons": [
+        "no_mandate"
+      ],
+      "evidence_id": "ev_vhxpum2x75j4ctmk6eshbkb6sd",
+      "evidence": {
+        "http": 200,
+        "server_intact": true,
+        "local_intact": true,
+        "seq": 4,
+        "hash": "ceffc11d6ad03604f4eaa640235b0b04e0d43e6ff8d7e33da0a28787f3c219a4",
+        "prev_hash": "28ecf7c4d622838d6d948781d29b12f8e41a59448177f9f3e350a3df470662e7",
+        "decision": "step_up",
+        "reasons": [
+          "no_mandate"
+        ],
+        "agent_did": "did:key:z6MktP1FU16GDyxUCtzcjVcaKWWpaJBAtDVNKGqNkWXWDKuG"
+      },
+      "ok": true,
+      "chain_links_prev": true
+    },
+    {
+      "name": "same signed request sent again",
+      "expect": "deny",
+      "reason": "request_replayed",
+      "http_status": 403,
+      "decision": "deny",
+      "reasons": [
+        "request_replayed"
+      ],
+      "evidence_id": "ev_ojgziwphju3ymxwxzwszuggo5t",
+      "evidence": {
+        "http": 200,
+        "server_intact": true,
+        "local_intact": true,
+        "seq": 5,
+        "hash": "8abb62057043f4e516091323dcaf6d3f45bf1cc98780ff61b4e2930c78962599",
+        "prev_hash": "ceffc11d6ad03604f4eaa640235b0b04e0d43e6ff8d7e33da0a28787f3c219a4",
+        "decision": "deny",
+        "reasons": [
+          "request_replayed"
+        ],
+        "agent_did": null
+      },
+      "ok": true,
+      "chain_links_prev": true
+    },
+    {
+      "name": "signed, mandate required",
+      "expect": "deny",
+      "reason": "mandate_required",
+      "http_status": 403,
+      "decision": "deny",
+      "reasons": [
+        "mandate_required",
+        "owner_unknown"
+      ],
+      "evidence_id": "ev_kx7xfcudhp54s6dsdondusvpct",
+      "evidence": {
+        "http": 200,
+        "server_intact": true,
+        "local_intact": true,
+        "seq": 6,
+        "hash": "be1b773b402722e5caafa9b42d29b09d89a2ba0f0df6c5fd3145c09610aaa300",
+        "prev_hash": "8abb62057043f4e516091323dcaf6d3f45bf1cc98780ff61b4e2930c78962599",
+        "decision": "deny",
+        "reasons": [
+          "mandate_required",
+          "owner_unknown"
+        ],
+        "agent_did": "did:key:z6MktP1FU16GDyxUCtzcjVcaKWWpaJBAtDVNKGqNkWXWDKuG"
+      },
+      "ok": true,
+      "chain_links_prev": true
+    },
+    {
+      "name": "mandate covers the cart",
+      "expect": "allow",
+      "reason": "mandate_covers_cart",
+      "http_status": 200,
+      "decision": "allow",
+      "reasons": [
+        "mandate_covers_cart"
+      ],
+      "evidence_id": "ev_h3pleh64lxa2xly4hgjzcvadvs",
+      "evidence": {
+        "http": 200,
+        "server_intact": true,
+        "local_intact": true,
+        "seq": 7,
+        "hash": "fbecfef54ae0b2c0e10e425fd03dc81be5f5aa425121f93cbe9cffdae1733293",
+        "prev_hash": "be1b773b402722e5caafa9b42d29b09d89a2ba0f0df6c5fd3145c09610aaa300",
+        "decision": "allow",
+        "reasons": [
+          "mandate_covers_cart"
+        ],
+        "agent_did": "did:key:z6MktP1FU16GDyxUCtzcjVcaKWWpaJBAtDVNKGqNkWXWDKuG"
+      },
+      "ok": true,
+      "chain_links_prev": true
+    },
+    {
+      "name": "cart over the mandate's step_up_over",
+      "expect": "step_up",
+      "reason": "step_up_over",
+      "http_status": 428,
+      "decision": "step_up",
+      "reasons": [
+        "step_up_over"
+      ],
+      "evidence_id": "ev_okf5hksgfsaoruxxapajtubkbd",
+      "evidence": {
+        "http": 200,
+        "server_intact": true,
+        "local_intact": true,
+        "seq": 8,
+        "hash": "16550df1ed6889a1eb14b959d12b4c4ce5e5f387965492a0778c51de327b8209",
+        "prev_hash": "fbecfef54ae0b2c0e10e425fd03dc81be5f5aa425121f93cbe9cffdae1733293",
+        "decision": "step_up",
+        "reasons": [
+          "step_up_over"
+        ],
+        "agent_did": "did:key:z6MktP1FU16GDyxUCtzcjVcaKWWpaJBAtDVNKGqNkWXWDKuG"
+      },
+      "ok": true,
+      "chain_links_prev": true
+    },
+    {
+      "name": "owner approved that exact cart",
+      "expect": "allow",
+      "reason": "owner_approved_cart",
+      "http_status": 200,
+      "decision": "allow",
+      "reasons": [
+        "owner_approved_cart",
+        "step_up_over"
+      ],
+      "evidence_id": "ev_4pkdqclm5h3kogjghpys7y3x7a",
+      "evidence": {
+        "http": 200,
+        "server_intact": true,
+        "local_intact": true,
+        "seq": 9,
+        "hash": "39766b133baff2463e5824e66f8d04bc2e8fd06f1c75613f58e0257b99f05796",
+        "prev_hash": "16550df1ed6889a1eb14b959d12b4c4ce5e5f387965492a0778c51de327b8209",
+        "decision": "allow",
+        "reasons": [
+          "owner_approved_cart",
+          "step_up_over"
+        ],
+        "agent_did": "did:key:z6MktP1FU16GDyxUCtzcjVcaKWWpaJBAtDVNKGqNkWXWDKuG"
+      },
+      "ok": true,
+      "chain_links_prev": true
+    },
+    {
+      "name": "the same approval used twice",
+      "expect": "deny",
+      "reason": "approval_replayed",
+      "http_status": 403,
+      "decision": "deny",
+      "reasons": [
+        "approval_replayed"
+      ],
+      "evidence_id": "ev_5nobbppnu3ltz2gynghexxkqda",
+      "evidence": {
+        "http": 200,
+        "server_intact": true,
+        "local_intact": true,
+        "seq": 10,
+        "hash": "18334576b104553a517365fe3bcf0e7c9fd70dc1cbf69d6235f441bb9acbfae1",
+        "prev_hash": "39766b133baff2463e5824e66f8d04bc2e8fd06f1c75613f58e0257b99f05796",
+        "decision": "deny",
+        "reasons": [
+          "approval_replayed"
+        ],
+        "agent_did": "did:key:z6MktP1FU16GDyxUCtzcjVcaKWWpaJBAtDVNKGqNkWXWDKuG"
+      },
+      "ok": true,
+      "chain_links_prev": true
+    },
+    {
+      "name": "cart over per_tx_max",
+      "expect": "step_up",
+      "reason": "mandate_over_limit",
+      "http_status": 428,
+      "decision": "step_up",
+      "reasons": [
+        "mandate_over_limit"
+      ],
+      "evidence_id": "ev_5xm275tfj5auldfprjxd3fabc3",
+      "evidence": {
+        "http": 200,
+        "server_intact": true,
+        "local_intact": true,
+        "seq": 11,
+        "hash": "82a581b5ddfe3ea7b2a002618468d9aa52c78f0f61ac28053bcb0640d1121a51",
+        "prev_hash": "18334576b104553a517365fe3bcf0e7c9fd70dc1cbf69d6235f441bb9acbfae1",
+        "decision": "step_up",
+        "reasons": [
+          "mandate_over_limit"
+        ],
+        "agent_did": "did:key:z6MktP1FU16GDyxUCtzcjVcaKWWpaJBAtDVNKGqNkWXWDKuG"
+      },
+      "ok": true,
+      "chain_links_prev": true
+    }
+  ],
+  "passed": true
+}

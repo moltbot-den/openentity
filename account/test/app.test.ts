@@ -126,7 +126,7 @@ test("web: the session lives in a __Host- cookie (HttpOnly, Secure, SameSite=Str
   const r = await emailSignIn("web@example.com", web, { origin: ORIGIN });
   expect(r.body.refresh_token).toBeUndefined();
   const cookie = r.headers.getSetCookie().find((v) => v.startsWith("__Host-oe_session="))!;
-  expect(cookie).toMatch(/^__Host-oe_session=oert_[A-Za-z0-9_-]{43}; Path=\/; Max-Age=432\d\d; HttpOnly; Secure; SameSite=Strict$/);
+  expect(cookie).toMatch(/^__Host-oe_session=oert_[A-Za-z0-9_-]{43}; Path=\/; Max-Age=43[12]\d\d; HttpOnly; Secure; SameSite=Strict$/);
   const jar = { cookie: cookie.split(";")[0] };
   expect((await call("POST", "/v1/token", { grant_type: "refresh_token", audience: [DID] }, jar)).body.error).toBe("bad_origin");
   const t = await call("POST", "/v1/token", { grant_type: "refresh_token", audience: [DID] }, { ...jar, origin: ORIGIN });

@@ -180,9 +180,9 @@ Verification
 - [x] G-2026-050: `POST /v1/commerce/check` (allow, step_up, deny; evidence hash chain kept 400 days; per-IP limit; no key), `GET /v1/commerce/evidence/{id}`, `GET /v1/commerce/head`, `POST /v1/commerce/mandate`
 - [x] MCP `openentity_commerce_check`, `openentity_mandate_verify`, `openentity_mandate_covers` on mcp.openentity.org and `@openentity/mcp`; `mcp/server.json` 0.3.0
 - [x] `@openentity/commerce-check` (Express, Hono and Workers, Next.js) and `openentity.commerce` (FastAPI, Django) with example apps; guide `/guides/commerce-check`
+- [x] G-2026-061 (C3.4): `integrations/commerce-check/proof.mjs` independent-agent proof, live deny and step_up, local allow, evidence fetched back and hash-checked (`proof/report-*.json`); guide and package README gaps fixed. Allow on openentity.org waits for the production account's sign-in (SIGNIN_OPEN) and an owner device
 - [ ] Release batch: `@openentity/commerce-check` 0.1.0 and `openentity` (PyPI) with the middleware; the middleware reads no SDK function, so no pin to swap
 - [ ] `assetlinks.json` fingerprints: the check already adds the Android app origin to key log verification once the account publishes them
-||||||| parent of d931818 (feat(account): organisations, shared budgets and quorum approvals (C5))
 ## Agentic commerce C5: organisations, shared budgets, multi-approver (2026-11-14, G-2026-060, oneentity docs/commerce/specs/enterprise-orgs.md)
 - [x] Orgs as owners: key log, admin, approver and viewer members, one registered quorum device per approver member, org pause, team and cost centre tags, budgets as org-signed mandate/1, CSV export, the org dashboard in the web app (`account/src/orgs.ts`, `account/src/web/home-client.ts`)
 - [x] `verifyQuorum` (TS and Python), `quorum` in `verifyAgentForCheckout`, `test-vectors/quorum-1`, commerce profile section 8
