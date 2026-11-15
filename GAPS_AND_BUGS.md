@@ -57,6 +57,7 @@ Backlog for this repo. Ticket ids are `G-YYYY-NNN` across the Open Entity produc
 - linked-pr: https://github.com/moltbot-den/openentity/pull/201
 - linked-issue: (none yet)
 
+<<<<<<< HEAD
 ### G-2026-004 [in-progress] P1 feature
 
 - file: account/src/mandates.ts, account/src/stepup.ts, account/src/agents.ts, account/openapi.yaml, account/schema.sql
@@ -69,7 +70,7 @@ Backlog for this repo. Ticket ids are `G-YYYY-NNN` across the Open Entity produc
 - linked-pr: https://github.com/moltbot-den/openentity/pull/203
 - linked-issue: (none yet)
 
-### G-2026-006 [open] P1 feature
+### G-2026-006 [fixed] P1 feature
 
 - file: sdk/kotlin/src/main/kotlin/org/openentity/sdk/Commerce.kt, sdk/kotlin/src/test/kotlin/org/openentity/sdk/CommerceTest.kt
 - area: Agentic commerce C1.3 Kotlin (oneentity docs/commerce/PLAN.md)
@@ -78,5 +79,5 @@ Backlog for this repo. Ticket ids are `G-YYYY-NNN` across the Open Entity produc
 - owner-agent: openentity
 - reviewer-agent: security
 - suggested-fix: Port sdk/ts/src/commerce.ts check for check against the shared vectors. No package version changes: release is one batch at the end of the program.
-- linked-pr: (this PR)
+- linked-pr: https://github.com/moltbot-den/openentity/pull/204
 - linked-issue: (none yet)
