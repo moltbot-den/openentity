@@ -114,5 +114,5 @@ Backlog for this repo. Ticket ids are `G-YYYY-NNN` across the Open Entity produc
 - owner-agent: c3-oe
 - reviewer-agent: adversarial-review
 - suggested-fix: verifyAgentForCheckout behind the registry route with registry facts, the owner key log (first_seen kept per entry, fork detection), mandate status from the account service only, single-use request nonces and approvals, per-IP limit; middleware calls the hosted route. Package versions untouched: the release batch ships @openentity/commerce-check and openentity.commerce.
-- linked-pr: (none yet)
+- linked-pr: https://github.com/moltbot-den/openentity/pull/206
 - linked-issue: (none yet)
