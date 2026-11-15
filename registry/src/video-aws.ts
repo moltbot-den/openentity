@@ -5,7 +5,7 @@ import { PollyClient, SynthesizeSpeechCommand } from "@aws-sdk/client-polly";
 import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getRenderProgress, renderMediaOnLambda } from "@remotion/lambda/client";
 import remotion from "../social/remotion.json" with { type: "json" };
-import type { Beat, Llm, Mark, Script, Topic, VideoDeps } from "./video.ts";
+import { LEVEL_FACTS, type Beat, type Llm, type Mark, type Script, type Topic, type VideoDeps } from "./video.ts";
 
 /** Preference order: the account may not have the newest model enabled yet, so fall through. */
 const MODELS = ["us.anthropic.claude-sonnet-5-5", "us.anthropic.claude-sonnet-4-6"];
@@ -54,7 +54,7 @@ export function bedrockLlm(client: Pick<BedrockRuntimeClient, "send"> = new Bedr
   return {
     async draft(topic: Topic, problems: string[]) {
       const d = await tool<{ beats: Beat[]; caption: string; title: string }>(SYSTEM, [
-        `Topic: ${topic.title}`, `Facts you may use: ${topic.brief}`,
+        `Topic: ${topic.title}`, `Facts you may use: ${topic.brief}`, `Level facts: ${LEVEL_FACTS}`,
         ...(problems.length ? [`Your last draft failed these checks, fix them: ${problems.join("; ")}`] : []),
         "Call submit_script.",
       ].join("\n"), "submit_script", draftSchema);
@@ -62,9 +62,9 @@ export function bedrockLlm(client: Pick<BedrockRuntimeClient, "send"> = new Bedr
       const undash = (t: string) => t.replace(/\s*[\u2014\u2013]\s*/g, ". ");
       return { caption: undash(d.caption), title: undash(d.title), beats: d.beats.map((b) => ({ say: undash(b.say), show: undash(b.show), ...(b.stat ? { stat: b.stat } : {}) })) } as Script;
     },
-    async judge(script: Script) {
-      const v = await tool<{ score: number; reason?: string }>("You are a strict editor of short explainer videos for builders of AI agents. Score 1 to 10: 9 to 10 a hook you would stop scrolling for and every line earns its place; 7 to 8 clear and accurate and fine to post; 5 to 6 generic, padded or confusing; below 5 wrong or embarrassing. Penalize jargon not explained, repeated lines, hype and vague claims. In the reason, say in one or two sentences what to change.",
-        JSON.stringify(script, null, 1) + "\nCall submit_verdict.", "submit_verdict", verdictSchema);
+    async judge(script: Script, topic: Topic) {
+      const v = await tool<{ score: number; reason?: string }>("You are a strict editor of short explainer videos for builders of AI agents. Score 1 to 10: 9 to 10 a hook you would stop scrolling for and every line earns its place; 7 to 8 clear and accurate and fine to post; 5 to 6 generic, padded or confusing; below 5 wrong or embarrassing. Fact check first: the only supported facts are the topic brief and the level facts below; any claim, mechanism, level change or number in the script that they do not support scores 1, and the reason names the claim. Penalize jargon not explained, repeated lines, hype and vague claims. In the reason, say in one or two sentences what to change.",
+        `Topic facts: ${topic.brief}\nLevel facts: ${LEVEL_FACTS}\nScript:\n` + JSON.stringify(script, null, 1) + "\nCall submit_verdict.", "submit_verdict", verdictSchema);
       return { score: Number(v.score), reason: v.reason ?? "" };
     },
   };
