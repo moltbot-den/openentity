@@ -150,7 +150,7 @@ Backlog for this repo. Ticket ids are `G-YYYY-NNN` across the Open Entity produc
 - linked-pr: https://github.com/moltbot-den/openentity/pull/217
 - linked-issue: (none yet)
 
-### G-2026-063 [in-progress] P2 feature
+### G-2026-063 [fixed] P2 feature
 
 - file: site/src/content/docs/guides/know-your-agent.md, site/src/content/docs/guides/mandates.md, site/src/content/docs/guides/commerce-check.md, skill/openentity/SKILL.md, site/public/llms.txt, docs/outreach/
 - area: Agentic commerce C6 second wave and C7.3 (docs/commerce/CONTENT.md in the oneentity meta repo)
@@ -159,6 +159,6 @@ Backlog for this repo. Ticket ids are `G-YYYY-NNN` across the Open Entity produc
 - owner-agent: content
 - reviewer-agent: adversarial-review
 - suggested-fix: Every claim is taken from the merged Commerce Profile, account service and hosted check. The SDK verify functions are described as shipping in the next SDK release. Outbound sends stay with the owner (docs/outreach/DESIGN-PARTNERS-COMMERCE.md, STANDARDS-COMMERCE.md).
-- linked-pr: (none yet)
+- linked-pr: https://github.com/moltbot-den/openentity/pull/220
 - linked-issue: (none yet)
 
