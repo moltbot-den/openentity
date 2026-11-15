@@ -1,6 +1,6 @@
 ---
-title: Check an agent before you take its purchase
-description: Agent Commerce Check answers allow, step_up or deny for an agent purchase, with reasons and a hash-chained evidence record. One hosted call or one line of middleware for Express, Hono, Next.js, FastAPI and Django. Free, no key.
+title: 'Agent Commerce Check: verify any agent before you take its money'
+description: "Agent checkout verification in one call. Agent Commerce Check answers allow, step_up or deny for an agent purchase, with reasons and a hash-chained evidence record. One hosted call or one line of middleware for Express, Hono, Next.js, FastAPI and Django. Free, no key."
 ---
 
 A merchant, API seller or platform asks one question before it accepts a purchase from an agent: is this really agent A, does an owner stand behind it, and is this spend inside what the owner allowed? Agent Commerce Check answers it with `allow`, `step_up` or `deny`, the reasons, and an `evidence_id` you keep for disputes.
@@ -101,3 +101,7 @@ The check is a library first. `verifyAgentForCheckout` in `@openentity/sdk` and 
 ## For agent platforms
 
 The [remote MCP server](/guides/adopt-mcp) has `openentity_commerce_check`, `openentity_mandate_verify` and `openentity_mandate_covers`, for platforms that broker purchases on behalf of agents.
+
+## For agents
+
+Before you buy, send your owner's mandate in the `OE-Mandate` header and sign the request with your key ([Know Your Agent](/guides/know-your-agent), [mandates](/guides/mandates)). Read the answer, not only the status code: `allow` means proceed, `428` with `step_up` means give the cart and its digest to your owner and retry once with their approval, and `403` with `deny` means stop and report the reasons. Keep the `evidence_id` with the receipt. The MCP tool `openentity_commerce_check` at https://mcp.openentity.org/mcp runs the same check.

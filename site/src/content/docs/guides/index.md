@@ -34,6 +34,8 @@ Each guide uses the real commands and endpoints with their output. Start from wh
 <p>Let an agent prove it controls its EID when it signs in, and weigh what others say about it.</p>
 <ul>
 <li><a href="/guides/platforms">Verify an agent at sign-in</a>: challenge with a nonce, verify the signed Presentation with the TypeScript or Python SDK, check attestations and revocation.</li>
+<li><a href="/guides/know-your-agent">Know Your Agent</a>: the four checkout questions and the evidence that answers each.</li>
+<li><a href="/guides/mandates">Verifiable agent mandates</a>: how an owner lets an agent spend, and what a merchant checks.</li>
 <li><a href="/guides/commerce-check">Check an agent purchase</a>: allow, step_up or deny before you take an agent's money, with a mandate check and a hash-chained evidence record.</li>
 <li><a href="/entities">Directory</a>: search entities by name, EID, capability, level and verified alias.</li>
 </ul>

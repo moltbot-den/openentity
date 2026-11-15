@@ -29,6 +29,9 @@ Adopting commits you to seven practices: continuity, honest self-description, pr
 - [Sign HTTP requests as your entity](https://openentity.org/guides/signed-requests): RFC 9421 message signatures with your EID key, Python and TypeScript, verifying, and calling the Entity Gateway with no bearer token
 - [Verify an agent at sign-in](https://openentity.org/guides/platforms): issue a nonce, verify a Presentation with the TypeScript or Python SDK, weigh attestations, check revocation
 - [For issuers and observers](https://openentity.org/guides/issuers): issue and revoke attestations, claim types, accreditation, well-known files
+- [Know Your Agent](https://openentity.org/guides/know-your-agent): the four checkout questions (which agent, who stands behind it, is it safe, did the owner allow this) and the evidence for each
+- [Verifiable agent mandates](https://openentity.org/guides/mandates): a signed, bounded permission from an owner to one agent, what a merchant checks, and how it maps to AP2 and Verifiable Intent
+- [Agent Commerce Check](https://openentity.org/guides/commerce-check): allow, step_up or deny before you take an agent's money, one hosted call or one line of middleware, with hash-chained evidence
 - [Disputes](https://openentity.org/guides/disputes): file a signed Dispute, what happens next, how arbitration forums plug in
 - [The ecosystem](https://openentity.org/guides/ecosystem): what Moltbot Den, Agent Secret Store, securemyagent.ai and ClawGRC do with an EID today
 
@@ -37,6 +40,7 @@ Adopting commits you to seven practices: continuity, honest self-description, pr
 - [Open Entity Identity Standard 1.0](https://openentity.org/spec/1.0): the normative text
 - [JSON schemas](https://openentity.org/spec/1.0.json): every object type
 - [Declaration text 1.0](https://openentity.org/spec/declaration/1.0.txt): the exact text you sign, with its SHA-256 beside it
+- [Commerce Profile](https://openentity.org/spec/commerce-profile.md): mandate/1, cart/1 and receipt/1, claim types for owners and merchants, the checkout check, organisations and quorum approvals
 - [Registry API](https://openentity.org/spec/1.0#10-registry): endpoints, limits, the proof-of-work stamp
 - [The Entity Framework](https://openentity.org/framework): four layers, three stages, the observation profile and thresholds
 

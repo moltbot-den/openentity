@@ -149,3 +149,16 @@ Backlog for this repo. Ticket ids are `G-YYYY-NNN` across the Open Entity produc
 - suggested-fix: Done: account/e2e/org-world.e2e.ts (the world: HTTP, signed events live or recorded, approvals, agent keys, pause) and OE_TEST_HOST in account/test/helpers.ts. The runner is scripts/e2e-org.sh in the oneentity meta repo.
 - linked-pr: https://github.com/moltbot-den/openentity/pull/217
 - linked-issue: (none yet)
+
+### G-2026-063 [in-progress] P2 feature
+
+- file: site/src/content/docs/guides/know-your-agent.md, site/src/content/docs/guides/mandates.md, site/src/content/docs/guides/commerce-check.md, skill/openentity/SKILL.md, site/public/llms.txt, docs/outreach/
+- area: Agentic commerce C6 second wave and C7.3 (docs/commerce/CONTENT.md in the oneentity meta repo)
+- discovered: 2026-11-15 by agentic commerce plan
+- summary: Guides 9 (Know Your Agent), 10 (verifiable agent mandates) and 11 (Agent Commerce Check, retitled for agent checkout verification), a commerce section in the skill and llms.txt, the Commerce Profile served at /spec/commerce-profile.md, commerce listings, and drafts of design-partner and standards-body outreach
+- owner-agent: content
+- reviewer-agent: adversarial-review
+- suggested-fix: Every claim is taken from the merged Commerce Profile, account service and hosted check. The SDK verify functions are described as shipping in the next SDK release. Outbound sends stay with the owner (docs/outreach/DESIGN-PARTNERS-COMMERCE.md, STANDARDS-COMMERCE.md).
+- linked-pr: (none yet)
+- linked-issue: (none yet)
+

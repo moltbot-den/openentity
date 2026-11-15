@@ -189,3 +189,8 @@ Verification
 - [x] Tests: `account/test/orgs.test.ts`, `account/e2e/org-flow.e2e.ts` (merchant over HTTP: one budget limits both agents, 2 of 2 approvals, pause), `account/e2e/org.e2e.ts` (the dashboard in Chrome with a passkey)
 - [ ] Apps: org switcher, org approvals with the quorum, signing as the org's owner DID, adding a device to the org key log (iOS and Android lanes)
 - [ ] Product duties of the brief: Moltbot Den org-owned agents and org approvals in `/dashboard/billing`, Agent Secret Store tenant budgets to org mandates, Secure My Agent org view, ClawGRC org as tenant and spend by cost centre (each product's lane reads `GET /o/<id>/policy` and the agent.* events)
+## Agentic commerce C6 second wave and C7.3 (G-2026-063, oneentity docs/commerce/CONTENT.md)
+- [x] Guides `/guides/know-your-agent`, `/guides/mandates`; `/guides/commerce-check` retitled; sidebar, guides index, `llms.txt`, skill commerce section; Commerce Profile served at `/spec/commerce-profile.md`
+- [x] `docs/outreach/DESIGN-PARTNERS-COMMERCE.md` and `STANDARDS-COMMERCE.md` drafted, not sent (owner sends)
+- [x] LISTINGS.md commerce section
+
