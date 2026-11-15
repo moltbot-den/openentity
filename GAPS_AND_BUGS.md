@@ -174,7 +174,7 @@ Backlog for this repo. Ticket ids are `G-YYYY-NNN` across the Open Entity produc
 - suggested-fix: Done: `verifyRequest` (same checks, order and codes as `verify_request`; did:key offline, did:web through `DidWebResolver.authenticationKey`, signer pin `expectDid`) and `request` on `verifyAgentForCheckout` (a bad signature is `request_unverified`, the signer replaces `agentDid`). `verifyReceiptChain` was already in the SDK. Passes `test-vectors/http-signature.json` (valid, invalid, did_web, expect_did requests) and the checkout-1 vectors. Responses (`verifyResponse`) and `verifyQuorum` are still TS and Python only. Rides the next batch; no version bump.
 - linked-pr: https://github.com/moltbot-den/openentity/pull/223
 
-### G-2026-065 [in-progress] P2 feature
+### G-2026-065 [fixed] P2 feature
 
 - file: sdk/swift/Sources/OpenEntityKit/HTTPSig.swift, sdk/swift/Sources/OpenEntityKit/Commerce.swift, sdk/swift/Sources/OpenEntityKit/DIDWeb.swift, sdk/swift/Tests/OpenEntityKitTests/HTTPSigTests.swift
 - area: Agentic commerce C1.3 leftover (docs/commerce/PLAN.md in the oneentity meta repo)
