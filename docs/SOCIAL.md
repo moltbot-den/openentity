@@ -39,3 +39,7 @@ video-topics.json -> script (Claude on Bedrock) -> lint + judge -> Polly voice -
 | Pinterest (`pinterest`) | Buffer video pin; the board whose name contains "video", else the first | `BUFFER_API_KEY` |
 
 The TikTok post sets the AI-generated label because the voice is synthetic. The app Lambda role holds Bedrock `InvokeModel`, Polly `SynthesizeSpeech`, invoke on `remotion-render-*` and read/write on the Remotion bucket (`infra/lib/stack.ts`). Bedrock needs the Anthropic use-case form filled once per account (done for `openentity`).
+
+## Campaigns
+
+The "Agents are customers now" posts have ids `cN-oe-M` (N is the campaign week). They need no owner approval: the calendar test lints them with the video script rules (banned words, brand forms, no typed count) and requires a link, and each cites a live guide on openentity.org. Market numbers, if a post ever needs one, link their source in `docs/commerce/research/` of the oneentity meta repo.

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import calendar from "../social/calendar.json" with { type: "json" };
 import { configured, due, fill, linkFacets, postSocial, textFor, type Entry } from "../src/social.ts";
+import { BANNED, BRAND } from "../src/video.ts";
 import { E } from "./helpers.ts";
 
 const stats = { entities: { total: 27, l2: 9 }, record_entries: 20, attestations: 34, observers: 1, log: { tree_size: 162 } };
@@ -17,6 +18,17 @@ describe("social calendar", () => {
       expect(Number.isNaN(Date.parse(e.at))).toBe(false);
       expect(fill(e.text, stats)).not.toMatch(/\{\w+\}/);
       expect(e.text).not.toContain(String.fromCharCode(0x2014));
+    }
+  });
+
+  it("lints the agentic commerce posts like a video script: no banned word, brand form or typed count", () => {
+    const posts = (calendar as Entry[]).filter((e) => /^c\d-oe-/.test(e.id));
+    expect(posts.length).toBeGreaterThanOrEqual(8);
+    for (const e of posts) {
+      expect(e.text, e.id).not.toMatch(BANNED);
+      expect(e.text, e.id).not.toMatch(BRAND);
+      expect(e.text.replace(/https?:\/\/\S+|\{\w+\}|x402|RFC 9421|\bCC0\b|\bL[0-3]\b/g, ""), e.id).not.toMatch(/\d/);
+      expect(e.text, e.id).toMatch(/https:\/\/(openentity\.org|moltbotden\.com)/);
     }
   });
 
