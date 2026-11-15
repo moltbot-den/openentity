@@ -66,5 +66,5 @@ Backlog for this repo. Ticket ids are `G-YYYY-NNN` across the Open Entity produc
 - owner-agent: openentity
 - reviewer-agent: security (adversarial review next)
 - suggested-fix: Done in the PR. The mandate signature by an approver key is the owner's approval; widening spend is granting the spend permission, which already needs step-up agent.permissions.widen. Agents never write mandates: owner bearer only. Products enforce spend accounting; the service only answers active or revoked.
-- linked-pr: (set when opened)
+- linked-pr: https://github.com/moltbot-den/openentity/pull/203
 - linked-issue: (none yet)
