@@ -183,5 +183,5 @@ Backlog for this repo. Ticket ids are `G-YYYY-NNN` across the Open Entity produc
 - owner-agent: swift-9421
 - reviewer-agent: adversarial-review
 - suggested-fix: verifyRequest (did:key offline, did:web and signer pins as in TS), verifyReceiptChain and a verifyAgentForCheckout(request:) overload, all passing test-vectors/http-signature.json. Additive; no package version change, rides the next batch.
-- linked-pr: (none yet)
+- linked-pr: https://github.com/moltbot-den/openentity/pull/224
 - linked-issue: (none yet)
