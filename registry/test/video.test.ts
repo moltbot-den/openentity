@@ -126,7 +126,7 @@ describe("video posting", () => {
   const seed = async (id = day, status = "ready") => {
     await E.db.run("INSERT INTO social_videos (day, topic, status, script, url, at) VALUES ($1, 'x', $2, $3, $4, 'now') ON CONFLICT DO NOTHING", [id, status, JSON.stringify(good), `https://bkt/renders/r1/${id}.mp4`]);
   };
-  const env = { ...E, META_TOKEN: "t", META_PAGE_ID: "p", META_IG_USER_ID: "ig", ZERNIO_API_KEY: "z", BUFFER_API_KEY: "b" };
+  const env = { ...E, META_TOKEN: "t", META_PAGE_ID: "p", META_IG_USER_ID: "ig", ZERNIO_API_KEY: "z", BUFFER_API_KEY: "b", VIDEO_POSTING: "on" };
   type Call = { url: string; init?: RequestInit; body: string };
   function mock(over: (c: Call) => unknown = () => undefined) {
     const calls: Call[] = [];
@@ -191,11 +191,18 @@ describe("video posting", () => {
     expect(after.filter((c) => c.url.endsWith("/posts") || c.url.includes("video_reels") || c.url === "https://api.buffer.com").length).toBe(0);
   });
 
+  it("posts nothing until VIDEO_POSTING is on", async () => {
+    await seed("2027-02-01");
+    const calls = mock();
+    await postVideo({ ...env, VIDEO_POSTING: undefined }, new Date("2027-02-01T16:05:00Z"));
+    expect(calls).toEqual([]);
+  });
+
   it("skips a network without credentials or a connected channel instead of failing it", async () => {
     await seed("2026-12-31", "ready");
     const d2 = "2026-12-31", t2 = new Date(`${d2}T16:05:00Z`);
     const calls = mock((c) => (c.url.endsWith("/accounts") ? { accounts: [] } : undefined));
-    await postVideo({ ...E, ZERNIO_API_KEY: "z" }, t2);
+    await postVideo({ ...E, ZERNIO_API_KEY: "z", VIDEO_POSTING: "on" }, t2);
     expect(calls.map((c) => c.url)).toEqual(["https://zernio.com/api/v1/accounts", "https://zernio.com/api/v1/accounts"]);
     expect(await E.db.first("SELECT 1 AS x FROM social_posts WHERE entry_id = $1", [`video-${d2}`])).toBeFalsy();
     expect(configuredVideo({})).toEqual([]);
@@ -206,7 +213,7 @@ describe("video posting", () => {
     await seed("2027-01-02");
     const t3 = new Date("2027-01-02T16:05:00Z");
     const calls = mock((c) => (c.url.endsWith("/posts") ? new Response("nope", { status: 401 }) : undefined));
-    const only = { ...E, ZERNIO_API_KEY: "z" };
+    const only = { ...E, ZERNIO_API_KEY: "z", VIDEO_POSTING: "on" };
     await expect(postVideo(only, t3)).rejects.toThrow(/tiktok.*zernio 401/);
     const n = calls.length;
     await expect(postVideo(only, new Date(t3.getTime() + 600_000))).resolves.toBeUndefined();
