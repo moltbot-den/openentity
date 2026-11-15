@@ -458,6 +458,18 @@ SCHEMA = {
       "source": "server",
       "props": {}
     },
+    "org_created": {
+      "source": "server",
+      "props": {}
+    },
+    "org_paused": {
+      "source": "server",
+      "props": {
+        "source": {
+          "type": "token"
+        }
+      }
+    },
     "live_activity_started": {
       "source": "client",
       "props": {}
@@ -879,6 +891,14 @@ def agent_pause_enforced(*, product: Product, seconds: int, agent_did: Optional[
 
 def agent_resumed(*, agent_did: Optional[str] = None) -> AnalyticsEvent:
     return _build("agent_resumed", {"agent_did": agent_did})
+
+
+def org_created(*, agent_did: Optional[str] = None) -> AnalyticsEvent:
+    return _build("org_created", {"agent_did": agent_did})
+
+
+def org_paused(*, source: str, agent_did: Optional[str] = None) -> AnalyticsEvent:
+    return _build("org_paused", {"source": source, "agent_did": agent_did})
 
 
 def live_activity_started(*, agent_did: Optional[str] = None) -> AnalyticsEvent:

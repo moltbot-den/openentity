@@ -195,6 +195,15 @@ export interface CheckoutInput {
         requestId: string; /** The WebAuthn counter stored for the signing key; store `evidence.approval_counter` after an allow. */
         counter?: number;
     };
+    /** An organisation-owned purchase: the `approvals[]` bundle, checked by verifyQuorum against the org's key log (`mandate.issuer_did`) and the policy `m` and `of` that the org's account service published (GET /o/<id>/policy). Store `evidence.approval_counters` after an allow. */
+    quorum?: {
+        approvals: unknown;
+        m: number;
+        of: string[];
+        verifierDid: string;
+        requestId: string;
+        counters?: Record<string, number>;
+    };
     now?: number;
     origins?: string[];
 }

@@ -84,9 +84,10 @@ interface Appended { seq: number; hash: string; first_seen_at: number; effective
 
 /**
  * Verifies `line` as the next entry of log `id` and stores it with this service's first_seen_at. Genesis needs `account`
- * (the signed-in owner). Returns the stored entry; an identical line already in the log returns what was stored.
+ * (the signed-in owner); with `org` the genesis creates an organisation (orgs.ts) instead of setting the account's own key
+ * log, and that account becomes its first admin. Returns the stored entry; an identical line already in the log returns what was stored.
  */
-async function append(d: Deps, id: string, line: string, o: { account?: string; service?: boolean }): Promise<Appended> {
+export async function append(d: Deps, id: string, line: string, o: { account?: string; service?: boolean; org?: { name: string } }): Promise<Appended> {
   let entry: any;
   try { entry = JSON.parse(line); } catch { fail(422, "invalid_entry", "malformed: not JSON"); }
   if (!entry || typeof entry !== "object" || !Number.isSafeInteger(entry.seq)) fail(422, "invalid_entry", "malformed: an entry has a seq");
@@ -120,7 +121,10 @@ async function append(d: Deps, id: string, line: string, o: { account?: string; 
   const delayed = (entry.op === "recover" || entry.op === "replace_root") && state.pending.some((p) => p.seq === entry.seq);
   const out: Appended = { seq: entry.seq, hash: sha256Hex(line), first_seen_at: t, effective_at: delayed ? t + DAY : t };
   const accountId = await d.db.tx(async (tx) => {
-    if (entry.op === "genesis") {
+    if (entry.op === "genesis" && o.org) {
+      await tx.run("INSERT INTO orgs (id, owner_did, name, created_by, created_at) VALUES ($1, $2, $3, $4, $5)", [id, did, o.org.name, o.account, t]);
+      await tx.run("INSERT INTO org_members (org_id, account_id, role, added_at) VALUES ($1, $2, 'admin', $3)", [id, o.account, t]);
+    } else if (entry.op === "genesis") {
       const set = await tx.run("UPDATE accounts SET owner_did = $2 WHERE id = $1 AND owner_did IS NULL AND deleted_at IS NULL", [o.account, did]);
       if (!set.changes) fail(403, "log_exists", "this account already has a key log");
     }
@@ -130,7 +134,7 @@ async function append(d: Deps, id: string, line: string, o: { account?: string; 
     if (!ins.changes) fail(409, "seq_conflict", "another entry took this seq; read the log and sign again");
     return (await tx.first<{ id: string }>("SELECT id FROM accounts WHERE owner_did = $1", [did]))?.id ?? null;
   });
-  if (accountId && (entry.op === "genesis" || entry.op === "revoke" || entry.op === "recover" || entry.op === "replace_root")) {
+  if (accountId && !o.org && (entry.op === "genesis" || entry.op === "revoke" || entry.op === "recover" || entry.op === "replace_root")) {
     const what = { genesis: "Approvers were set up on", revoke: "An approver was removed from", recover: "A recovery was started on", replace_root: "A new root passkey was added to" }[entry.op as "revoke"];
     const when = delayed ? ` It takes effect on ${new Date(out.effective_at * 1000).toUTCString()} unless an approver cancels it in the app.` : "";
     await notifyOwner(d, accountId, {
@@ -226,6 +230,19 @@ function enrollmentView(e: EnrollmentRow) {
     seq: e.seq === null ? null : Number(e.seq), effective_at: e.effective_at === null ? null : Number(e.effective_at),
     created_at: Number(e.created_at), expires_at: Number(e.expires_at),
   };
+}
+
+/**
+ * Gate M2: genesis decides who approves every later step-up, so it takes a fresh sign-in and, in production, an app
+ * session bound to its device; append tells the owner it happened. Creating an organisation is the same decision.
+ */
+export async function genesisGate(c: Context, d: Deps) {
+  const o = await bearer(c, d);
+  freshSignIn(o, "turn on approvals");
+  if (d.stage === "production" && !(await d.db.first("SELECT 1 FROM sessions WHERE id = $1 AND platform <> 'web' AND binding IS NOT NULL", [o.sid]))) {
+    fail(403, "binding_required", "turn on approvals in the app, from a device-bound sign-in");
+  }
+  return o;
 }
 
 export function routes(app: Hono, d: Deps) {
@@ -336,17 +353,7 @@ export function routes(app: Hono, d: Deps) {
     // Only genesis needs the owner; every other entry authenticates itself, so a stale token never blocks a revoke.
     let op: unknown;
     try { op = JSON.parse(b.line)?.op; } catch { /* append answers invalid_entry */ }
-    let account: string | undefined;
-    if (op === "genesis") {
-      // Gate M2: genesis decides who approves every later step-up, so it takes a fresh sign-in and, in production, an
-      // app session bound to its device; append tells the owner it happened.
-      const o = await bearer(c, d);
-      freshSignIn(o, "turn on approvals");
-      if (d.stage === "production" && !(await d.db.first("SELECT 1 FROM sessions WHERE id = $1 AND platform <> 'web' AND binding IS NOT NULL", [o.sid]))) {
-        fail(403, "binding_required", "turn on approvals in the app, from a device-bound sign-in");
-      }
-      account = o.accountId;
-    }
+    const account = op === "genesis" ? (await genesisGate(c, d)).accountId : undefined;
     return c.json(await append(d, id, b.line, { account }), 201);
   });
 

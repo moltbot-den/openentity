@@ -13,7 +13,7 @@ const PLAN: Record<string, "client" | "server" | "web"> = {
   approval_requested: "server", approval_push_sent: "server", approval_push_opened: "client", approval_viewed: "client",
   approval_decided: "server", approval_expired: "server", approval_rejected_by_verifier: "server", legacy_approval_attempted: "server", agent_auto_muted: "server",
   agent_message_sent: "server", owner_message_sent: "server", agent_status_reported: "server", command_sent: "server",
-  agent_paused: "server", agent_pause_enforced: "server", agent_resumed: "server", live_activity_started: "client",
+  agent_paused: "server", agent_pause_enforced: "server", agent_resumed: "server", org_created: "server", org_paused: "server", live_activity_started: "client",
   plans_viewed: "client", purchase_started: "client", purchase_completed: "server", purchase_failed: "client", purchase_restored: "server",
   subscription_renewed: "server", subscription_cancelled: "server", subscription_refunded: "server", plan_granted: "server",
   credits_reserved: "server", credits_insufficient: "server",

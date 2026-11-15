@@ -181,10 +181,12 @@ export function homeClient(cfg: { serviceDid: string; rpId: string; turnstile: s
 
     // Approvals: the key log names the approvers; passkey approvers can sign here.
     let passkeys: { kid: string; credential_id: string }[] = [];
+    let rootCred: any = null;
     if (me.owner_did) {
       const id = me.owner_did.split(":o:")[1];
       const [doc, log] = await Promise.all([api("GET", `/o/${id}/did.json`), fetch(`/o/${id}/log`).then((r) => r.text())]);
       const creds = new Map<string, any>();
+      rootCred = JSON.parse(log.trim().split("\n")[0]).body?.root ?? null;
       for (const line of log.trim().split("\n")) {
         const e = JSON.parse(line), b = e.body ?? {};
         for (const c of [b.root, b.approver, ...(b.approvers ?? [])]) if (c?.kid) creds.set(c.kid, c);
@@ -245,6 +247,174 @@ export function homeClient(cfg: { serviceDid: string; rpId: string; turnstile: s
       const approval = { version: "approval/2.0", verifier_did: req.verifier_did, owner_did: req.owner_did, request_id: req.request_id, payload_digest: req.payload_digest, decision: "approve", expires_at: req.expires_at, device_id: kid, form: "webauthn", signature: a.signature, authenticator_data: a.authenticator_data, client_data_json: a.client_data_json };
       return { "x-oe-approval": b64u(new TextEncoder().encode(JSON.stringify(approval))) };
     };
+
+    // Organisations: an org's approvals are signed here by a passkey that is an approver of the org's own key log.
+    const orgs = async () => {
+      if (!me.owner_did) return show("orgs-off");
+      show("org-form");
+      let org: any = null, orgPasskeys: { kid: string; credential_id: string }[] = [];
+      const orgError = (e: unknown) => say("org-error", message(e));
+      const money = (c: number) => `$${(c / 100).toFixed(2)}`;
+      const cents = (v: string) => {
+        const [w, f = ""] = v.trim().replace(/^\$/, "").split(".");
+        const n = Number(w) * 100 + Number(f.padEnd(2, "0").slice(0, 2));
+        if (!Number.isSafeInteger(n) || n < 1) throw new Error("Enter an amount like 25 or 25.50.");
+        return n;
+      };
+      const row = (list: string, text: string, ...buttons: [string, () => Promise<unknown>][]) => {
+        const li = document.createElement("li"), span = document.createElement("span");
+        span.textContent = text;
+        li.append(span);
+        for (const [label, run] of buttons) {
+          const b = document.createElement("button");
+          b.textContent = label;
+          b.addEventListener("click", () => run().then(() => open(org.id), orgError));
+          li.append(b);
+        }
+        $(list).append(li);
+      };
+      const passkeysOf = async (id: string) => {
+        const [doc, log] = await Promise.all([api("GET", `/o/${id}/did.json`), fetch(`/o/${id}/log`).then((r) => r.text())]);
+        const creds = new Map<string, any>();
+        for (const line of log.trim().split("\n")) { const b = JSON.parse(line).body ?? {}; for (const c of [b.root, b.approver, ...(b.approvers ?? [])]) if (c?.kid) creds.set(c.kid, c); }
+        return (doc.assertionMethod ?? []).map((v: string) => creds.get(v.split("#")[1])).filter((c: any) => c?.type === "webauthn");
+      };
+      /** An approval/2.0 for an org request, signed by an org passkey: the X-OE-Approval header. */
+      const approvalFor = async (req: any, decision: string) => {
+        if (!orgPasskeys.length) throw new Error("This browser's passkeys are not approvers of this organisation. Use the OpenEntity app.");
+        const digest = await sha256(["approval/2.0", req.verifier_did, req.owner_did, req.request_id, req.payload_digest, decision, String(req.expires_at)].join("|"));
+        const a = await signWithPasskey(digest, orgPasskeys.map((p) => p.credential_id));
+        const kid = orgPasskeys.find((p) => p.credential_id === a.id)?.kid ?? "";
+        const approval = { version: "approval/2.0", verifier_did: req.verifier_did, owner_did: req.owner_did, request_id: req.request_id, payload_digest: req.payload_digest, decision, expires_at: req.expires_at, device_id: kid, form: "webauthn", signature: a.signature, authenticator_data: a.authenticator_data, client_data_json: a.client_data_json };
+        return { "x-oe-approval": b64u(new TextEncoder().encode(JSON.stringify(approval))) };
+      };
+      const orgStepUp = async (action: string, params: object) => approvalFor(await api("POST", "/v1/step-up", { org_id: org.id, action, params }), "approve");
+      const strong = (r: string) => r === "admin" || r === "approver";
+
+      const open = async (id: string) => {
+        say("org-error", "");
+        for (const l of ["org-members", "org-agents", "org-budgets", "org-approvals"]) $(l).replaceChildren();
+        org = await api("GET", `/v1/orgs/${id}`);
+        orgPasskeys = await passkeysOf(org.id);
+        const admin = org.role === "admin", approver = admin || org.role === "approver";
+        show("org");
+        $("org-title").textContent = `${org.name} (${org.role})`;
+        $("org-did").textContent = org.did;
+        $("org-state").textContent = org.state === "paused" ? "Paused: every agent of this organisation is stopped." : "Active.";
+        $("org-quorum").textContent = `A purchase approval needs ${org.quorum.m} of ${org.quorum.of.length} approver devices.${org.quorum.satisfiable ? "" : " Fewer devices are registered than that: nothing can be approved."}`;
+        for (const b of ["org-device", "org-quorum-set", "org-resume"]) show(b, admin);
+        show("org-pause", approver);
+        show("member-form", admin);
+        show("budget-form", admin);
+        for (const m of (await api("GET", `/v1/orgs/${org.id}/members`)).members) {
+          const set = (role: string) => async () => {
+            const h = strong(role) || strong(m.role) ? await orgStepUp("org.member.set", { org_id: org.id, account_id: m.account_id, role }) : {};
+            await api("PATCH", `/v1/orgs/${org.id}/members/${m.account_id}`, { role }, h);
+          };
+          const remove = async () => api("DELETE", `/v1/orgs/${org.id}/members/${m.account_id}`, undefined, strong(m.role) ? await orgStepUp("org.member.set", { org_id: org.id, account_id: m.account_id, role: "none" }) : {});
+          row("org-members", `${m.email ?? m.account_id}: ${m.role}${m.device ? `, device ${m.device.slice(0, 8)}` : ""}`, ...(admin ? ([["Viewer", set("viewer")], ["Approver", set("approver")], ["Admin", set("admin")], ["Remove", remove]] as [string, () => Promise<unknown>][]) : []));
+        }
+        const agents = (await api("GET", `/v1/orgs/${org.id}/agents`)).agents;
+        for (const a of agents) {
+          const url = `/v1/orgs/${org.id}/agents/${encodeURIComponent(a.did)}`;
+          const tags = async () => {
+            const team = prompt("Team tag (empty for none)", a.team ?? "");
+            const cost = prompt("Cost centre (empty for none)", a.cost_centre ?? "");
+            if (team === null || cost === null) return;
+            await api("PATCH", url, { team: team || null, cost_centre: cost || null });
+          };
+          const mandate = async () => {
+            const draft = await api("POST", `/v1/orgs/${org.id}/mandates/draft`, { agent_did: a.did });
+            const digest = Uint8Array.from(draft.digest.match(/../g).map((x: string) => parseInt(x, 16)));
+            const sig = await signWithPasskey(digest, orgPasskeys.map((p) => p.credential_id));
+            const kid = orgPasskeys.find((p) => p.credential_id === sig.id)?.kid ?? "";
+            await api("POST", `/v1/orgs/${org.id}/mandates`, { ...draft.mandate, signature: { device_id: kid, form: "webauthn", signature: sig.signature, authenticator_data: sig.authenticator_data, client_data_json: sig.client_data_json } });
+          };
+          const resume = async () => api("POST", `${url}/resume`, {}, await orgStepUp("agent.resume", { agent_did: a.did }));
+          row("org-agents", `${a.label ?? a.did.slice(0, 24)}: ${a.state}${a.team ? `, team ${a.team}` : ""}${a.cost_centre ? `, ${a.cost_centre}` : ""}`,
+            ...(approver && a.state === "active" ? ([["Pause", async () => api("POST", `${url}/pause`, { source: "web" })]] as [string, () => Promise<unknown>][]) : []),
+            ...(admin && a.state === "paused" ? ([["Resume", resume]] as [string, () => Promise<unknown>][]) : []),
+            ...(admin ? ([["Team and cost centre", tags], ["Sign a mandate", mandate]] as [string, () => Promise<unknown>][]) : []));
+        }
+        for (const b of (await api("GET", `/v1/orgs/${org.id}/budgets`)).budgets) {
+          row("org-budgets", `${b.scope}${b.ref ? ` ${b.ref}` : ""}: ${money(b.per_tx_max)} a purchase, ${money(b.period_max)} per ${b.period}, ${b.rails.join(" ")}`, ...(admin ? ([["Delete", async () => api("DELETE", `/v1/orgs/${org.id}/budgets/${b.budget_id}`)]] as [string, () => Promise<unknown>][]) : []));
+        }
+        for (const r of (await api("GET", `/v1/orgs/${org.id}/approvals`)).approvals) {
+          const decide = (decision: string) => async () => api("POST", `/v1/orgs/${org.id}/approvals/${r.id}/decision`, {}, await approvalFor(r.approval_request, decision));
+          row("org-approvals", `${r.title} (${r.risk}): ${r.votes.filter((v: any) => v.decision === "approve").length} of ${r.quorum.m}, ${r.summary}`, ...(approver ? ([["Approve", decide("approve")], ["Deny", decide("deny")]] as [string, () => Promise<unknown>][]) : []));
+        }
+      };
+
+      const list = (await api("GET", "/v1/orgs")).orgs;
+      for (const o of list) {
+        const li = document.createElement("li"), b = document.createElement("button");
+        b.textContent = `${o.name} (${o.role})`;
+        b.addEventListener("click", () => open(o.id).catch(orgError));
+        li.append(b);
+        $("orgs").append(li);
+      }
+      if (list.length === 1) await open(list[0].id).catch(orgError);
+
+      // Creating an org: its key log starts with the account's root passkey (an approver of its own here), signed by that passkey.
+      $("org-form").addEventListener("submit", async (ev) => {
+        ev.preventDefault();
+        try {
+          if (!rootCred) throw new Error("This account has no root passkey to sign the organisation's key log with.");
+          const unsigned = { v: 1, seq: 1, prev: null, op: "genesis", ts: Math.floor(Date.now() / 1000), body: { approver: null, root: rootCred } };
+          const a = await signWithPasskey(await sha256(jcs(unsigned)), [rootCred.credential_id]);
+          const line = jcs({ ...unsigned, auth: { kid: rootCred.kid, form: "webauthn", signature: a.signature, authenticator_data: a.authenticator_data, client_data_json: a.client_data_json } });
+          const made = await api("POST", "/v1/orgs", { name: $("org-name").value, line });
+          await api("PUT", `/v1/orgs/${made.id}/device`, { kid: rootCred.kid }).catch(() => null); // when this passkey is an approver of the account's own log too
+          location.reload();
+        } catch (e) { orgError(e); }
+      });
+      // New members come in as viewers (no approval needed); the role buttons promote them, with the org's step-up for admin and approver.
+      $("member-form").addEventListener("submit", async (ev) => {
+        ev.preventDefault();
+        try { await api("POST", `/v1/orgs/${org.id}/members`, { email: $("member-email").value.trim().toLowerCase(), role: "viewer" }); await open(org.id); } catch (e) { orgError(e); }
+      });
+      $("budget-form").addEventListener("submit", async (ev) => {
+        ev.preventDefault();
+        try {
+          const scope = $("budget-scope").value;
+          await api("PUT", `/v1/orgs/${org.id}/budgets`, { scope, ...(scope === "org" ? {} : { ref: $("budget-ref").value }), per_tx_max: cents($("budget-tx").value), period: $("budget-period").value, period_max: cents($("budget-max").value), rails: $("budget-rails").value.split(",").map((x) => x.trim()).filter(Boolean) });
+          await open(org.id);
+        } catch (e) { orgError(e); }
+      });
+      $("org-device").addEventListener("click", async () => {
+        try {
+          const mine = orgPasskeys.find((p) => passkeys.some((q) => q.kid === p.kid));
+          if (!mine) throw new Error("None of your passkeys is an approver of both your account and this organisation.");
+          await api("PUT", `/v1/orgs/${org.id}/device`, { kid: mine.kid });
+          await open(org.id);
+        } catch (e) { orgError(e); }
+      });
+      $("org-quorum-set").addEventListener("click", async () => {
+        try {
+          const m = Number(prompt("Approvals needed for a purchase approval (1 to 16)", String(org.quorum.m)));
+          if (!Number.isInteger(m) || m < 1 || m > 16) return;
+          await api("PATCH", `/v1/orgs/${org.id}`, { quorum_m: m }, await orgStepUp("org.quorum.set", { org_id: org.id, quorum_m: m }));
+          await open(org.id);
+        } catch (e) { orgError(e); }
+      });
+      $("org-pause").addEventListener("click", async () => {
+        try { await api("POST", `/v1/orgs/${org.id}/pause`, { source: "web" }); await open(org.id); } catch (e) { orgError(e); }
+      });
+      $("org-resume").addEventListener("click", async () => {
+        try { await api("POST", `/v1/orgs/${org.id}/resume`, {}, await orgStepUp("org.resume", { org_id: org.id })); await open(org.id); } catch (e) { orgError(e); }
+      });
+      $("org-csv").addEventListener("click", async () => {
+        try {
+          const r = await fetch(`/v1/orgs/${org.id}/export.csv`, { headers: { authorization: `Bearer ${token}` } });
+          if (!r.ok) throw new Error(`export failed (${r.status})`);
+          const a = document.createElement("a");
+          a.href = URL.createObjectURL(await r.blob());
+          a.download = "organisation.csv";
+          a.click();
+        } catch (e) { orgError(e); }
+      });
+    };
+    await orgs().catch((e) => say("orgs-error", message(e)));
 
     // Deletion: step-up with a key log, a fresh sign-in without one, or a 7-day request when no approver can sign here.
     if (me.deletion) {

@@ -34,16 +34,18 @@ export function covered(perms: string[], m: Pick<Mandate, "limits" | "scope">): 
   return merchants.every((p) => m.scope.rails.every((r) => held.some((h) => (h.pattern === p || h.pattern === "*") && h.rail === r && h.period === m.limits.period && h.cents >= m.limits.period_max && h.cents >= m.limits.per_tx_max)));
 }
 
-const statusUrl = (d: Deps, id: string) => `https://${d.host}/v1/mandates/${id}/status`;
+export const statusUrl = (d: Deps, id: string) => `https://${d.host}/v1/mandates/${id}/status`;
 const seqOf = async (d: Deps, agent: string) => Number((await d.db.first<{ seq: number }>(
   "INSERT INTO mandate_seqs (agent_did, seq) VALUES ($1, 1) ON CONFLICT (agent_did) DO UPDATE SET seq = mandate_seqs.seq + 1 RETURNING seq", [agent]))!.seq);
 
 /** agent.mandates to every product of the agent: the full list of its active mandates (replace, newest `seq` wins). */
-async function push(d: Deps, agentDid: string, ownerDid: string) {
+export async function push(d: Deps, agentDid: string, ownerDid: string) {
   // seq first, list after: of two concurrent pushes the higher seq read the list last, so it is never the stale one.
   const seq = await seqOf(d, agentDid);
   const rows = await d.db.all<{ body: string }>("SELECT body FROM mandates WHERE agent_did = $1 AND revoked_at IS NULL AND expires_at > $2 ORDER BY id", [agentDid, now()]);
-  const data = { agent_did: agentDid, owner_did: ownerDid, mandates: rows.map((r) => JSON.parse(r.body)), seq };
+  const tags = await d.db.first<{ team: string | null; cost_centre: string | null }>("SELECT team, cost_centre FROM agents WHERE did = $1", [agentDid]);
+  // Organisation agents carry their team and cost centre to the products, which put them on receipts and evidence.
+  const data = { agent_did: agentDid, owner_did: ownerDid, mandates: rows.map((r) => JSON.parse(r.body)), seq, ...(tags?.team || tags?.cost_centre ? { team: tags.team, cost_centre: tags.cost_centre } : {}) };
   const products = await d.db.all<{ product: string }>("SELECT product FROM agent_products WHERE agent_did = $1", [agentDid]);
   await Promise.all(products.map((p) => sendEvent(d, p.product, "agent.mandates", data)));
 }
@@ -61,11 +63,47 @@ export async function revokeFor(d: Deps, a: Pick<AgentRow, "did" | "owner_did">,
   return ids.length;
 }
 
-interface Row { id: string; account_id: string; owner_did: string; agent_did: string; body: string; expires_at: number; revoked_at: number | null; revoke_reason: string | null }
-const view = (r: Row) => ({ mandate: JSON.parse(r.body), status: r.revoked_at !== null ? "revoked" : Number(r.expires_at) <= now() ? "expired" : "active", revoked_at: r.revoked_at === null ? null : Number(r.revoked_at), revoke_reason: r.revoke_reason });
+export interface Row { id: string; account_id: string; owner_did: string; agent_did: string; body: string; issued_at: number; expires_at: number; revoked_at: number | null; revoke_reason: string | null }
+export const view = (r: Row) => ({ mandate: JSON.parse(r.body), status: r.revoked_at !== null ? "revoked" : Number(r.expires_at) <= now() ? "expired" : "active", revoked_at: r.revoked_at === null ? null : Number(r.revoked_at), revoke_reason: r.revoke_reason });
+
+export interface IssueOptions {
+  accountId: string; ownerDid: string; agent: AgentRow; mandate: Mandate;
+  /** "permissions": the agent must hold a spend permission covering the mandate (a person's agent). "none": the caller already bounded it (an org's budgets). */
+  ceiling: "permissions" | "none";
+  /** Extra refusal, thrown by the caller (org: budgets, quorum device). */
+  check?: (m: Mandate) => void | Promise<void>;
+}
+
+/** Verifies a signed mandate against the issuer's key log, stores it and pushes agent.mandates. Returns the stored view. */
+export async function issueMandate(d: Deps, o: IssueOptions) {
+  const { agent: a, mandate: m, ownerDid } = o;
+  const keyLog = await keyLogState(d, ownerDid) ?? fail(403, "key_log_required", "this account has no key log");
+  if (a.state === "paused") fail(423, "agent_paused", "the owner paused this agent");
+  const r = verifyMandate(m, { keyLog: keyLog!, agentDid: a.did, status: { status: "active" }, origins: d.rp.origins, rpId: d.rp.id });
+  if (!r.ok) fail(r.error === "malformed" || r.error === "bad_version" ? 400 : 403, "mandate_invalid", `${r.error}: ${r.message}`);
+  const t = now();
+  if (t - m.issued_at > FRESH) fail(403, "mandate_invalid", "stale: issued_at is more than 10 minutes old; ask for a new draft");
+  if (m.status !== statusUrl(d, m.mandate_id)) fail(400, "mandate_invalid", `status must be ${statusUrl(d, m.mandate_id)}`);
+  if (o.ceiling === "permissions" && !covered(JSON.parse(a.permissions), m)) fail(403, "spend_not_granted", "the agent does not hold a spend permission that covers this mandate; widen its permissions first");
+  await o.check?.(m);
+  if ((await d.db.first<{ n: number }>("SELECT count(*)::int AS n FROM mandates WHERE agent_did = $1 AND revoked_at IS NULL AND expires_at > $2", [a.did, t]))!.n >= MAX_ACTIVE) fail(409, "too_many_mandates", `at most ${MAX_ACTIVE} active mandates per agent`);
+  const ins = await d.db.run("INSERT INTO mandates (id, account_id, owner_did, agent_did, body, issued_at, expires_at) VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT DO NOTHING",
+    [m.mandate_id, o.accountId, ownerDid, a.did, JSON.stringify(m), m.issued_at, m.expires_at]);
+  if (!ins.changes) fail(409, "mandate_exists", "this mandate id was already issued");
+  // Re-read after the insert: pause, unlink and narrowing change the agent first and revokeFor after, so a mandate that
+  // slipped in between those two steps is seen here and ended (an insert before the change is caught by revokeFor).
+  const now2 = await d.db.first<AgentRow & { org_state: string | null }>("SELECT a.*, g.state AS org_state FROM agents a LEFT JOIN orgs g ON g.id = a.org_id WHERE a.did = $1", [a.did]);
+  if (now2?.state !== "active" || now2.org_state === "paused" || (o.ceiling === "permissions" && !covered(JSON.parse(now2.permissions), m))) {
+    await d.db.run("UPDATE mandates SET revoked_at = $2, revoke_reason = 'agent_changed' WHERE id = $1 AND revoked_at IS NULL", [m.mandate_id, now()]);
+    fail(423, "agent_changed", "the agent was paused, unlinked or narrowed while this mandate was issued; sign a new one");
+  }
+  await push(d, a.did, ownerDid);
+  return view((await d.db.first<Row>("SELECT * FROM mandates WHERE id = $1", [m.mandate_id]))!);
+}
 
 export function routes(app: Hono, d: Deps) {
-  const owned = async (c: Context, accountId: string) => await d.db.first<Row>("SELECT * FROM mandates WHERE id = $1 AND account_id = $2", [c.req.param("id"), accountId]) ?? fail(404, "not_found", "no such mandate");
+  // A person's own mandates: the ones issued under their DID (an org's are the org's, whoever signed them in).
+  const owned = async (c: Context, o: { accountId: string; ownerDid: string | null }) => await d.db.first<Row>("SELECT * FROM mandates WHERE id = $1 AND account_id = $2 AND owner_did = $3", [c.req.param("id"), o.accountId, o.ownerDid ?? ""]) ?? fail(404, "not_found", "no such mandate");
 
   // The unsigned mandate/1 for a spend permission the agent holds, ready for the owner's device to sign (mandateDigest).
   app.post("/v1/mandates/draft", async (c) => {
@@ -88,38 +126,18 @@ export function routes(app: Hono, d: Deps) {
   app.post("/v1/mandates", async (c) => {
     const o = await bearer(c, d), m = await json(c) as unknown as Mandate;
     const ownerDid = o.ownerDid ?? fail(403, "key_log_required", "mandates need a key log; finish \"Turn on Face ID approvals\" first");
-    const keyLog = await keyLogState(d, ownerDid) ?? fail(403, "key_log_required", "this account has no key log");
     const a = await ownersAgent(d, o.accountId, String(m.agent_did));
-    if (a.state === "paused") fail(423, "agent_paused", "the owner paused this agent");
-    const r = verifyMandate(m, { keyLog: keyLog!, agentDid: a.did, status: { status: "active" }, origins: d.rp.origins, rpId: d.rp.id });
-    if (!r.ok) fail(r.error === "malformed" || r.error === "bad_version" ? 400 : 403, "mandate_invalid", `${r.error}: ${r.message}`);
-    const t = now();
-    if (t - m.issued_at > FRESH) fail(403, "mandate_invalid", "stale: issued_at is more than 10 minutes old; ask for a new draft");
-    if (m.status !== statusUrl(d, m.mandate_id)) fail(400, "mandate_invalid", `status must be ${statusUrl(d, m.mandate_id)}`);
-    if (!covered(JSON.parse(a.permissions), m)) fail(403, "spend_not_granted", "the agent does not hold a spend permission that covers this mandate; widen its permissions first");
-    if ((await d.db.first<{ n: number }>("SELECT count(*)::int AS n FROM mandates WHERE agent_did = $1 AND revoked_at IS NULL AND expires_at > $2", [a.did, t]))!.n >= MAX_ACTIVE) fail(409, "too_many_mandates", `at most ${MAX_ACTIVE} active mandates per agent`);
-    const ins = await d.db.run("INSERT INTO mandates (id, account_id, owner_did, agent_did, body, issued_at, expires_at) VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT DO NOTHING",
-      [m.mandate_id, o.accountId, ownerDid, a.did, JSON.stringify(m), m.issued_at, m.expires_at]);
-    if (!ins.changes) fail(409, "mandate_exists", "this mandate id was already issued");
-    // Re-read after the insert: pause, unlink and narrowing change the agent first and revokeFor after, so a mandate that
-    // slipped in between those two steps is seen here and ended (an insert before the change is caught by revokeFor).
-    const now2 = await d.db.first<AgentRow>("SELECT * FROM agents WHERE did = $1", [a.did]);
-    if (now2?.state !== "active" || !covered(JSON.parse(now2.permissions), m)) {
-      await d.db.run("UPDATE mandates SET revoked_at = $2, revoke_reason = 'agent_changed' WHERE id = $1 AND revoked_at IS NULL", [m.mandate_id, now()]);
-      fail(423, "agent_changed", "the agent was paused, unlinked or narrowed while this mandate was issued; sign a new one");
-    }
-    await push(d, a.did, ownerDid);
-    return c.json(view((await d.db.first<Row>("SELECT * FROM mandates WHERE id = $1", [m.mandate_id]))!), 201);
+    return c.json(await issueMandate(d, { accountId: o.accountId, ownerDid, agent: a, mandate: m, ceiling: "permissions" }), 201);
   });
 
   app.get("/v1/mandates", async (c) => {
     const o = await bearer(c, d), agent = c.req.query("agent");
-    const rows = await d.db.all<Row>("SELECT * FROM mandates WHERE account_id = $1 AND ($2::text IS NULL OR agent_did = $2) ORDER BY issued_at DESC, id LIMIT 200", [o.accountId, agent ?? null]);
+    const rows = await d.db.all<Row>("SELECT * FROM mandates WHERE account_id = $1 AND owner_did = $3 AND ($2::text IS NULL OR agent_did = $2) ORDER BY issued_at DESC, id LIMIT 200", [o.accountId, agent ?? null, o.ownerDid ?? ""]);
     return c.json({ mandates: rows.map(view) });
   });
 
   app.delete("/v1/mandates/:id", async (c) => {
-    const o = await bearer(c, d), r = await owned(c, o.accountId);
+    const o = await bearer(c, d), r = await owned(c, o);
     if (r.revoked_at === null) {
       await d.db.run("UPDATE mandates SET revoked_at = $2, revoke_reason = 'owner' WHERE id = $1 AND revoked_at IS NULL", [r.id, now()]);
       await push(d, r.agent_did, r.owner_did);

@@ -515,6 +515,18 @@ export const SCHEMA = {
       "source": "server",
       "props": {}
     },
+    "org_created": {
+      "source": "server",
+      "props": {}
+    },
+    "org_paused": {
+      "source": "server",
+      "props": {
+        "source": {
+          "type": "token"
+        }
+      }
+    },
     "live_activity_started": {
       "source": "client",
       "props": {}
@@ -771,6 +783,8 @@ export const track = {
   agentPaused: (p: { source: string; agent_did?: string }) => make("agent_paused", "server", p),
   agentPauseEnforced: (p: { product: Product; seconds: number; agent_did?: string }) => make("agent_pause_enforced", "server", p),
   agentResumed: (p: { agent_did?: string } = {}) => make("agent_resumed", "server", p),
+  orgCreated: (p: { agent_did?: string } = {}) => make("org_created", "server", p),
+  orgPaused: (p: { source: string; agent_did?: string }) => make("org_paused", "server", p),
   liveActivityStarted: (p: { agent_did?: string } = {}) => make("live_activity_started", "client", p),
   plansViewed: (p: { trigger: string; product?: Product; agent_did?: string }) => make("plans_viewed", "client", p),
   purchaseStarted: (p: { sku: string; rail: Rail; agent_did?: string }) => make("purchase_started", "client", p),

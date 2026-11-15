@@ -7,14 +7,18 @@ import type { Deps } from "./app.ts";
 import { newId, now } from "./db.ts";
 import { bearer, fail, json } from "./http.ts";
 import { keyLogState } from "./keylog.ts";
+import { orgOf } from "./orgbase.ts";
 
-export const ACTIONS = ["agent.resume", "agent.permissions.widen", "method.add", "method.remove", "email.change", "account.delete", "deletion.cancel", "product.link"] as const;
+export const ACTIONS = ["agent.resume", "agent.permissions.widen", "method.add", "method.remove", "email.change", "account.delete", "deletion.cancel", "product.link", "org.member.set", "org.quorum.set", "org.resume"] as const;
+/** Actions an organisation's admin takes under the org's key log (POST /v1/step-up with org_id): the approval names the org as its owner. */
+export const ORG_ACTIONS: readonly string[] = ["org.member.set", "org.quorum.set", "org.resume", "agent.permissions.widen", "agent.resume"];
 export type Action = (typeof ACTIONS)[number];
 export const REQUEST_TTL = 600;
 
 const PERMISSION = /^(owner\.message|owner\.status|owner\.approval|vault\.request:\S+|evidence\.file|den\.post|market\.sell|contract\.accept<=\$[0-9]+(\.[0-9]{1,2})?|spend<=\$[0-9]+(\.[0-9]{1,2})?\/(P1D|P7D|P1M)@\S+:(card|x402|mpp|credits|usdc))$/;
 const AGENT_DID = /^did:key:z6Mk[1-9A-HJ-NP-Za-km-z]+$/;
 const ID = /^[A-Za-z0-9_-]{1,64}$/;
+const ORG_ID = /^[a-z2-7]{52}$/;
 
 /** Sorted, de-duplicated permission strings; 400 invalid_permission for one outside the grammar (openapi.yaml Permission). */
 export function permissionList(v: unknown): string[] {
@@ -38,6 +42,11 @@ export function normalParams(action: string, p: any): Record<string, unknown> {
     case "method.remove": need(ID.test(p.method_id ?? ""), "params.method_id"); return { method_id: p.method_id };
     case "email.change": need(typeof p.email === "string" && p.email.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(p.email), "params.email"); return { email: p.email.trim().toLowerCase() };
     case "product.link": need(typeof p.product === "string" && p.product.length <= 128, "params.product"); return { product: p.product };
+    // Org actions name the org and the exact change, so an approval for one member's new role is no approval for another's.
+    case "org.member.set": need(ORG_ID.test(p.org_id ?? ""), "params.org_id"); need(typeof p.account_id === "string" && ID.test(p.account_id), "params.account_id");
+      need(["admin", "approver", "viewer", "none"].includes(p.role), "params.role"); return { org_id: p.org_id, account_id: p.account_id, role: p.role };
+    case "org.quorum.set": need(ORG_ID.test(p.org_id ?? ""), "params.org_id"); need(Number.isInteger(p.quorum_m) && p.quorum_m >= 1 && p.quorum_m <= 16, "params.quorum_m (1 to 16)"); return { org_id: p.org_id, quorum_m: p.quorum_m };
+    case "org.resume": need(ORG_ID.test(p.org_id ?? ""), "params.org_id"); return { org_id: p.org_id };
     case "account.delete": case "deletion.cancel": return {};
     default: return fail(400, "unknown_action", `unknown action ${action}`);
   }
@@ -86,10 +95,10 @@ export async function checkApproval(c: Context, d: Deps, o: { ownerDid: string; 
 export async function requireApproval(c: Context, d: Deps, o: { accountId: string; ownerDid: string | null; action: Action; params: Record<string, unknown>; allowRoot?: boolean }): Promise<{ kid: string }> {
   if (!o.ownerDid) fail(403, "key_log_required", "this action needs a key log; finish \"Turn on Face ID approvals\" first");
   const a = approvalHeader(c);
-  const row = await d.db.first<{ action: string; params: string; payload_digest: string; expires_at: number; used_at: number | null }>(
-    "SELECT action, params, payload_digest, expires_at, used_at FROM step_ups WHERE request_id = $1 AND account_id = $2", [String(a.request_id ?? ""), o.accountId]);
+  const row = await d.db.first<{ action: string; params: string; owner_did: string; payload_digest: string; expires_at: number; used_at: number | null }>(
+    "SELECT action, params, owner_did, payload_digest, expires_at, used_at FROM step_ups WHERE request_id = $1 AND account_id = $2", [String(a.request_id ?? ""), o.accountId]);
   if (!row) fail(403, "approval_invalid", "wrong_request: no such step-up request for this account; call POST /v1/step-up");
-  if (row!.action !== o.action || row!.params !== canonicalize(normalParams(o.action, o.params))) fail(403, "approval_invalid", "wrong_request: the approval is for another action");
+  if (row!.action !== o.action || row!.params !== canonicalize(normalParams(o.action, o.params)) || row!.owner_did !== o.ownerDid) fail(403, "approval_invalid", "wrong_request: the approval is for another action");
   if (row!.used_at !== null) fail(409, "approval_reused", "this approval was already used");
   if (Number(row!.expires_at) <= now()) fail(403, "approval_expired", "expired: the step-up request expired; ask again");
   const { kid } = await checkApproval(c, d, { ownerDid: o.ownerDid!, requestId: String(a.request_id), payloadDigest: row!.payload_digest, decisions: ["approve"], allowRoot: o.allowRoot });
@@ -103,13 +112,19 @@ export function routes(app: Hono, d: Deps) {
     const owner = await bearer(c, d);
     const b = await json(c);
     if (!ACTIONS.includes(b.action)) fail(400, "unknown_action", `action must be one of: ${ACTIONS.join(", ")}`);
-    if (!owner.ownerDid) fail(403, "key_log_required", "step-up needs a key log; finish \"Turn on Face ID approvals\" first");
+    // With org_id the approval is the org's: an admin asks, and a device in the org's key log signs (orgs.ts checks whose).
+    const org = b.org_id === undefined ? null : (await orgOf(d, owner.accountId, String(b.org_id), "admin")).org;
+    if (org ? !ORG_ACTIONS.includes(b.action) : b.action.startsWith("org.")) fail(400, "bad_request", org ? `${b.action} is not an organisation action` : `${b.action} needs org_id`);
+    const ownerDid = org ? org.owner_did : owner.ownerDid;
+    if (!ownerDid) fail(403, "key_log_required", "step-up needs a key log; finish \"Turn on Face ID approvals\" first");
     const params = normalParams(b.action, b.params);
+    if (org && b.action.startsWith("org.") && params.org_id !== org.id) fail(400, "bad_request", "params.org_id is not org_id");
+    if (org && !b.action.startsWith("org.") && !(await d.db.first("SELECT 1 FROM agents WHERE did = $1 AND org_id = $2 AND state <> 'unlinked'", [params.agent_did, org.id]))) fail(404, "not_found", "no such agent in this organisation");
     if (b.action === "method.remove" && !(await d.db.first("SELECT 1 FROM methods WHERE id = $1 AND account_id = $2", [params.method_id, owner.accountId]))) fail(404, "not_found", "no such method");
     const payload = { action: b.action, ...params };
     const t = now(), request = { request_id: newId("su"), payload_digest: payloadDigest(payload), expires_at: t + REQUEST_TTL };
     await d.db.run("INSERT INTO step_ups (request_id, account_id, owner_did, action, params, payload_digest, created_at, expires_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
-      [request.request_id, owner.accountId, owner.ownerDid, b.action, canonicalize(params), request.payload_digest, t, request.expires_at]);
-    return c.json({ verifier_did: `did:web:${d.host}`, owner_did: owner.ownerDid, action: b.action, payload, decisions: ["approve"], ...request });
+      [request.request_id, owner.accountId, ownerDid, b.action, canonicalize(params), request.payload_digest, t, request.expires_at]);
+    return c.json({ verifier_did: `did:web:${d.host}`, owner_did: ownerDid, action: b.action, payload, decisions: ["approve"], ...request });
   });
 }

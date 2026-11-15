@@ -2709,6 +2709,22 @@ function verifyApproval(approval, o) {
     throw x;
   }
 }
+function verifyQuorum(approvals, o) {
+  const no = (error, message) => ({ ok: false, error, message });
+  if (!Number.isSafeInteger(o.m) || o.m < 1 || !Array.isArray(o.of) || o.of.some((k) => typeof k !== "string") || new Set(o.of).size !== o.of.length || o.m > o.of.length) return no("bad_quorum", "m must be 1 or more and at most the number of distinct kids in of");
+  if (!Array.isArray(approvals) || !approvals.length || approvals.length > o.of.length) return no("malformed", `approvals must be 1 to ${o.of.length} approval/2.0 objects`);
+  const kids = [], counters = {};
+  for (const a of approvals) {
+    const device = isObj(a) && typeof a.device_id === "string" ? a.device_id : "";
+    if (!o.of.includes(device)) return no(device ? "not_in_quorum" : "malformed", `device ${device || "?"} is not one of the quorum's approvers`);
+    if (kids.includes(device)) return no("duplicate_device", `device ${device} approved twice`);
+    const r = verifyApproval(a, { ...o, decisions: ["approve"], counter: o.counters?.[device] ?? 0 });
+    if (!r.ok) return no(r.error, r.message);
+    kids.push(r.kid);
+    counters[r.kid] = r.counter;
+  }
+  return kids.length >= o.m ? { ok: true, kids, counters } : no("quorum_not_met", `${kids.length} of ${o.m} approvals`);
+}
 var BODY = {
   genesis: ["approver", "root"],
   add_approver: ["approver"],
@@ -3463,7 +3479,16 @@ async function verifyAgentForCheckout(i) {
   const needApproval = !covered || !covered.ok || covered.step_up_required;
   if (!needApproval) return { decision: "allow", reasons: ["mandate_covers_cart"], evidence };
   const why = !covered ? "no_mandate" : !covered.ok ? `mandate_${covered.reason}` : "step_up_over";
-  if (i.approval && i.keyLog && owner) {
+  if (i.quorum && i.keyLog && owner) {
+    const q = verifyQuorum(i.quorum.approvals, { keyLog: i.keyLog, verifierDid: i.quorum.verifierDid, ownerDid: owner, requestId: i.quorum.requestId, payloadDigest: cartDigest(cart), now, origins: i.origins, m: i.quorum.m, of: i.quorum.of, counters: i.quorum.counters });
+    if (q.ok) {
+      evidence.approval_request_id = i.quorum.requestId;
+      evidence.approval_kids = q.kids;
+      evidence.approval_counters = q.counters;
+      return { decision: "allow", reasons: ["owner_approved_cart", why], evidence };
+    }
+    evidence.approval_error = q.error;
+  } else if (i.approval && i.keyLog && owner) {
     const a = verifyApproval(i.approval.approval, { keyLog: i.keyLog, verifierDid: i.approval.verifierDid, ownerDid: owner, requestId: i.approval.requestId, payloadDigest: cartDigest(cart), decisions: ["approve"], now, origins: i.origins, counter: i.approval.counter });
     if (a.ok) {
       evidence.approval_request_id = i.approval.requestId;
@@ -3555,6 +3580,7 @@ export {
   approvalDigest,
   payloadDigest,
   verifyApproval,
+  verifyQuorum,
   verifyKeyLog,
   pairSas,
   pair,

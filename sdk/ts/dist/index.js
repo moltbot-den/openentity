@@ -87,12 +87,13 @@ import {
   verifyObject,
   verifyPresentation,
   verifyProof,
+  verifyQuorum,
   verifyReceipt,
   verifyReceiptChain,
   verifyRequest,
   verifyResponse,
   withdraw
-} from "./chunk-HXRB7BZE.js";
+} from "./chunk-L37RZYGA.js";
 export {
   A2A_EXTENSION_URI,
   CLIENTS,
@@ -182,6 +183,7 @@ export {
   verifyObject,
   verifyPresentation,
   verifyProof,
+  verifyQuorum,
   verifyReceipt,
   verifyReceiptChain,
   verifyRequest,

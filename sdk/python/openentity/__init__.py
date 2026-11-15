@@ -15,7 +15,7 @@ from .httpsig import http_sig_base, sign_request, verify_request, verify_respons
 from .identity import Identity
 from .issuer import (A2A_EXTENSION_URI, a2a_extension, agent_card, build_did_document, build_openentity_json, sign_attestation,
                      sign_revocation)
-from .owner import approval_digest, payload_digest, verify_approval, verify_key_log
+from .owner import approval_digest, payload_digest, verify_approval, verify_quorum, verify_key_log
 from .pair import pair_sas
 from .report import TrustReport, clear_trust_cache, did_web_resolver, trust
 from .schema import validate
@@ -29,5 +29,5 @@ __all__ = sorted([
     "build_openentity_json", "sign_attestation", "sign_revocation", "TrustReport", "clear_trust_cache", "did_web_resolver", "trust",
     "cart_digest", "cart_error", "mandate_covers", "mandate_digest", "receipt_error", "sign_receipt", "verify_agent_for_checkout",
     "verify_mandate", "verify_receipt", "verify_receipt_chain", "RAILS",
-    "validate", "approval_digest", "payload_digest", "verify_approval", "verify_key_log", "pair_sas", "Owner", "pair",
+    "validate", "approval_digest", "payload_digest", "verify_approval", "verify_quorum", "verify_key_log", "pair_sas", "Owner", "pair",
 ])

@@ -260,6 +260,36 @@ def verify_approval(approval, *, key_log: dict, verifier_did: str, owner_did: st
         return {"ok": False, "error": f.code, "message": str(f)}
 
 
+def verify_quorum(approvals, *, key_log: dict, verifier_did: str, owner_did: str, request_id: str, payload_digest: str, m: int, of,
+                  now: int | None = None, origins=None, rp_id: str = RP_ID, counters: dict | None = None) -> dict:
+    """Verify the `approvals[]` bundle of an organisation-owned action: at least m approval/2.0 objects, each by a different
+    device in `of` (the kids the organisation's account service published), each approving this request_id and payload_digest
+    against the organisation's key log. Fails closed: one bad or duplicate approval refuses the bundle. Returns
+    {"ok": True, "kids", "counters"} (store the counters) or {"ok": False, "error", "message"}."""
+    def no(error, message):
+        return {"ok": False, "error": error, "message": message}
+    of = list(of) if isinstance(of, (list, tuple)) else None
+    if of is None or not isinstance(m, int) or isinstance(m, bool) or m < 1 or any(not isinstance(k, str) for k in of) or len(set(of)) != len(of) or m > len(of):
+        return no("bad_quorum", "m must be 1 or more and at most the number of distinct kids in of")
+    if not isinstance(approvals, list) or not approvals or len(approvals) > len(of):
+        return no("malformed", f"approvals must be 1 to {len(of)} approval/2.0 objects")
+    kids: list[str] = []
+    out: dict = {}
+    for a in approvals:
+        device = a.get("device_id") if isinstance(a, dict) and isinstance(a.get("device_id"), str) else ""
+        if device not in of:
+            return no("not_in_quorum" if device else "malformed", f"device {device or '?'} is not one of the quorum's approvers")
+        if device in kids:
+            return no("duplicate_device", f"device {device} approved twice")
+        r = verify_approval(a, key_log=key_log, verifier_did=verifier_did, owner_did=owner_did, request_id=request_id, payload_digest=payload_digest,
+                            now=now, decisions=("approve",), origins=origins, rp_id=rp_id, counter=(counters or {}).get(device, 0))
+        if not r["ok"]:
+            return r
+        kids.append(r["kid"])
+        out[r["kid"]] = r["counter"]
+    return {"ok": True, "kids": kids, "counters": out} if len(kids) >= m else no("quorum_not_met", f"{len(kids)} of {m} approvals")
+
+
 # ---- key log
 
 def _credential(c, rp_id: str, what: str) -> dict:

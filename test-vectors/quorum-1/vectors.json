@@ -1,0 +1,698 @@
+{
+  "description": "quorum vectors: verifyQuorum(approvals, {keyLog: key_states[context.key_state], verifierDid: context.verifier_did, ownerDid: context.owner_did, requestId, payloadDigest, now, m, of}) must equal `expect`: {ok: true, kids} (the kids in bundle order) or {ok: false, error}. The owner key state plays the organisation's key log; `of` is the policy list of quorum devices. approvals are those of approval-2.0.",
+  "warning": "PUBLISHED THROWAWAY KEYS FOR TEST VECTORS ONLY. Every secret is published (test-vectors/approval-2.0/keys.json and test-vectors/keys.json). Anyone can sign with them. Never use them for anything real.",
+  "cases": [
+    {
+      "name": "two-of-two",
+      "description": "Both devices approve the same request: an iOS device key (p256) and a web passkey (webauthn).",
+      "approvals": [
+        {
+          "version": "approval/2.0",
+          "verifier_did": "did:web:api.agentsecretstore.com",
+          "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "request_id": "req_7Hk2:42",
+          "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+          "decision": "approve",
+          "expires_at": 1794017100,
+          "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+          "form": "p256",
+          "signature": "dSEffeOblaG-VzgFSgx_X4GsNfkGnUBxTqzxukR4kxhkhe9P3urDlLilrQNmJnItRTHOgZRd1t_3RY_ZzKGYNg"
+        },
+        {
+          "version": "approval/2.0",
+          "verifier_did": "did:web:api.agentsecretstore.com",
+          "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "request_id": "req_7Hk2:42",
+          "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+          "decision": "approve",
+          "expires_at": 1794017100,
+          "device_id": "mTluyYyMSPInd1g_ENjr016z9DqqE2ZUX845TdohRVE",
+          "form": "webauthn",
+          "signature": "MEUCIQDz_RQtXAbeP-nVjVpVoaMSe64YqFoHCrdXGWrl4ggURAIgBb9eREogYpTNXeGst6TBupQMgS5cYB-Pn4zdie1BLOw",
+          "authenticator_data": "D3UMQg2RHUXdnWy7aJ1fAnM1wAzOoZElYIW5k5ZyV-MdAAAAAA",
+          "client_data_json": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiS2Q3SVZLQ3pPQjFfLXpsWkRWaTJvU0Vvak1udG1OX3lCWjNGSE5GbzRjcyIsIm9yaWdpbiI6Imh0dHBzOi8vYWNjb3VudC5vcGVuZW50aXR5Lm9yZyIsImNyb3NzT3JpZ2luIjpmYWxzZX0"
+        }
+      ],
+      "context": {
+        "key_state": "owner",
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "now": 1794016800,
+        "m": 2,
+        "of": [
+          "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+          "mTluyYyMSPInd1g_ENjr016z9DqqE2ZUX845TdohRVE"
+        ]
+      },
+      "expect": {
+        "ok": true,
+        "kids": [
+          "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+          "mTluyYyMSPInd1g_ENjr016z9DqqE2ZUX845TdohRVE"
+        ]
+      }
+    },
+    {
+      "name": "one-of-two",
+      "description": "m is 1: one approval is enough.",
+      "approvals": [
+        {
+          "version": "approval/2.0",
+          "verifier_did": "did:web:api.agentsecretstore.com",
+          "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "request_id": "req_7Hk2:42",
+          "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+          "decision": "approve",
+          "expires_at": 1794017100,
+          "device_id": "mTluyYyMSPInd1g_ENjr016z9DqqE2ZUX845TdohRVE",
+          "form": "webauthn",
+          "signature": "MEUCIQDz_RQtXAbeP-nVjVpVoaMSe64YqFoHCrdXGWrl4ggURAIgBb9eREogYpTNXeGst6TBupQMgS5cYB-Pn4zdie1BLOw",
+          "authenticator_data": "D3UMQg2RHUXdnWy7aJ1fAnM1wAzOoZElYIW5k5ZyV-MdAAAAAA",
+          "client_data_json": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiS2Q3SVZLQ3pPQjFfLXpsWkRWaTJvU0Vvak1udG1OX3lCWjNGSE5GbzRjcyIsIm9yaWdpbiI6Imh0dHBzOi8vYWNjb3VudC5vcGVuZW50aXR5Lm9yZyIsImNyb3NzT3JpZ2luIjpmYWxzZX0"
+        }
+      ],
+      "context": {
+        "key_state": "owner",
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "now": 1794016800,
+        "m": 1,
+        "of": [
+          "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+          "mTluyYyMSPInd1g_ENjr016z9DqqE2ZUX845TdohRVE"
+        ]
+      },
+      "expect": {
+        "ok": true,
+        "kids": [
+          "mTluyYyMSPInd1g_ENjr016z9DqqE2ZUX845TdohRVE"
+        ]
+      }
+    },
+    {
+      "name": "not-met",
+      "description": "m is 2 and one device approved.",
+      "approvals": [
+        {
+          "version": "approval/2.0",
+          "verifier_did": "did:web:api.agentsecretstore.com",
+          "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "request_id": "req_7Hk2:42",
+          "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+          "decision": "approve",
+          "expires_at": 1794017100,
+          "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+          "form": "p256",
+          "signature": "dSEffeOblaG-VzgFSgx_X4GsNfkGnUBxTqzxukR4kxhkhe9P3urDlLilrQNmJnItRTHOgZRd1t_3RY_ZzKGYNg"
+        }
+      ],
+      "context": {
+        "key_state": "owner",
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "now": 1794016800,
+        "m": 2,
+        "of": [
+          "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+          "mTluyYyMSPInd1g_ENjr016z9DqqE2ZUX845TdohRVE"
+        ]
+      },
+      "expect": {
+        "ok": false,
+        "error": "quorum_not_met"
+      }
+    },
+    {
+      "name": "same-device-twice",
+      "description": "One device sent its approval twice: it counts once, and the bundle is refused.",
+      "approvals": [
+        {
+          "version": "approval/2.0",
+          "verifier_did": "did:web:api.agentsecretstore.com",
+          "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "request_id": "req_7Hk2:42",
+          "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+          "decision": "approve",
+          "expires_at": 1794017100,
+          "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+          "form": "p256",
+          "signature": "dSEffeOblaG-VzgFSgx_X4GsNfkGnUBxTqzxukR4kxhkhe9P3urDlLilrQNmJnItRTHOgZRd1t_3RY_ZzKGYNg"
+        },
+        {
+          "version": "approval/2.0",
+          "verifier_did": "did:web:api.agentsecretstore.com",
+          "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "request_id": "req_7Hk2:42",
+          "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+          "decision": "approve",
+          "expires_at": 1794017100,
+          "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+          "form": "p256",
+          "signature": "dSEffeOblaG-VzgFSgx_X4GsNfkGnUBxTqzxukR4kxhkhe9P3urDlLilrQNmJnItRTHOgZRd1t_3RY_ZzKGYNg"
+        }
+      ],
+      "context": {
+        "key_state": "owner",
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "now": 1794016800,
+        "m": 2,
+        "of": [
+          "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+          "mTluyYyMSPInd1g_ENjr016z9DqqE2ZUX845TdohRVE"
+        ]
+      },
+      "expect": {
+        "ok": false,
+        "error": "duplicate_device"
+      }
+    },
+    {
+      "name": "device-outside-of",
+      "description": "web is an approver in the key log but not in the quorum's list.",
+      "approvals": [
+        {
+          "version": "approval/2.0",
+          "verifier_did": "did:web:api.agentsecretstore.com",
+          "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "request_id": "req_7Hk2:42",
+          "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+          "decision": "approve",
+          "expires_at": 1794017100,
+          "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+          "form": "p256",
+          "signature": "dSEffeOblaG-VzgFSgx_X4GsNfkGnUBxTqzxukR4kxhkhe9P3urDlLilrQNmJnItRTHOgZRd1t_3RY_ZzKGYNg"
+        },
+        {
+          "version": "approval/2.0",
+          "verifier_did": "did:web:api.agentsecretstore.com",
+          "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "request_id": "req_7Hk2:42",
+          "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+          "decision": "approve",
+          "expires_at": 1794017100,
+          "device_id": "mTluyYyMSPInd1g_ENjr016z9DqqE2ZUX845TdohRVE",
+          "form": "webauthn",
+          "signature": "MEUCIQDz_RQtXAbeP-nVjVpVoaMSe64YqFoHCrdXGWrl4ggURAIgBb9eREogYpTNXeGst6TBupQMgS5cYB-Pn4zdie1BLOw",
+          "authenticator_data": "D3UMQg2RHUXdnWy7aJ1fAnM1wAzOoZElYIW5k5ZyV-MdAAAAAA",
+          "client_data_json": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiS2Q3SVZLQ3pPQjFfLXpsWkRWaTJvU0Vvak1udG1OX3lCWjNGSE5GbzRjcyIsIm9yaWdpbiI6Imh0dHBzOi8vYWNjb3VudC5vcGVuZW50aXR5Lm9yZyIsImNyb3NzT3JpZ2luIjpmYWxzZX0"
+        }
+      ],
+      "context": {
+        "key_state": "owner",
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "now": 1794016800,
+        "m": 2,
+        "of": [
+          "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+          "qksxx4pp3xaJwtii_IjmacMw6V_UouAqRrlwQeZXAVo"
+        ]
+      },
+      "expect": {
+        "ok": false,
+        "error": "not_in_quorum"
+      }
+    },
+    {
+      "name": "device-outside-log",
+      "description": "A key the quorum lists but the key log does not hold.",
+      "approvals": [
+        {
+          "version": "approval/2.0",
+          "verifier_did": "did:web:api.agentsecretstore.com",
+          "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "request_id": "req_7Hk2:42",
+          "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+          "decision": "approve",
+          "expires_at": 1794017100,
+          "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+          "form": "p256",
+          "signature": "dSEffeOblaG-VzgFSgx_X4GsNfkGnUBxTqzxukR4kxhkhe9P3urDlLilrQNmJnItRTHOgZRd1t_3RY_ZzKGYNg"
+        },
+        {
+          "version": "approval/2.0",
+          "verifier_did": "did:web:api.agentsecretstore.com",
+          "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "request_id": "req_7Hk2:42",
+          "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+          "decision": "approve",
+          "expires_at": 1794017100,
+          "device_id": "njSMcnFS8gLSI4-5PgIQeJTFQudLF6moiczrC46hNXU",
+          "form": "p256",
+          "signature": "E_wHZ0uyr0osUHCJgsOa8HT75z4LXQTMv77gn4T0X4ol7htJFFLbjvJcvi5NgSXR5Il-fwKF7mF1JSM9TRlcAQ"
+        }
+      ],
+      "context": {
+        "key_state": "owner",
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "now": 1794016800,
+        "m": 2,
+        "of": [
+          "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+          "njSMcnFS8gLSI4-5PgIQeJTFQudLF6moiczrC46hNXU"
+        ]
+      },
+      "expect": {
+        "ok": false,
+        "error": "unknown_key"
+      }
+    },
+    {
+      "name": "another-payload",
+      "description": "The verifier recomputed another payload digest than the approvals signed.",
+      "approvals": [
+        {
+          "version": "approval/2.0",
+          "verifier_did": "did:web:api.agentsecretstore.com",
+          "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "request_id": "req_7Hk2:42",
+          "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+          "decision": "approve",
+          "expires_at": 1794017100,
+          "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+          "form": "p256",
+          "signature": "dSEffeOblaG-VzgFSgx_X4GsNfkGnUBxTqzxukR4kxhkhe9P3urDlLilrQNmJnItRTHOgZRd1t_3RY_ZzKGYNg"
+        },
+        {
+          "version": "approval/2.0",
+          "verifier_did": "did:web:api.agentsecretstore.com",
+          "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "request_id": "req_7Hk2:42",
+          "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+          "decision": "approve",
+          "expires_at": 1794017100,
+          "device_id": "mTluyYyMSPInd1g_ENjr016z9DqqE2ZUX845TdohRVE",
+          "form": "webauthn",
+          "signature": "MEUCIQDz_RQtXAbeP-nVjVpVoaMSe64YqFoHCrdXGWrl4ggURAIgBb9eREogYpTNXeGst6TBupQMgS5cYB-Pn4zdie1BLOw",
+          "authenticator_data": "D3UMQg2RHUXdnWy7aJ1fAnM1wAzOoZElYIW5k5ZyV-MdAAAAAA",
+          "client_data_json": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiS2Q3SVZLQ3pPQjFfLXpsWkRWaTJvU0Vvak1udG1OX3lCWjNGSE5GbzRjcyIsIm9yaWdpbiI6Imh0dHBzOi8vYWNjb3VudC5vcGVuZW50aXR5Lm9yZyIsImNyb3NzT3JpZ2luIjpmYWxzZX0"
+        }
+      ],
+      "context": {
+        "key_state": "owner",
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "8b0bb7512fb6d1595c87b3604b48935021ab88233ea853246f5c244600a40929",
+        "now": 1794016800,
+        "m": 2,
+        "of": [
+          "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+          "mTluyYyMSPInd1g_ENjr016z9DqqE2ZUX845TdohRVE"
+        ]
+      },
+      "expect": {
+        "ok": false,
+        "error": "wrong_payload"
+      }
+    },
+    {
+      "name": "another-request",
+      "description": "The verifier issued another request id than the approvals answer.",
+      "approvals": [
+        {
+          "version": "approval/2.0",
+          "verifier_did": "did:web:api.agentsecretstore.com",
+          "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "request_id": "req_7Hk2:42",
+          "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+          "decision": "approve",
+          "expires_at": 1794017100,
+          "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+          "form": "p256",
+          "signature": "dSEffeOblaG-VzgFSgx_X4GsNfkGnUBxTqzxukR4kxhkhe9P3urDlLilrQNmJnItRTHOgZRd1t_3RY_ZzKGYNg"
+        },
+        {
+          "version": "approval/2.0",
+          "verifier_did": "did:web:api.agentsecretstore.com",
+          "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "request_id": "req_7Hk2:42",
+          "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+          "decision": "approve",
+          "expires_at": 1794017100,
+          "device_id": "mTluyYyMSPInd1g_ENjr016z9DqqE2ZUX845TdohRVE",
+          "form": "webauthn",
+          "signature": "MEUCIQDz_RQtXAbeP-nVjVpVoaMSe64YqFoHCrdXGWrl4ggURAIgBb9eREogYpTNXeGst6TBupQMgS5cYB-Pn4zdie1BLOw",
+          "authenticator_data": "D3UMQg2RHUXdnWy7aJ1fAnM1wAzOoZElYIW5k5ZyV-MdAAAAAA",
+          "client_data_json": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiS2Q3SVZLQ3pPQjFfLXpsWkRWaTJvU0Vvak1udG1OX3lCWjNGSE5GbzRjcyIsIm9yaWdpbiI6Imh0dHBzOi8vYWNjb3VudC5vcGVuZW50aXR5Lm9yZyIsImNyb3NzT3JpZ2luIjpmYWxzZX0"
+        }
+      ],
+      "context": {
+        "key_state": "owner",
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_other:1",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "now": 1794016800,
+        "m": 2,
+        "of": [
+          "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+          "mTluyYyMSPInd1g_ENjr016z9DqqE2ZUX845TdohRVE"
+        ]
+      },
+      "expect": {
+        "ok": false,
+        "error": "wrong_request"
+      }
+    },
+    {
+      "name": "one-deny",
+      "description": "A deny is not an approval.",
+      "approvals": [
+        {
+          "version": "approval/2.0",
+          "verifier_did": "did:web:api.agentsecretstore.com",
+          "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "request_id": "req_7Hk2:42",
+          "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+          "decision": "deny",
+          "expires_at": 1794017100,
+          "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+          "form": "p256",
+          "signature": "_vdGfZgJ5YY5_x_E6JUGcLYlbl_4cDawPNG-yLnnOf5i9sxWA7a8Xv_qCiRzKVK9EeoQG2xCj3VeD_YTAjPXWA"
+        },
+        {
+          "version": "approval/2.0",
+          "verifier_did": "did:web:api.agentsecretstore.com",
+          "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "request_id": "req_7Hk2:42",
+          "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+          "decision": "approve",
+          "expires_at": 1794017100,
+          "device_id": "mTluyYyMSPInd1g_ENjr016z9DqqE2ZUX845TdohRVE",
+          "form": "webauthn",
+          "signature": "MEUCIQDz_RQtXAbeP-nVjVpVoaMSe64YqFoHCrdXGWrl4ggURAIgBb9eREogYpTNXeGst6TBupQMgS5cYB-Pn4zdie1BLOw",
+          "authenticator_data": "D3UMQg2RHUXdnWy7aJ1fAnM1wAzOoZElYIW5k5ZyV-MdAAAAAA",
+          "client_data_json": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiS2Q3SVZLQ3pPQjFfLXpsWkRWaTJvU0Vvak1udG1OX3lCWjNGSE5GbzRjcyIsIm9yaWdpbiI6Imh0dHBzOi8vYWNjb3VudC5vcGVuZW50aXR5Lm9yZyIsImNyb3NzT3JpZ2luIjpmYWxzZX0"
+        }
+      ],
+      "context": {
+        "key_state": "owner",
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "now": 1794016800,
+        "m": 2,
+        "of": [
+          "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+          "mTluyYyMSPInd1g_ENjr016z9DqqE2ZUX845TdohRVE"
+        ]
+      },
+      "expect": {
+        "ok": false,
+        "error": "bad_decision"
+      }
+    },
+    {
+      "name": "expired",
+      "description": "now is at the approvals' expires_at.",
+      "approvals": [
+        {
+          "version": "approval/2.0",
+          "verifier_did": "did:web:api.agentsecretstore.com",
+          "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "request_id": "req_7Hk2:42",
+          "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+          "decision": "approve",
+          "expires_at": 1794017100,
+          "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+          "form": "p256",
+          "signature": "dSEffeOblaG-VzgFSgx_X4GsNfkGnUBxTqzxukR4kxhkhe9P3urDlLilrQNmJnItRTHOgZRd1t_3RY_ZzKGYNg"
+        },
+        {
+          "version": "approval/2.0",
+          "verifier_did": "did:web:api.agentsecretstore.com",
+          "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "request_id": "req_7Hk2:42",
+          "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+          "decision": "approve",
+          "expires_at": 1794017100,
+          "device_id": "mTluyYyMSPInd1g_ENjr016z9DqqE2ZUX845TdohRVE",
+          "form": "webauthn",
+          "signature": "MEUCIQDz_RQtXAbeP-nVjVpVoaMSe64YqFoHCrdXGWrl4ggURAIgBb9eREogYpTNXeGst6TBupQMgS5cYB-Pn4zdie1BLOw",
+          "authenticator_data": "D3UMQg2RHUXdnWy7aJ1fAnM1wAzOoZElYIW5k5ZyV-MdAAAAAA",
+          "client_data_json": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiS2Q3SVZLQ3pPQjFfLXpsWkRWaTJvU0Vvak1udG1OX3lCWjNGSE5GbzRjcyIsIm9yaWdpbiI6Imh0dHBzOi8vYWNjb3VudC5vcGVuZW50aXR5Lm9yZyIsImNyb3NzT3JpZ2luIjpmYWxzZX0"
+        }
+      ],
+      "context": {
+        "key_state": "owner",
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "now": 1794017100,
+        "m": 2,
+        "of": [
+          "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+          "mTluyYyMSPInd1g_ENjr016z9DqqE2ZUX845TdohRVE"
+        ]
+      },
+      "expect": {
+        "ok": false,
+        "error": "expired"
+      }
+    },
+    {
+      "name": "padded-bundle",
+      "description": "More approvals than devices in the quorum.",
+      "approvals": [
+        {
+          "version": "approval/2.0",
+          "verifier_did": "did:web:api.agentsecretstore.com",
+          "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "request_id": "req_7Hk2:42",
+          "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+          "decision": "approve",
+          "expires_at": 1794017100,
+          "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+          "form": "p256",
+          "signature": "dSEffeOblaG-VzgFSgx_X4GsNfkGnUBxTqzxukR4kxhkhe9P3urDlLilrQNmJnItRTHOgZRd1t_3RY_ZzKGYNg"
+        },
+        {
+          "version": "approval/2.0",
+          "verifier_did": "did:web:api.agentsecretstore.com",
+          "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "request_id": "req_7Hk2:42",
+          "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+          "decision": "approve",
+          "expires_at": 1794017100,
+          "device_id": "mTluyYyMSPInd1g_ENjr016z9DqqE2ZUX845TdohRVE",
+          "form": "webauthn",
+          "signature": "MEUCIQDz_RQtXAbeP-nVjVpVoaMSe64YqFoHCrdXGWrl4ggURAIgBb9eREogYpTNXeGst6TBupQMgS5cYB-Pn4zdie1BLOw",
+          "authenticator_data": "D3UMQg2RHUXdnWy7aJ1fAnM1wAzOoZElYIW5k5ZyV-MdAAAAAA",
+          "client_data_json": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiS2Q3SVZLQ3pPQjFfLXpsWkRWaTJvU0Vvak1udG1OX3lCWjNGSE5GbzRjcyIsIm9yaWdpbiI6Imh0dHBzOi8vYWNjb3VudC5vcGVuZW50aXR5Lm9yZyIsImNyb3NzT3JpZ2luIjpmYWxzZX0"
+        },
+        {
+          "version": "approval/2.0",
+          "verifier_did": "did:web:api.agentsecretstore.com",
+          "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "request_id": "req_7Hk2:42",
+          "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+          "decision": "approve",
+          "expires_at": 1794017100,
+          "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+          "form": "p256",
+          "signature": "dSEffeOblaG-VzgFSgx_X4GsNfkGnUBxTqzxukR4kxhkhe9P3urDlLilrQNmJnItRTHOgZRd1t_3RY_ZzKGYNg"
+        }
+      ],
+      "context": {
+        "key_state": "owner",
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "now": 1794016800,
+        "m": 2,
+        "of": [
+          "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+          "mTluyYyMSPInd1g_ENjr016z9DqqE2ZUX845TdohRVE"
+        ]
+      },
+      "expect": {
+        "ok": false,
+        "error": "malformed"
+      }
+    },
+    {
+      "name": "m-zero",
+      "description": "m below 1.",
+      "approvals": [
+        {
+          "version": "approval/2.0",
+          "verifier_did": "did:web:api.agentsecretstore.com",
+          "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "request_id": "req_7Hk2:42",
+          "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+          "decision": "approve",
+          "expires_at": 1794017100,
+          "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+          "form": "p256",
+          "signature": "dSEffeOblaG-VzgFSgx_X4GsNfkGnUBxTqzxukR4kxhkhe9P3urDlLilrQNmJnItRTHOgZRd1t_3RY_ZzKGYNg"
+        }
+      ],
+      "context": {
+        "key_state": "owner",
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "now": 1794016800,
+        "m": 0,
+        "of": [
+          "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+          "mTluyYyMSPInd1g_ENjr016z9DqqE2ZUX845TdohRVE"
+        ]
+      },
+      "expect": {
+        "ok": false,
+        "error": "bad_quorum"
+      }
+    },
+    {
+      "name": "m-over-of",
+      "description": "m above the number of devices.",
+      "approvals": [
+        {
+          "version": "approval/2.0",
+          "verifier_did": "did:web:api.agentsecretstore.com",
+          "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "request_id": "req_7Hk2:42",
+          "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+          "decision": "approve",
+          "expires_at": 1794017100,
+          "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+          "form": "p256",
+          "signature": "dSEffeOblaG-VzgFSgx_X4GsNfkGnUBxTqzxukR4kxhkhe9P3urDlLilrQNmJnItRTHOgZRd1t_3RY_ZzKGYNg"
+        },
+        {
+          "version": "approval/2.0",
+          "verifier_did": "did:web:api.agentsecretstore.com",
+          "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "request_id": "req_7Hk2:42",
+          "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+          "decision": "approve",
+          "expires_at": 1794017100,
+          "device_id": "mTluyYyMSPInd1g_ENjr016z9DqqE2ZUX845TdohRVE",
+          "form": "webauthn",
+          "signature": "MEUCIQDz_RQtXAbeP-nVjVpVoaMSe64YqFoHCrdXGWrl4ggURAIgBb9eREogYpTNXeGst6TBupQMgS5cYB-Pn4zdie1BLOw",
+          "authenticator_data": "D3UMQg2RHUXdnWy7aJ1fAnM1wAzOoZElYIW5k5ZyV-MdAAAAAA",
+          "client_data_json": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiS2Q3SVZLQ3pPQjFfLXpsWkRWaTJvU0Vvak1udG1OX3lCWjNGSE5GbzRjcyIsIm9yaWdpbiI6Imh0dHBzOi8vYWNjb3VudC5vcGVuZW50aXR5Lm9yZyIsImNyb3NzT3JpZ2luIjpmYWxzZX0"
+        }
+      ],
+      "context": {
+        "key_state": "owner",
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "now": 1794016800,
+        "m": 3,
+        "of": [
+          "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+          "mTluyYyMSPInd1g_ENjr016z9DqqE2ZUX845TdohRVE"
+        ]
+      },
+      "expect": {
+        "ok": false,
+        "error": "bad_quorum"
+      }
+    },
+    {
+      "name": "not-a-list",
+      "description": "approvals is one object, not a list.",
+      "approvals": {
+        "version": "approval/2.0",
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "decision": "approve",
+        "expires_at": 1794017100,
+        "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+        "form": "p256",
+        "signature": "dSEffeOblaG-VzgFSgx_X4GsNfkGnUBxTqzxukR4kxhkhe9P3urDlLilrQNmJnItRTHOgZRd1t_3RY_ZzKGYNg"
+      },
+      "context": {
+        "key_state": "owner",
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "now": 1794016800,
+        "m": 1,
+        "of": [
+          "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+          "mTluyYyMSPInd1g_ENjr016z9DqqE2ZUX845TdohRVE"
+        ]
+      },
+      "expect": {
+        "ok": false,
+        "error": "malformed"
+      }
+    },
+    {
+      "name": "owner-closed",
+      "description": "The organisation's key log is closed.",
+      "approvals": [
+        {
+          "version": "approval/2.0",
+          "verifier_did": "did:web:api.agentsecretstore.com",
+          "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "request_id": "req_7Hk2:42",
+          "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+          "decision": "approve",
+          "expires_at": 1794017100,
+          "device_id": "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+          "form": "p256",
+          "signature": "dSEffeOblaG-VzgFSgx_X4GsNfkGnUBxTqzxukR4kxhkhe9P3urDlLilrQNmJnItRTHOgZRd1t_3RY_ZzKGYNg"
+        },
+        {
+          "version": "approval/2.0",
+          "verifier_did": "did:web:api.agentsecretstore.com",
+          "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+          "request_id": "req_7Hk2:42",
+          "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+          "decision": "approve",
+          "expires_at": 1794017100,
+          "device_id": "mTluyYyMSPInd1g_ENjr016z9DqqE2ZUX845TdohRVE",
+          "form": "webauthn",
+          "signature": "MEUCIQDz_RQtXAbeP-nVjVpVoaMSe64YqFoHCrdXGWrl4ggURAIgBb9eREogYpTNXeGst6TBupQMgS5cYB-Pn4zdie1BLOw",
+          "authenticator_data": "D3UMQg2RHUXdnWy7aJ1fAnM1wAzOoZElYIW5k5ZyV-MdAAAAAA",
+          "client_data_json": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiS2Q3SVZLQ3pPQjFfLXpsWkRWaTJvU0Vvak1udG1OX3lCWjNGSE5GbzRjcyIsIm9yaWdpbiI6Imh0dHBzOi8vYWNjb3VudC5vcGVuZW50aXR5Lm9yZyIsImNyb3NzT3JpZ2luIjpmYWxzZX0"
+        }
+      ],
+      "context": {
+        "key_state": "closed",
+        "verifier_did": "did:web:api.agentsecretstore.com",
+        "owner_did": "did:web:account.openentity.org:o:ogkj5m5wz7jxrr4jteqlxroznlok4paalqmppivgr2arait6j32q",
+        "request_id": "req_7Hk2:42",
+        "payload_digest": "e7d48a30823ee37f3f289a07dd353acaa8842a74df384457b40c97e9d0deb889",
+        "now": 1794016800,
+        "m": 2,
+        "of": [
+          "tvLLAMcd0he3wfaWyywx6M2q-kSc5k51iL20LU-3AzU",
+          "mTluyYyMSPInd1g_ENjr016z9DqqE2ZUX845TdohRVE"
+        ]
+      },
+      "expect": {
+        "ok": false,
+        "error": "owner_closed"
+      }
+    }
+  ]
+}

@@ -5,11 +5,12 @@
 import { createHash, randomInt } from "node:crypto";
 import type { Hono } from "hono";
 import { normalizeEid, pairSas, payloadDigest, trust, verifyPresentation } from "@openentity/sdk";
-import { type AgentRow, agentView, productKeys } from "./agents.ts";
+import { type AgentRow, agentView, pause, productKeys } from "./agents.ts";
 import type { Deps } from "./app.ts";
 import { bump, newId, now } from "./db.ts";
 import { bearer, fail, ipOf, json } from "./http.ts";
 import { track } from "./events.ts";
+import { type OrgRow, memberDevice, orgOf } from "./orgbase.ts";
 import { sendEvent } from "./outbound.ts";
 import { agentSigned } from "./rfc9421.ts";
 import { checkApproval, permissionList } from "./stepup.ts";
@@ -20,7 +21,7 @@ const CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"; // base32 without I, L, O 
 const CODE = /^OE-[0-9A-HJKMNP-TV-Z]{4}-[0-9A-HJKMNP-TV-Z]{4}$/;
 
 interface PairingRow {
-  id: string; account_id: string; code: string; state: string; created_at: number; expires_at: number;
+  id: string; account_id: string; code: string; state: string; created_at: number; expires_at: number; org_id: string | null;
   agent_did: string | null; agent: string | null; request_id: string | null; claimed_at: number | null; confirmed_at: number | null; credentials_at: number | null;
 }
 
@@ -87,9 +88,19 @@ export function routes(app: Hono, d: Deps) {
     (await d.db.first<PairingRow>("SELECT * FROM pairings WHERE id = $1 AND account_id = $2", [id, accountId])) ?? fail(404, "not_found", "no such pairing");
   const linked = async (accountId: string) => Number((await d.db.first<{ n: number }>("SELECT count(*) AS n FROM agents WHERE account_id = $1 AND state <> 'unlinked'", [accountId]))!.n);
 
+  /** Who owns what this pairing makes: the person, or the organisation the admin named (their role is checked each time). */
+  const ownerOf = async (accountId: string, ownerDid: string | null, p: Pick<PairingRow, "org_id">): Promise<{ ownerDid: string; org: OrgRow | null }> => {
+    if (!p.org_id) return { ownerDid: ownerDid ?? "", org: null };
+    const { org } = await orgOf(d, accountId, p.org_id, "admin");
+    return { ownerDid: org.owner_did, org };
+  };
+
   // ---------------------------------------------------------------- owner side
   app.post("/v1/pairings", async (c) => {
     const o = await bearer(c, d);
+    const b = (await c.req.text()) ? await json(c) : {};
+    const org = b.org_id === undefined ? null : (await orgOf(d, o.accountId, String(b.org_id), "admin")).org;
+    if (org?.state === "paused") fail(423, "org_paused", "the organisation is paused; resume it before pairing an agent");
     if (!o.ownerDid) fail(403, "key_log_required", "pairing needs a key log, since confirming signs approval/2.0");
     const t = now();
     const today = await d.db.all<{ created_at: number }>("SELECT created_at FROM pairings WHERE account_id = $1 AND created_at > $2 ORDER BY created_at", [o.accountId, t - 86_400]);
@@ -97,8 +108,8 @@ export function routes(app: Hono, d: Deps) {
     if ((await linked(o.accountId)) >= AGENT_LIMIT) fail(409, "agent_limit", `at most ${AGENT_LIMIT} paired agents; unlink one first`);
     for (let attempt = 0; ; attempt++) {
       const p = { id: newId("pr"), code: newCode(), expires_at: t + CODE_TTL };
-      const ins = await d.db.run("INSERT INTO pairings (id, account_id, code, state, created_at, expires_at) VALUES ($1, $2, $3, 'waiting', $4, $5) ON CONFLICT (code) DO NOTHING",
-        [p.id, o.accountId, p.code, t, p.expires_at]);
+      const ins = await d.db.run("INSERT INTO pairings (id, account_id, code, state, created_at, expires_at, org_id) VALUES ($1, $2, $3, 'waiting', $4, $5, $6) ON CONFLICT (code) DO NOTHING",
+        [p.id, o.accountId, p.code, t, p.expires_at, org?.id ?? null]);
       if (ins.changes) {
         await track(d, "pair_code_created", {}, { owner: o.ownerDid });
         return c.json({ ...p, url: `https://openentity.org/pair#${p.code}`, state: "waiting" }, 201);
@@ -110,8 +121,8 @@ export function routes(app: Hono, d: Deps) {
   app.get("/v1/pairings/:id", async (c) => {
     const o = await bearer(c, d);
     // ?permissions=a,b: the approval request covers the permissions the owner picked; confirm sends the same list.
-    const q = c.req.query("permissions");
-    return c.json(detail(d, await own(o.accountId, c.req.param("id")), o.ownerDid ?? "", permissionList(q ? q.split(",") : [])));
+    const q = c.req.query("permissions"), p = await own(o.accountId, c.req.param("id"));
+    return c.json(detail(d, p, (await ownerOf(o.accountId, o.ownerDid, p)).ownerDid, permissionList(q ? q.split(",") : [])));
   });
 
   app.delete("/v1/pairings/:id", async (c) => {
@@ -133,27 +144,36 @@ export function routes(app: Hono, d: Deps) {
     const previous = await d.db.first<AgentRow>("SELECT * FROM agents WHERE did = $1", [p.agent_did]);
     if (previous && previous.state !== "unlinked" && previous.account_id !== o.accountId) fail(409, "agent_linked", "this agent is paired with another owner");
     if (!(previous && previous.state !== "unlinked") && (await linked(o.accountId)) >= AGENT_LIMIT) fail(409, "agent_limit", `at most ${AGENT_LIMIT} paired agents; unlink one first`);
-    await checkApproval(c, d, { ownerDid: o.ownerDid!, requestId: p.request_id!, payloadDigest: payloadDigest(confirmPayload(p, permissions)), decisions: ["approve"] });
+    const own2 = await ownerOf(o.accountId, o.ownerDid, p);
+    if (own2.org?.state === "paused") fail(423, "org_paused", "the organisation is paused; resume it before pairing an agent");
+    const signed = await checkApproval(c, d, { ownerDid: own2.ownerDid, requestId: p.request_id!, payloadDigest: payloadDigest(confirmPayload(p, permissions)), decisions: ["approve"] });
+    if (own2.org) await memberDevice(d, own2.org, o.accountId, signed.kid); // the pairing is the signing admin's own act
     const agent = JSON.parse(p.agent!), t = now();
     const link = await d.db.tx(async (tx) => {
       const won = await tx.run("UPDATE pairings SET state = 'confirmed', confirmed_at = $2 WHERE id = $1 AND state = 'claimed'", [p.id, t]);
       if (!won.changes) fail(409, "approval_reused", "this pairing was already confirmed");
       // A paused agent that pairs again with the same owner stays paused; an unlinked one starts active.
       const row = await tx.first<{ perm_seq: number; link_epoch: number }>(
-        `INSERT INTO agents (did, account_id, owner_did, label, framework, host, permissions, perm_seq, state, paired_at, link_epoch)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, 1, 'active', $8, 1)
-         ON CONFLICT (did) DO UPDATE SET account_id = $2, owner_did = $3, label = COALESCE($4, agents.label), framework = $5, host = $6, permissions = $7,
+        `INSERT INTO agents (did, account_id, owner_did, label, framework, host, permissions, perm_seq, state, paired_at, link_epoch, org_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, 1, 'active', $8, 1, $9)
+         ON CONFLICT (did) DO UPDATE SET account_id = $2, owner_did = $3, org_id = $9, team = NULL, cost_centre = NULL, label = COALESCE($4, agents.label), framework = $5, host = $6, permissions = $7,
            perm_seq = agents.perm_seq + 1, state = CASE WHEN agents.state = 'paused' AND agents.account_id = $2 THEN 'paused' ELSE 'active' END,
            paired_at = $8, unlinked_at = NULL, link_epoch = agents.link_epoch + 1
          RETURNING perm_seq, link_epoch`,
-        [p.agent_did, o.accountId, o.ownerDid, label, agent.framework, agent.host, JSON.stringify(permissions), t]);
+        [p.agent_did, o.accountId, own2.ownerDid, label, agent.framework, agent.host, JSON.stringify(permissions), t, own2.org?.id ?? null]);
       for (const product of PRODUCT_DIDS) await tx.run("INSERT INTO agent_products (agent_did, product) VALUES ($1, $2) ON CONFLICT DO NOTHING", [p.agent_did, product]);
       return { seq: Number(row!.perm_seq), linkEpoch: Number(row!.link_epoch) };
     });
-    const data = { agent_did: p.agent_did, owner_did: o.ownerDid, permissions, framework: agent.framework, seq: link.seq, link_epoch: link.linkEpoch };
+    const data = { agent_did: p.agent_did, owner_did: own2.ownerDid, permissions, framework: agent.framework, seq: link.seq, link_epoch: link.linkEpoch };
     await Promise.all(PRODUCT_DIDS.map((product) => sendEvent(d, product, "agent.paired", data)));
-    await track(d, "pair_confirmed", { framework: agent.framework, permissions_count: permissions.length, seconds_from_code: t - Number(p.created_at) }, { owner: o.ownerDid, agent: p.agent_did! });
-    return c.json(await agentView(d, (await d.db.first<AgentRow>("SELECT * FROM agents WHERE did = $1", [p.agent_did]))!));
+    await track(d, "pair_confirmed", { framework: agent.framework, permissions_count: permissions.length, seconds_from_code: t - Number(p.created_at) }, { owner: own2.ownerDid, agent: p.agent_did! });
+    // An org paused while this pairing finished: the agent starts paused, so the pause reaches it too (like mandates.ts re-reading the agent).
+    let linked2 = (await d.db.first<AgentRow>("SELECT * FROM agents WHERE did = $1", [p.agent_did]))!;
+    if (own2.org && (await d.db.first<OrgRow>("SELECT * FROM orgs WHERE id = $1", [own2.org.id]))!.state === "paused" && linked2.state === "active") {
+      await pause(d, linked2, "web");
+      linked2 = (await d.db.first<AgentRow>("SELECT * FROM agents WHERE did = $1", [p.agent_did]))!;
+    }
+    return c.json(await agentView(d, linked2));
   });
 
   // ---------------------------------------------------------------- agent side (no CAPTCHA, login or payment)
@@ -175,8 +195,9 @@ export function routes(app: Hono, d: Deps) {
     const state = stateOf(p);
     if (state === "expired" || state === "cancelled") fail(410, "code_expired", "this code expired; ask the owner for a new one");
     if (state !== "waiting") fail(409, "code_used", "this code was already used");
-    const linkedTo = await d.db.first<{ account_id: string }>("SELECT account_id FROM agents WHERE did = $1 AND state <> 'unlinked'", [did]);
-    if (linkedTo && linkedTo.account_id !== p.account_id) fail(409, "agent_linked", "this agent is paired with another owner, who must unlink it first");
+    const linkedTo = await d.db.first<{ account_id: string; org_id: string | null }>("SELECT account_id, org_id FROM agents WHERE did = $1 AND state <> 'unlinked'", [did]);
+    // An organisation's agent moves only by the org unlinking it: its pairer cannot take it back as a person's, nor into another org.
+    if (linkedTo && (linkedTo.account_id !== p.account_id || linkedTo.org_id !== p.org_id)) fail(409, "agent_linked", "this agent is paired with another owner, who must unlink it first");
     const t = now();
     const won = await d.db.run(
       "UPDATE pairings SET state = 'claimed', agent_did = $2, agent = $3, request_id = $4, claimed_at = $5, expires_at = $6 WHERE id = $1 AND state = 'waiting' AND expires_at > $5",

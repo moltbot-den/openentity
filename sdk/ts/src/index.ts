@@ -9,7 +9,7 @@ export { leafHash, nodeHash, merkleRoot, inclusionProof, verifyInclusion, consis
 export { DEFAULT_REGISTRY, DISPUTE_REASONS, type DisputeReason, withdraw, record, dispute, find, present } from "./client.ts";
 export { OpenEntityError, HttpSigError, type RegistryErrorCode, type LocalErrorCode } from "./errors.ts";
 export { httpSigBase, signRequest, verifyRequest, verifyResponse } from "./httpsig.ts";
-export { approvalDigest, payloadDigest, verifyApproval, verifyKeyLog, type Credential, type KeyLogState, type KeyLogResult, type KeyLogOptions, type KeyLogError, type ApprovalOptions, type ApprovalResult, type ApprovalError } from "./owner.ts";
+export { approvalDigest, payloadDigest, verifyApproval, verifyQuorum, verifyKeyLog, type Credential, type KeyLogState, type KeyLogResult, type KeyLogOptions, type KeyLogError, type ApprovalOptions, type ApprovalResult, type ApprovalError, type QuorumOptions, type QuorumResult, type QuorumError } from "./owner.ts";
 export { pairSas } from "./pair.ts";
 export { pair, Owner, type Signer, type BearerCredential, type Paired, type InboxItem, type AgentState, type Listener } from "./agent.ts";
 export { mandateDigest, verifyMandate, cartDigest, cartError, mandateCovers, receiptError, signReceipt, verifyReceipt, verifyReceiptChain, verifyAgentForCheckout, RAILS, type Mandate, type Cart, type CartLine, type Limits, type Scope, type MandateOptions, type MandateResult, type MandateError, type MandateStatus, type CoverReason, type Receipt, type Party, type ReceiptResult, type ReceiptError, type ChainError, type AgentPolicy, type AgentFacts, type CheckoutInput, type CheckoutDecision } from "./commerce.ts";

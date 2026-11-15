@@ -141,6 +141,12 @@ info:
     - API Gateway cannot choose the close code of a socket the server closes, so before closing the service sends a
       last error frame whose `close_code` is the code listed under closeCodes (4001, 4003, 4008). SDKs treat that frame
       as the close.
+    - Organisations (C5): an org's DID is an ordinary owner DID, `did:web:<rp>:o:<id>`, with an ordinary key log (the
+      enterprise-orgs brief names `...:org:<hash>`; one DID shape means every verifier and product that accepts an owner
+      DID accepts an org without a change). Its agents carry owner_did = the org's DID in every event (agent.paired,
+      agent.paused, agent.mandates, ...). agent.mandates adds `team` and `cost_centre` for an org agent. The quorum
+      products enforce is GET /o/{id}/policy (signed); an org-owned approval is the `approvals[]` bundle checked with
+      verifyQuorum. Approver devices count one per member (PUT /v1/orgs/{id}/device), so m devices are m members.
 servers:
   - url: https://account.openentity.org
     description: production
@@ -161,6 +167,8 @@ tags:
     description: Owner side of pairing an agent (PLAN 8.1).
   - name: Mandates
     description: Owner-signed spend mandates for agents (commerce profile). The owner's device signs; agents never write.
+  - name: Organisations
+    description: 'Organisations as owners (C5): own key log, members and roles, budgets as org-signed mandates, quorum approvals, org pause. Spec docs/commerce/specs/enterprise-orgs.md in the oneentity meta repo.'
   - name: Agents
     description: The owner's paired agents, pause, resume, commands and messages (PLAN 8.2, 8.3).
   - name: Agent-written approvals
@@ -1441,6 +1449,12 @@ paths:
         A single-use code `OE-XXXX-XXXX` (Crockford base32 without I, L, O, U), valid 600 seconds, shown with a QR code
         of `url`. 10 codes per owner per day (429 rate_limited); 50 paired agents per owner (409 agent_limit). Needs a
         key log, since confirming signs approval/2.0.
+
+        Body, optional: `{org_id}` pairs the agent to an organisation the caller administers instead of to the caller
+        (423 org_paused while the org is paused). The approval request of that pairing then names the org as its owner and
+        its confirm needs the signature of the admin's own device registered for the org. The agent's owner_did is the
+        org's DID; it is reached only through /v1/orgs from then on, never through the pairing admin's own /v1/agents,
+        /v1/approvals or /v1/mandates.
       x-available: day-3
       security:
         - ownerBearer: []
@@ -3130,6 +3144,714 @@ paths:
         '422':
           $ref: '#/components/responses/Error'
           description: 'error: invalid_entry'
+  /v1/orgs:
+    post:
+      operationId: createOrg
+      tags: [Organisations]
+      summary: 'Create an organisation'
+      description: 'Body {name, line}: `line` is the org key log''s genesis entry (JCS line), whose root is a passkey registered to the caller and whose first approver is the caller''s device or null. The organisation''s id is base32(SHA-256(line)), so its DID is `did:web:<rp>:o:<id>`, an ordinary owner DID with an ordinary key log (GET/POST /o/{id}/log). The caller becomes its first admin. Needs the caller''s own key log and a fresh sign-in (same gate as the account''s genesis).'
+      x-available: day-8
+      security:
+        - ownerBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        '201':
+          description: OK.
+          content:
+            application/json:
+              schema: { type: object }
+        '400':
+          $ref: '#/components/responses/Error'
+          description: 'error: bad_request'
+        '401':
+          $ref: '#/components/responses/Error'
+          description: 'error: unauthorized'
+        '403':
+          $ref: '#/components/responses/Error'
+          description: 'error: key_log_required, binding_required, log_exists'
+        '409':
+          $ref: '#/components/responses/Error'
+          description: 'error: too_many_orgs'
+        '422':
+          $ref: '#/components/responses/Error'
+          description: 'error: invalid_entry'
+    get:
+      operationId: listOrgs
+      tags: [Organisations]
+      summary: 'The caller''s organisations'
+      description: 'Every org the caller is a member of, with the caller''s role and the quorum policy.'
+      x-available: day-8
+      security:
+        - ownerBearer: []
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema: { type: object }
+        '401':
+          $ref: '#/components/responses/Error'
+          description: 'error: unauthorized'
+  /v1/orgs/{id}:
+    get:
+      operationId: getOrg
+      tags: [Organisations]
+      summary: 'One organisation'
+      description: 'Any member. A stranger gets 404.'
+      x-available: day-8
+      security:
+        - ownerBearer: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, pattern: '^[a-z2-7]{52}$' } }
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema: { type: object }
+        '401':
+          $ref: '#/components/responses/Error'
+          description: 'error: unauthorized'
+        '404':
+          $ref: '#/components/responses/Error'
+          description: 'error: not_found'
+    patch:
+      operationId: updateOrg
+      tags: [Organisations]
+      summary: 'Rename, or change the quorum'
+      description: 'Admin. `quorum_m` (1 to 16) is a step-up: X-OE-Approval over a POST /v1/step-up request with org_id and action org.quorum.set, signed by the admin''s own registered device. The approval''s owner is the org.'
+      x-available: day-8
+      security:
+        - ownerBearer: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, pattern: '^[a-z2-7]{52}$' } }
+        - $ref: '#/components/parameters/ApprovalHeaderConditional'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema: { type: object }
+        '400':
+          $ref: '#/components/responses/Error'
+          description: 'error: bad_request'
+        '401':
+          $ref: '#/components/responses/Error'
+          description: 'error: unauthorized'
+        '403':
+          $ref: '#/components/responses/Error'
+          description: 'error: forbidden_role, approval_invalid, device_not_registered'
+        '404':
+          $ref: '#/components/responses/Error'
+          description: 'error: not_found'
+        '428':
+          $ref: '#/components/responses/Error'
+          description: 'error: approval_required'
+  /o/{id}/policy:
+    get:
+      operationId: orgPolicy
+      tags: [Organisations]
+      summary: 'What products enforce for an org (public, signed, max-age 30)'
+      description: '`{org_did, state, quorum: {m, of: [kid...]}, seq, generated_at}`, signed like GET /v1/paused (RFC 9421 response signature by the service key). `of` lists one registered device per admin and approver that is still an approver in the org key log. An org-owned approval is accepted when m approval/2.0 objects, each by a different kid in `of`, each over the same request_id and payload_digest, verify against the org key log (verifyQuorum in the SDKs, test-vectors/quorum-1). `state` paused means every agent of the org is paused.'
+      x-available: day-8
+      security: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, pattern: '^[a-z2-7]{52}$' } }
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema: { type: object }
+        '404':
+          $ref: '#/components/responses/Error'
+          description: 'error: not_found'
+  /v1/orgs/{id}/members:
+    get:
+      operationId: listOrgMembers
+      tags: [Organisations]
+      summary: 'Members, roles and quorum devices'
+      description: 'Any member.'
+      x-available: day-8
+      security:
+        - ownerBearer: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, pattern: '^[a-z2-7]{52}$' } }
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema: { type: object }
+        '401':
+          $ref: '#/components/responses/Error'
+          description: 'error: unauthorized'
+        '404':
+          $ref: '#/components/responses/Error'
+          description: 'error: not_found'
+    post:
+      operationId: addOrgMember
+      tags: [Organisations]
+      summary: 'Add a member by account email'
+      description: 'Admin. The person must already have an account (404 no_account). Adding an admin or approver is a step-up (org.member.set, signed by the acting admin''s device); adding a viewer is not. At most 30 an hour.'
+      x-available: day-8
+      security:
+        - ownerBearer: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, pattern: '^[a-z2-7]{52}$' } }
+        - $ref: '#/components/parameters/ApprovalHeaderConditional'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        '201':
+          description: OK.
+          content:
+            application/json:
+              schema: { type: object }
+        '400':
+          $ref: '#/components/responses/Error'
+          description: 'error: bad_request'
+        '403':
+          $ref: '#/components/responses/Error'
+          description: 'error: forbidden_role, approval_invalid, device_not_registered'
+        '404':
+          $ref: '#/components/responses/Error'
+          description: 'error: no_account, not_found'
+        '409':
+          $ref: '#/components/responses/Error'
+          description: 'error: already_member, too_many_members'
+        '428':
+          $ref: '#/components/responses/Error'
+          description: 'error: approval_required'
+        '429':
+          $ref: '#/components/responses/Error'
+          description: 'error: rate_limited'
+  /v1/orgs/{id}/members/{account_id}:
+    patch:
+      operationId: setOrgMemberRole
+      tags: [Organisations]
+      summary: 'Change a member''s role'
+      description: 'Admin. A change to or from admin or approver is a step-up (org.member.set). The last admin cannot be demoted (409 last_admin). A member who is demoted to viewer must first have their registered device removed from the org key log by a revoke entry (409 device_in_log): an approver key in the log can add keys and sign.'
+      x-available: day-8
+      security:
+        - ownerBearer: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, pattern: '^[a-z2-7]{52}$' } }
+        - { name: account_id, in: path, required: true, schema: { type: string } }
+        - $ref: '#/components/parameters/ApprovalHeaderConditional'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema: { type: object }
+        '400':
+          $ref: '#/components/responses/Error'
+          description: 'error: bad_request'
+        '403':
+          $ref: '#/components/responses/Error'
+          description: 'error: forbidden_role, approval_invalid, device_not_registered'
+        '404':
+          $ref: '#/components/responses/Error'
+          description: 'error: not_found'
+        '409':
+          $ref: '#/components/responses/Error'
+          description: 'error: last_admin, device_in_log'
+        '428':
+          $ref: '#/components/responses/Error'
+          description: 'error: approval_required'
+    delete:
+      operationId: removeOrgMember
+      tags: [Organisations]
+      summary: 'Remove a member'
+      description: 'Same rules as a role change to none. Agents the member paired stay in the org, now under the removing admin.'
+      x-available: day-8
+      security:
+        - ownerBearer: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, pattern: '^[a-z2-7]{52}$' } }
+        - { name: account_id, in: path, required: true, schema: { type: string } }
+        - $ref: '#/components/parameters/ApprovalHeaderConditional'
+      responses:
+        '204':
+          description: Removed.
+        '403':
+          $ref: '#/components/responses/Error'
+          description: 'error: forbidden_role, approval_invalid'
+        '404':
+          $ref: '#/components/responses/Error'
+          description: 'error: not_found'
+        '409':
+          $ref: '#/components/responses/Error'
+          description: 'error: last_admin, device_in_log'
+        '428':
+          $ref: '#/components/responses/Error'
+          description: 'error: approval_required'
+  /v1/orgs/{id}/device:
+    put:
+      operationId: registerOrgDevice
+      tags: [Organisations]
+      summary: 'Register the caller''s device for the org'
+      description: 'Approver or admin. Body {kid}. The key must be a current approver in the caller''s own key log and in the org''s (add it to the org log first with an add_approver entry signed by a current org approver, POST /o/{id}/log). One device per member: it replaces the caller''s earlier one. This list is the quorum.'
+      x-available: day-8
+      security:
+        - ownerBearer: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, pattern: '^[a-z2-7]{52}$' } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema: { type: object }
+        '403':
+          $ref: '#/components/responses/Error'
+          description: 'error: device_not_approver'
+        '409':
+          $ref: '#/components/responses/Error'
+          description: 'error: device_taken'
+    delete:
+      operationId: removeOrgDevice
+      tags: [Organisations]
+      summary: 'Unregister the caller''s device'
+      description: 'Approver or admin.'
+      x-available: day-8
+      security:
+        - ownerBearer: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, pattern: '^[a-z2-7]{52}$' } }
+      responses:
+        '204':
+          description: Removed.
+  /v1/orgs/{id}/agents:
+    get:
+      operationId: listOrgAgents
+      tags: [Organisations]
+      summary: 'The org''s agents with team and cost centre'
+      description: 'Any member.'
+      x-available: day-8
+      security:
+        - ownerBearer: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, pattern: '^[a-z2-7]{52}$' } }
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema: { type: object }
+        '404':
+          $ref: '#/components/responses/Error'
+          description: 'error: not_found'
+  /v1/orgs/{id}/agents/{agent_did}:
+    patch:
+      operationId: updateOrgAgent
+      tags: [Organisations]
+      summary: 'Label, team, cost centre, permissions'
+      description: 'Admin. team and cost_centre are free text (64 characters) or null; a team change re-checks the agent''s mandates against its budgets. Widening permissions is a step-up (agent.permissions.widen) owned by the org.'
+      x-available: day-8
+      security:
+        - ownerBearer: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, pattern: '^[a-z2-7]{52}$' } }
+        - { name: agent_did, in: path, required: true, schema: { type: string } }
+        - $ref: '#/components/parameters/ApprovalHeaderConditional'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema: { type: object }
+        '400':
+          $ref: '#/components/responses/Error'
+          description: 'error: bad_request, invalid_permission'
+        '403':
+          $ref: '#/components/responses/Error'
+          description: 'error: forbidden_role, approval_invalid, device_not_registered'
+        '404':
+          $ref: '#/components/responses/Error'
+          description: 'error: not_found'
+        '428':
+          $ref: '#/components/responses/Error'
+          description: 'error: approval_required'
+    delete:
+      operationId: unlinkOrgAgent
+      tags: [Organisations]
+      summary: 'Unlink an org agent'
+      description: 'Admin.'
+      x-available: day-8
+      security:
+        - ownerBearer: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, pattern: '^[a-z2-7]{52}$' } }
+        - { name: agent_did, in: path, required: true, schema: { type: string } }
+      responses:
+        '204':
+          description: Unlinked.
+        '404':
+          $ref: '#/components/responses/Error'
+          description: 'error: not_found'
+  /v1/orgs/{id}/agents/{agent_did}/pause:
+    post:
+      operationId: pauseOrgAgent
+      tags: [Organisations]
+      summary: 'Pause one org agent'
+      description: 'Approver or admin; no biometrics, like any pause.'
+      x-available: day-8
+      security:
+        - ownerBearer: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, pattern: '^[a-z2-7]{52}$' } }
+        - { name: agent_did, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema: { type: object }
+        '404':
+          $ref: '#/components/responses/Error'
+          description: 'error: not_found'
+  /v1/orgs/{id}/agents/{agent_did}/resume:
+    post:
+      operationId: resumeOrgAgent
+      tags: [Organisations]
+      summary: 'Resume one org agent'
+      description: 'Admin, step-up agent.resume owned by the org; refused while the org is paused.'
+      x-available: day-8
+      security:
+        - ownerBearer: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, pattern: '^[a-z2-7]{52}$' } }
+        - { name: agent_did, in: path, required: true, schema: { type: string } }
+        - $ref: '#/components/parameters/ApprovalHeaderConditional'
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema: { type: object }
+        '403':
+          $ref: '#/components/responses/Error'
+          description: 'error: approval_invalid'
+        '409':
+          $ref: '#/components/responses/Error'
+          description: 'error: not_paused'
+        '423':
+          $ref: '#/components/responses/Error'
+          description: 'error: org_paused'
+        '428':
+          $ref: '#/components/responses/Error'
+          description: 'error: approval_required'
+  /v1/orgs/{id}/pause:
+    post:
+      operationId: pauseOrg
+      tags: [Organisations]
+      summary: 'Pause the whole organisation'
+      description: 'Approver or admin. Marks the org paused and pauses every agent of the org: agent.paused to every product at once (same events and the same 60-second guarantee as a single pause), mandates revoked, GET /v1/paused carries the change, GET /o/{id}/policy says paused. Pairing into a paused org is refused. Idempotent: it also pauses an agent that slipped in.'
+      x-available: day-8
+      security:
+        - ownerBearer: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, pattern: '^[a-z2-7]{52}$' } }
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema: { type: object }
+        '404':
+          $ref: '#/components/responses/Error'
+          description: 'error: not_found'
+  /v1/orgs/{id}/resume:
+    post:
+      operationId: resumeOrg
+      tags: [Organisations]
+      summary: 'Resume the organisation'
+      description: 'Admin, step-up org.resume. Resumes every paused org agent; mandates stay revoked and are signed again.'
+      x-available: day-8
+      security:
+        - ownerBearer: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, pattern: '^[a-z2-7]{52}$' } }
+        - $ref: '#/components/parameters/ApprovalHeaderConditional'
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema: { type: object }
+        '403':
+          $ref: '#/components/responses/Error'
+          description: 'error: approval_invalid, device_not_registered'
+        '428':
+          $ref: '#/components/responses/Error'
+          description: 'error: approval_required'
+  /v1/orgs/{id}/budgets:
+    get:
+      operationId: listOrgBudgets
+      tags: [Organisations]
+      summary: 'Budgets of the org, its teams and agents'
+      description: 'Any member. Amounts are integer cents.'
+      x-available: day-8
+      security:
+        - ownerBearer: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, pattern: '^[a-z2-7]{52}$' } }
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema: { type: object }
+        '404':
+          $ref: '#/components/responses/Error'
+          description: 'error: not_found'
+    put:
+      operationId: setOrgBudget
+      tags: [Organisations]
+      summary: 'Set a budget'
+      description: 'Admin. Body {scope: org|team|agent, ref (team tag or agent DID; omitted for org), per_tx_max, period, period_max, step_up_over?, merchants?, rails}. A narrower budget stays inside the wider ones (400 exceeds_parent) and a wider one cannot drop below the narrower ones (409 children_exceed). Lowering a budget revokes the agents'' mandates that no longer fit it; the admin signs new ones.'
+      x-available: day-8
+      security:
+        - ownerBearer: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, pattern: '^[a-z2-7]{52}$' } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema: { type: object }
+        '400':
+          $ref: '#/components/responses/Error'
+          description: 'error: bad_request, exceeds_parent'
+        '409':
+          $ref: '#/components/responses/Error'
+          description: 'error: children_exceed'
+  /v1/orgs/{id}/budgets/{budget_id}:
+    delete:
+      operationId: deleteOrgBudget
+      tags: [Organisations]
+      summary: 'Delete a budget'
+      description: 'Admin. Mandates that no budget covers any more are revoked.'
+      x-available: day-8
+      security:
+        - ownerBearer: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, pattern: '^[a-z2-7]{52}$' } }
+        - { name: budget_id, in: path, required: true, schema: { type: string } }
+      responses:
+        '204':
+          description: Deleted.
+        '404':
+          $ref: '#/components/responses/Error'
+          description: 'error: not_found'
+  /v1/orgs/{id}/mandates/draft:
+    post:
+      operationId: draftOrgMandate
+      tags: [Organisations]
+      summary: 'The unsigned mandate/1 for an agent''s effective budget'
+      description: 'Admin. The agent''s own budget, else its team''s, else the org''s. Returns {mandate, digest}; an org device signs the digest (mandateDigest of the SDK).'
+      x-available: day-8
+      security:
+        - ownerBearer: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, pattern: '^[a-z2-7]{52}$' } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema: { type: object }
+        '404':
+          $ref: '#/components/responses/Error'
+          description: 'error: not_found'
+        '409':
+          $ref: '#/components/responses/Error'
+          description: 'error: no_budget'
+  /v1/orgs/{id}/mandates:
+    post:
+      operationId: createOrgMandate
+      tags: [Organisations]
+      summary: 'Store a signed org mandate/1'
+      description: 'Admin. The mandate/1 is issued by the org DID and signed by a device registered for the org; it must sit inside every budget that applies to the agent (403 over_budget). Sends agent.mandates, with the agent''s team and cost_centre, to the agent''s products.'
+      x-available: day-8
+      security:
+        - ownerBearer: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, pattern: '^[a-z2-7]{52}$' } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        '201':
+          description: OK.
+          content:
+            application/json:
+              schema: { type: object }
+        '400':
+          $ref: '#/components/responses/Error'
+          description: 'error: mandate_invalid'
+        '403':
+          $ref: '#/components/responses/Error'
+          description: 'error: mandate_invalid, device_not_registered, over_budget'
+        '409':
+          $ref: '#/components/responses/Error'
+          description: 'error: mandate_exists'
+        '423':
+          $ref: '#/components/responses/Error'
+          description: 'error: org_paused, agent_paused'
+    get:
+      operationId: listOrgMandates
+      tags: [Organisations]
+      summary: 'The org''s mandates'
+      description: 'Any member.'
+      x-available: day-8
+      security:
+        - ownerBearer: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, pattern: '^[a-z2-7]{52}$' } }
+        - { name: agent, in: query, required: false, schema: { type: string } }
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema: { type: object }
+  /v1/orgs/{id}/mandates/{mandate_id}:
+    delete:
+      operationId: revokeOrgMandate
+      tags: [Organisations]
+      summary: 'Revoke an org mandate'
+      description: 'Admin. Final.'
+      x-available: day-8
+      security:
+        - ownerBearer: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, pattern: '^[a-z2-7]{52}$' } }
+        - { name: mandate_id, in: path, required: true, schema: { type: string } }
+      responses:
+        '204':
+          description: Revoked.
+        '404':
+          $ref: '#/components/responses/Error'
+          description: 'error: not_found'
+  /v1/orgs/{id}/approvals:
+    get:
+      operationId: listOrgApprovals
+      tags: [Organisations]
+      summary: 'Approvals the org''s agents wait on'
+      description: 'Any member. Each carries `quorum` {m, of} and `votes`. `state=decided` lists the answered and expired ones.'
+      x-available: day-8
+      security:
+        - ownerBearer: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, pattern: '^[a-z2-7]{52}$' } }
+        - { name: state, in: query, required: false, schema: { type: string, enum: [pending, decided] } }
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema: { type: object }
+  /v1/orgs/{id}/approvals/{approval_id}/decision:
+    post:
+      operationId: decideOrgApproval
+      tags: [Organisations]
+      summary: 'One device''s answer to an org approval'
+      description: 'Approver or admin. X-OE-Approval is an approval/2.0 owned by the org, over the request''s request_id and payload_digest, signed by the caller''s registered device. The approval is approved after m approvals from distinct devices of the quorum the agent''s request named, denied once more devices denied than the quorum can overcome. The agent then receives `approvals[]` (and `approval`, the first). Presented to a product, the bundle is checked with verifyQuorum against GET /o/{id}/policy.'
+      x-available: day-8
+      security:
+        - ownerBearer: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, pattern: '^[a-z2-7]{52}$' } }
+        - { name: approval_id, in: path, required: true, schema: { type: string } }
+        - $ref: '#/components/parameters/ApprovalHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema: { type: object }
+        '403':
+          $ref: '#/components/responses/Error'
+          description: 'error: approval_invalid, not_in_quorum, device_not_registered'
+        '404':
+          $ref: '#/components/responses/Error'
+          description: 'error: not_found'
+        '409':
+          $ref: '#/components/responses/Error'
+          description: 'error: already_decided, already_voted'
+        '410':
+          $ref: '#/components/responses/Error'
+          description: 'error: expired'
+        '428':
+          $ref: '#/components/responses/Error'
+          description: 'error: approval_required'
+  /v1/orgs/{id}/export.csv:
+    get:
+      operationId: exportOrg
+      tags: [Organisations]
+      summary: 'Mandates and quorum approvals by cost centre, as CSV'
+      description: 'Any member. Query from and to (unix seconds). Columns: kind, id, at, agent_did, team, cost_centre, state, period, period_max_cents, per_tx_max_cents, approvals, detail. Cells that start with = + - @ are prefixed with an apostrophe. Allowances and decisions only: spend itself is in the products'' receipts.'
+      x-available: day-8
+      security:
+        - ownerBearer: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, pattern: '^[a-z2-7]{52}$' } }
+        - { name: from, in: query, required: false, schema: { type: integer } }
+        - { name: to, in: query, required: false, schema: { type: integer } }
+      responses:
+        '200':
+          description: CSV.
+          content:
+            text/csv:
+              schema: { type: string }
 components:
   securitySchemes:
     ownerBearer:

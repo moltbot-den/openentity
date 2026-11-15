@@ -13,7 +13,7 @@ const hex = (b: Uint8Array) => Buffer.from(b).toString("hex");
 describe("commerce vectors", () => {
   it("committed files equal a fresh deterministic generation", async () => {
     const fresh = await buildCommerceVectors();
-    for (const sub of ["mandate-1", "cart-1", "receipt-1", "checkout-1"])
+    for (const sub of ["mandate-1", "cart-1", "receipt-1", "checkout-1", "quorum-1"])
       expect(readdirSync(new URL(`${sub}/`, dir)).filter((f) => f.endsWith(".json")).map((f) => `${sub}/${f}`)).toEqual(Object.keys(fresh).filter((k) => k.startsWith(sub)));
     for (const [path, v] of Object.entries(fresh)) expect(readFileSync(new URL(path, dir), "utf8"), path).toBe(serialize(v));
   });
@@ -138,3 +138,44 @@ describe("adversarial review fixes", () => {
   });
 });
 const V_CHECKOUT = json("checkout-1/vectors.json");
+
+describe("quorum approvals", () => {
+  const V = json("quorum-1/vectors.json");
+  for (const c of V.cases)
+    it(c.name, () => {
+      const x = c.context;
+      const r = oe.verifyQuorum(c.approvals, { keyLog: keyState(x.key_state), verifierDid: x.verifier_did, ownerDid: x.owner_did, requestId: x.request_id, payloadDigest: x.payload_digest, now: x.now, m: x.m, of: x.of });
+      expect(r.ok ? { ok: true, kids: r.kids } : { ok: false, error: r.error }, r.ok ? "" : r.message).toEqual(c.expect);
+    });
+  it("returns the counters to store, by kid", () => {
+    const x = V.cases[0].context, opts = { keyLog: keyState(x.key_state), verifierDid: x.verifier_did, ownerDid: x.owner_did, requestId: x.request_id, payloadDigest: x.payload_digest, now: x.now, m: x.m, of: x.of };
+    expect(oe.verifyQuorum(V.cases[0].approvals, opts)).toMatchObject({ ok: true, counters: { [x.of[0]]: 0 } });
+  });
+});
+
+describe("verifyAgentForCheckout with an organisation's quorum", async () => {
+  const { p256 } = await import("@noble/curves/nist.js");
+  const V = json("checkout-1/vectors.json"), c = V.cases.find((x: { name: string }) => x.name === "step-up-over-threshold").input;
+  const dev = (n: number) => {
+    const secret = Uint8Array.from({ length: 32 }, (_, i) => i + n + 1), pub = p256.getPublicKey(secret, false);
+    return { secret, cred: { kid: `org-device-${n}`, type: "p256" as const, jwk: { kty: "EC" as const, crv: "P-256" as const, x: Buffer.from(pub.slice(1, 33)).toString("base64url"), y: Buffer.from(pub.slice(33)).toString("base64url") } } };
+  };
+  const [d1, d2] = [dev(1), dev(2)], base = keyState(c.key_state), keyLog = { ...base, approvers: [...base.approvers, d1.cred, d2.cred] };
+  const signed = (d: ReturnType<typeof dev>, o: Record<string, unknown> = {}) => {
+    const a = { version: "approval/2.0", verifier_did: "did:web:shop.example", owner_did: base.did, request_id: "req_q1", payload_digest: oe.cartDigest(c.cart), decision: "approve", expires_at: c.now + 300, ...o };
+    return { ...a, device_id: d.cred.kid, form: "p256", signature: Buffer.from(p256.sign(oe.approvalDigest(a as never), d.secret, { prehash: false, lowS: true })).toString("base64url") };
+  };
+  const run = (quorum: object | undefined) => oe.verifyAgentForCheckout({ agentDid: c.agent_did, cart: c.cart, merchantPolicy: c.merchant_policy, agent: c.agent, mandate: c.mandate, keyLog, status: c.status, now: c.now, quorum: quorum as never });
+  const q = (approvals: unknown, o: object = {}) => ({ approvals, m: 2, of: [d1.cred.kid, d2.cred.kid], verifierDid: "did:web:shop.example", requestId: "req_q1", ...o });
+  it("allows with m approvals of this cart, and reports the devices and counters to store", async () => {
+    const r = await run(q([signed(d1), signed(d2)]));
+    expect(r).toMatchObject({ decision: "allow", reasons: ["owner_approved_cart", "step_up_over"], evidence: { approval_kids: [d1.cred.kid, d2.cred.kid], approval_counters: { [d1.cred.kid]: 0 } } });
+  });
+  it("steps up when the bundle is short, padded with one device, for another cart, or for another request", async () => {
+    for (const [name, bundle, over] of [["short", [signed(d1)], {}], ["same device twice", [signed(d1), signed(d1)], {}], ["other cart", [signed(d1), signed(d2, { payload_digest: "0".repeat(64) })], {}], ["other request", [signed(d1), signed(d2)], { requestId: "req_other" }]] as const) {
+      const r = await run(q(bundle, over));
+      expect(r.decision, name).toBe("step_up");
+      expect(r.evidence.approval_error, name).toBeTruthy();
+    }
+  });
+});
