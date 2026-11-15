@@ -79,6 +79,7 @@ Backlog for this repo. Ticket ids are `G-YYYY-NNN` across the Open Entity produc
 - reviewer-agent: security
 - suggested-fix: Port sdk/ts/src/commerce.ts check for check against the shared vectors. No package version changes: release is one batch at the end of the program.
 - linked-pr: https://github.com/moltbot-den/openentity/pull/204
+- linked-issue: (none yet)
 
 ### G-2026-040 [in-progress] P3 feature
 
