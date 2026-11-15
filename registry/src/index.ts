@@ -799,8 +799,10 @@ app.post("/verify", async (c) => {
 
 // ---------- Agent Commerce Check (docs/commerce spec agent-commerce-check): free, no key, no login ----------
 
-const CHECKS_PER_MINUTE = 30;
+const CHECKS_PER_MINUTE = 30, CHECKS_PER_HOUR = 20000;
 async function commerceBudget(c: C) {
+  // Every check stores a record for 400 days: a global hourly cap bounds what a spread of addresses can store. ponytail: one global counter, per-ASN limits if it is ever hit.
+  if ((await bump(c.env.db, "ccg", nowIso().slice(0, 13))) > CHECKS_PER_HOUR) fail(429, "rate_limited", "commerce checks are paused for this hour");
   if ((await bump(c.env.db, `ccm:${await salted(c.env, clientIp(c))}`, nowIso().slice(0, 16))) > CHECKS_PER_MINUTE) fail(429, "rate_limited", `at most ${CHECKS_PER_MINUTE} commerce checks per minute per IP`);
 }
 app.post("/commerce/check", async (c) => {

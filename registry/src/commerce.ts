@@ -143,12 +143,15 @@ export function parseCheckBody(o: unknown): CheckBody {
   if (!isObj(o) || !isObj(o.request) || !isObj(o.request.headers) || typeof o.request.method !== "string" || typeof o.request.url !== "string") return bad("bad_request", "body must be {request: {method, url, headers}, cart, policy}");
   if (!Object.values(o.request.headers).every((v) => typeof v === "string")) bad("bad_request", "request.headers values must be strings");
   if (o.policy !== undefined && !isObj(o.policy)) bad("bad_request", "policy must be an object");
+  const b64 = (o.request as { body_b64?: unknown }).body_b64;
+  if (b64 !== undefined && !(typeof b64 === "string" && /^[A-Za-z0-9+/]*={0,2}$/.test(b64) && b64.length % 4 === 0)) bad("bad_request", "request.body_b64 must be base64");
+  if ((o.request as { body?: unknown }).body !== undefined && typeof (o.request as { body?: unknown }).body !== "string") bad("bad_request", "request.body must be a string");
   if (o.approval !== undefined && !(isObj(o.approval) && typeof o.approval.verifier_did === "string" && typeof o.approval.request_id === "string")) bad("bad_request", "approval must be {approval, verifier_did, request_id}");
   return o as unknown as CheckBody;
 }
 
 const CHECK_OF: [RegExp, string][] = [
-  [/^(request_|agent_mismatch$)/, "signature"], [/^(level_too_low|agent_withdrawn)$/, "registry"], [/^(owner_|no_key_log$)/, "owner"],
+  [/^(request_|agent_mismatch$)/, "signature"], [/^(level_too_low|agent_withdrawn)$/, "registry"], [/^(owner_|no_key_log$|mandate_owner_mismatch$)/, "owner"],
   [/^(security_|issuer_not_accepted$|clawgrc_)/, "security"], [/^(mandate|no_mandate$|step_up_over$|approval_|owner_approved_cart$)/, "mandate"],
 ];
 const ORDER = ["signature", "registry", "owner", "security", "mandate", "policy"];
@@ -204,6 +207,8 @@ export async function commerceCheck(env: CommerceEnv, b: CheckBody): Promise<Che
     if (!reasons.length) {
       if (f.withdrawn) reasons = ["agent_withdrawn"];
       else if (keyLog === "fork") reasons = ["owner_key_log_fork"];
+      // The registry knows the agent's owner: a mandate from another owner's key log is not that owner's permission.
+      else if (m && f.facts.owner_did && m.issuer_did !== f.facts.owner_did) reasons = ["mandate_owner_mismatch"];
       else if (policy.min_security_band !== undefined && f.violation) reasons = ["clawgrc_violation"];
       else if (typeof policy.min_owner_level === "string" && (!f.facts.owner_did || OWNER_LEVELS.indexOf(f.ownerLevel ?? "") < OWNER_LEVELS.indexOf(policy.min_owner_level))) reasons = ["owner_not_verified"];
     }

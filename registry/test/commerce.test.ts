@@ -167,6 +167,16 @@ describe("Agent Commerce Check", () => {
     expect(await run(LOG.log.slice(0, 1))).toEqual(["owner_key_log_fork"]);
   });
 
+  it("denies a mandate from another owner than the one the registry knows for the agent, and a malformed body_b64", async () => {
+    const kp = (await adopted("Owned Agent")).kp, m = mandate(kp.did);
+    await E.db.run("INSERT INTO attestations (sha256, issuer, subject, claim_type, json, created, expires) VALUES ($1,$2,$3,$4,$5,$6,$7)", ["own1", "did:web:account.openentity.org", kp.did, "custom:openentity:operated_by", JSON.stringify({ claim: { owner: "did:web:account.openentity.org:o:" + "z".repeat(52) } }), new Date().toISOString(), new Date(Date.now() + 86400_000).toISOString()]);
+    const r = await check(kp, { cart: cart(kp.did, 1000, m.mandate_id), mandate: m, policy: POLICY });
+    expect(r.body).toMatchObject({ decision: "deny", reasons: ["mandate_owner_mismatch"] });
+    const sig = await signRequest({ method: "POST", url: "https://shop.example/buy", privateKey: kp, did: kp.did });
+    const bad = await call("POST", "/commerce/check", { request: { method: "POST", url: "https://shop.example/buy", headers: sig, body_b64: "***" }, cart: cart(kp.did, 1, null) }, { "x-forwarded-for": "10.5.5.5" }, CE);
+    expect([bad.status, bad.body.error]).toEqual([400, "bad_request"]);
+  });
+
   it("verifies a mandate on its own", async () => {
     const kp = await generateKeyPair(), m = mandate(kp.did), ip = { "x-forwarded-for": "10.6.6.6" };
     const v = (body: object) => call("POST", "/commerce/mandate", body, ip, CE).then((r) => r.body);
