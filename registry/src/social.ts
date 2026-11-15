@@ -37,6 +37,9 @@ export const fill = (text: string, s: Stats) =>
 export const textFor = (p: Platform, text: string) =>
   p === "instagram" ? text.replace(/\s*https?:\/\/\S+/g, "").trim() + "\n\nopenentity.org" : text;
 
+/** A Buffer channel not connected yet: skipped like a network without keys, so it posts once connected. */
+class NotConnected extends Error {}
+
 async function ok<T>(service: string, res: Response): Promise<T> {
   const body = await res.text();
   if (!res.ok) throw new Error(`${service} ${res.status}: ${body.slice(0, 300)}`);
@@ -76,7 +79,7 @@ async function buffer(c: Creds, p: keyof typeof BUFFER_SERVICE, text: string) {
   const { channels } = await q<{ channels: { id: string; service: string }[] }>(
     "query($organizationId: OrganizationId!){channels(input:{organizationId:$organizationId}){id service}}", { organizationId: account.organizations[0]?.id });
   const channel = channels.find((ch) => ch.service === BUFFER_SERVICE[p]);
-  if (!channel) throw new Error(`buffer: no ${p} channel connected`);
+  if (!channel) throw new NotConnected(p);
   const r = await q<{ createPost: { post?: { id: string }; message?: string } }>(
     "mutation($input: CreatePostInput!){createPost(input:$input){... on PostActionSuccess{post{id}} ... on MutationError{message}}}",
     { input: { text, channelId: channel.id, schedulingType: "automatic", mode: "shareNow" } });
@@ -129,6 +132,10 @@ export async function postSocial(env: Env, s: Stats, now = new Date(), entries: 
         const ref = await publish(env, p, fill(e.text, s), e.image);
         await env.db.run("UPDATE social_posts SET status = 'posted', ref = $3 WHERE entry_id = $1 AND platform = $2", [e.id, p, ref]);
       } catch (err) {
+        if (err instanceof NotConnected) {
+          await env.db.run("DELETE FROM social_posts WHERE entry_id = $1 AND platform = $2", [e.id, p]);
+          continue;
+        }
         const msg = String((err as Error).message ?? err).slice(0, 500);
         await env.db.run("UPDATE social_posts SET status = 'failed', error = $3 WHERE entry_id = $1 AND platform = $2", [e.id, p, msg]);
         failures.push(`${p} ${e.id}: ${msg}`);
