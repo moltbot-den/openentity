@@ -105,7 +105,7 @@ Backlog for this repo. Ticket ids are `G-YYYY-NNN` across the Open Entity produc
 - linked-pr: (none yet)
 - linked-issue: (none yet)
 
-### G-2026-050 [in-progress] P1 feature
+### G-2026-050 [fixed] P1 feature
 
 - file: registry/src/commerce.ts, registry/src/index.ts, registry/schema.sql, mcp/src/commerce.ts, integrations/commerce-check/, sdk/python/openentity/commerce_check.py
 - area: Agentic commerce C3.1, C3.2 and C4.3 OpenEntity part (docs/commerce/PLAN.md in the oneentity meta repo)
