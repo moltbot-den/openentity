@@ -283,7 +283,7 @@ public func mandateCovers(_ mandate: MandateTerms, cart: JSONValue, periodSpent:
             return no("out_of_scope", "a line is outside the categories")
         }
     }
-    if (periodSpent ?? 0) < 0 || (totalSpent ?? 0) < 0 { return no("over_limit", "spent must be unsigned integers") }
+    if [periodSpent, totalSpent].contains(where: { ($0 ?? 0) < 0 || ($0 ?? 0) > maxSafe }) { return no("over_limit", "spent must be unsigned integers") }
     if total > l.perTxMax { return no("over_limit", "per_tx_max") }
     if (periodSpent ?? 0) + total > l.periodMax { return no("over_limit", "period_max") }
     if (totalSpent ?? 0) + total > l.totalMax { return no("over_limit", "total_max") }

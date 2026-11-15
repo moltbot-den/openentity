@@ -129,6 +129,15 @@ struct CartTests {
         #expect(!r.ok && r.reason == "over_limit")
     }
 
+    @Test func hugeSpentNeverTraps() throws {
+        let terms = try MandateTerms(cartVectors.at("mandates").at("M"))
+        let cart = cartVectors.at("covers").list[0].at("cart")
+        for (p, t) in [(Int64.max, nil), (nil, Int64.max), (9_007_199_254_740_992, nil)] as [(Int64?, Int64?)] {
+            let r = mandateCovers(terms, cart: cart, periodSpent: p, totalSpent: t)
+            #expect(!r.ok && r.reason == "over_limit")
+        }
+    }
+
     @Test func aTotalPastTwoToTheFiftyThirdNeverTraps() throws {
         let cart = try JSONValue.parse(#"""
         {"profile":"cart/1","merchant":"did:key:z6Mkv4fhuJNepggTLQ4LtYSsiYFayjovLj1fpKMeqe9ss2Gw","agent_did":"did:key:z6MkneMkZqwqRiU5mJzSG3kDwzt9P8C59N4NGTfBLfSGE7c7",
