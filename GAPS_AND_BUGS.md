@@ -126,7 +126,7 @@ Backlog for this repo. Ticket ids are `G-YYYY-NNN` across the Open Entity produc
 - linked-pr: (none yet)
 - linked-issue: (none yet)
 
-### G-2026-061 [in-progress] P2 feature
+### G-2026-061 [fixed] P2 feature
 
 - file: integrations/commerce-check/proof.mjs, integrations/commerce-check/proof-mandate.mjs, integrations/commerce-check/README.md, registry/scripts/local.ts, site/src/content/docs/guides/commerce-check.md
 - area: Agentic commerce C3.4 independent-agent proof (docs/commerce/PLAN.md in the oneentity meta repo)
@@ -135,5 +135,5 @@ Backlog for this repo. Ticket ids are `G-YYYY-NNN` across the Open Entity produc
 - owner-agent: c3-proof
 - reviewer-agent: adversarial-review
 - suggested-fix: Done in the PR: proof.mjs (`--registry`, `--mandate-case`, report.json), proof-mandate.mjs, COMMERCE_VECTOR_OWNER=1 in the local registry, reports in integrations/commerce-check/proof/. Re-run proof.mjs against production for the allow case once sign-in opens and an owner device can sign.
-- linked-pr: (none yet)
+- linked-pr: https://github.com/moltbot-den/openentity/pull/210
 - linked-issue: (none yet)
