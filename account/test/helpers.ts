@@ -30,7 +30,8 @@ export async function account(db: Db, id = `acct_${Math.random().toString(36).sl
   return id;
 }
 
-export const HOST = "staging.account.openentity.org", ORIGIN = `https://${HOST}`, SERVICE_DID = `did:web:${HOST}`;
+// OE_TEST_HOST: the cross-product org e2e (oneentity scripts/e2e-org.sh) runs this service under the production host name, which the products pin.
+export const HOST = process.env.OE_TEST_HOST ?? "staging.account.openentity.org", ORIGIN = `https://${HOST}`, SERVICE_DID = `did:web:${HOST}`;
 const jwkOf = (k: KeyObject) => k.export({ format: "jwk" }) as any;
 
 /** Throwaway stand-ins for the KMS keys (never real keys) and Deps for a test app. `codes` collects sent email codes. */
