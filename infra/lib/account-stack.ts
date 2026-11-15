@@ -155,8 +155,8 @@ export class OpenEntityAccountStack extends Stack {
         DATA_KEY_ID: dataKey.keyArn,
         EVENTS_QUEUE_URL: events.queueUrl,
         ATTACHMENTS_BUCKET: attachments.bucketName,
-        // Production sign-in stays closed until device binding and the Day 6 review gate (PLAN 3.6); staging is open.
-        SIGNIN_OPEN: prod ? "0" : "1",
+        // Open on both stages: device binding (#169) and the review gate re-verify (2026-11-14) are done. "0" closes sign-in again.
+        SIGNIN_OPEN: "1",
         NODE_OPTIONS: "--enable-source-maps",
       },
     });
