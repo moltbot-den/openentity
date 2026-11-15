@@ -86,9 +86,25 @@ export async function mandateCheck(env: CommerceEnv, mandate: unknown, agentDid:
   const { keyLog, status } = await mandateContext(env, mandate, Math.floor(Date.now() / 1000));
   if (keyLog === "fork") return { ok: false, error: "owner_key_log_fork" };
   if (!keyLog) return { ok: false, error: "no_key_log" };
+  if (!status) return { ok: false, error: "mandate_status_unavailable" };
   const r = verifyMandate(mandate, { keyLog: keyLog.keyLog, origins: keyLog.origins, agentDid, status });
   return r.ok ? { ok: true, mandate_id: r.mandate_id, owner_did: mandate.issuer_did, limits: r.limits, scope: r.scope, step_up_over: r.step_up_over, period_spent: r.period_spent, total_spent: r.total_spent } : { ok: false, error: r.error, message: r.message };
 }
+
+/** The host a did:web merchant DID names ("did:web:shop.example%3A8443" is shop.example:8443); null for any other DID or a DID with a path. */
+const didWebHost = (d: unknown): string | null => {
+  const m = typeof d === "string" ? /^did:web:([A-Za-z0-9.-]+(?:%3[Aa][0-9]{1,5})?)$/.exec(d) : null;
+  return m ? m[1].replace(/%3[Aa]/, ":").toLowerCase() : null;
+};
+const hostOf = (url: string): string | null => { try { return new URL(url).host.toLowerCase(); } catch { return null; } };
+/** A signed request is for one merchant: its URL host must be the host of cart.merchant (and of policy.merchant when given). */
+const audienceOk = (url: string, cart: unknown, inline: Record<string, unknown>): string | null => {
+  const host = hostOf(url);
+  const merchants = [isObj(cart) ? cart.merchant : undefined, inline.merchant].filter((x) => x !== undefined);
+  return host && isObj(cart) && typeof cart.merchant === "string" && merchants.every((m) => didWebHost(m) === host) ? host : null;
+};
+// Mandate spend the registry allowed but the account's status has not counted yet (settlement lag): added to period_spent and total_spent.
+const RESERVE_SECONDS = 600;
 
 const claimOf = (row: { json: string }) => JSON.parse(row.json).claim ?? {};
 const BANDS = ["poor", "fair", "good", "strong"];
@@ -177,17 +193,20 @@ export async function commerceCheck(env: CommerceEnv, b: CheckBody): Promise<Che
   const body = b.request.body_b64 !== undefined ? Uint8Array.from(atob(b.request.body_b64), (c) => c.charCodeAt(0)) : b.request.body !== undefined ? new TextEncoder().encode(b.request.body) : undefined;
 
   let reasons: string[] = [], decision: CheckResult["decision"] = "deny", evidence: Record<string, unknown> = {}, owner: string | undefined, agentDid: string | undefined;
-  let used: string[] = [], mandateId: string | undefined, sigNonce: string | undefined;
+  let used: string[] = [], mandateId: string | undefined, sigNonce: string | undefined, audience: string | null = null;
   try {
     // 1. signature. did:web keys are fetched through the SSRF-guarded fetch; the nonce is single-use for everyone.
     const keyid = /keyid="([^"]+)"/.exec(lower["signature-input"] ?? "")?.[1];
     const v = await verifyRequest({ method: b.request.method, url: b.request.url, headers: lower, body, allowDidWeb: keyid?.startsWith("did:web:") ? [keyid.split("#")[0]] : undefined, fetchJson: (u) => getJson(u) });
     agentDid = v.did;
     sigNonce = v.nonce;
+    audience = audienceOk(b.request.url, b.cart, b.policy ?? {});
   } catch { /* verifyAgentForCheckout reports request_unverified below */ }
 
+  // The request was signed for one host: a signature replayed at another merchant is refused before it burns the nonce.
+  if (agentDid && sigNonce && !audience) { reasons = ["request_wrong_audience"]; agentDid = undefined; }
   if (agentDid && sigNonce) {
-    const first = await db.run("INSERT INTO commerce_used (key, n, created_at) VALUES ($1, 0, $2) ON CONFLICT DO NOTHING", [`nonce:${await sha256Hex(`${agentDid}|${sigNonce}`)}`, now]);
+    const first = await db.run("INSERT INTO commerce_used (key, n, created_at) VALUES ($1, 0, $2) ON CONFLICT DO NOTHING", [`nonce:${await sha256Hex(`${agentDid}|${sigNonce}|${audience}`)}`, now]);
     if (!first.changes) { reasons = ["request_replayed"]; agentDid = undefined; }
   }
   if (!agentDid && !reasons.length) reasons = ["request_unverified"];
@@ -200,7 +219,7 @@ export async function commerceCheck(env: CommerceEnv, b: CheckBody): Promise<Che
     if (mandateRaw !== undefined && !m) reasons = ["mandate_malformed"];
     const ctx = m ? await mandateContext(env, m, nowS) : { keyLog: null, status: undefined };
     let keyLog = ctx.keyLog;
-    const status = ctx.status;
+    let status = ctx.status;
     const a = b.approval;
     if (a && !keyLog && f.facts.owner_did) keyLog = await ownerKeyLog(env, f.facts.owner_did, nowS);
     if (a && isObj(a.approval) && typeof a.approval.device_id === "string") approvalCounter = Number((await db.first<{ n: number }>("SELECT n FROM commerce_used WHERE key = $1", [`kid:${a.approval.device_id}`]))?.n ?? 0);
@@ -209,8 +228,21 @@ export async function commerceCheck(env: CommerceEnv, b: CheckBody): Promise<Che
       else if (keyLog === "fork") reasons = ["owner_key_log_fork"];
       // The registry knows the agent's owner: a mandate from another owner's key log is not that owner's permission.
       else if (m && f.facts.owner_did && m.issuer_did !== f.facts.owner_did) reasons = ["mandate_owner_mismatch"];
+      // The hosted check never takes the offline one-day rule: a revocation must be visible, so no status answer is no allow.
+      else if (m && !status) reasons = ["mandate_status_unavailable"];
       else if (policy.min_security_band !== undefined && f.violation) reasons = ["clawgrc_violation"];
       else if (typeof policy.min_owner_level === "string" && (!f.facts.owner_did || OWNER_LEVELS.indexOf(f.ownerLevel ?? "") < OWNER_LEVELS.indexOf(policy.min_owner_level))) reasons = ["owner_not_verified"];
+    }
+    // Spend: reserve this cart's total against the mandate before deciding, and count every other live reservation as spent.
+    // Parallel checks each see the other's reservation, so at worst both are refused, never both allowed over a limit.
+    let reserved: string | undefined;
+    if (!reasons.length && m && status && isObj(b.cart) && Number.isSafeInteger(b.cart.total) && b.cart.total >= 0 && b.cart.mandate_id === m.mandate_id) {
+      reserved = `spend:${m.mandate_id}:${await sha256Hex(`${agentDid}|${sigNonce}`)}`;
+      await db.run("INSERT INTO commerce_used (key, n, created_at) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING", [reserved, b.cart.total, now]);
+      const cutoff = new Date((nowS - RESERVE_SECONDS) * 1000).toISOString().replace(/\.\d+Z$/, "Z");
+      const o = await db.first<{ t: number | null }>("SELECT COALESCE(SUM(n), 0) AS t FROM commerce_used WHERE key LIKE $1 AND key <> $2 AND created_at > $3", [`spend:${m.mandate_id}:%`, reserved, cutoff]);
+      const others = Number(o?.t ?? 0);
+      status = { ...status, period_spent: Number(status.period_spent ?? 0) + others, total_spent: Number(status.total_spent ?? 0) + others };
     }
     if (!reasons.length) {
       const r = await verifyAgentForCheckout({
@@ -220,10 +252,11 @@ export async function commerceCheck(env: CommerceEnv, b: CheckBody): Promise<Che
       ({ decision, reasons, evidence } = r);
       owner = (m?.issuer_did as string | undefined) ?? f.facts.owner_did;
       mandateId = evidence.mandate_id as string | undefined;
+      if (reserved && decision !== "allow") await db.run("DELETE FROM commerce_used WHERE key = $1", [reserved]);
       if (decision === "allow" && evidence.approval_request_id !== undefined) {
         const key = `approval:${await sha256Hex(`${a!.verifier_did}|${a!.request_id}`)}`;
         const fresh = await db.run("INSERT INTO commerce_used (key, n, created_at) VALUES ($1, 0, $2) ON CONFLICT DO NOTHING", [key, now]);
-        if (!fresh.changes) { decision = "deny"; reasons = ["approval_replayed"]; }
+        if (!fresh.changes) { decision = "deny"; reasons = ["approval_replayed"]; if (reserved) await db.run("DELETE FROM commerce_used WHERE key = $1", [reserved]); }
         else {
           const kid = `kid:${evidence.approval_kid}`;
           await db.run("INSERT INTO commerce_used (key, n, created_at) VALUES ($1, $2, $3) ON CONFLICT (key) DO UPDATE SET n = excluded.n WHERE commerce_used.n < excluded.n", [kid, evidence.approval_counter, now]);

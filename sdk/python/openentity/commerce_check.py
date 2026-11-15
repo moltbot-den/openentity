@@ -6,6 +6,7 @@ a response is built). Both attach the answer as `request.state.agent_check` (ASG
 Re-exported from `openentity.commerce`.
 """
 import asyncio
+import base64
 import json
 import re
 import urllib.error
@@ -35,7 +36,9 @@ def _post(endpoint: str, payload: dict) -> dict:
 
 
 def agent_check(request: dict, cart, policy: dict | None = None, *, approval: dict | None = None, endpoint: str = ENDPOINT, post=_post) -> dict:
-    """Asks the hosted check about one request: request = {method, url, headers, body?: str}. Raises on a transport error or an HTTP error."""
+    """Asks the hosted check about one request: request = {method, url, headers, body?: str, body_b64?: str}. Raises on a transport error or an HTTP error."""
+    # The raw bytes (body_b64) are what content-digest is checked against; the text body is only for the cart builder.
+    request = {k: v for k, v in request.items() if not (k == "body" and "body_b64" in request)}
     payload = {"request": request, "cart": cart, "policy": policy or {}, **({"approval": approval} if approval else {})}
     out = post(endpoint, payload)
     if not isinstance(out, dict) or "decision" not in out:
@@ -77,7 +80,7 @@ class CommerceCheckMiddleware:
         host = self.public_origin or f"{scope.get('scheme', 'http')}://{headers.get('host', '')}"
         qs = scope.get("query_string", b"").decode("latin-1")
         info = {"method": scope["method"], "url": f"{host.rstrip('/')}{scope['path']}{'?' + qs if qs else ''}", "headers": headers,
-                **({"body": raw.decode("utf-8", "replace")} if raw else {})}
+                **({"body": raw.decode("utf-8", "replace"), "body_b64": base64.b64encode(raw).decode()} if raw else {})}
         sent = False
 
         async def replay():
@@ -127,7 +130,7 @@ def django_middleware(*, cart, policy: dict | None = None, approval=None, paths:
             url = request.build_absolute_uri()
             if public_origin:
                 url = public_origin.rstrip("/") + re.sub(r"^https?://[^/]+", "", url)
-            info = {"method": request.method, "url": url, "headers": headers, **({"body": raw.decode("utf-8", "replace")} if raw else {})}
+            info = {"method": request.method, "url": url, "headers": headers, **({"body": raw.decode("utf-8", "replace"), "body_b64": base64.b64encode(raw).decode()} if raw else {})}
             try:
                 c = agent_check(info, cart(info, agent_did_of(headers)), policy, approval=approval(info) if approval else None, endpoint=endpoint, post=post)
             except Exception:

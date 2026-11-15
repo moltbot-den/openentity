@@ -112,10 +112,12 @@ describe("Agent Commerce Check", () => {
     statusAnswer = "revoked";
     const m3 = mandate(kp.did);
     expect((await check(kp, { cart: cart(kp.did, 1000, m3.mandate_id), mandate: m3, policy: POLICY })).body.reasons).toEqual(["mandate_revoked"]);
-    statusAnswer = null; // status unreachable: only a mandate that expires within a day is accepted
-    expect((await check(kp, { cart: cart(kp.did, 1000, m3.mandate_id), mandate: m3, policy: POLICY })).body.reasons).toEqual(["mandate_status_required"]);
+    // Status unreachable: the hosted check never takes the offline one-day rule, so even a short mandate is refused.
+    statusAnswer = null;
+    expect((await check(kp, { cart: cart(kp.did, 1000, m3.mandate_id), mandate: m3, policy: POLICY })).body.reasons).toEqual(["mandate_status_unavailable"]);
     const short = mandate(kp.did, { expires_at: T + 3600 });
-    expect((await check(kp, { cart: cart(kp.did, 1000, short.mandate_id), mandate: short, policy: POLICY })).body.decision).toBe("allow");
+    expect((await check(kp, { cart: cart(kp.did, 1000, short.mandate_id), mandate: short, policy: POLICY })).body.reasons).toEqual(["mandate_status_unavailable"]);
+    expect(await call("POST", "/commerce/mandate", { mandate: short }, { "x-forwarded-for": "10.6.6.9" }, CE).then((r) => r.body)).toMatchObject({ ok: false, error: "mandate_status_unavailable" });
     statusAnswer = "active";
   });
 
@@ -175,6 +177,25 @@ describe("Agent Commerce Check", () => {
     const sig = await signRequest({ method: "POST", url: "https://shop.example/buy", privateKey: kp, did: kp.did });
     const bad = await call("POST", "/commerce/check", { request: { method: "POST", url: "https://shop.example/buy", headers: sig, body_b64: "***" }, cart: cart(kp.did, 1, null) }, { "x-forwarded-for": "10.5.5.5" }, CE);
     expect([bad.status, bad.body.error]).toEqual([400, "bad_request"]);
+  });
+
+  it("refuses a signature made for another merchant, without burning its nonce", async () => {
+    const kp = await generateKeyPair(), m = mandate(kp.did), c = cart(kp.did, 1000, m.mandate_id);
+    const url = "https://evil.example/buy", sig = await signRequest({ method: "POST", url, privateKey: kp, did: kp.did });
+    const post = (u: string, cartBody: unknown, ip: string) => call("POST", "/commerce/check", { request: { method: "POST", url: u, headers: sig }, cart: cartBody, mandate: m, policy: POLICY }, { "x-forwarded-for": ip }, CE).then((r) => r.body);
+    // The signature names evil.example; presented for shop.example's cart it is refused.
+    expect(await post(url, c, "10.4.4.1")).toMatchObject({ decision: "deny", reasons: ["request_wrong_audience"] });
+    // The refused attempt did not burn the nonce: the signature still works at the host it was made for.
+    expect(await post(url, { ...c, merchant: "did:web:evil.example" }, "10.4.4.3")).toMatchObject({ decision: "step_up", reasons: ["mandate_out_of_scope"] });
+  });
+
+  it("counts spend the registry already allowed against the mandate limits", async () => {
+    const kp = await generateKeyPair(), m = mandate(kp.did, { limits: { currency: "USD", per_tx_max: 5000, period: "P1D", period_max: 8000, total_max: 100000 }, step_up_over: 5000 });
+    const go = () => check(kp, { cart: cart(kp.did, 5000, m.mandate_id), mandate: m, policy: POLICY }).then((r) => r.body);
+    expect(await go()).toMatchObject({ decision: "allow" });
+    expect(await go()).toMatchObject({ decision: "step_up", reasons: ["mandate_over_limit"] }); // 5000 + 5000 > period_max 8000
+    // A refused check reserves nothing: a smaller cart still fits.
+    expect((await check(kp, { cart: cart(kp.did, 3000, m.mandate_id), mandate: m, policy: POLICY })).body.decision).toBe("allow");
   });
 
   it("verifies a mandate on its own", async () => {

@@ -131,3 +131,18 @@ def test_agent_did_of_reads_the_keyid_and_commerce_exports_the_middleware():
     h = {k.lower(): v for k, v in oe.sign_request("POST", "https://shop.example/", b"", AGENT, AGENT.did).items()}
     assert commerce_check.agent_did_of(h) == AGENT.did
     assert oe.commerce.CommerceCheckMiddleware is commerce_check.CommerceCheckMiddleware and oe.commerce.django_middleware
+
+
+def test_a_binary_body_is_sent_as_its_raw_bytes_in_body_b64_in_both_middlewares():
+    """A non-UTF-8 body must reach the hosted check byte for byte (content-digest), never decoded with replacement."""
+    from starlette.testclient import TestClient
+
+    import commerce_check_fastapi as ex
+
+    raw, case = bytes([0xFF, 0xFE, 0x00, 0x80, 0xC3, 0x28]), CASES["allow-mandate-covers"]
+    c = case["input"]
+    post = hosted_for(case)
+    r = TestClient(ex.make_app(cart=lambda req, did: c["cart"], policy=c["merchant_policy"], post=post)).post("/buy", content=raw, headers=agent_headers(case, "http://testserver/buy"))
+    assert r.status_code in (200, 403, 428)
+    sent = post.calls[0]["request"]
+    assert base64.b64decode(sent["body_b64"]) == raw and "body" not in sent

@@ -4,6 +4,7 @@ import type { AddressInfo } from "node:net";
 import { createServer } from "node:http";
 import { describe, expect, it } from "vitest";
 import { agentHeaders, generateKeyPair, hosted, mandateFor } from "./fixture.ts";
+import { signRequest } from "@openentity/sdk";
 
 const load = (p: string) => import(p);
 const options = { fetch: hosted };
@@ -28,13 +29,21 @@ async function scenarios(send: Send) {
 
 describe("example apps", () => {
   it("Express", async () => {
-    const server = createServer((await load("../examples/express.mjs")).app(options)).listen(0);
+    // The agent signs the public URL; the server sits behind a proxy on localhost, so publicOrigin says what agents signed.
+    const server = createServer((await load("../examples/express.mjs")).app({ ...options, publicOrigin: "https://shop.example" })).listen(0);
     try {
       const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
       await scenarios(async (path, headers) => {
-        const r = await fetch(base + path, { method: "POST", headers: await headers(base + path) });
+        const r = await fetch(base + path, { method: "POST", headers: await headers("https://shop.example" + path) });
         return { status: r.status, body: await r.json() };
       });
+      // Without publicOrigin the signed host (shop.example) is not the host this server saw (127.0.0.1): refused, not trusted from the Host header.
+      const bare = createServer((await load("../examples/express.mjs")).app(options)).listen(0);
+      try {
+        const u = `http://127.0.0.1:${(bare.address() as AddressInfo).port}/buy?total=1000`;
+        const r = await fetch(u, { method: "POST", headers: await agentHeaders(await generateKeyPair(), u) });
+        expect((await r.json()).reasons).toEqual(["request_wrong_audience"]);
+      } finally { bare.close(); }
     } finally { server.close(); }
   });
 
@@ -66,5 +75,17 @@ describe("example apps", () => {
     expect(closed.status).toBe(503);
     const open = await (await load("../examples/hono.mjs")).app({ ...down, enforce: false }).request(url, { method: "POST", headers: await agentHeaders(kp, url) });
     expect(open.status).toBe(200);
+  });
+
+  it("a signed binary (non-UTF-8) body passes the signature check in every adapter", async () => {
+    const kp = await generateKeyPair(), m = mandateFor(kp.did), url = "https://shop.example/buy?total=1000";
+    const body = Uint8Array.from([0xff, 0xfe, 0x00, 0x80, 0xc3, 0x28]); // not valid UTF-8
+    const signed = { ...(await signRequest({ method: "POST", url, privateKey: kp, did: kp.did, body })), "OE-Mandate": (await agentHeaders(kp, url, m))["OE-Mandate"], "content-type": "application/octet-stream" };
+    const hono = (await load("../examples/hono.mjs")).app(options);
+    expect((await hono.request(url, { method: "POST", headers: signed, body })).status).toBe(200);
+    const kp2 = await generateKeyPair(), m2 = mandateFor(kp2.did);
+    const signed2 = { ...(await signRequest({ method: "POST", url, privateKey: kp2, did: kp2.did, body })), "OE-Mandate": (await agentHeaders(kp2, url, m2))["OE-Mandate"], "content-type": "application/octet-stream" };
+    const POST = (await load("../examples/next-route.mjs")).route(options);
+    expect((await POST(new Request(url, { method: "POST", headers: signed2, body }))).status).toBe(200);
   });
 });
