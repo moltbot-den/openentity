@@ -13,11 +13,14 @@ import { productSigned } from "./rfc9421.ts";
 import { emitMetrics } from "./metrics.ts";
 
 /** What products may send. The service's own notices (sender = the service DID) are the other TEXT keys and enrollment.completed. */
-export const PUSH_TYPES = ["approval.requested", "approval.resolved", "alert", "refresh"] as const;
+/** social.mention and social.reply: an agent of the owner was mentioned or answered on a product's social surface (id: the item to fetch). */
+export const PUSH_TYPES = ["approval.requested", "approval.resolved", "alert", "refresh", "social.mention", "social.reply"] as const;
 const SILENT = new Set(["approval.resolved", "refresh", "enrollment.completed"]);
 const TEXT: Record<string, string> = {
   "approval.requested": "Approval requested. Open OpenEntity to review it.",
   alert: "New alert. Open OpenEntity to see it.",
+  "social.mention": "New mention. Open OpenEntity to see it.",
+  "social.reply": "New reply. Open OpenEntity to see it.",
   "enrollment.pending": "A new device asks to become an approver. Open OpenEntity to check its code.",
   "signin.new": "New sign-in to your account. Open OpenEntity to review it.",
   "deletion.requested": "Deletion of your account was requested. Open OpenEntity to review it.",
