@@ -193,4 +193,6 @@ Verification
 - [x] Guides `/guides/know-your-agent`, `/guides/mandates`; `/guides/commerce-check` retitled; sidebar, guides index, `llms.txt`, skill commerce section; Commerce Profile served at `/spec/commerce-profile.md`
 - [x] `docs/outreach/DESIGN-PARTNERS-COMMERCE.md` and `STANDARDS-COMMERCE.md` drafted, not sent (owner sends)
 - [x] LISTINGS.md commerce section
-
+## Kotlin RFC 9421 request verification (G-2026-064, oneentity docs/commerce/PLAN.md C1.3)
+- [x] `verifyRequest` (did:key, did:web under `authentication`, signer pin), `request` on `verifyAgentForCheckout`, `HttpSigTest`, README
+- [ ] Ships with the next Kotlin release batch (no version bump here)

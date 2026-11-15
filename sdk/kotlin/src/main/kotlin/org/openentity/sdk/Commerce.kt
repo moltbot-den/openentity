@@ -391,14 +391,18 @@ data class AgentFacts(val level: Int? = null, val ownerDid: String? = null, val 
 /** The owner's per-cart approval/2.0 for this exact cart: [verifierDid] and [requestId] are the merchant's own; [counter] is the WebAuthn counter stored for the signing key (store evidence `approval_counter` after an allow). */
 data class CheckoutApproval(val approval: JsonValue, val verifierDid: String, val requestId: String, val counter: Long = 0L)
 
-/** [decision] is allow, step_up or deny; [evidence] holds strings and longs (agent_did, mandate_id, mandate_hash, approval_request_id, approval_kid, approval_counter, approval_error). */
+/** The agent's signed request to the checkout, as the merchant received it. */
+class CheckoutRequest(val method: String, val url: String, val headers: Map<String, String>, val body: ByteArray = ByteArray(0), val maxAge: Long = 300)
+
+/** [decision] is allow, step_up or deny; [evidence] holds strings and longs (request, agent_did, mandate_id, mandate_hash, approval_request_id, approval_kid, approval_counter, approval_error). */
 data class CheckoutDecision(val decision: String, val reasons: List<String>, val evidence: Map<String, Any>)
 
 /**
  * The one-call check behind Agent Commerce Check: agent, owner, mandate, cart and merchant policy in, `allow`, `step_up` or `deny`
- * with reasons out. Deny is final (wrong agent, dead mandate, policy unmet); step_up means an owner approval of this exact cart
- * would allow. [agentDid] must come from a verified request signature (RFC 9421, which this SDK does not carry): never from a
- * header or a body field. [mandate] needs [keyLog], the mandate issuer's verified key log; [status] is the mandate status answer.
+ * with reasons out. Deny is final (bad signature, wrong agent, dead mandate, policy unmet); step_up means an owner approval of this
+ * exact cart would allow. Pass the agent's signed [request] (RFC 9421, verified here by [verifyRequest]; its signer replaces
+ * [agentDid]), or [agentDid] when the caller already verified the signature: never a header or a body field. [mandate] needs
+ * [keyLog], the mandate issuer's verified key log; [status] is the mandate status answer.
  */
 fun verifyAgentForCheckout(
     agentDid: String?,
@@ -411,11 +415,20 @@ fun verifyAgentForCheckout(
     status: JsonValue? = null,
     approval: CheckoutApproval? = null,
     origins: List<String>? = null,
+    request: CheckoutRequest? = null,
 ): CheckoutDecision {
     val evidence = linkedMapOf<String, Any>()
     fun deny(vararg reasons: String) = CheckoutDecision("deny", reasons.toList(), evidence)
     if (cartError(cart) != null) return deny("bad_cart")
     val c = cart as JsonValue.Obj
+    var agentDid = agentDid
+    if (request != null) {
+        agentDid = try {
+            verifyRequest(request.method, request.url, request.headers, request.body, now, request.maxAge).did.also { evidence["request"] = "verified" }
+        } catch (e: Exception) { // OpenEntityException and anything a hostile header can raise: either way the request is unverified
+            return deny("request_unverified")
+        }
+    }
     if (agentDid == null) return deny("request_unverified")
     evidence["agent_did"] = agentDid
     if (c["agent_did"].str() != agentDid) return deny("agent_mismatch")

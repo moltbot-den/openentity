@@ -30,7 +30,7 @@ class DidWebResolver(
     private val fetch: (url: String) -> JsonValue = ::fetchDidJson,
     private val clock: () -> Long = { System.nanoTime() / 1_000_000 },
 ) : Resolver {
-    private class Fetched(val at: Long, val keys: Map<String, ByteArray>?, val error: String?)
+    private class Fetched(val at: Long, val keys: Map<String, ByteArray>?, val auth: Map<String, ByteArray>?, val error: String?)
 
     private val cache = HashMap<String, Fetched>()
 
@@ -39,25 +39,34 @@ class DidWebResolver(
     override fun ed25519Keys(verificationMethod: String): List<ByteArray> {
         val did = verificationMethod.substringBefore('#')
         if (!did.startsWith("did:web:")) return Resolver.DID_KEY.ed25519Keys(verificationMethod)
+        return entry(did, verificationMethod) { it.keys }.values.toList()
+    }
+
+    /** The Ed25519 key a `did:web:<host>#<key>` names, only when the DID lists it under `authentication` (what signs an HTTP request); null otherwise. */
+    @Synchronized
+    fun authenticationKey(keyid: String): ByteArray? = entry(keyid.substringBefore('#'), keyid) { it.auth }[keyid]
+
+    private fun entry(did: String, method: String, pick: (Fetched) -> Map<String, ByteArray>?): Map<String, ByteArray> {
         val now = clock()
         val hit = cache[did]
         val age = if (hit == null) Long.MAX_VALUE else now - hit.at
-        val keys = hit?.keys
+        val keys = hit?.let(pick)
         val fresh = when {
             hit == null -> false
-            keys == null -> age < REFETCH_MS
-            else -> age < CACHE_MS && (verificationMethod in keys || age < REFETCH_MS)
+            hit.keys == null -> age < REFETCH_MS
+            else -> age < CACHE_MS && (method in keys!! || age < REFETCH_MS)
         }
-        val entry = if (fresh) hit!! else load(did, now).also { cache[did] = it }
-        return entry.keys?.values?.toList() ?: fail("unresolved", entry.error.orEmpty())
+        val e = if (fresh) hit!! else load(did, now).also { cache[did] = it }
+        return pick(e) ?: fail("unresolved", e.error.orEmpty())
     }
 
     private fun load(did: String, now: Long): Fetched = try {
-        Fetched(now, ed25519Methods(did, fetch(didWebUrl(did))), null)
+        val doc = fetch(didWebUrl(did))
+        Fetched(now, ed25519Methods(did, doc), ed25519Methods(did, doc, "authentication"), null)
     } catch (e: OpenEntityException) {
-        Fetched(now, null, e.message)
+        Fetched(now, null, null, e.message)
     } catch (e: Exception) {
-        Fetched(now, null, "cannot fetch the document of $did: $e")
+        Fetched(now, null, null, "cannot fetch the document of $did: $e")
     }
 }
 
@@ -94,15 +103,20 @@ private fun utf8(b: ByteArray): String? = try {
 }
 
 /**
- * Ed25519 keys of a DID document by absolute method id (`#key-1` is relative to the DID): a `publicKeyMultibase` that is an
+ * Ed25519 keys of a DID document by absolute method id (`#key-1` is relative to the DID; with a [relationship] such as `authentication`, only the methods it lists): a `publicKeyMultibase` that is an
  * Ed25519 multikey, or a `publicKeyJwk` with kty OKP, crv Ed25519 and a strict base64url `x`. Any other key yields nothing. A
  * document whose `id` is not [did] fails `unresolved`.
  */
-internal fun ed25519Methods(did: String, doc: JsonValue): Map<String, ByteArray> {
+internal fun ed25519Methods(did: String, doc: JsonValue, relationship: String? = null): Map<String, ByteArray> {
     if (doc["id"].str() != did) fail("unresolved", "the document for $did names ${doc["id"].str()}")
+    val abs = { i: String -> if (i.startsWith("#")) did + i else i }
+    val refs = relationship?.let { r ->
+        (doc[r] as? JsonValue.Arr)?.items.orEmpty().mapNotNull { (if (it is JsonValue.Obj) it["id"] else it).str()?.let(abs) }.toSet()
+    }
     val keys = LinkedHashMap<String, ByteArray>()
     for (vm in (doc["verificationMethod"] as? JsonValue.Arr)?.items.orEmpty()) {
-        val id = vm["id"].str()?.let { if (it.startsWith("#")) did + it else it } ?: continue
+        val id = vm["id"].str()?.let(abs) ?: continue
+        if (refs != null && id !in refs) continue
         val multibase = vm["publicKeyMultibase"]
         val jwk = vm["publicKeyJwk"]
         val key = when {
