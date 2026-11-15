@@ -150,3 +150,20 @@ test("narrowing the permission ends the mandates it no longer covers; unlinking 
   expect((await call("DELETE", `/v1/agents/${encodeURIComponent(kp.did)}`, undefined, o.auth)).status).toBe(204);
   expect((await call("GET", `/v1/mandates/${b.draft.mandate_id}/status`)).body.status).toBe("revoked");
 });
+
+test("race: the agent is paused between the state check and the insert: the mandate is ended, never live", async () => {
+  const o = await owner(), kp = await paired(o), m = await issue(o, kp.did);
+  const run = d.db.run.bind(d.db);
+  d.db.run = (async (sql: string, params?: unknown[]) => {
+    if (sql.startsWith("INSERT INTO mandates")) {
+      d.db.run = run;
+      await run("UPDATE agents SET state = 'paused' WHERE did = $1", [kp.did]); // pause landed; its revokeFor found nothing yet
+    }
+    return run(sql, params);
+  }) as typeof d.db.run;
+  const r = await call("POST", "/v1/mandates", m.signed, o.auth);
+  d.db.run = run;
+  expect(r.status).toBe(423);
+  await run("UPDATE agents SET state = 'active' WHERE did = $1", [kp.did]); // owner resumes
+  expect((await call("GET", `/v1/mandates/${m.draft.mandate_id}/status`)).body.status).toBe("revoked");
+});

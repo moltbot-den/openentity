@@ -101,6 +101,13 @@ export function routes(app: Hono, d: Deps) {
     const ins = await d.db.run("INSERT INTO mandates (id, account_id, owner_did, agent_did, body, issued_at, expires_at) VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT DO NOTHING",
       [m.mandate_id, o.accountId, ownerDid, a.did, JSON.stringify(m), m.issued_at, m.expires_at]);
     if (!ins.changes) fail(409, "mandate_exists", "this mandate id was already issued");
+    // Re-read after the insert: pause, unlink and narrowing change the agent first and revokeFor after, so a mandate that
+    // slipped in between those two steps is seen here and ended (an insert before the change is caught by revokeFor).
+    const now2 = await d.db.first<AgentRow>("SELECT * FROM agents WHERE did = $1", [a.did]);
+    if (now2?.state !== "active" || !covered(JSON.parse(now2.permissions), m)) {
+      await d.db.run("UPDATE mandates SET revoked_at = $2, revoke_reason = 'agent_changed' WHERE id = $1 AND revoked_at IS NULL", [m.mandate_id, now()]);
+      fail(423, "agent_changed", "the agent was paused, unlinked or narrowed while this mandate was issued; sign a new one");
+    }
     await push(d, a.did, ownerDid);
     return c.json(view((await d.db.first<Row>("SELECT * FROM mandates WHERE id = $1", [m.mandate_id]))!), 201);
   });
