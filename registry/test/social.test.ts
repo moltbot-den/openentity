@@ -64,4 +64,15 @@ describe("social send guard", () => {
     await postSocial(env, stats, new Date(NOW.getTime() + 600_000), [e2]);
     expect(fetch).toHaveBeenCalledTimes(1);
   });
+
+  it("skips a Buffer channel that is not connected, without a failed row", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (_u: string, init?: RequestInit) => {
+      const q = JSON.parse(String(init!.body)).query as string;
+      return Response.json({ data: q.includes("organizations") ? { account: { organizations: [{ id: "o" }] } } : { channels: [{ id: "c1", service: "twitter" }] } });
+    }));
+    const e3 = { ...entry, id: "t3" };
+    const env = { ...E, BUFFER_API_KEY: "k" };
+    await expect(postSocial(env, stats, NOW, [{ ...e3 }]).catch((x) => String(x))).resolves.not.toMatch(/threads|linkedin/);
+    expect(await env.db.first("SELECT 1 AS x FROM social_posts WHERE entry_id = 't3' AND platform IN ('threads', 'linkedin')")).toBeFalsy();
+  });
 });
