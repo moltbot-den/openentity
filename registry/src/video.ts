@@ -19,7 +19,8 @@ export type VideoProps = {
 export type Llm = {
   /** `problems` are what the previous draft got wrong. */
   draft(topic: Topic, problems: string[]): Promise<Script>;
-  judge(script: Script): Promise<{ score: number; reason: string }>;
+  /** Scores the script and rejects (score 1) any claim the topic's facts and LEVEL_FACTS do not support. */
+  judge(script: Script, topic: Topic): Promise<{ score: number; reason: string }>;
 };
 export type VideoDeps = {
   llm: Llm;
@@ -46,6 +47,29 @@ export const variantFor = (day: string) => (((dayNumber(day) % 3) + 3) % 3) as 0
 const BANNED = /coming soon|global standard|\bbest\b|world'?s first|revolution|cutting.edge|\busers?\b|millions?|thousands?/i;
 const BRAND = /\bOEIS\b|OpenEntity|Openentity|MoltbotDen|Moltbot-Den/; // "openentity.org" and the CLI name stay lowercase
 const ALLOWED_DIGITS = /\{\w+\}|\bL[0-3]\b|RFC 9421|ERC-8004|\bCC0\b/g;
+/** Level names and how each is reached, from spec/OEIS-1.md 2.2 (a test checks this table against the spec). Levels are not a ladder: L2 needs an observer's attestation, not L1. */
+export const LEVELS: Record<string, { name: string; how: string }> = {
+  L0: { name: "Declared", how: "a valid identifier with a valid Declaration in the log; any entity, one command" },
+  L1: { name: "Verified", how: "control of something beyond a bare key is proven: at least one verified alias such as a domain, wallet, ERC-8004 agent or platform account" },
+  L2: { name: "Observed", how: "at least one accredited observer has issued a current attestation about the entity's record" },
+  L3: { name: "Entity", how: "an accredited observer attests the stage is entity, from evidence thresholds" },
+};
+export const LEVEL_FACTS = Object.entries(LEVELS).map(([l, v]) => `${l} ${v.name}: ${v.how}.`).join(" ") + " Levels are not a ladder: reaching one does not require holding the one below.";
+const NUMBER_WORDS = "one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|dozens?|hundreds?|thousands?";
+/** Deterministic claims the spec contradicts; the judge covers the rest. */
+export function factProblems(s: Script): string[] {
+  const p: string[] = [];
+  const text = s.beats.map((b) => b.say).join(" ") + " " + s.caption;
+  if (/\bfrom L[0-3]\b|\b(L[0-3]|level [0-3])\s+(to|then|and then|up to)\s+L[0-3]\b|\b(moves?|promot\w+|upgrad\w+|advanc\w+|climbs?|steps?)\b[^.]*\bL[0-3]\b/i.test(text)) p.push("levels are not a ladder: say what an observer or alias proves, never that an agent moves from one level to another");
+  for (const sentence of text.split(/(?<=[.!?])\s+/)) {
+    const mentioned = [...sentence.matchAll(/\bL([0-3])\b/g)].map((m) => `L${m[1]}`);
+    for (const [l, v] of Object.entries(LEVELS))
+      if (mentioned.length === 1 && mentioned[0] !== l && new RegExp(`\\b${v.name}\\b`).test(sentence) && l !== "L3") // "Entity" is also the brand, so L3 is only checked by the judge
+        p.push(`${mentioned[0]} is ${LEVELS[mentioned[0]!]!.name}, not ${v.name}`);
+  }
+  if (new RegExp(`\\b(${NUMBER_WORDS})\\s+(registered\\s+)?(entities|agents|attestations|observers|record entries)\\b`, "i").test(text)) p.push("typed count in words: counts come only from the placeholders");
+  return p;
+}
 const spoken = (s: Script) => s.beats.map((b) => b.say).join(" ");
 const wc = (t: string) => t.trim().split(/\s+/).filter(Boolean).length;
 
@@ -67,6 +91,7 @@ export function lintScript(s: Script): string[] {
   if (s.beats.some((b) => wc(b.show) > 7)) p.push("a show line has more than 7 words");
   if (s.beats.some((b) => b.stat && !(b.stat in STAT_LABEL))) p.push("unknown stat key");
   if (s.caption.length > 220 || s.title.length > 90) p.push("caption over 220 or title over 90 characters");
+  p.push(...factProblems(s));
   if (!/Open Entity/.test(spoken(s))) p.push('say "Open Entity" aloud at least once');
   return p;
 }
@@ -76,7 +101,7 @@ export async function attempt(llm: Llm, topic: Topic, problems: string[]): Promi
   const script = await llm.draft(topic, problems);
   const lint = lintScript(script);
   if (lint.length) return { problems: lint };
-  const { score, reason } = await llm.judge(script);
+  const { score, reason } = await llm.judge(script, topic);
   return score >= PASS_SCORE ? { script } : { problems: [`an editor scored the last draft ${score} of 10: ${reason}`] };
 }
 

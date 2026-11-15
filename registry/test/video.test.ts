@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { postVideo, captionFor, configuredVideo, pinBoard } from "../src/video-post.ts";
-import { dueVideos, lintScript, topicFor, TOPICS, variantFor, videoProps, videoTick, type Llm, type Mark, type Script, type VideoDeps } from "../src/video.ts";
+import { readFileSync } from "node:fs";
+import { dueVideos, factProblems, LEVELS, lintScript, topicFor, TOPICS, variantFor, videoProps, videoTick, type Llm, type Mark, type Script, type VideoDeps } from "../src/video.ts";
 import { E } from "./helpers.ts";
 
 const stats = { entities: { total: 27, l2: 9 }, record_entries: 20, attestations: 34, observers: 1, log: { tree_size: 162 } };
@@ -53,6 +54,30 @@ describe("script lint", () => {
   });
 });
 
+describe("fact check", () => {
+  // The L1-to-L2 error a real draft made: L2 needs an accredited observer's attestation, not L1.
+  const wrong: Script = { ...good, beats: good.beats.map((b, i) => (i === 3 ? { ...b, say: "A signed attestation moves the agent from L1 to L2, a higher trust level in the Open Entity standard." } : b)) };
+  it("rejects the L1 to L2 observer claim a real draft made", () => {
+    expect(factProblems(wrong).join("|")).toMatch(/not a ladder/);
+    expect(lintScript(wrong).join("|")).toMatch(/not a ladder/);
+  });
+  it("rejects a wrong level name and typed counts in words, and passes a correct level claim", () => {
+    const say = (t: string): Script => ({ ...good, caption: t });
+    expect(factProblems(say("L2 means the agent is Verified."))).toEqual(["L2 is Observed, not Verified"]);
+    expect(factProblems(say("An observer attests and the agent shows as L2 Observed. Open Entity lists seven entities."))).toEqual(["typed count in words: counts come only from the placeholders"]);
+    expect(factProblems(say("L2 means an accredited observer has attested to the agent's record."))).toEqual([]);
+  });
+  it("keeps the level table equal to spec/OEIS-1.md section 2.2", () => {
+    const spec = readFileSync(new URL("../../spec/OEIS-1.md", import.meta.url), "utf8");
+    for (const [l, v] of Object.entries(LEVELS)) expect(spec).toMatch(new RegExp(`\\| ${l} \\| ${v.name} \\|`));
+  });
+  it("stops a script the judge rejects for an unsupported claim from being rendered", async () => {
+    const { attempt } = await import("../src/video.ts");
+    const llm: Llm = { draft: async () => good, judge: async (_s, t) => ({ score: 1, reason: `unsupported claim, topic ${t.id}` }) };
+    expect(await attempt(llm, TOPICS[0]!, [])).toEqual({ problems: ["an editor scored the last draft 1 of 10: unsupported claim, topic problem"] });
+  });
+});
+
 describe("video props", () => {
   const text = spokenOf(good);
   it("times beats from the voice marks and fills numbers from stats", () => {
@@ -75,7 +100,7 @@ function deps(over: Partial<{ scores: number[]; progress: { done: boolean; error
   const scores = [...(over.scores ?? [8])], progress = [...(over.progress ?? [{ done: true }])];
   const calls = { draft: 0, judge: 0, voice: 0, start: 0 };
   const d: VideoDeps = {
-    llm: { draft: async () => (calls.draft++, good), judge: async () => (calls.judge++, { score: scores.shift() ?? 8, reason: "tighten the hook" }) } as Llm,
+    llm: { draft: async () => (calls.draft++, good), judge: async (_s, _t) => (calls.judge++, { score: scores.shift() ?? 8, reason: "tighten the hook" }) } as Llm,
     voice: async (t) => (calls.voice++, { audio: "https://b/a.mp3", marks: words(t) }),
     render: { start: async (_p, day) => (calls.start++, { id: "r1", bucket: "bkt", url: `https://bkt/renders/r1/${day}.mp4` }), progress: async () => progress.shift() ?? { done: true } },
   };
