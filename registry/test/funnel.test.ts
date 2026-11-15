@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { generateKeyPair } from "../src/sdk.ts";
 import { scheduled } from "../src/index.ts";
 import { E, call, signed, stamp } from "./helpers.ts";
@@ -53,7 +53,12 @@ describe("time-to-adopt funnel", () => {
     expect(s.median_seconds).toBeLessThan(45);
   });
 
+  afterEach(() => vi.useRealTimers());
+
   it("caps starts per address per minute and, over all addresses, per hour, and the sweep drops the counters", async () => {
+    // Pin the clock mid-minute: twelve calls that straddle a minute boundary reset the per-minute counter and flake.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(Math.floor(Date.now() / 60000) * 60000 + 5000));
     const codes: number[] = [];
     for (let i = 0; i < 12; i++) codes.push((await call("POST", "/funnel/start", undefined, ip(70))).status);
     expect(codes).toEqual([...Array(10).fill(204), 429, 429]);
