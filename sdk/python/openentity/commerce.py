@@ -11,7 +11,7 @@ from .core import canonicalize, default_resolver, sign_proof, verify_proof, veri
 from .errors import InvalidInputError
 from .httpsig import verify_request
 from .owner import (_DAY, _DID, _HEX64, RP_ID, _check_signature, _Fail, _plain, _sha, _signed_shape, _uint, payload_digest,
-                    verify_approval)
+                    verify_approval, verify_quorum)
 
 _MAX_TTL = 90 * _DAY
 _MD_ID = re.compile(r"md_[a-z2-7]{26}")
@@ -350,12 +350,14 @@ def verify_receipt_chain(purchase, later) -> dict:
 
 def verify_agent_for_checkout(*, cart, merchant_policy: dict, agent_did: str | None = None, request: dict | None = None,
                               agent: dict | None = None, mandate=None, key_log: dict | None = None, status: dict | None = None,
-                              approval: dict | None = None, now: int | None = None, origins=None) -> dict:
+                              approval: dict | None = None, quorum: dict | None = None, now: int | None = None, origins=None) -> dict:
     """The one-call check behind Agent Commerce Check: agent, owner, mandate, cart and merchant policy in, "allow", "step_up" or
     "deny" with reasons out. Deny is final (bad signature, wrong agent, dead mandate, policy unmet); step_up means an owner approval
     of this exact cart would allow. `request` ({method, url, headers, body}) is verified here; or pass `agent_did` when the caller
     already did. `agent` is what the registry says (level, owner_did, security_band, security_issuer), never the request's claim.
-    `approval` is {approval, verifier_did, request_id, counter?}: the owner's approval/2.0 of this cart, with the merchant's own ids."""
+    `approval` is {approval, verifier_did, request_id, counter?}: the owner's approval/2.0 of this cart, with the merchant's own ids.
+    `quorum` is {approvals, m, of, verifier_did, request_id, counters?} for an organisation-owned purchase (verify_quorum against the
+    org's key log and the policy the org's account service publishes at GET /o/<id>/policy)."""
     now = int(time.time()) if now is None else now
     evidence: dict = {}
 
@@ -411,7 +413,16 @@ def verify_agent_for_checkout(*, cart, merchant_policy: dict, agent_did: str | N
     if covered and covered["ok"] and not covered["step_up_required"]:
         return {"decision": "allow", "reasons": ["mandate_covers_cart"], "evidence": evidence}
     why = "no_mandate" if not covered else f"mandate_{covered['reason']}" if not covered["ok"] else "step_up_over"
-    if approval and key_log and owner:
+    if quorum and key_log and owner:
+        # An organisation-owned purchase: quorum is {approvals, m, of, verifier_did, request_id, counters?} (verify_quorum, the org's policy).
+        q = verify_quorum(quorum["approvals"], key_log=key_log, verifier_did=quorum["verifier_did"], owner_did=owner, request_id=quorum["request_id"],
+                          payload_digest=cart_digest(cart), now=now, origins=origins, m=quorum["m"], of=quorum["of"], counters=quorum.get("counters"))
+        if q["ok"]:
+            evidence["approval_request_id"] = quorum["request_id"]
+            evidence["approval_kids"], evidence["approval_counters"] = q["kids"], q["counters"]
+            return {"decision": "allow", "reasons": ["owner_approved_cart", why], "evidence": evidence}
+        evidence["approval_error"] = q["error"]
+    elif approval and key_log and owner:
         a = verify_approval(approval["approval"], key_log=key_log, verifier_did=approval["verifier_did"], owner_did=owner,
                             request_id=approval["request_id"], payload_digest=cart_digest(cart), decisions=("approve",), now=now,
                             origins=origins, counter=approval.get("counter", 0))

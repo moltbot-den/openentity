@@ -149,3 +149,49 @@ def test_an_allow_by_approval_hands_back_the_key_and_counter():
     r = oe.verify_agent_for_checkout(agent_did=i.get("agent_did"), cart=i["cart"], merchant_policy=i["merchant_policy"], agent=i.get("agent"), mandate=i.get("mandate"),
                                      key_log=STATES[i["key_state"]], status=i.get("status"), now=i["now"], approval={**i["approval"], "counter": 0})
     assert (r["evidence"]["approval_kid"], r["evidence"]["approval_counter"]) == (i["approval"]["approval"]["device_id"], 0)
+
+
+QUORUM = load("quorum-1/vectors.json")
+
+
+@pytest.mark.parametrize("c", QUORUM["cases"], ids=lambda c: c["name"])
+def test_quorum(c):
+    x = c["context"]
+    r = oe.verify_quorum(c["approvals"], key_log=STATES[x["key_state"]], verifier_did=x["verifier_did"], owner_did=x["owner_did"],
+                         request_id=x["request_id"], payload_digest=x["payload_digest"], now=x["now"], m=x["m"], of=x["of"])
+    got = {"ok": True, "kids": r["kids"]} if r["ok"] else {"ok": False, "error": r["error"]}
+    assert got == c["expect"], r.get("message")
+
+
+def test_checkout_with_org_quorum():
+    from cryptography.hazmat.primitives import hashes
+    from cryptography.hazmat.primitives.asymmetric import ec, utils
+    import base64
+    c = next(x for x in CHECKOUT["cases"] if x["name"] == "step-up-over-threshold")["input"]
+    keys = [ec.generate_private_key(ec.SECP256R1()) for _ in range(2)]
+    b64 = lambda b: base64.urlsafe_b64encode(b).rstrip(b"=").decode()
+
+    def cred(i, k):
+        n = k.public_key().public_numbers()
+        return {"kid": f"org-device-{i}", "type": "p256", "jwk": {"kty": "EC", "crv": "P-256", "x": b64(n.x.to_bytes(32, "big")), "y": b64(n.y.to_bytes(32, "big"))}}
+
+    creds = [cred(i, k) for i, k in enumerate(keys)]
+    base = STATES[c["key_state"]]
+    key_log = {**base, "approvers": [*base["approvers"], *creds]}
+
+    def signed(i, **over):
+        a = {"version": "approval/2.0", "verifier_did": "did:web:shop.example", "owner_did": base["did"], "request_id": "req_q1",
+             "payload_digest": oe.cart_digest(c["cart"]), "decision": "approve", "expires_at": c["now"] + 300, **over}
+        r, s = utils.decode_dss_signature(keys[i].sign(oe.approval_digest(a), ec.ECDSA(utils.Prehashed(hashes.SHA256()))))
+        return {**a, "device_id": creds[i]["kid"], "form": "p256", "signature": b64(r.to_bytes(32, "big") + s.to_bytes(32, "big"))}
+
+    def run(approvals, **over):
+        q = {"approvals": approvals, "m": 2, "of": [x["kid"] for x in creds], "verifier_did": "did:web:shop.example", "request_id": "req_q1", **over}
+        return oe.verify_agent_for_checkout(agent_did=c["agent_did"], cart=c["cart"], merchant_policy=c["merchant_policy"], agent=c.get("agent"),
+                                            mandate=c["mandate"], key_log=key_log, status=c["status"], quorum=q, now=c["now"])
+
+    ok = run([signed(0), signed(1)])
+    assert ok["decision"] == "allow" and ok["evidence"]["approval_kids"] == [x["kid"] for x in creds]
+    for bundle, over in ([[signed(0)], {}], [[signed(0), signed(0)], {}], [[signed(0), signed(1, payload_digest="0" * 64)], {}], [[signed(0), signed(1)], {"request_id": "req_other"}]):
+        r = run(bundle, **over)
+        assert r["decision"] == "step_up" and r["evidence"]["approval_error"]

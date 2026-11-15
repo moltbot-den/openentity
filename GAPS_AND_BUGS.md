@@ -79,7 +79,6 @@ Backlog for this repo. Ticket ids are `G-YYYY-NNN` across the Open Entity produc
 - reviewer-agent: security
 - suggested-fix: Port sdk/ts/src/commerce.ts check for check against the shared vectors. No package version changes: release is one batch at the end of the program.
 - linked-pr: https://github.com/moltbot-den/openentity/pull/204
-||||||| parent of 8df61ca (feat(sdk): Swift commerce profile: verifyMandate, mandateCovers, signReceipt, verifyReceipt, verifyAgentForCheckout (C1.3))
 
 ### G-2026-005 [in-progress] P1 feature
 
@@ -115,4 +114,15 @@ Backlog for this repo. Ticket ids are `G-YYYY-NNN` across the Open Entity produc
 - reviewer-agent: adversarial-review
 - suggested-fix: verifyAgentForCheckout behind the registry route with registry facts, the owner key log (first_seen kept per entry, fork detection), mandate status from the account service only, single-use request nonces and approvals, per-IP limit; middleware calls the hosted route. Package versions untouched: the release batch ships @openentity/commerce-check and openentity.commerce.
 - linked-pr: https://github.com/moltbot-den/openentity/pull/206
+||||||| parent of d931818 (feat(account): organisations, shared budgets and quorum approvals (C5))
+### G-2026-060 [in-progress] P1 feature
+
+- file: account/src/orgs.ts, account/src/orgbase.ts, account/src/orgbudget.ts, account/src/stepup.ts, account/src/agents.ts, account/src/mandates.ts, account/src/pairing.ts, account/src/keylog.ts, account/src/web/home-client.ts, account/openapi.yaml, account/schema.sql, sdk/ts/src/owner.ts, sdk/ts/src/commerce.ts, sdk/python/openentity/owner.py, sdk/python/openentity/commerce.py, test-vectors/quorum-1, spec/commerce-profile.md
+- area: Agentic commerce C5 organisations, shared budgets, multi-approver (oneentity docs/commerce/specs/enterprise-orgs.md)
+- discovered: 2026-11-14 by agentic commerce program
+- summary: Organisations in the account service: an org is an owner (ordinary owner DID and key log) with admin, approver and viewer members, one registered quorum device per approver member, budgets (org, team, agent) issued as org-signed mandate/1, m-of-n quorum approvals for the org's agents (`approvals[]`, verifyQuorum in the TS and Python SDKs, test-vectors/quorum-1, quorum in verifyAgentForCheckout), a public signed GET /o/{id}/policy, org pause that pauses every org agent, team and cost centre tags carried in agent.mandates, a CSV export, and the org dashboard in the web app.
+- owner-agent: openentity
+- reviewer-agent: security (adversarial review next)
+- suggested-fix: Done in the PR. Decisions: the org DID is `:o:<id>` (not `:org:<hash>`), so every verifier and product that accepts an owner DID accepts an org; budgets are per-agent ceilings (a pooled counter needs product spend reports); the quorum device list is the service's policy because the key log cannot tell one member's devices apart. No package version changes: release is one batch at the end of the program. Open: iOS and Android app screens (org switcher, org approvals, signing as the org owner, adding a device to the org log), verifyQuorum in the Swift and Kotlin SDKs if an app ever verifies, and the product duties in the enterprise-orgs brief (Den, ASS, SMA, ClawGRC).
+- linked-pr: (none yet)
 - linked-issue: (none yet)

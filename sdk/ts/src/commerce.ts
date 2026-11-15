@@ -4,7 +4,7 @@
 import { OpenEntityError } from "./errors.ts";
 import { canonicalize, sha256Sync, toHex, signProof, verifyProof, verificationMethodId, type KeyPair, type Resolver, type Proof } from "./core.ts";
 import { verifyRequest } from "./httpsig.ts";
-import { verifyApproval, payloadDigest, type KeyLogState, type ApprovalError } from "./owner.ts";
+import { verifyApproval, verifyQuorum, payloadDigest, type KeyLogState, type ApprovalError } from "./owner.ts";
 import { Fail, fail, isObj, exactKeys, isUint, plainJson, checkSignature, signedShape, DID, HEX64, RP_ID, DAY } from "./owner.ts";
 
 const MAX_TTL = 90 * DAY;
@@ -297,6 +297,8 @@ export interface CheckoutInput {
   status?: MandateStatus;
   /** The owner's per-cart approval/2.0 for this exact cart: `verifierDid` and `requestId` are the merchant's own. */
   approval?: { approval: unknown; verifierDid: string; requestId: string; /** The WebAuthn counter stored for the signing key; store `evidence.approval_counter` after an allow. */ counter?: number };
+  /** An organisation-owned purchase: the `approvals[]` bundle, checked by verifyQuorum against the org's key log (`mandate.issuer_did`) and the policy `m` and `of` that the org's account service published (GET /o/<id>/policy). Store `evidence.approval_counters` after an allow. */
+  quorum?: { approvals: unknown; m: number; of: string[]; verifierDid: string; requestId: string; counters?: Record<string, number> };
   now?: number;
   origins?: string[];
 }
@@ -351,7 +353,16 @@ export async function verifyAgentForCheckout(i: CheckoutInput): Promise<Checkout
   const needApproval = !covered || !covered.ok || covered.step_up_required;
   if (!needApproval) return { decision: "allow", reasons: ["mandate_covers_cart"], evidence };
   const why = !covered ? "no_mandate" : !covered.ok ? `mandate_${covered.reason}` : "step_up_over";
-  if (i.approval && i.keyLog && owner) {
+  if (i.quorum && i.keyLog && owner) {
+    const q = verifyQuorum(i.quorum.approvals, { keyLog: i.keyLog, verifierDid: i.quorum.verifierDid, ownerDid: owner, requestId: i.quorum.requestId, payloadDigest: cartDigest(cart), now, origins: i.origins, m: i.quorum.m, of: i.quorum.of, counters: i.quorum.counters });
+    if (q.ok) {
+      evidence.approval_request_id = i.quorum.requestId;
+      evidence.approval_kids = q.kids;
+      evidence.approval_counters = q.counters;
+      return { decision: "allow", reasons: ["owner_approved_cart", why], evidence };
+    }
+    evidence.approval_error = q.error;
+  } else if (i.approval && i.keyLog && owner) {
     const a = verifyApproval(i.approval.approval, { keyLog: i.keyLog, verifierDid: i.approval.verifierDid, ownerDid: owner, requestId: i.approval.requestId, payloadDigest: cartDigest(cart), decisions: ["approve"], now, origins: i.origins, counter: i.approval.counter });
     if (a.ok) {
       evidence.approval_request_id = i.approval.requestId;

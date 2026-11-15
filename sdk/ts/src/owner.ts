@@ -265,6 +265,39 @@ export function verifyApproval(approval: unknown, o: ApprovalOptions): ApprovalR
   }
 }
 
+export type QuorumError = ApprovalError | "bad_quorum" | "quorum_not_met" | "duplicate_device" | "not_in_quorum";
+export type QuorumResult = { ok: true; kids: string[]; counters: Record<string, number> } | { ok: false; error: QuorumError; message: string };
+export interface QuorumOptions extends Omit<ApprovalOptions, "counter" | "decisions"> {
+  /** Approvals needed, and the kids that may count: the policy the organisation's account service published (GET /o/<id>/policy). */
+  m: number;
+  of: string[];
+  /** Stored WebAuthn counters by kid; the result returns the new ones. */
+  counters?: Record<string, number>;
+}
+
+/**
+ * Verifies the `approvals[]` bundle of an organisation-owned action: at least `m` approval/2.0 objects, each by a different
+ * device in `of`, each approving this request_id and payload_digest against the organisation's key log. Fails closed: one
+ * bad or duplicate approval refuses the bundle, so a client cannot pad it. Devices, not people: the account service lists
+ * one device per member in `of`, which is what makes m devices m members.
+ */
+export function verifyQuorum(approvals: unknown, o: QuorumOptions): QuorumResult {
+  const no = (error: QuorumError, message: string): QuorumResult => ({ ok: false, error, message });
+  if (!Number.isSafeInteger(o.m) || o.m < 1 || !Array.isArray(o.of) || o.of.some((k) => typeof k !== "string") || new Set(o.of).size !== o.of.length || o.m > o.of.length) return no("bad_quorum", "m must be 1 or more and at most the number of distinct kids in of");
+  if (!Array.isArray(approvals) || !approvals.length || approvals.length > o.of.length) return no("malformed", `approvals must be 1 to ${o.of.length} approval/2.0 objects`);
+  const kids: string[] = [], counters: Record<string, number> = {};
+  for (const a of approvals) {
+    const device = isObj(a) && typeof a.device_id === "string" ? a.device_id : "";
+    if (!o.of.includes(device)) return no(device ? "not_in_quorum" : "malformed", `device ${device || "?"} is not one of the quorum's approvers`);
+    if (kids.includes(device)) return no("duplicate_device", `device ${device} approved twice`);
+    const r = verifyApproval(a, { ...o, decisions: ["approve"], counter: o.counters?.[device] ?? 0 });
+    if (!r.ok) return no(r.error, r.message);
+    kids.push(r.kid);
+    counters[r.kid] = r.counter;
+  }
+  return kids.length >= o.m ? { ok: true, kids, counters } : no("quorum_not_met", `${kids.length} of ${o.m} approvals`);
+}
+
 // ---------------------------------------------------------------- key log
 
 const BODY: Record<string, string[]> = {

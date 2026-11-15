@@ -44,6 +44,33 @@ export function homePage(o: { serviceDid: string; rpId: string; turnstile: strin
     <button id="add-approver">Add a passkey approver</button>
     <div id="enroll" class="panel" hidden><p>On a phone that is already an approver, open the OpenEntity app and check that it shows this code:</p><p class="code" id="enroll-code"></p><p id="enroll-state" class="note" hidden></p></div>
   </div>
+  <h2>Organisations</h2>
+  <p id="orgs-error" class="error" hidden></p>
+  <ul class="list" id="orgs"></ul>
+  <form id="org-form" hidden><input id="org-name" required maxlength="80" placeholder="Organisation name" aria-label="Organisation name"><button class="primary">Create an organisation</button></form>
+  <p class="note" id="orgs-off" hidden>Turn on approvals first: an organisation is owned by a key log of its own.</p>
+  <div id="org" class="panel" hidden>
+    <h3 id="org-title"></h3>
+    <p class="mono" id="org-did"></p>
+    <p id="org-state"></p>
+    <p id="org-quorum" class="note"></p>
+    <h3>Members</h3>
+    <ul class="list" id="org-members"></ul>
+    <form id="member-form"><input id="member-email" type="email" required placeholder="member@example.com" aria-label="Member email"><button>Add as a viewer</button></form>
+    <h3>Agents</h3>
+    <ul class="list" id="org-agents"></ul>
+    <h3>Budgets</h3>
+    <ul class="list" id="org-budgets"></ul>
+    <form id="budget-form"><select id="budget-scope" aria-label="Scope"><option>org</option><option>team</option><option>agent</option></select><input id="budget-ref" placeholder="team tag or agent DID" aria-label="Team or agent"><input id="budget-tx" required placeholder="per purchase, $" aria-label="Per purchase in dollars"><select id="budget-period" aria-label="Period"><option>P1D</option><option>P7D</option><option>P1M</option></select><input id="budget-max" required placeholder="per period, $" aria-label="Per period in dollars"><input id="budget-rails" value="credits,x402,mpp,card,usdc" aria-label="Rails"><button>Set budget</button></form>
+    <h3>Approvals waiting</h3>
+    <ul class="list" id="org-approvals"></ul>
+    <p id="org-error" class="error" hidden></p>
+    <button id="org-device">Use this passkey for the organisation</button>
+    <button id="org-quorum-set">Set how many approvals a purchase needs</button>
+    <button id="org-pause" class="danger">Pause every agent</button>
+    <button id="org-resume">Resume the organisation</button>
+    <button id="org-csv">Download CSV</button>
+  </div>
   <h2>Sign-in methods</h2>
   <ul class="list" id="methods"></ul>
   <p class="note">Add or remove sign-in methods in the OpenEntity app.</p>

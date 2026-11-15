@@ -7,6 +7,7 @@
 // (the log stays readable, so old signatures still verify) and removes the account's personal data.
 import type { Hono } from "hono";
 import { unlinkAll } from "./agents.ts";
+import { membershipsOf } from "./orgs.ts";
 import type { Deps } from "./app.ts";
 import { newId, now } from "./db.ts";
 import { bearer, fail, freshSignIn } from "./http.ts";
@@ -37,6 +38,7 @@ export async function deleteAccount(d: Deps, accountId: string): Promise<number>
   const a = await d.db.first<{ owner_did: string | null; deleted_at: number | null }>("SELECT owner_did, deleted_at FROM accounts WHERE id = $1", [accountId]);
   if (!a) return fail(404, "not_found", "no such account");
   if (a.deleted_at !== null) return Number(a.deleted_at);
+  if (await membershipsOf(d, accountId)) fail(409, "org_member", "this account belongs to an organisation: leave it first (its admins can remove you), then delete the account");
   await revokeAppleTokens(d, accountId);
   // Close first: if anything after it fails, a closed log signs nothing more, and the delete route then takes a fresh
   // sign-in instead of an approval, so the owner can finish.
@@ -76,6 +78,13 @@ export async function purgeTestAccounts(d: Deps, minAge = 86_400): Promise<numbe
     await d.db.tx(async (tx) => {
       await tx.run("DELETE FROM refresh_tokens WHERE session_id IN (SELECT id FROM sessions WHERE account_id = $1)", [o.id]);
       await tx.run("DELETE FROM agent_products WHERE agent_did IN (SELECT did FROM agents WHERE account_id = $1)", [o.id]);
+      // Organisations the test owner made go with it: their budgets, devices, members and key log.
+      for (const g of await tx.all<{ id: string }>("SELECT id FROM orgs WHERE created_by = $1", [o.id])) {
+        for (const t of ["org_budgets", "org_devices", "org_members"]) await tx.run(`DELETE FROM ${t} WHERE org_id = $1`, [g.id]);
+        await tx.run("DELETE FROM keylog_entries WHERE owner_id = $1", [g.id]);
+        await tx.run("DELETE FROM orgs WHERE id = $1", [g.id]);
+      }
+      for (const t of ["org_devices", "org_members"]) await tx.run(`DELETE FROM ${t} WHERE account_id = $1`, [o.id]);
       for (const t of ["sessions", "methods", "step_ups", "pairings", "enrollments", "push_tokens", "deletion_requests", "login_codes", "entitlements", "uploads", "agent_approvals", "passkey_challenges", "agents"]) {
         await tx.run(`DELETE FROM ${t} WHERE account_id = $1`, [o.id]);
       }
@@ -93,7 +102,7 @@ export async function purgeTestAccounts(d: Deps, minAge = 86_400): Promise<numbe
 /** jobs.ts: carries out deletion requests whose 7 days have passed. */
 export async function runDueDeletions(d: Deps): Promise<void> {
   for (const r of await d.db.all<{ account_id: string }>("SELECT account_id FROM deletion_requests WHERE state = 'pending' AND effective_at <= $1 LIMIT 20", [now()])) {
-    await deleteAccount(d, r.account_id);
+    await deleteAccount(d, r.account_id).catch((e) => console.warn(`deletion of ${r.account_id} waits: ${e?.message}`)); // an org member waits until they leave
   }
 }
 

@@ -29,7 +29,7 @@ const T0 = 1794009600; // 2026-11-07T00:00:00Z
 const DAY = 86_400;
 const NOW = T0 + 1000;
 const WARNING = KEY_WARNING;
-export const COMMERCE_DIRS = ["mandate-1", "cart-1", "receipt-1", "checkout-1"];
+export const COMMERCE_DIRS = ["mandate-1", "cart-1", "receipt-1", "checkout-1", "quorum-1"];
 
 const p256Sign = (keyName: string, digest: Uint8Array) => ({
   device_id: AK[keyName].kid,
@@ -240,6 +240,32 @@ export async function buildCommerceVectors(): Promise<Record<string, object>> {
     k("deny-two-policy-failures", "Every failed policy check is listed.", { agent: { level: 0, security_band: "poor" } }, { decision: "deny", reasons: ["level_too_low", "security_band_too_low"] }),
   ];
 
+  // ---------------------------------------------------------------- quorum (approvals[] of an organisation-owned action)
+  // The approvals are the approval-2.0 cases' own (same verifier, request and payload), so no new signature is made here.
+  const pick = (name: string) => (AV.cases as unknown as { name: string; approval: Record<string, unknown>; context: Record<string, unknown> }[]).find((c) => c.name === name)!;
+  const IOS = pick("p256-approve").approval, WEB = pick("webauthn-web-origin").approval, DENY = pick("p256-deny").approval, STRANGER = pick("unknown-key").approval;
+  const qbase = pick("p256-approve").context as { verifier_did: string; owner_did: string; request_id: string; payload_digest: string; now: number };
+  const OF = [AK.ios.kid, AK.web.kid];
+  const qctx = (o: Record<string, unknown> = {}) => ({ key_state: "owner", verifier_did: qbase.verifier_did, owner_did: qbase.owner_did, request_id: qbase.request_id, payload_digest: qbase.payload_digest, now: qbase.now, m: 2, of: OF, ...o });
+  const q = (name: string, description: string, approvals: unknown, context: object, expect: object) => ({ name, description, approvals, context, expect });
+  const quorumCases = [
+    q("two-of-two", "Both devices approve the same request: an iOS device key (p256) and a web passkey (webauthn).", [IOS, WEB], qctx(), { ok: true, kids: [AK.ios.kid, AK.web.kid] }),
+    q("one-of-two", "m is 1: one approval is enough.", [WEB], qctx({ m: 1 }), { ok: true, kids: [AK.web.kid] }),
+    q("not-met", "m is 2 and one device approved.", [IOS], qctx(), { ok: false, error: "quorum_not_met" }),
+    q("same-device-twice", "One device sent its approval twice: it counts once, and the bundle is refused.", [IOS, IOS], qctx(), { ok: false, error: "duplicate_device" }),
+    q("device-outside-of", "web is an approver in the key log but not in the quorum's list.", [IOS, WEB], qctx({ of: [AK.ios.kid, AK.android.kid] }), { ok: false, error: "not_in_quorum" }),
+    q("device-outside-log", "A key the quorum lists but the key log does not hold.", [IOS, STRANGER], qctx({ of: [AK.ios.kid, AK.stranger.kid] }), { ok: false, error: "unknown_key" }),
+    q("another-payload", "The verifier recomputed another payload digest than the approvals signed.", [IOS, WEB], qctx({ payload_digest: payloadDigest({ other: 1 }) }), { ok: false, error: "wrong_payload" }),
+    q("another-request", "The verifier issued another request id than the approvals answer.", [IOS, WEB], qctx({ request_id: "req_other:1" }), { ok: false, error: "wrong_request" }),
+    q("one-deny", "A deny is not an approval.", [DENY, WEB], qctx(), { ok: false, error: "bad_decision" }),
+    q("expired", "now is at the approvals' expires_at.", [IOS, WEB], qctx({ now: IOS.expires_at }), { ok: false, error: "expired" }),
+    q("padded-bundle", "More approvals than devices in the quorum.", [IOS, WEB, IOS], qctx(), { ok: false, error: "malformed" }),
+    q("m-zero", "m below 1.", [IOS], qctx({ m: 0 }), { ok: false, error: "bad_quorum" }),
+    q("m-over-of", "m above the number of devices.", [IOS, WEB], qctx({ m: 3 }), { ok: false, error: "bad_quorum" }),
+    q("not-a-list", "approvals is one object, not a list.", IOS, qctx({ m: 1 }), { ok: false, error: "malformed" }),
+    q("owner-closed", "The organisation's key log is closed.", [IOS, WEB], qctx({ key_state: "closed" }), { ok: false, error: "owner_closed" }),
+  ];
+
   const w = (description: string, o: object) => ({ description, warning: WARNING, ...o });
   return {
     "mandate-1/vectors.json": w("mandate/1 vectors. Owner DID, key states and device keys are those of approval-2.0 (published throwaway keys). cases: verify `mandate` with `context` (key_state names an entry of approval-2.0/vectors.json key_states; agent_did, now and the status answer); `expect` is {ok: true, kid, mandate_id, limits, scope, step_up_over, period_spent?, total_spent?} or {ok: false, error}. digests: the signing preimage and its SHA-256. replay: an approval/2.0 carrying a mandate's signature must fail bad_signature.", {
@@ -253,6 +279,9 @@ export async function buildCommerceVectors(): Promise<Record<string, object>> {
     }),
     "receipt-1/vectors.json": w("receipt/1 vectors. Merchant key is the OEIS `second` key, agent the `entity` key (test-vectors/keys.json). cases: verifyReceipt(receipt, {require}) must equal `expect`; `require` defaults to [merchant]. Proofs are eddsa-jcs-2022 over the receipt without `proofs`; `by` is outside the signed proof configuration.", {
       merchant_did: MERCHANT, agent_did: AGENT, cases: receiptCases,
+    }),
+    "quorum-1/vectors.json": w("quorum vectors: verifyQuorum(approvals, {keyLog: key_states[context.key_state], verifierDid: context.verifier_did, ownerDid: context.owner_did, requestId, payloadDigest, now, m, of}) must equal `expect`: {ok: true, kids} (the kids in bundle order) or {ok: false, error}. The owner key state plays the organisation's key log; `of` is the policy list of quorum devices. approvals are those of approval-2.0.", {
+      cases: quorumCases,
     }),
     "checkout-1/vectors.json": w("verifyAgentForCheckout vectors. input: agent_did (already verified from the request signature), cart, merchant_policy, agent (registry facts), mandate, key_state (approval-2.0 key_states), status, approval {approval, verifier_did, request_id}, now. expect: decision, reasons (in order) and, where an approval was offered and refused, the approval error in evidence.approval_error. Security bands rank poor < fair < good < strong.", {
       cases: checkoutCases,
@@ -268,5 +297,5 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     mkdirSync(new URL(path.split("/")[0] + "/", dir), { recursive: true });
     writeFileSync(new URL(path, dir), serialize(v));
   }
-  console.log("wrote mandate-1, cart-1, receipt-1 and checkout-1 vectors to", dir.pathname);
+  console.log("wrote mandate-1, cart-1, receipt-1, checkout-1 and quorum-1 vectors to", dir.pathname);
 }

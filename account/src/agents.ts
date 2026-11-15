@@ -7,6 +7,7 @@ import { OpenEntityError, payloadDigest } from "@openentity/sdk";
 import type { Deps } from "./app.ts";
 import { bump, newId, now } from "./db.ts";
 import { bearer, fail, json } from "./http.ts";
+import { type OrgRow, quorumOf } from "./orgbase.ts";
 import { track } from "./events.ts";
 import { covered, revokeFor } from "./mandates.ts";
 import { notifyOwner } from "./notify.ts";
@@ -26,6 +27,8 @@ export interface AgentRow {
   did: string; account_id: string; owner_did: string; label: string | null; framework: string | null; host: string | null;
   permissions: string; perm_seq: number; state: "active" | "paused" | "unlinked"; pause_seq: number; link_epoch: number; status: string | null;
   connection_id: string | null; paired_at: number; last_seen_at: number | null;
+  /** Set when an organisation owns the agent: owner_did is then the org's DID and account_id the member who paired it. */
+  org_id: string | null; team: string | null; cost_centre: string | null;
 }
 
 /** The Agent object (openapi.yaml) the owner sees. */
@@ -35,6 +38,7 @@ export async function agentView(d: Deps, a: AgentRow) {
     did: a.did, label: a.label, framework: a.framework, host: a.host, state: a.state === "paused" ? "paused" : "active",
     status: a.status ? JSON.parse(a.status) : null, permissions: JSON.parse(a.permissions) as string[], products: products.map((p) => p.product),
     paired_at: Number(a.paired_at), last_seen_at: a.last_seen_at === null ? null : Number(a.last_seen_at),
+    ...(a.org_id ? { org_id: a.org_id, team: a.team, cost_centre: a.cost_centre } : {}),
   };
 }
 
@@ -43,16 +47,16 @@ const agentDidParam = (c: Context) => {
   return /^did:key:z6Mk[1-9A-HJ-NP-Za-km-z]+$/.test(did) ? did : fail(404, "not_found", "no such agent");
 };
 
-/** One of the owner's linked agents, or 404. */
+/** One of the person's own linked agents, or 404. An organisation's agent is the org's: its members reach it through /v1/orgs, never as its pairer. */
 export async function ownersAgent(d: Deps, accountId: string, did: string): Promise<AgentRow> {
-  return (await d.db.first<AgentRow>("SELECT * FROM agents WHERE did = $1 AND account_id = $2 AND state <> 'unlinked'", [did, accountId])) ?? fail(404, "not_found", "no such agent");
+  return (await d.db.first<AgentRow>("SELECT * FROM agents WHERE did = $1 AND account_id = $2 AND state <> 'unlinked' AND org_id IS NULL", [did, accountId])) ?? fail(404, "not_found", "no such agent");
 }
 
 /**
  * Unlinks an agent. The thread, the inbox and the attachments go with the link, so an owner who pairs the agent later
  * never sees an earlier owner's messages, label or status. Its socket closes (4003) and its products get agent.unlinked.
  */
-async function unlink(d: Deps, a: AgentRow, message: string) {
+export async function unlink(d: Deps, a: AgentRow, message: string) {
   await revokeFor(d, a, "agent_unlinked");
   const files = await d.db.tx(async (tx) => {
     await tx.run("UPDATE agents SET state = 'unlinked', unlinked_at = $2, label = NULL, status = NULL WHERE did = $1", [a.did, now()]);
@@ -109,7 +113,7 @@ async function changePause(d: Deps, a: AgentRow, from: "active" | "paused", to: 
   });
 }
 
-const productsOf = async (d: Deps, did: string) => (await d.db.all<{ product: string }>("SELECT product FROM agent_products WHERE agent_did = $1", [did])).map((p) => p.product);
+export const productsOf = async (d: Deps, did: string) => (await d.db.all<{ product: string }>("SELECT product FROM agent_products WHERE agent_did = $1", [did])).map((p) => p.product);
 
 /** Pause needs no biometrics: record it, close the socket with 4001, queue a pause command, tell every product now. Idempotent. */
 export async function pause(d: Deps, a: AgentRow, source: string): Promise<boolean> {
@@ -124,7 +128,7 @@ export async function pause(d: Deps, a: AgentRow, source: string): Promise<boole
   return true;
 }
 
-async function resume(d: Deps, a: AgentRow): Promise<void> {
+export async function resume(d: Deps, a: AgentRow): Promise<void> {
   const t = now(), seq = await changePause(d, a, "paused", "active", t) ?? fail(409, "not_paused", "this agent is not paused");
   await deliver(d, a.did, { type: "command", command: "resume", args: {} });
   const data = { agent_did: a.did, owner_did: a.owner_did, resumed_at: t, seq };
@@ -133,7 +137,7 @@ async function resume(d: Deps, a: AgentRow): Promise<void> {
 }
 
 /** RFC 9421 response signature over "@status" and content-digest by the service key (GET /v1/paused). */
-async function signedJson(c: Context, d: Deps, payload: unknown) {
+export async function signedJson(c: Context, d: Deps, payload: unknown) {
   const body = JSON.stringify(payload), created = now();
   const digest = `sha-256=:${createHash("sha256").update(body).digest("base64")}:`;
   const params = `("@status" "content-digest");created=${created};expires=${created + 60};keyid="did:web:${d.host}#${d.keys.did.kid}";alg="ed25519"`;
@@ -144,20 +148,23 @@ async function signedJson(c: Context, d: Deps, payload: unknown) {
 
 // ---------------------------------------------------------------- approvals agents write
 
-interface ApprovalRow { id: string; agent_did: string; account_id: string; owner_did: string; request_id: string; payload: string; payload_digest: string; state: string; approval: string | null; created_at: number; expires_at: number; decided_at: number | null }
+export interface ApprovalRow { id: string; agent_did: string; account_id: string; owner_did: string; request_id: string; payload: string; payload_digest: string; state: string; approval: string | null; quorum: string | null; approvals: string | null; created_at: number; expires_at: number; decided_at: number | null }
 
 /** AgentApproval (openapi.yaml); the owner view adds agent_did and, while pending, the approval request. */
-function approvalView(d: Deps, r: ApprovalRow, owner: boolean) {
+export function approvalView(d: Deps, r: ApprovalRow, owner: boolean) {
   const p = JSON.parse(r.payload), t = now();
   const state = r.state === "pending" && Number(r.expires_at) <= t ? "expired" : r.state;
   return {
     id: r.id, request_id: r.request_id, state, title: p.title, summary: p.summary, ...(p.details ? { details: p.details } : {}), risk: p.risk,
     created_at: Number(r.created_at), expires_at: Number(r.expires_at), decided_at: r.decided_at === null ? null : Number(r.decided_at),
     ...(r.approval ? { approval: JSON.parse(r.approval) } : {}),
+    ...(r.approvals ? { approvals: JSON.parse(r.approvals) } : {}),
+    ...(r.quorum ? { quorum: JSON.parse(r.quorum) } : {}),
     ...(owner ? { agent_did: r.agent_did } : {}),
     ...(owner && state === "pending" ? { approval_request: {
       verifier_did: `did:web:${d.host}`, owner_did: r.owner_did, request_id: r.request_id, action: "agent.approval", payload: p,
       payload_digest: r.payload_digest, expires_at: Number(r.expires_at), decisions: ["approve", "deny"],
+      ...(r.quorum ? { quorum: JSON.parse(r.quorum) } : {}),
     } } : {}),
   };
 }
@@ -267,13 +274,17 @@ export function routes(app: Hono, d: Deps) {
       }
       fail(429, "muted", `more than ${APPROVALS_PER_HOUR} approval requests this hour; this agent is muted until the hour ends`, { retry_after: (Math.floor(now() / 3600) + 1) * 3600 - now() });
     }
+    // An organisation's agent asks the org: the quorum (m of these devices) is fixed now, so changing the policy later never changes a request in flight.
+    const org = a.org_id ? await d.db.first<OrgRow>("SELECT * FROM orgs WHERE id = $1", [a.org_id]) : null;
+    const quorum = org ? JSON.stringify(await quorumOf(d, org)) : null;
     const t = now(), row: ApprovalRow = {
       id: newId("apr"), agent_did: a.did, account_id: a.account_id, owner_did: a.owner_did, request_id: newId("aar"), payload: JSON.stringify(payload),
-      payload_digest: digest, state: "pending", approval: null, created_at: t, expires_at: t + ttl, decided_at: null,
+      payload_digest: digest, state: "pending", approval: null, quorum, approvals: null, created_at: t, expires_at: t + ttl, decided_at: null,
     };
-    await d.db.run("INSERT INTO agent_approvals (id, agent_did, account_id, owner_did, request_id, payload, payload_digest, state, created_at, expires_at) VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending', $8, $9)",
-      [row.id, row.agent_did, row.account_id, row.owner_did, row.request_id, row.payload, row.payload_digest, row.created_at, row.expires_at]);
-    await notifyOwner(d, a.account_id, { type: "approval.requested", id: row.id, agent: a.did });
+    await d.db.run("INSERT INTO agent_approvals (id, agent_did, account_id, owner_did, request_id, payload, payload_digest, state, quorum, created_at, expires_at) VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending', $8, $9, $10)",
+      [row.id, row.agent_did, row.account_id, row.owner_did, row.request_id, row.payload, row.payload_digest, row.quorum, row.created_at, row.expires_at]);
+    const askers = org ? (await d.db.all<{ account_id: string }>("SELECT account_id FROM org_members WHERE org_id = $1 AND role IN ('admin', 'approver')", [org.id])).map((m) => m.account_id) : [a.account_id];
+    for (const who of askers) await notifyOwner(d, who, { type: "approval.requested", id: row.id, agent: a.did });
     await track(d, "approval_requested", { product: "openentity", kind: "agent", risk: payload.risk }, { owner: a.owner_did, agent: a.did });
     return c.json(approvalView(d, row, false), 201);
   });
@@ -298,14 +309,14 @@ export function routes(app: Hono, d: Deps) {
   // ---------------------------------------------------------------- owner: agents
   app.get("/v1/agents", async (c) => {
     const o = await bearer(c, d);
-    const rows = await d.db.all<AgentRow>("SELECT * FROM agents WHERE account_id = $1 AND state <> 'unlinked' ORDER BY paired_at", [o.accountId]);
+    const rows = await d.db.all<AgentRow>("SELECT * FROM agents WHERE account_id = $1 AND state <> 'unlinked' AND org_id IS NULL ORDER BY paired_at", [o.accountId]);
     return c.json({ agents: await Promise.all(rows.map((r) => agentView(d, r))) });
   });
 
   app.post("/v1/agents/pause-all", async (c) => {
     const o = await bearer(c, d);
     const source = pauseSource(await json(c));
-    const rows = await d.db.all<AgentRow>("SELECT * FROM agents WHERE account_id = $1 AND state = 'active'", [o.accountId]);
+    const rows = await d.db.all<AgentRow>("SELECT * FROM agents WHERE account_id = $1 AND state = 'active' AND org_id IS NULL", [o.accountId]);
     const done = await Promise.all(rows.map((r) => pause(d, r, source)));
     return c.json({ paused: done.filter(Boolean).length });
   });
@@ -404,20 +415,20 @@ export function routes(app: Hono, d: Deps) {
     const o = await bearer(c, d);
     const decided = c.req.query("state") === "decided";
     const rows = await d.db.all<ApprovalRow>(decided
-      ? "SELECT * FROM agent_approvals WHERE account_id = $1 AND (state <> 'pending' OR expires_at <= $2) ORDER BY created_at DESC LIMIT 100"
-      : "SELECT * FROM agent_approvals WHERE account_id = $1 AND state = 'pending' AND expires_at > $2 ORDER BY created_at DESC LIMIT 100", [o.accountId, now()]);
+      ? "SELECT * FROM agent_approvals WHERE account_id = $1 AND quorum IS NULL AND (state <> 'pending' OR expires_at <= $2) ORDER BY created_at DESC LIMIT 100"
+      : "SELECT * FROM agent_approvals WHERE account_id = $1 AND quorum IS NULL AND state = 'pending' AND expires_at > $2 ORDER BY created_at DESC LIMIT 100", [o.accountId, now()]);
     return c.json({ approvals: rows.map((r) => approvalView(d, r, true)) });
   });
 
   app.get("/v1/approvals/:id", async (c) => {
     const o = await bearer(c, d);
-    const r = await d.db.first<ApprovalRow>("SELECT * FROM agent_approvals WHERE id = $1 AND account_id = $2", [c.req.param("id"), o.accountId]) ?? fail(404, "not_found", "no such approval");
+    const r = await d.db.first<ApprovalRow>("SELECT * FROM agent_approvals WHERE id = $1 AND account_id = $2 AND quorum IS NULL", [c.req.param("id"), o.accountId]) ?? fail(404, "not_found", "no such approval");
     return c.json(approvalView(d, r, true));
   });
 
   app.post("/v1/approvals/:id/decision", async (c) => {
     const o = await bearer(c, d);
-    const r = await d.db.first<ApprovalRow>("SELECT * FROM agent_approvals WHERE id = $1 AND account_id = $2", [c.req.param("id"), o.accountId]) ?? fail(404, "not_found", "no such approval");
+    const r = await d.db.first<ApprovalRow>("SELECT * FROM agent_approvals WHERE id = $1 AND account_id = $2 AND quorum IS NULL", [c.req.param("id"), o.accountId]) ?? fail(404, "not_found", "no such approval");
     if (r.state !== "pending") fail(409, "already_decided", "this approval was already decided");
     if (Number(r.expires_at) <= now()) fail(410, "expired", "this approval request expired");
     const { decision, approval } = await checkApproval(c, d, { ownerDid: r.owner_did, requestId: r.request_id, payloadDigest: r.payload_digest });
@@ -463,7 +474,8 @@ export async function setPermissions(d: Deps, a: AgentRow, next: string[]) {
   const data = { agent_did: a.did, owner_did: a.owner_did, permissions: next, seq: Number(row!.perm_seq) };
   await Promise.all((await productsOf(d, a.did)).map((p) => sendEvent(d, p, "agent.permissions", data)));
   await deliver(d, a.did, { type: "permissions", permissions: next });
-  await revokeFor(d, a, "permission_removed", (m) => covered(next, m)); // narrowing ends the mandates it no longer covers
+  // Narrowing ends the mandates it no longer covers. An org's mandates rest on its budgets (orgs.ts), not on spend permissions.
+  if (!a.org_id) await revokeFor(d, a, "permission_removed", (m) => covered(next, m));
 }
 
 /**

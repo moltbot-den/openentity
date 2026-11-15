@@ -380,3 +380,58 @@ CREATE TABLE IF NOT EXISTS mandate_seqs (
   agent_did text PRIMARY KEY,
   seq integer NOT NULL
 );
+
+-- Organisations (orgs.ts, enterprise orgs spec): an owner principal with its own key log (keylog_entries, owner id = orgs.id),
+-- members with a role, one quorum device per member, budgets and the team and cost centre tags on agents. seq counts
+-- changes to what GET /o/<id>/policy publishes (state, quorum m, quorum devices).
+CREATE TABLE IF NOT EXISTS orgs (
+  id text PRIMARY KEY,                        -- the key log's owner id
+  owner_did text NOT NULL UNIQUE,
+  name text NOT NULL,
+  state text NOT NULL DEFAULT 'active' CHECK (state IN ('active', 'paused')),
+  quorum_m integer NOT NULL DEFAULT 1,
+  seq integer NOT NULL DEFAULT 1,
+  created_by text NOT NULL REFERENCES accounts (id),
+  created_at bigint NOT NULL
+);
+CREATE TABLE IF NOT EXISTS org_members (
+  org_id text NOT NULL REFERENCES orgs (id),
+  account_id text NOT NULL REFERENCES accounts (id),
+  role text NOT NULL CHECK (role IN ('admin', 'approver', 'viewer')),
+  added_at bigint NOT NULL,
+  PRIMARY KEY (org_id, account_id)
+);
+CREATE INDEX IF NOT EXISTS org_members_account ON org_members (account_id);
+-- The device a member signs for the org with: a current approver of the org key log that is also one of the member's own.
+CREATE TABLE IF NOT EXISTS org_devices (
+  org_id text NOT NULL REFERENCES orgs (id),
+  account_id text NOT NULL REFERENCES accounts (id),
+  kid text NOT NULL,
+  added_at bigint NOT NULL,
+  PRIMARY KEY (org_id, account_id),
+  UNIQUE (org_id, kid)
+);
+CREATE TABLE IF NOT EXISTS org_budgets (
+  id text PRIMARY KEY,
+  org_id text NOT NULL REFERENCES orgs (id),
+  scope text NOT NULL CHECK (scope IN ('org', 'team', 'agent')),
+  ref text NOT NULL,                          -- '' for the org, the team tag, or the agent DID
+  body text NOT NULL,                         -- JSON {per_tx_max, period, period_max, step_up_over, merchants, rails} in cents
+  updated_at bigint NOT NULL,
+  UNIQUE (org_id, scope, ref)
+);
+ALTER TABLE agents ADD COLUMN IF NOT EXISTS org_id text;
+ALTER TABLE agents ADD COLUMN IF NOT EXISTS team text;
+ALTER TABLE agents ADD COLUMN IF NOT EXISTS cost_centre text;
+ALTER TABLE pairings ADD COLUMN IF NOT EXISTS org_id text;
+-- An agent approval of an organisation: quorum is {m, of} fixed when the agent asked; each device's decision is a vote.
+ALTER TABLE agent_approvals ADD COLUMN IF NOT EXISTS quorum text;
+ALTER TABLE agent_approvals ADD COLUMN IF NOT EXISTS approvals text;
+CREATE TABLE IF NOT EXISTS approval_votes (
+  approval_id text NOT NULL,
+  kid text NOT NULL,
+  decision text NOT NULL,
+  approval text NOT NULL,
+  at bigint NOT NULL,
+  PRIMARY KEY (approval_id, kid)
+);

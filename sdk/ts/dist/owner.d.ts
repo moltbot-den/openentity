@@ -134,6 +134,30 @@ export interface ApprovalOptions {
 }
 /** Verifies an approval/2.0 object against the owner's key log. Rejects approval/1.0. */
 export declare function verifyApproval(approval: unknown, o: ApprovalOptions): ApprovalResult;
+export type QuorumError = ApprovalError | "bad_quorum" | "quorum_not_met" | "duplicate_device" | "not_in_quorum";
+export type QuorumResult = {
+    ok: true;
+    kids: string[];
+    counters: Record<string, number>;
+} | {
+    ok: false;
+    error: QuorumError;
+    message: string;
+};
+export interface QuorumOptions extends Omit<ApprovalOptions, "counter" | "decisions"> {
+    /** Approvals needed, and the kids that may count: the policy the organisation's account service published (GET /o/<id>/policy). */
+    m: number;
+    of: string[];
+    /** Stored WebAuthn counters by kid; the result returns the new ones. */
+    counters?: Record<string, number>;
+}
+/**
+ * Verifies the `approvals[]` bundle of an organisation-owned action: at least `m` approval/2.0 objects, each by a different
+ * device in `of`, each approving this request_id and payload_digest against the organisation's key log. Fails closed: one
+ * bad or duplicate approval refuses the bundle, so a client cannot pad it. Devices, not people: the account service lists
+ * one device per member in `of`, which is what makes m devices m members.
+ */
+export declare function verifyQuorum(approvals: unknown, o: QuorumOptions): QuorumResult;
 export interface KeyLogOptions {
     /** Unix seconds; defaults to the clock. Pending operations whose 24 hours have run by `now` take effect. */
     now?: number;
