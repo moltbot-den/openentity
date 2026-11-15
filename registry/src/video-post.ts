@@ -90,6 +90,7 @@ async function pinterest(c: Creds, caption: string, title: string, url: string) 
 
 /** Posts each due, rendered video to every configured video network it has not gone to, once. */
 export async function postVideo(env: Env, now = new Date()) {
+  if (env.VIDEO_POSTING !== "on") return; // videos render ahead either way; publishing starts when this key is "on" in /openentity/app
   const failures: string[] = [];
   for (const v of await dueVideos(env, now)) {
     for (const p of configuredVideo(env)) {

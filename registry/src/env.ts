@@ -24,6 +24,7 @@ export interface Env {
   META_IG_USER_ID?: string;
   BUFFER_API_KEY?: string; // X, Threads, LinkedIn channels in the Open Entity Buffer organization
   ZERNIO_API_KEY?: string; // TikTok and YouTube Shorts through Zernio (video-post.ts)
+  VIDEO_POSTING?: string; // "on" lets postVideo publish rendered videos; anything else renders them and posts nothing
   BLUESKY_HANDLE?: string;
   BLUESKY_APP_PASSWORD?: string;
   IP_DAILY_LIMIT?: string; // overrides LIMITS.writes_per_ip_per_day (load test)
