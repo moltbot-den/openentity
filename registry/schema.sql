@@ -212,3 +212,9 @@ CREATE TABLE IF NOT EXISTS commerce_used (
 CREATE TABLE IF NOT EXISTS commerce_keylog (
   owner TEXT NOT NULL, seq BIGINT NOT NULL, line_sha TEXT NOT NULL, first_seen BIGINT NOT NULL, PRIMARY KEY (owner, seq)
 );
+
+-- Social publisher (social.ts): one row per calendar entry per network, claimed before the send so nothing double posts.
+CREATE TABLE IF NOT EXISTS social_posts (
+  entry_id TEXT NOT NULL, platform TEXT NOT NULL, status TEXT NOT NULL, ref TEXT, error TEXT, at TEXT NOT NULL,
+  PRIMARY KEY (entry_id, platform)
+);
