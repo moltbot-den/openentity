@@ -1,5 +1,5 @@
 // Open Entity primitives, ported from sdk/ts/src/core.ts: JSON read the way JavaScript reads it, its RFC 8785 (JCS) form,
-// and eddsa-jcs-2022 proofs. Verify only: nothing in this SDK signs, and only a DidWebResolver the caller passes touches the network.
+// and eddsa-jcs-2022 proofs. Verify only apart from signReceipt (Commerce.kt), and only a DidWebResolver the caller passes touches the network.
 package org.openentity.sdk
 
 import java.math.BigInteger
@@ -373,4 +373,36 @@ fun verifyProof(obj: JsonValue, proof: JsonValue, resolver: Resolver = Resolver.
     // Resolution runs last, so a malformed proof never makes a resolver fetch.
     if (resolver.ed25519Keys(method).none { ed25519Verify(it, message, sig) }) fail("bad_signature", "no Ed25519 key of $signer verifies the proof")
     return signer
+}
+
+// ---------------------------------------------------------------- signing (receipts only)
+
+/** base58btc, the inverse of [base58]. */
+internal fun base58Encode(b: ByteArray): String {
+    var n = BigInteger(1, b)
+    val out = StringBuilder()
+    val fiftyEight = BigInteger.valueOf(58)
+    while (n.signum() > 0) {
+        val qr = n.divideAndRemainder(fiftyEight)
+        out.append(B58[qr[1].toInt()])
+        n = qr[0]
+    }
+    repeat(b.takeWhile { it.toInt() == 0 }.size) { out.append('1') }
+    return out.reverse().toString()
+}
+
+private val ED25519_PKCS8 = byteArrayOf(0x30, 0x2e, 0x02, 0x01, 0x00, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x04, 0x22, 0x04, 0x20)
+
+/** RFC 8032 Ed25519 signature of [message] by the 32-byte [seed], through the JDK (15+) or Android 13+; deterministic. */
+internal fun ed25519Sign(seed: ByteArray, message: ByteArray): ByteArray {
+    require(seed.size == 32) { "an Ed25519 seed is 32 bytes" }
+    return try {
+        Signature.getInstance("Ed25519").run {
+            initSign(KeyFactory.getInstance("Ed25519").generatePrivate(java.security.spec.PKCS8EncodedKeySpec(ED25519_PKCS8 + seed)))
+            update(message)
+            sign()
+        }
+    } catch (e: NoSuchAlgorithmException) {
+        fail("unsupported", "this runtime has no Ed25519 (needs JDK 15+ or Android 13+)")
+    }
 }

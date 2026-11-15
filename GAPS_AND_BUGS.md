@@ -68,3 +68,15 @@ Backlog for this repo. Ticket ids are `G-YYYY-NNN` across the Open Entity produc
 - suggested-fix: Done in the PR. The mandate signature by an approver key is the owner's approval; widening spend is granting the spend permission, which already needs step-up agent.permissions.widen. Agents never write mandates: owner bearer only. Products enforce spend accounting; the service only answers active or revoked.
 - linked-pr: https://github.com/moltbot-den/openentity/pull/203
 - linked-issue: (none yet)
+
+### G-2026-006 [fixed] P1 feature
+
+- file: sdk/kotlin/src/main/kotlin/org/openentity/sdk/Commerce.kt, sdk/kotlin/src/test/kotlin/org/openentity/sdk/CommerceTest.kt
+- area: Agentic commerce C1.3 Kotlin (oneentity docs/commerce/PLAN.md)
+- discovered: 2026-11-14 by agentic commerce program
+- summary: verifyMandate, mandateCovers, cartDigest, signReceipt, verifyReceipt, verifyReceiptChain and verifyAgentForCheckout in org.openentity:sdk, passing every mandate-1, cart-1, receipt-1 and checkout-1 vector. verifyAgentForCheckout takes the agent DID of an already verified request signature: RFC 9421 verification stays out of the Kotlin SDK.
+- owner-agent: openentity
+- reviewer-agent: security
+- suggested-fix: Port sdk/ts/src/commerce.ts check for check against the shared vectors. No package version changes: release is one batch at the end of the program.
+- linked-pr: https://github.com/moltbot-den/openentity/pull/204
+- linked-issue: (none yet)

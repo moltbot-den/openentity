@@ -17,14 +17,14 @@ import java.security.spec.ECParameterSpec
 import java.security.spec.ECPoint
 import java.security.spec.ECPublicKeySpec
 
-private const val RP_ID = "account.openentity.org"
-private const val DAY = 86_400L
+internal const val RP_ID = "account.openentity.org"
+internal const val DAY = 86_400L
 private const val WEEK = 7 * DAY
 private const val MAX_TTL = 600L
 private const val MAX_SAFE = 9_007_199_254_740_991L // 2^53 - 1
 private val REQUEST_ID = Regex("[A-Za-z0-9:._-]{1,128}")
-private val HEX64 = Regex("[0-9a-f]{64}")
-private val DID = Regex("did:[a-z0-9]+:[A-Za-z0-9._%:-]*[A-Za-z0-9._%-]")
+internal val HEX64 = Regex("[0-9a-f]{64}")
+internal val DID = Regex("did:[a-z0-9]+:[A-Za-z0-9._%:-]*[A-Za-z0-9._%-]")
 private val P256: ECParameterSpec = AlgorithmParameters.getInstance("EC").run {
     init(ECGenParameterSpec("secp256r1"))
     getParameterSpec(ECParameterSpec::class.java)
@@ -99,14 +99,14 @@ private fun base32(b: ByteArray): String {
     return out.toString()
 }
 
-private fun safeInteger(d: Double) = d.isFinite() && d == Math.floor(d) && Math.abs(d) <= MAX_SAFE.toDouble()
-private fun uint(v: JsonValue?): Long? = (v as? JsonValue.Num)?.value?.takeIf { safeInteger(it) && it >= 0.0 }?.toLong()
+internal fun safeInteger(d: Double) = d.isFinite() && d == Math.floor(d) && Math.abs(d) <= MAX_SAFE.toDouble()
+internal fun uint(v: JsonValue?): Long? = (v as? JsonValue.Num)?.value?.takeIf { safeInteger(it) && it >= 0.0 }?.toLong()
 
 /** Containers on one path, in an entry, a payload summary or clientDataJSON: the same limit in all four SDKs. */
 private const val OWNER_MAX_DEPTH = 64
 
 /** Only safe integers (unless [ints] is false), well-formed strings and at most 64 nested containers, so every SDK reads an entry, a summary or client data the same way. */
-private fun plainJson(v: JsonValue, ints: Boolean = true, depth: Int = 0): String? = when (v) {
+internal fun plainJson(v: JsonValue, ints: Boolean = true, depth: Int = 0): String? = when (v) {
     is JsonValue.Num -> if (!ints || safeInteger(v.value)) null else "number ${v.value} is not an integer within 2^53"
     is JsonValue.Str -> if (hasLoneSurrogate(v.value)) "string has a lone surrogate" else null
     is JsonValue.Arr -> if (depth >= OWNER_MAX_DEPTH) "nested deeper than $OWNER_MAX_DEPTH levels"
@@ -182,7 +182,7 @@ private fun ecdsa(raw: ByteArray, message: ByteArray, pub: PublicKey?, lowS: Boo
  * A p256 or webauthn signature by [cred] over the digest SHA-256([signed]); returns the WebAuthn signature counter (0 for p256).
  * [signed] is the preimage: the JCS bytes of a key log entry without `auth`, or the UTF-8 approval/2.0 preimage.
  */
-private fun checkSignature(cred: Credential, s: JsonValue.Obj, signed: ByteArray, origins: List<String>, rpId: String, lowS: Boolean): Long {
+internal fun checkSignature(cred: Credential, s: JsonValue.Obj, signed: ByteArray, origins: List<String>, rpId: String, lowS: Boolean): Long {
     val form = s["form"].str()
     if (form != cred.type) fail("bad_signature", "a ${cred.type} key cannot present a $form signature")
     val pub = publicKey(cred.jwk) // null only for a hand-built credential; it fails at the ECDSA step, as in the TS SDK
@@ -213,7 +213,7 @@ private fun checkSignature(cred: Credential, s: JsonValue.Obj, signed: ByteArray
 }
 
 /** Shape of the signature fields shared by approvals and key log `auth`. */
-private fun signedShape(s: JsonValue.Obj): String? {
+internal fun signedShape(s: JsonValue.Obj): String? {
     val form = s["form"].str()
     if (form != "p256" && form != "webauthn") return "form must be p256 or webauthn"
     if (b64u(s["signature"].str()) == null) return "signature must be base64url"
