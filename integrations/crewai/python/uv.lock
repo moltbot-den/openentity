@@ -1730,7 +1730,10 @@ provides-extras = ["wallet"]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "django", specifier = ">=5.2.19" },
     { name = "eth-account", specifier = ">=0.11" },
+    { name = "fastapi", specifier = ">=0.163.0" },
+    { name = "httpx", specifier = ">=0.28.1" },
     { name = "pytest", specifier = ">=8" },
 ]
 

@@ -198,3 +198,17 @@ CREATE INDEX IF NOT EXISTS documents_sha256 ON documents(sha256);
 CREATE INDEX IF NOT EXISTS declarations_sha256 ON declarations(sha256);
 CREATE INDEX IF NOT EXISTS record_entries_sha256 ON record_entries(sha256);
 CREATE INDEX IF NOT EXISTS continuity_links_sha256 ON continuity_links(sha256);
+
+-- Agent Commerce Check. Evidence is hash-chained (hash = sha256 of the JCS record without `hash`, which carries prev_hash) and deleted after 400 days.
+CREATE TABLE IF NOT EXISTS commerce_evidence (
+  seq BIGINT PRIMARY KEY, evidence_id TEXT NOT NULL UNIQUE, created_at TEXT NOT NULL, json TEXT NOT NULL, hash TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS commerce_evidence_created ON commerce_evidence(created_at);
+-- Single-use keys: request nonces and per-cart approvals (two days), and the last WebAuthn counter per approver key (kid:..., kept).
+CREATE TABLE IF NOT EXISTS commerce_used (
+  key TEXT PRIMARY KEY, n BIGINT NOT NULL, created_at TEXT NOT NULL
+);
+-- Owner key log entries as this registry first saw them: every key log delay runs from first_seen, never from the log's own clock.
+CREATE TABLE IF NOT EXISTS commerce_keylog (
+  owner TEXT NOT NULL, seq BIGINT NOT NULL, line_sha TEXT NOT NULL, first_seen BIGINT NOT NULL, PRIMARY KEY (owner, seq)
+);

@@ -175,3 +175,10 @@ Verification
 - [ ] Pin the OpenEntity Android app's `android:apk-key-hash:` origin in the four SDKs once `assetlinks.json` carries the Play app signing fingerprint
 - [ ] Day 5 release batch: `@openentity/sdk`, `openentity` (PyPI), CLI and MCP with `pair()` and the owner tools (PLAN 8.5)
 - [x] Day 5 batch prepared (2026-11-12): SDK 1.1.0 in both languages, CLI 0.7.0, `@openentity/mcp` 0.3.0, every bridge one minor up on SDK 1.1.0; versions, `publish.yml` input and the steps in `CHANGELOG.md`. `@openentity/mcp` goes out first from the npm CLI, because npm adds a trusted publisher only to a package that exists
+
+## Agent Commerce Check (2026-11-14, oneentity docs/commerce/PLAN.md C3.1, C3.2, C4.3)
+- [x] G-2026-050: `POST /v1/commerce/check` (allow, step_up, deny; evidence hash chain kept 400 days; per-IP limit; no key), `GET /v1/commerce/evidence/{id}`, `GET /v1/commerce/head`, `POST /v1/commerce/mandate`
+- [x] MCP `openentity_commerce_check`, `openentity_mandate_verify`, `openentity_mandate_covers` on mcp.openentity.org and `@openentity/mcp`; `mcp/server.json` 0.3.0
+- [x] `@openentity/commerce-check` (Express, Hono and Workers, Next.js) and `openentity.commerce` (FastAPI, Django) with example apps; guide `/guides/commerce-check`
+- [ ] Release batch: `@openentity/commerce-check` 0.1.0 and `openentity` (PyPI) with the middleware; the middleware reads no SDK function, so no pin to swap
+- [ ] `assetlinks.json` fingerprints: the check already adds the Android app origin to key log verification once the account publishes them

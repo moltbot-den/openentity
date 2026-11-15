@@ -1,0 +1,49 @@
+{
+  "name": "@openentity/commerce-check",
+  "version": "0.1.0",
+  "description": "Agent Commerce Check middleware for Express, Hono and Cloudflare Workers, and Next.js: one line before you accept an agent purchase, answering allow, step_up or deny with evidence.",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "esbuild src/index.ts --bundle --packages=external --format=esm --platform=node --target=es2022 --outfile=dist/index.js && tsc -p tsconfig.build.json",
+    "prepack": "pnpm run build",
+    "lint": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --fsModuleCachePath node_modules/.vitest-cache-commerce-check --testTimeout=60000 --hookTimeout=60000"
+  },
+  "devDependencies": {
+    "@noble/curves": "^2.4.0",
+    "@openentity/sdk": "workspace:*",
+    "@types/node": "^26.6.5",
+    "esbuild": "^0.28.2",
+    "express": "^5.3.0",
+    "hono": "^4.13.13",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/moltbot-den/openentity.git",
+    "directory": "integrations/commerce-check"
+  },
+  "homepage": "https://openentity.org",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "publishConfig": {
+    "access": "public",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    }
+  }
+}

@@ -421,3 +421,7 @@ def verify_agent_for_checkout(*, cart, merchant_policy: dict, agent_did: str | N
             return {"decision": "allow", "reasons": ["owner_approved_cart", why], "evidence": evidence}
         evidence["approval_error"] = a["error"]
     return {"decision": "step_up", "reasons": [why], "evidence": evidence}
+
+
+# The merchant-side middleware lives in commerce_check.py (no framework imports) and is exported here, as the spec names it.
+from .commerce_check import CommerceCheckMiddleware, agent_check, agent_did_of, django_middleware  # noqa: E402,F401

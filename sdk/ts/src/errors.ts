@@ -1,14 +1,14 @@
 /** Error codes the registry answers with (`{ error, message }`), as of this release. Any string is possible: a newer registry may add codes. */
 export type RegistryErrorCode =
   | "alias_exists" | "alias_proof_invalid" | "already_redacted" | "already_revoked" | "already_withdrawn" | "attestation_not_found"
-  | "bad_email" | "bad_json" | "bad_sort" | "bad_token" | "bad_offset" | "bad_query" | "bad_tree_size" | "batch_too_large" | "continuity_proof_missing"
+  | "bad_email" | "bad_json" | "bad_mandate" | "bad_request" | "bad_sort" | "bad_token" | "bad_offset" | "bad_query" | "bad_tree_size" | "batch_too_large" | "continuity_proof_missing"
   | "custody_unavailable" | "declaration_exists" | "declaration_hash_mismatch" | "declaration_not_found" | "dispute_exists"
-  | "document_required" | "eid_mismatch" | "entity_exists" | "entity_not_found" | "entry_hash_mismatch" | "entry_not_found"
+  | "document_required" | "eid_mismatch" | "entity_exists" | "entity_not_found" | "evidence_not_found" | "entry_hash_mismatch" | "entry_not_found"
   | "expires_invalid" | "invalid_client" | "no_checkpoint" | "no_custodial_copy" | "nonce_reused" | "not_incorporated" | "not_issuer"
   | "object_not_about_subject" | "object_not_found" | "presentation_invalid" | "previous_has_successor" | "rate_limited"
   | "record_chain_broken" | "recovery_alias_required" | "schema_invalid" | "seq_invalid" | "signature_invalid" | "snapshot_not_found"
   | "stamp_invalid" | "stamp_required" | "stamp_reused" | "subscribe_failed" | "subscribe_unavailable" | "successor_has_predecessor"
-  | "tile_not_found" | "timestamp_invalid" | "too_large" | "turnstile_failed" | "unresolvable" | "unsupported_method"
+  | "tile_not_found" | "timestamp_invalid" | "too_large" | "turnstile_failed" | "unknown_merchant" | "unresolvable" | "unsupported_method"
   | "updated_not_increasing";
 
 /** Codes the SDK raises itself. `registry_error` is a non-2xx answer without a registry error body. */

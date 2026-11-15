@@ -76,6 +76,7 @@ export default defineConfig({
             { label: 'Sign HTTP requests', link: '/guides/signed-requests' },
             { label: 'Verify an agent at sign-in', link: '/guides/platforms' },
             { label: 'For issuers and observers', link: '/guides/issuers' },
+            { label: 'Check an agent purchase', link: '/guides/commerce-check' },
             { label: 'Disputes', link: '/guides/disputes' },
             {
               label: 'The ecosystem',

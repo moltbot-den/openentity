@@ -2,10 +2,11 @@
 // CLI keeps in ~/.openentity (OPENENTITY_HOME). Claude Code: `claude mcp add openentity -- npx -y @openentity/mcp`;
 // `openentity pair --openclaw` registers it for OpenClaw. The remote server (src/index.ts) is stateless and holds no key.
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { Owner } from "@openentity/sdk";
+import { DEFAULT_REGISTRY, Owner } from "@openentity/sdk";
 import { z } from "zod";
 import { ACCOUNT, pairCmd } from "../../cli/src/pair.ts";
 import { loadEntity } from "../../cli/src/store.ts";
+import { registerCommerceTools } from "./commerce.ts";
 import pkg from "../package.json";
 
 const text = (o: unknown, isError = false) => ({
@@ -119,6 +120,16 @@ export function localServer(o: { account?: string } = {}): McpServer {
     },
     (a) => withOwner((o) => o.askApproval({ title: a.title, summary: a.summary, risk: a.risk, expiresIn: a.expires_in }, { wait: a.wait }), (r) => r),
   );
+
+  // Commerce tools run against the public registry, which needs no key.
+  const registry = process.env.OPENENTITY_REGISTRY ?? DEFAULT_REGISTRY;
+  registerCommerceTools(server, async (method, path, body) => {
+    const res = await fetch(`${registry}/v1${path}`, { method, headers: { accept: "application/json", ...(body === undefined ? {} : { "content-type": "application/json" }) }, body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(20_000) });
+    const t = await res.text();
+    let json: unknown = t;
+    try { json = JSON.parse(t); } catch { /* keep text */ }
+    return { ok: res.ok, status: res.status, body: json };
+  });
 
   return server;
 }

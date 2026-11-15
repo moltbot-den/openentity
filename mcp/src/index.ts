@@ -30,6 +30,7 @@ import {
 } from "@openentity/sdk";
 import { z } from "zod";
 import { anchorText } from "../../cli/src/anchor.ts";
+import { registerCommerceTools } from "./commerce.ts";
 
 export interface McpDeps {
   /** In-process call into the registry app (no network hop). */
@@ -110,7 +111,8 @@ function serve({ registry, site, origin: ORIGIN = "https://openentity.org" }: Mc
     const out = (r: { ok: boolean; status: number; body: any }, pick: (b: any) => unknown = (b) => b) =>
       r.ok ? text(pick(r.body)) : text({ status: r.status, error: r.body?.error, message: r.body?.message ?? r.body }, true);
 
-    const server = new McpServer({ name: "openentity", version: "0.2.0" });
+    const server = new McpServer({ name: "openentity", version: "0.3.0" });
+    registerCommerceTools(server, (method, path, body) => reg(method, path, body));
 
     server.registerTool(
       "openentity_read",
