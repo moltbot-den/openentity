@@ -57,13 +57,16 @@ const JOBS: [string, (d: Deps) => Promise<unknown>][] = [
   }],
 ];
 
-/** Runs every job; one failing job never stops the others. */
+/**
+ * Runs every job at once; one failing job never stops the others. The jobs are independent, so the tick lasts as long as
+ * the slowest one (about 14 sequential Data API round trips took ~890 ms and tripped the p95 duration alarm every minute).
+ */
 export async function runJobs(d: Deps): Promise<void> {
-  for (const [name, job] of JOBS) {
+  await Promise.all(JOBS.map(async ([name, job]) => {
     try {
       await job(d);
     } catch (e) {
       console.error(`job ${name} failed`, e);
     }
-  }
+  }));
 }
